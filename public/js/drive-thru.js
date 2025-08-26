@@ -9,6 +9,23 @@ const remoteEl = qs('#remoteVideo');
 const localEl = qs('#localVideo');
 const cart = createCart();
 
+// selection highlight (read-only mirror)
+let selProductId = '';
+let selBtn = null;
+const escapeAttr = (s) => {
+  const v = String(s);
+  try { if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(v); } catch {}
+  return v.replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\]/g,'\\]');
+};
+function clearSelection(){ if (selBtn) selBtn.classList.remove('selected'); selBtn=null; selProductId=''; }
+function applySelection(){
+  if (!selProductId) return clearSelection();
+  const btn = gridEl.querySelector(`.tile[data-id="${escapeAttr(selProductId)}"]`);
+  if (selBtn && selBtn!==btn) selBtn.classList.remove('selected');
+  selBtn = btn || null;
+  if (selBtn) selBtn.classList.add('selected');
+}
+
 const POPULER = 'Populer';
 let allProds = [];
 let popular = [];
@@ -54,6 +71,8 @@ function renderCategories(cats) {
     };
     catsEl.appendChild(b);
   });
+  // after rendering, reapply highlight if any
+  applySelection();
 }
 
 async function setActiveAndShow(name, btnEl) {
@@ -79,6 +98,7 @@ function renderProducts(list) {
   list.forEach(p => {
     const card = document.createElement('button');
     card.className = 'tile';
+    card.dataset.id = p.id;
     card.onclick = () => addToBill(p);
 
     const img = document.createElement('img');
@@ -105,6 +125,8 @@ function renderProducts(list) {
     card.appendChild(price);
     gridEl.appendChild(card);
   });
+  // after rendering grid, reapply highlight if it was selected earlier
+  applySelection();
 }
 
 function connect(){
@@ -130,6 +152,12 @@ function connect(){
           updateOptionsSelection(msg.selection||{});
         } else if (msg.type === 'ui:optionsClose') {
           hideOptionsUI();
+          clearSelection();
+        } else if (msg.type === 'ui:selectProduct') {
+          selProductId = String(msg.productId||'');
+          applySelection();
+        } else if (msg.type === 'ui:clearSelection') {
+          clearSelection();
         }
       } catch {}
     });
@@ -142,7 +170,10 @@ function addToBill(_p) {
 
 function updateBillFromBasket(basket) {
   currentBasket = basket || { items: [], total: 0, version: 0 };
-  const mapped = (currentBasket.items || []).map(i => ({ id: i.sku, name: i.name, price: Number(i.price)||0, qty: Number(i.qty)||0, thumb: imgMap.get(i.sku) }));
+  const mapped = (currentBasket.items || []).map(i => {
+    const baseId = String(i.sku || i.id || '').split('#')[0];
+    return { id: i.sku, name: i.name, price: Number(i.price)||0, qty: Number(i.qty)||0, thumb: imgMap.get(baseId) };
+  });
   renderBillList('billItems', mapped);
   const totals = computeTotals(mapped);
   renderTotals(totals);

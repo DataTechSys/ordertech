@@ -68,6 +68,31 @@
   const remoteEl = document.getElementById('remoteVideo');
   const localEl  = document.getElementById('localVideo');
 
+  // selection state for two-click add
+  let selectedId = null;
+  let selectedBtn = null;
+  function clearSelection(){
+    if (selectedBtn) selectedBtn.classList.remove('selected');
+    selectedId = null; selectedBtn = null;
+    try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:clearSelection', basketId })); } catch {}
+  }
+  function selectTile(btn, id){
+    clearSelection();
+    selectedId = id; selectedBtn = btn;
+    if (selectedBtn) selectedBtn.classList.add('selected');
+    try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:selectProduct', basketId, productId: id })); } catch {}
+  }
+  function onProductTileClick(p, btn){
+    if (selectedId === p.id) {
+      // second click: proceed
+      clearSelection();
+      onProductClick(p);
+    } else {
+      // first click: highlight only
+      selectTile(btn, p.id);
+    }
+  }
+
   const api = {
     get: async (url) => {
         const r = await fetch(url);
@@ -132,7 +157,7 @@
     list.forEach(p => {
       const card = document.createElement('button');
       card.className = 'tile';
-      card.onclick = () => onProductClick(p);
+      card.onclick = () => onProductTileClick(p, card);
 
       const img = document.createElement('img');
       const src = p.image_url || '/public/images/products/placeholder.jpg';
@@ -164,7 +189,8 @@
     billItemsEl.innerHTML = '';
     const mapped = [];
     for (const item of state.items.values()) {
-      const thumb = imgById.get(item.sku) || '/public/images/products/placeholder.jpg';
+      const baseId = String(item.sku || item.id || '').split('#')[0];
+      const thumb = imgById.get(baseId) || '/public/images/products/placeholder.jpg';
       const li = document.createElement('li');
       const img = document.createElement('img');
       img.src = thumb;
@@ -257,15 +283,23 @@
   }
 
   // ---- Options / Modifiers flow (cashier drives)
+  function hasMilkVariants(p){
+    const name = String(p.name||'').toLowerCase();
+    const cat  = String(p.category_name||'').toLowerCase();
+    const include = ['latte','cappuccino','flat white','mocha','macchiato','cortado','frappe','white mocha','spanish'];
+    const exclude = ['americano','espresso','drip','cold brew','iced americano','turkish coffee','tea','mojito','lemonade','juice'];
+    if (exclude.some(w => name.includes(w))) return false;
+    if (include.some(w => name.includes(w))) return true;
+    // default: coffee categories except excluded names
+    if (cat.includes('coffee')) return true;
+    return false;
+  }
   function productOptions(p){
-    const cat = String(p.category_name||'').toLowerCase();
-    if (cat.includes('coffee')) {
-      return {
-        size: [ {id:'reg', label:'Regular', delta:0}, {id:'lg', label:'Large', delta:0.5} ],
-        milk: [ {id:'full', label:'Full fat', delta:0}, {id:'low', label:'Low fat', delta:0}, {id:'oat', label:'Oat', delta:0.25}, {id:'almond', label:'Almond', delta:0.25} ]
-      };
-    }
-    return null;
+    if (!hasMilkVariants(p)) return null;
+    return {
+      size: [ {id:'reg', label:'Regular', delta:0}, {id:'lg', label:'Large', delta:0.5} ],
+      milk: [ {id:'full', label:'Full fat', delta:0}, {id:'low', label:'Low fat', delta:0}, {id:'oat', label:'Oat', delta:0.25}, {id:'almond', label:'Almond', delta:0.25} ]
+    };
   }
 
   function onProductClick(p){
@@ -342,6 +376,7 @@
   function hideOptionsUI(){
     const modal = document.getElementById('optionsModal');
     if (modal) modal.style.display = 'none';
+    clearSelection();
   }
 
   // React to remote UI events (safe for cashier if mirrored)

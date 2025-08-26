@@ -416,7 +416,7 @@ function prunePresence(m){
 addRoute('post', '/presence/display', requireTenant, async (req, res) => {
   const id = String(req.body?.id||'').trim();
   if(!id) return res.status(400).json({ error: 'id required' });
-  const name = String(req.body?.name||'Drive‑Thru');
+  const name = String(req.body?.name||'Car');
   const m = getPresenceMap(req.tenantId);
   m.set(id, { id, name, last_seen: Date.now() });
   res.json({ ok:true });
@@ -514,7 +514,7 @@ app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
 app.use('/public', express.static(PUB));
 
-addRoute('get', '/drive-thru', (_req, res) => res.sendFile(path.join(PUB, 'drive-thru.html')));
+addRoute('get', '/drive', (_req, res) => res.sendFile(path.join(PUB, 'drive-thru.html')));
 addRoute('get', '/cashier', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cashier-new.html'));
 });
@@ -620,6 +620,18 @@ function handleUiOptionsClose(ws, msg) {
   const payload = { type: 'ui:optionsClose', basketId, serverTs: Date.now() };
   broadcast(basketId, payload);
 }
+function handleUiSelectProduct(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  const productId = String(msg.productId || '').trim();
+  if (!productId) return;
+  broadcast(basketId, { type: 'ui:selectProduct', basketId, productId, serverTs: Date.now() });
+}
+function handleUiClearSelection(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  broadcast(basketId, { type: 'ui:clearSelection', basketId, serverTs: Date.now() });
+}
 
 function applyOp(basket, op) {
   const action = op?.action;
@@ -694,6 +706,8 @@ wss.on('connection', (ws, req) => {
     if (msg.type === 'ui:showOptions') return handleUiShowOptions(ws, msg);
     if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
     if (msg.type === 'ui:optionsClose') return handleUiOptionsClose(ws, msg);
+    if (msg.type === 'ui:selectProduct') return handleUiSelectProduct(ws, msg);
+    if (msg.type === 'ui:clearSelection') return handleUiClearSelection(ws, msg);
     return send(ws, { type: 'error', error: 'unknown_type' });
   });
 
