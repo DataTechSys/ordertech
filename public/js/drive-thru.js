@@ -1,5 +1,6 @@
 import { qs, qsa, fmt, getParams, loadCategories, loadProducts, startLocalCam, setRemoteVideo, createCart, api } from '/public/js/common.js';
 import { setDisplayId, renderBillList, renderTotals } from '/public/js/ui-common.js';
+import { computeTotals } from '/public/js/data.js';
 
 const { tenant, remote } = getParams();
 const catsEl = qs('#cats');
@@ -17,6 +18,8 @@ const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 let ws;
 let catsReady = false;
 let pendingCategory = '';
+let currentBasket = { items: [], total: 0, version: 0 };
+let imgMap = new Map();
 
 connect();
 init();
@@ -27,6 +30,7 @@ async function init() {
 
   const cats = await loadCategories(tenant);
   allProds = await loadProducts(tenant);
+  imgMap = new Map(allProds.map(p => [p.id, p.image_url]));
   popular = computePopular(allProds);
   renderCategories(cats);
   catsReady = true;
@@ -35,13 +39,6 @@ async function init() {
     pendingCategory = '';
   } else {
     await showCategory(POPULER);
-  }
-
-  // Add some items to the bill for demonstration
-  if (allProds.length > 0) {
-    addToBill(allProds[0]);
-    if (allProds[1]) addToBill(allProds[1]);
-    if (allProds[2]) addToBill(allProds[2]);
   }
 }
 
@@ -124,22 +121,63 @@ function connect(){
           if (!name) return;
           if (!catsReady) { pendingCategory = name; return; }
           await setActiveAndShow(name);
+        } else if (msg.type === 'basket:sync' || msg.type === 'basket:update') {
+          updateBillFromBasket(msg.basket || { items: [], total: 0, version: 0 });
+        } else if (msg.type === 'ui:showOptions') {
+          const p = msg.product||{}; const opts = msg.options||{}; const sel = msg.selection||{};
+          showOptionsUI(true, p, opts, sel);
+        } else if (msg.type === 'ui:optionsUpdate') {
+          updateOptionsSelection(msg.selection||{});
+        } else if (msg.type === 'ui:optionsClose') {
+          hideOptionsUI();
         }
       } catch {}
     });
   } catch {}
 }
 
-function addToBill(p) {
-  cart.upsert({ id: p.id, name: p.name, price: p.price, thumb: p.image_url });
-  renderBill();
+function addToBill(_p) {
+  // No-op: drive-thru follows cashier basket now.
 }
 
-function renderBill() {
-  renderBillList('billItems', cart.items);
-  const totals = cart.total();
+function updateBillFromBasket(basket) {
+  currentBasket = basket || { items: [], total: 0, version: 0 };
+  const mapped = (currentBasket.items || []).map(i => ({ id: i.sku, name: i.name, price: Number(i.price)||0, qty: Number(i.qty)||0, thumb: imgMap.get(i.sku) }));
+  renderBillList('billItems', mapped);
+  const totals = computeTotals(mapped);
   renderTotals(totals);
 }
+
+function showOptionsUI(readOnly, p, opts, sel){
+  const modal = document.getElementById('optionsModal');
+  const body = document.getElementById('optBody');
+  const title = document.getElementById('optTitle');
+  const btnCancel = document.getElementById('optCancel');
+  const btnConfirm = document.getElementById('optConfirm');
+  if (!modal||!body) return;
+  title.textContent = `Choose options — ${p.name||''}`;
+  btnCancel.disabled = true; btnConfirm.disabled = true;
+
+  function render(){
+    const grp = [];
+    if (opts.size && opts.size.length){
+      grp.push(`<fieldset><legend>Size</legend>${opts.size.map(o=>`<label style="display:block;margin:4px 0;"><input type=radio name=opt_size value="${o.id}" ${sel.sizeId===o.id?'checked':''} disabled> ${o.label}${o.delta?` (+${fmt(o.delta)} KWD)`:''}</label>`).join('')}</fieldset>`);
+    }
+    if (opts.milk && opts.milk.length){
+      grp.push(`<fieldset><legend>Milk</legend>${opts.milk.map(o=>`<label style="display:block;margin:4px 0;"><input type=radio name=opt_milk value="${o.id}" ${sel.milkId===o.id?'checked':''} disabled> ${o.label}${o.delta?` (+${fmt(o.delta)} KWD)`:''}</label>`).join('')}</fieldset>`);
+    }
+    body.innerHTML = grp.join('');
+  }
+  render();
+  modal.style.display = 'flex';
+}
+function updateOptionsSelection(sel){
+  const body = document.getElementById('optBody'); if (!body || document.getElementById('optionsModal').style.display==='none') return;
+  const sizeEl = body.querySelector(`input[name=opt_size][value="${sel.sizeId}"]`);
+  const milkEl = body.querySelector(`input[name=opt_milk][value="${sel.milkId}"]`);
+  if (sizeEl) sizeEl.checked = true; if (milkEl) milkEl.checked = true;
+}
+function hideOptionsUI(){ const m = document.getElementById('optionsModal'); if (m) m.style.display='none'; }
 
 function computePopular(all) {
   const withPhotos = (all || []).filter(p => p.image_url);

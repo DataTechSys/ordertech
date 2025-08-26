@@ -595,6 +595,32 @@ function handleUiSelectCategory(ws, msg) {
   broadcast(basketId, { type: 'ui:selectCategory', basketId, name, serverTs: Date.now() });
 }
 
+function handleUiShowOptions(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  const payload = {
+    type: 'ui:showOptions',
+    basketId,
+    product: msg.product || null,
+    options: msg.options || null,
+    selection: msg.selection || null,
+    serverTs: Date.now()
+  };
+  broadcast(basketId, payload);
+}
+function handleUiOptionsUpdate(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  const payload = { type: 'ui:optionsUpdate', basketId, selection: msg.selection || null, serverTs: Date.now() };
+  broadcast(basketId, payload);
+}
+function handleUiOptionsClose(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  const payload = { type: 'ui:optionsClose', basketId, serverTs: Date.now() };
+  broadcast(basketId, payload);
+}
+
 function applyOp(basket, op) {
   const action = op?.action;
   const itm = op?.item || {};
@@ -665,6 +691,9 @@ wss.on('connection', (ws, req) => {
     if (msg.type === 'basket:update') return handleUpdate(ws, msg);
     if (msg.type === 'basket:requestSync') return handleSubscribe(ws, msg); // safely re-sync
     if (msg.type === 'ui:selectCategory') return handleUiSelectCategory(ws, msg);
+    if (msg.type === 'ui:showOptions') return handleUiShowOptions(ws, msg);
+    if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
+    if (msg.type === 'ui:optionsClose') return handleUiOptionsClose(ws, msg);
     return send(ws, { type: 'error', error: 'unknown_type' });
   });
 

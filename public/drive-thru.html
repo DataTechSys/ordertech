@@ -48,6 +48,17 @@
     </section>
   </main>
 
-  <script type="module" src="/public/js/drive-thru.js?v=1.0.2" defer></script>
+  <div id="optionsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+    <div id="optionsCard" style="background:#fff; border-radius:12px; padding:16px; width:min(520px,90vw); max-height:90vh; overflow:auto;">
+      <h3 id="optTitle" style="margin-top:0;">Choose Options</h3>
+      <div id="optBody"></div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+        <button id="optCancel" disabled>Cancel</button>
+        <button id="optConfirm" disabled>Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/public/js/drive-thru.js?v=1.0.3" defer></script>
 </body>
 </html>
