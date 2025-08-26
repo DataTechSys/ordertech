@@ -65,6 +65,8 @@
 
   const catsEl = document.querySelector('#cats');
   const gridEl = document.querySelector('#grid');
+  const remoteEl = document.getElementById('remoteVideo');
+  const localEl  = document.getElementById('localVideo');
 
   const api = {
     get: async (url) => {
@@ -90,6 +92,7 @@
     }
   }
   init();
+  initRTC();
 
   function renderCategories(cats) {
     catsEl.innerHTML = '';
@@ -174,7 +177,16 @@
 
       const amt = document.createElement('div'); amt.textContent = `${fmtPrice(item.price * item.qty)} KWD`;
 
-      li.appendChild(img); li.appendChild(info); li.appendChild(amt);
+      // small trash button (cashier only)
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.title = 'Remove';
+      del.className = 'trash';
+      del.textContent = '🗑';
+      del.style = 'margin-left:8px; background:none; border:none; cursor:pointer; font-size:14px; line-height:1;';
+      del.onclick = (e) => { e.stopPropagation(); window.onRemoveItem(item.sku); };
+
+      li.appendChild(img); li.appendChild(info); li.appendChild(amt); li.appendChild(del);
       billItemsEl.appendChild(li);
       mapped.push({ id: item.sku, name: item.name, price: item.price, qty: item.qty, thumb });
     }
@@ -205,6 +217,43 @@
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
+  }
+
+  // ---- WebRTC two-way video (cashier offers)
+  async function initRTC(){
+    try {
+      const localStream = await (window.startLocalCam ? window.startLocalCam(localEl) : navigator.mediaDevices.getUserMedia({video:true,audio:false}).then(s=>{localEl.srcObject=s;localEl.play().catch(()=>{});return s;}));
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      const remoteStream = new MediaStream();
+      if (remoteEl) { remoteEl.srcObject = remoteStream; remoteEl.play && remoteEl.play().catch(()=>{}); }
+      pc.ontrack = (ev) => { ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
+      pc.onicecandidate = async (ev) => {
+        if (ev.candidate) {
+          try { await fetch('/webrtc/candidate', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, role:'cashier', candidate: ev.candidate }) }); } catch {}
+        }
+      };
+      const offer = await pc.createOffer({offerToReceiveAudio:true, offerToReceiveVideo:true});
+      await pc.setLocalDescription(offer);
+      await fetch('/webrtc/offer', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, sdp: offer.sdp }) });
+      const pollAnswer = setInterval(async () => {
+        try {
+          const r = await fetch(`/webrtc/answer?pairId=${encodeURIComponent(basketId)}`);
+          const j = await r.json();
+          if (j && j.sdp && pc.signalingState !== 'stable') {
+            await pc.setRemoteDescription({ type:'answer', sdp: j.sdp });
+            clearInterval(pollAnswer);
+          }
+        } catch {}
+      }, 1500);
+      setInterval(async () => {
+        try {
+          const r = await fetch(`/webrtc/candidates?pairId=${encodeURIComponent(basketId)}&role=cashier`);
+          const j = await r.json();
+          for (const c of (j.items||[])) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} }
+        } catch {}
+      }, 1200);
+    } catch (e) { console.warn('RTC init failed', e); }
   }
 
   // ---- Options / Modifiers flow (cashier drives)

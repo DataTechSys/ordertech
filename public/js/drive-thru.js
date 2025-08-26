@@ -25,8 +25,8 @@ connect();
 init();
 
 async function init() {
-  setRemoteVideo(remoteEl, remote);
-  await startLocalCam(localEl);
+  const localStream = await startLocalCam(localEl);
+  initRTC(localStream);
 
   const cats = await loadCategories(tenant);
   allProds = await loadProducts(tenant);
@@ -178,6 +178,38 @@ function updateOptionsSelection(sel){
   if (sizeEl) sizeEl.checked = true; if (milkEl) milkEl.checked = true;
 }
 function hideOptionsUI(){ const m = document.getElementById('optionsModal'); if (m) m.style.display='none'; }
+
+function initRTC(localStream){
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    const remoteStream = new MediaStream();
+    if (remoteEl) { remoteEl.srcObject = remoteStream; remoteEl.play && remoteEl.play().catch(()=>{}); }
+    pc.ontrack = (ev) => { ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
+    pc.onicecandidate = async (ev) => { if (ev.candidate) { try { await fetch('/webrtc/candidate', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, role:'display', candidate: ev.candidate }) }); } catch {} } };
+    // Wait/poll for offer, then answer
+    const pollOffer = setInterval(async () => {
+      try {
+        const r = await fetch(`/webrtc/offer?pairId=${encodeURIComponent(basketId)}`);
+        const j = await r.json();
+        if (j && j.sdp && pc.signalingState === 'stable') {
+          await pc.setRemoteDescription({ type:'offer', sdp: j.sdp });
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await fetch('/webrtc/answer', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, sdp: answer.sdp }) });
+          clearInterval(pollOffer);
+        }
+      } catch {}
+    }, 1200);
+    setInterval(async () => {
+      try {
+        const r = await fetch(`/webrtc/candidates?pairId=${encodeURIComponent(basketId)}&role=display`);
+        const j = await r.json();
+        for (const c of (j.items||[])) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} }
+      } catch {}
+    }, 1000);
+  } catch (e) { console.warn('RTC init failed', e); }
+}
 
 function computePopular(all) {
   const withPhotos = (all || []).filter(p => p.image_url);

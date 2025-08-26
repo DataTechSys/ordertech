@@ -37,10 +37,14 @@ export async function loadProducts(tenant, categoryName = '') {
 export async function startLocalCam(videoEl) {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-    videoEl.srcObject = stream;
-    await videoEl.play();
+    if (videoEl) {
+      videoEl.srcObject = stream;
+      await videoEl.play().catch(() => {});
+    }
+    return stream;
   } catch (e) {
     console.warn('Local camera denied/unavailable:', e);
+    return null;
   }
 }
 
