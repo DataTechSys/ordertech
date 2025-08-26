@@ -1,0 +1,28 @@
+/* Responsive breakpoints and media-specific adjustments */
+
+/* Mobile & Portrait: stack video/bill vertically */
+@media (max-width: 768px) {
+  .topRow { grid-template-columns: 1fr; }
+  .videoPane .videoFrame { aspect-ratio: 16/9; }
+  .pip { width: 80px; height: 120px; }
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Large displays: optimize for kiosk */
+@media (min-width: 1200px) {
+  .app { max-width: 1400px; }
+  .grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+/* Portrait displays: optimize aspect ratios */
+@media (orientation: portrait) and (min-height: 800px) {
+  .topRow { grid-template-rows: 1fr auto; }
+  .videoPane .videoFrame { aspect-ratio: 3/4; }
+}
+
+/* High-DPI: sharper borders and shadows */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+  .billCard, .card, .videoFrame {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  }
+}

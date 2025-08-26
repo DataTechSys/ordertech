@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <title>Smart Order · Drive‑Thru</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <link rel="icon" href="/public/images/icon-192.png"/>
+        <link rel="stylesheet" href="/public/css/ui.css"/>
+        <link rel="stylesheet" href="/public/css/drive-thru.css"/>
+    </head>
+    <body>
+        <div class="app">
+            <!-- Banner -->
+            <div class="dt-banner"><span id="banner">Welcome to Koobs Café ☕</span><span id="rtcStatus" class="status-pill">Not paired</span></div>
+            <details class="debugBox"><summary>Debug</summary><pre id="debugLog" class="debugLog"></pre></details>
+            <!-- TOP: customer video (left, vertical, large) + order bill (right) -->
+            <section class="top top-dt">
+                <div class="videoZone">
+                    <div class="videoFrame">
+                        <video id="remoteVideo" playsinline autoplay muted></video>
+                        <div class="pip">
+                            <video id="selfVideo" playsinline autoplay muted></video>
+                        </div>
+                    </div>
+                </div>
+                <aside class="billZone">
+                    <header class="billHeader">
+                        <div>Your Order</div>
+                        <div class="muted" id="orderStatus">building…</div>
+                    </header>
+                    <div class="billBody" id="billItems"></div>
+                    <footer class="billFooter">
+                        <div class="total">Total: <span id="billTotal">0.000</span></div>
+                    </footer>
+                </aside>
+            </section>
+            <!-- BOTTOM: categories + menu grid -->
+            <section class="bottom">
+                <div class="categories" id="catBar"></div>
+                <div class="grid" id="productGrid"></div>
+            </section>
+        </div>
+        <script type="module" src="/public/js/drive-thru.js"></script>
+    </body>
+</html>

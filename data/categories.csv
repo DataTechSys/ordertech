@@ -1,0 +1,18 @@
+id,name,name_localized,reference,image
+92849df1-bda0-4513-b98c-09c2790db2ec,"Iced Coffee | 12oz (M)","القهوة البارده",16,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331924_9a47ce2e-40ab-4514-a824-022dba274466.png
+92849ecc-81b6-4ff7-a730-bfb782680245,"Hot Coffee","القهوة الساخنة",15,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331910_9a47ce17-dc33-4725-98f9-b03a2c58cd25.png
+92849f13-3b72-4eb3-a666-aa0cecb617df,"Speciality Coffee","القهوة المختصة",14,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696664420_9a4f8c02-0586-4227-b76f-0e35cd76c7c5.png
+92849f3c-ce15-4a90-b564-e2cc617cca4e,Sandwiches,السندويشات,13,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331893_9a47cdfd-cae7-43a1-88ef-bfa4994be4d2.png
+92849f7c-ad75-49c0-997f-dd78ea06eaf7,"Coffee Beans","حبوب القهوة",12,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331875_9a47cde3-365c-4188-85a4-3fd6bf21a8d2.png
+92849faa-62c4-48ba-9ec6-213f62800187,Gifts,هدايا,11,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331848_9a47cdba-6027-48d8-a59b-98f42812a93f.png
+92866b5c-765d-49ba-a26f-7a0a05dad5a0,"Sweets | Snacks","حلويات ومقبلات",10,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696664390_9a4f8bd4-8c16-423a-91d6-12fc4a20d3db.png
+92866b7c-38bd-4e31-b9de-ac0bfde93374,"Water | Juice","ماء وعصير",9,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696663347_9a4f859c-85c5-47b6-86fa-1de38a24433e.png
+929a4815-4a7f-40b3-abd2-eec4987c989a,Croissant,كرواسان,8,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696663001_9a4f838c-4766-435e-8bcd-3c0b30e9cc20.png
+92d11971-f3d1-4e17-916e-10c2c2985598,Frappe,فرابتشينو,17,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1755091766_9f9fea20-9ebe-4de2-a0e2-12e133ea5673.png
+92d4836c-8888-49cf-961d-78639b24b59d,"Mojito | Iced Tea",موهيتو,7,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331706_9a47cce0-7401-42c7-9d61-66c1025c73d4.png
+985ce150-13a1-4c5c-a5bf-19c81acb5345,"Soft Serve",,6,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1684744496_993a03b8-fb7c-4d74-97c0-46e5be7dfc64.png
+98b93022-4ca6-4625-926b-bcb1d2536927,Gathering,اليمعات,5,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696751718_9a519458-2966-40eb-8ca7-3fb643d230a0.png
+9c6f34e3-3f0d-44cf-b6e5-701468d08736,Milk,حليب,4,
+9d0775ac-75a0-4495-b67c-312ab59a3623,"Drinks | Non Coffee","مشروبات | بدون قهوة",3,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1729154358_9d440321-233a-4e58-94f1-13738d767e46.jpg
+9d425b06-9a80-4641-8701-89470d73bb86,"Hot Coffee | 12oz (L)","قهوة حارة | 12 اونصه",2,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1729154262_9d44028e-d169-4491-a769-d79a8ba3a619.png
+9d4261d3-ca6c-4fc9-a4e0-eeb56a9dac28,"Iced Coffee | 16oz (L)","قهوة مثلجة | 16 اونصه",1,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1729154331_9d4402f7-9144-4771-a35c-3617ede49c0e.png

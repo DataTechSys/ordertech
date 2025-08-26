@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Koobs · Drive‑Thru</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/css/style.css?v=1.0.1">
+</head>
+<body>
+  <header class="topbar">
+    <img class="logo" src="/public/images/koobs-logo.png" alt="koobs" />
+    <div class="live-pill">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="label">LIVE - Fouz</span>
+    </div>
+  </header>
+
+  <main class="canvas">
+    <!-- UPPER STRIP -->
+    <section class="upper">
+      <!-- LEFT: VIDEO with PiP -->
+      <div class="video-panel">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <video id="localVideo" class="pip" autoplay muted playsinline></video>
+      </div>
+
+      <!-- RIGHT: ORDER SUMMARY -->
+      <div class="order-panel">
+        <div class="billCard">
+          <header class="billHead">
+            <h3>Order Summary</h3>
+            <div class="billStatus" id="billStatus">—</div>
+          </header>
+          <ul id="billItems" class="billItems"></ul>
+          <footer class="billFoot">
+            <div class="row total"><span>Total</span><span id="grandTotal">0.000 KWD</span></div>
+          </footer>
+        </div>
+      </div>
+    </section>
+
+    <!-- MENU -->
+    <section class="menu">
+      <nav id="cats" class="tabs" role="tablist" aria-label="Menu categories"></nav>
+      <div id="grid" class="grid"></div>
+    </section>
+  </main>
+
+<script src="/public/js/cashier-complete.js?v=1.0.2" defer></script>
+</body>
+</html>

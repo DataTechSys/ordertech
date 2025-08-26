@@ -1,0 +1,257 @@
+/* Reset */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  background: #0b0b0c;
+  color: #fff;
+}
+
+/* App frame: vertical 9:16 screens */
+.app {
+  height: 100svh;           /* mobile-safe */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+/* TOP: 1/3 of height */
+.top {
+  min-height: 0;
+  height: 33.333vh;
+  display: grid;
+  grid-template-columns: 1fr 2fr; /* 1/3 video | 2/3 bill */
+  gap: 10px;
+}
+
+/* Video zone (left of top) */
+.videoZone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: #111418;
+  border: 1px solid #1f2733;
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 8px;
+}
+
+/* Keep main remote video at 9:16 inside the panel */
+.videoFrame {
+  position: relative;
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 9 / 16;
+  background: #0d1014;
+  border-radius: 12px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid #202734;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.35) inset;
+}
+
+.videoFrame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* a tiny bit “softer/clearer” like video apps */
+  filter: contrast(0.96) saturate(0.98) brightness(0.98);
+}
+
+/* Picture-in-Picture: local camera in top-left */
+.pip {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 24%;
+  aspect-ratio: 9 / 16;
+  background: #0e1116;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+
+.pip video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.96;                 /* subtle “glassiness” */
+}
+
+/* Bill zone (right of top) */
+.billZone {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #10141b, #0d1118);
+  border: 1px solid #1f2834;
+  border-radius: 16px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.billHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #121722;
+  border-bottom: 1px solid #1f2a3a;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.billBody {
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Bill line item */
+.line {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  background: #0f141c;
+  border: 1px solid #213041;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.lineThumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1a2230;
+  display: grid;
+  place-items: center;
+  border: 1px solid #263649;
+}
+.lineThumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.lineInfo {
+  min-width: 0;
+}
+.lineTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.lineMeta {
+  margin-top: 2px;
+  color: #adc0d8;
+  opacity: 0.8;
+  font-size: 11px;   /* small font for add-ons/modifiers */
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.linePrice {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Bill footer */
+.billFooter {
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #101522;
+  border-top: 1px solid #1e2a3a;
+}
+.total {
+  font-weight: 700;
+  font-size: 16px;
+}
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #2563eb;
+  color: #fff;
+  border: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* BOTTOM: 2/3 of height -> categories + menu grid */
+.bottom {
+  min-height: 0;
+  height: 66.666vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+}
+
+/* Categories */
+.categories {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.catBtn {
+  background: #121722;
+  color: #d7e4f7;
+  border: 1px solid #273246;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.catBtn.active {
+  background: #27457a;
+  border-color: #2f5bb6;
+}
+
+/* Product grid */
+.grid {
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* 3 cols is comfy on 9:16 portrait */
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.card {
+  background: #0f141c;
+  border: 1px solid #1f2c3e;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform .08s ease;
+}
+.card:active { transform: scale(0.98); }
+
+.cardImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #1a2433;
+  display: grid;
+  place-items: center;
+}
+.cardImg img { width: 100%; height: 100%; object-fit: cover; }
+
+.cardInfo {
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.cardTitle { font-size: 13px; font-weight: 700; }
+.cardPrice { font-size: 12px; opacity: 0.9; }
+
+/* Tiny helper */
+.muted { opacity: 0.7; }

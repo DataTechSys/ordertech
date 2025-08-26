@@ -1,0 +1,166 @@
+[
+  {
+    "category": "Iced Coffee",
+    "items": [
+      {
+        "id": "spanish_latte",
+        "name_en": "Spanish Latte",
+        "name_ar": "سبانيش لاتيه",
+        "price_kwd": 1.950,
+        "image": "/images/products/Spanish-Latte.png",
+        "allergens": ["milk"]
+      },
+      {
+        "id": "iced_americano",
+        "name_en": "Iced Americano",
+        "name_ar": "ايس امريكانو",
+        "price_kwd": 1.200,
+        "image": "Iced-Americano.png",
+        "allergens": []
+      },
+      {
+        "id": "caramel_latte",
+        "name_en": "Caramel Latte",
+        "name_ar": "كراميل لاتيه",
+        "price_kwd": 1.500,
+        "image": "Salted Caramel_PIC-109_A.png",
+        "allergens": ["milk"]
+      },
+      {
+        "id": "vanilla_frappe",
+        "name_en": "Vanilla Frappe",
+        "name_ar": "فانيلا فرابيه",
+        "price_kwd": 2.500,
+        "image": "ICED-Vanilla-Cappuccino.png",
+        "allergens": ["milk"]
+      },
+      {
+        "id": "spanish_latte_2",
+        "name_en": "Spanish Latte",
+        "name_ar": "سبانيش لاتيه",
+        "price_kwd": 1.950,
+        "image": "Spanish-Latte.png",
+        "allergens": ["milk"]
+      },
+      {
+        "id": "iced_americano_2",
+        "name_en": "Iced Americano",
+        "name_ar": "ايس امريكانو",
+        "price_kwd": 1.200,
+        "image": "Iced-Americano.png",
+        "allergens": []
+      }
+    ]
+  },
+  {
+    "category": "Hot Coffee",
+    "items": [
+      {
+        "id": "espresso",
+        "name_en": "Espresso",
+        "name_ar": "إسبريسو",
+        "price_kwd": 1.000,
+        "image": "Espresso_4_PHT-107_A.png",
+        "allergens": []
+      },
+      {
+        "id": "cappuccino",
+        "name_en": "Cappuccino",
+        "name_ar": "كابتشينو",
+        "price_kwd": 1.800,
+        "image": "Cappuccino_10_PHT-104_A.png",
+        "allergens": ["milk"]
+      },
+      {
+        "id": "flat_white",
+        "name_en": "Flat White",
+        "name_ar": "فلات وايت",
+        "price_kwd": 1.600,
+        "image": "Flat White_8_PHT-109_A.png",
+        "allergens": ["milk"]
+      },
+      {
+        "id": "turkish_coffee",
+        "name_en": "Turkish Coffee",
+        "name_ar": "قهوة تركية",
+        "price_kwd": 1.200,
+        "image": "Turkish Coffee_4_PHT-117_A.png",
+        "allergens": []
+      }
+    ]
+  },
+  {
+    "category": "Cold Drinks",
+    "items": [
+      {
+        "id": "mango_peach_lemonade",
+        "name_en": "Mango Peach Lemonade",
+        "name_ar": "ليمونادة مانجو خوخ",
+        "price_kwd": 2.000,
+        "image": "Mango Peach Lemonade_PBR-103_A.png",
+        "allergens": []
+      },
+      {
+        "id": "very_berry",
+        "name_en": "Very Berry",
+        "name_ar": "فيرى بيرى",
+        "price_kwd": 2.200,
+        "image": "Very Berry_PBR-109_A.png",
+        "allergens": []
+      },
+      {
+        "id": "strawberry_mojito",
+        "name_en": "Strawberry Mojito",
+        "name_ar": "ستروبري موهيتو",
+        "price_kwd": 2.300,
+        "image": "Strawberry-Mojito.png",
+        "allergens": []
+      },
+      {
+        "id": "tokyo_ice_tea",
+        "name_en": "Tokyo Ice Tea",
+        "name_ar": "شاي طوكيو المثلج",
+        "price_kwd": 2.100,
+        "image": "Tokyo Ice Tea_PBR-108_A.png",
+        "allergens": []
+      }
+    ]
+  },
+  {
+    "category": "Bakery",
+    "items": [
+      {
+        "id": "plain_croissant",
+        "name_en": "Plain Croissant",
+        "name_ar": "كرواسون سادة",
+        "price_kwd": 0.800,
+        "image": "Plain Croissant_PCR-105.png",
+        "allergens": ["gluten", "milk"]
+      },
+      {
+        "id": "cheese_croissant",
+        "name_en": "Cheese Croissant",
+        "name_ar": "كرواسون جبن",
+        "price_kwd": 1.200,
+        "image": "Cheese Croissant.png",
+        "allergens": ["gluten", "milk"]
+      },
+      {
+        "id": "choco_croissant",
+        "name_en": "Chocolate Croissant",
+        "name_ar": "كرواسون شوكولاتة",
+        "price_kwd": 1.300,
+        "image": "Croissant Chocolate.png",
+        "allergens": ["gluten", "milk"]
+      },
+      {
+        "id": "danish_zaatar",
+        "name_en": "Danish Zaatar",
+        "name_ar": "دانيش زعتر",
+        "price_kwd": 1.000,
+        "image": "Danish Zaatar.png",
+        "allergens": ["gluten", "sesame"]
+      }
+    ]
+  }
+]

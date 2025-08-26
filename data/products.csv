@@ -1,0 +1,7 @@
+id,name,sku,category_reference,tax_group_reference,is_sold_by_weight,is_active,is_stock_product,price,cost,barcode,description,preparation_time,calories,walking_minutes_to_burn_calories,is_high_salt,image,name_localized,description_localized
+9f18e970-837c-4526-b814-a5ba237d01dc,"Double Chocolate Brownie",PSN-145,10,,No,Yes,No,1.25,,,,,,,No,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1749293544_9f18ea08-2e0d-42a1-b04c-c2973bc3c02f.jpg,"براوني دبل تشوكولت",
+9f0d74f8-7623-489e-8902-4260150d2741,"Coffee Beans | Gwanda Blend 250g",659657707798,12,,No,Yes,No,6,,,,,,,No,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1752057778_9f594626-748b-451f-9bdd-7aa926939e12.jpg,"حبوب القهوة | خلطة جواندا 250 جرام",
+9eeab89a-4aa0-4858-80cf-a106ecebe88b,"Danish | Mixed Nuts",PCR-106,8,,No,No,No,1.35,,,,,,,No,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1747309603_9eeab8d2-f4d4-4598-9ece-fdb1d4e7ee2c.jpg,"دانيش مكسرات مشكلة",
+9eeab6d1-7d0b-4ac8-85b6-a22935cef9ac,"Danish | Ricotta",PCR-116,8,,No,No,No,1.25,,,,,,,No,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1747309369_9eeab76d-c762-4695-b75c-3104a9d539d4.jpg,"دانيش جبنة الريكوتا",
+9ebc1e48-6f4b-44d1-89ae-3eef279dec5b,"Hazelnut Wafer Protein Bar",PSN-146,10,,No,Yes,No,1.25,,,,,,,No,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1745309565_9ebc27ab-9eeb-40ff-825b-3e6d1a0270a5.jpg,"لوح بروتين بطعم البندق والويفر",
+...
