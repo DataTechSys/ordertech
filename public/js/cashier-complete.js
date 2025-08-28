@@ -503,6 +503,8 @@
   if (clearBtn) clearBtn.addEventListener('click', () => window.onClearBasket());
   const payBtn = document.getElementById('payBtn');
   if (payBtn) payBtn.addEventListener('click', async () => {
+    // Clear basket immediately on cashier for responsive UX
+    try { window.onClearBasket && window.onClearBasket(); } catch {}
     try {
       const r = await fetch(`/session/pay?pairId=${encodeURIComponent(basketId)}`, { method:'POST' });
       await r.json().catch(()=>({}));

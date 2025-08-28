@@ -50,6 +50,7 @@ let imgMap = new Map();
 let reconnectDelay = 500;
 let reconnectTimer = null;
 let peersConnected = false;
+let statusFreezeUntil = 0; // gate READY flicker shortly after offers/restarts
 
 connect();
 init();
@@ -227,6 +228,7 @@ function connect(){
       if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
       // Start RTC immediately; display will poll for offer until cashier posts one
       startRTC();
+      statusFreezeUntil = Date.now() + 3000;
     });
     ws.addEventListener('message', async (ev) => {
       try {
@@ -234,6 +236,7 @@ function connect(){
         if (msg.type === 'rtc:stopped') {
           if (msg.reason === 'preclear') {
             stopRTC('preclear');
+            statusFreezeUntil = Date.now() + 3000;
             scheduleRtcRestart('preclear');
           } else {
             stopRTC('remote');
@@ -252,6 +255,13 @@ function connect(){
             if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
             startRTC();
           } else {
+            // Avoid flicker to READY while we just received/are processing an offer/reconnect
+            const pc = window.__pcDisplay;
+            const midHandshake = (Date.now() < statusFreezeUntil) || (pc && (
+              pc.connectionState === 'connecting' || pc.connectionState === 'connected' ||
+              pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'connected'
+            ));
+            if (midHandshake) return;
             peersConnected = false;
             if (label) label.textContent = 'READY';
             if (dot) dot.style.background = '#f59e0b';
@@ -270,6 +280,7 @@ function connect(){
         if (msg.type === 'rtc:offer') {
           // A fresh offer is available; force-reset and (re)start RTC to fetch it
           try { stopRTC('new-offer'); } catch {}
+          statusFreezeUntil = Date.now() + 3000;
           setTimeout(() => { try { startRTC(); } catch {} }, 150);
           return;
         }

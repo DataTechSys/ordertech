@@ -517,6 +517,11 @@ addRoute('post', '/session/pay', async (req, res) => {
   if (!s.osn) s.osn = genOSN();
   s.status = 'paid';
   try { broadcast(id, { type:'session:paid', basketId: id, osn: s.osn }); } catch {}
+  // Clear basket on pay
+  try {
+    const b = ensureBasket(id); b.items.clear(); computeTotals(b); b.version++;
+    broadcast(id, { type:'basket:update', basketId: id, op: { action: 'clear' }, basket: toWireBasket(b), serverTs: Date.now() });
+  } catch {}
   // Also stop RTC to ensure clean end
   try { broadcast(id, { type:'rtc:stopped', basketId: id, reason: 'paid' }); } catch {}
   res.json({ ok:true, osn: s.osn });
