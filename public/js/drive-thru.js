@@ -8,6 +8,12 @@ const gridEl = qs('#grid');
 const remoteEl = qs('#remoteVideo');
 const localEl = qs('#localVideo');
 const posterEl = document.getElementById('posterOverlay');
+const posterA = posterEl ? document.getElementById('posterImgA') : null;
+const posterB = posterEl ? document.getElementById('posterImgB') : null;
+let posterList = [];
+let posterIdx = 0;
+let posterTimer = null;
+const POSTER_INTERVAL_MS = 8000;
 const cart = createCart();
 
 // selection highlight (read-only mirror)
@@ -57,6 +63,57 @@ let lastCashierName = 'Cashier';
 function setPosterVisible(show){ try { if (posterEl) posterEl.style.display = show ? 'flex' : 'none'; } catch {} }
 // Show poster by default until RTC is connected
 setPosterVisible(true);
+
+function startPosterRotation(){
+  if (!posterEl) return;
+  // Try to fetch tenant posters
+  fetch('/posters', { cache: 'no-store' }).then(r => r.json()).then(j => {
+    const items = Array.isArray(j?.items) ? j.items.filter(u => typeof u === 'string' && u) : [];
+    if (items.length) {
+      posterList = items;
+      initPosterCycle();
+      return;
+    }
+    // Fallback single poster (brand)
+    if (posterA) { posterA.src = '/public/images/koobs-bg.png'; posterA.classList.add('visible'); }
+  }).catch(() => {
+    if (posterA) { posterA.src = '/public/images/koobs-bg.png'; posterA.classList.add('visible'); }
+  });
+}
+
+function swapPoster(){
+  if (!posterEl || posterList.length === 0) return;
+  const next = posterList[posterIdx % posterList.length];
+  const aVis = posterA && posterA.classList.contains('visible');
+  const showB = aVis; // if A visible, fade in B; else fade in A
+  const target = showB ? posterB : posterA;
+  const other  = showB ? posterA : posterB;
+  if (target) {
+    if (target.src !== next) target.src = next;
+    target.classList.add('visible');
+  }
+  if (other) {
+    other.classList.remove('visible');
+  }
+  posterIdx++;
+}
+
+function initPosterCycle(){
+  // prime first
+  if (!posterA || !posterB) return;
+  posterIdx = 0;
+  // set first into A
+  if (posterList.length) {
+    posterA.src = posterList[0];
+    posterA.classList.add('visible');
+    posterIdx = 1;
+  }
+  if (posterTimer) { try { clearInterval(posterTimer); } catch {} posterTimer = null; }
+  posterTimer = setInterval(swapPoster, POSTER_INTERVAL_MS);
+}
+
+// Begin poster rotation ASAP
+startPosterRotation();
 
 connect();
 init();

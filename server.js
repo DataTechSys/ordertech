@@ -1255,6 +1255,20 @@ app.use(express.static(PUB));
 app.use('/public', express.static(PUB));
 addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'images', 'koobs-logo.png')));
 
+// Posters list for rotating display overlay
+addRoute('get', '/posters', (_req, res) => {
+  try {
+    const dir = path.join(PUB, 'images', 'poster');
+    const files = fs.readdirSync(dir)
+      .filter(f => /\.(png|jpe?g|webp|gif|avif)$/i.test(f))
+      .sort((a,b) => a.localeCompare(b));
+    const items = files.map(f => `/public/images/poster/${encodeURIComponent(f)}`);
+    res.json({ items });
+  } catch {
+    res.json({ items: [] });
+  }
+});
+
 addRoute('get', '/drive', (_req, res) => res.sendFile(path.join(PUB, 'drive-thru.html')));
 addRoute('get', '/cashier', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cashier-new.html'));
