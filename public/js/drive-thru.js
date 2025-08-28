@@ -7,6 +7,7 @@ const catsEl = qs('#cats');
 const gridEl = qs('#grid');
 const remoteEl = qs('#remoteVideo');
 const localEl = qs('#localVideo');
+const posterEl = document.getElementById('posterOverlay');
 const cart = createCart();
 
 // selection highlight (read-only mirror)
@@ -52,6 +53,10 @@ let reconnectTimer = null;
 let peersConnected = false;
 let statusFreezeUntil = 0; // gate READY flicker shortly after offers/restarts
 let lastCashierName = 'Cashier';
+
+function setPosterVisible(show){ try { if (posterEl) posterEl.style.display = show ? 'flex' : 'none'; } catch {} }
+// Show poster by default until RTC is connected
+setPosterVisible(true);
 
 connect();
 init();
@@ -111,6 +116,8 @@ function stopRTC(reason){
     if (dot) dot.style.background = '#f59e0b';
     if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
   }
+  // Always show poster when RTC is stopped
+  setPosterVisible(true);
 }
 async function startRTC(){
   if (rtcStarted || rtcStarting) return;
@@ -213,7 +220,7 @@ function connect(){
     // Clear any pending reconnect to avoid duplicated sockets
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     ws = new WebSocket(proto + '://' + location.host);
-    ws.addEventListener('open', () => {
+ws.addEventListener('open', () => {
       reconnectDelay = 500;
       try { ws.send(JSON.stringify({ type: 'subscribe', basketId })); } catch {}
       // Identify as display with name for peer-status
@@ -227,6 +234,8 @@ function connect(){
       if (label) label.textContent = 'READY';
       if (dot) dot.style.background = '#f59e0b';
       if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+      // Keep poster visible while connecting/handshaking
+      setPosterVisible(true);
       // Start RTC immediately; display will poll for offer until cashier posts one
       startRTC();
       statusFreezeUntil = Date.now() + 3000;
@@ -273,8 +282,10 @@ function connect(){
         if (msg.type === 'session:paid' && msg.basketId === basketId) {
           const h = document.getElementById('osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
         }
-        if (msg.type === 'session:ended' && msg.basketId === basketId) {
+if (msg.type === 'session:ended' && msg.basketId === basketId) {
           const h = document.getElementById('osnHeader'); if (h) { h.textContent = ''; h.style.display = 'none'; }
+          // Back to poster when session ends
+          setPosterVisible(true);
         }
         if (msg.type === 'rtc:offer') {
           // A fresh offer is available; force-reset and (re)start RTC to fetch it
@@ -307,13 +318,15 @@ function connect(){
         }
       } catch {}
     });
-    ws.addEventListener('close', () => {
+ws.addEventListener('close', () => {
       const pill = document.getElementById('linkPill');
       const label = document.getElementById('linkStatus');
       const dot = pill ? pill.querySelector('.dot') : null;
       if (label) label.textContent = 'OFFLINE';
       if (dot) dot.style.background = '#ef4444';
       if (pill) { pill.style.background = '#ef4444'; pill.style.color = '#fff'; }
+      // Show poster while offline
+      setPosterVisible(true);
       // Attempt to reconnect with backoff
       if (!reconnectTimer) {
         const delay = Math.min(reconnectDelay, 8000) + Math.floor(Math.random()*250);
@@ -412,14 +425,17 @@ pc.addEventListener('iceconnectionstatechange', () => {
       const pill = document.getElementById('linkPill');
       const label = document.getElementById('linkStatus');
       const dot = pill ? pill.querySelector('.dot') : null;
-      if (pc.iceConnectionState === 'connected') {
+      const isConnected = (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed');
+      if (isConnected) {
         rtcBackoff = 1000;
         if (label) label.textContent = `CONNECTED — ${lastCashierName}`;
         if (dot) dot.style.background = '#22c55e';
         if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+        setPosterVisible(false);
         statusFreezeUntil = Date.now() + 2000;
-      }
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'new' || pc.iceConnectionState === 'checking') {
+        // Show poster when not connected
+        setPosterVisible(true);
         if (Date.now() >= statusFreezeUntil) {
           if (label) label.textContent = 'READY';
           if (dot) dot.style.background = '#f59e0b';
@@ -428,7 +444,7 @@ pc.addEventListener('iceconnectionstatechange', () => {
         scheduleRtcRestart(pc.iceConnectionState);
       }
     });
-    pc.addEventListener('connectionstatechange', () => {
+pc.addEventListener('connectionstatechange', () => {
       console.log('RTC(display) connectionState:', pc.connectionState);
       const pill = document.getElementById('linkPill');
       const label = document.getElementById('linkStatus');
@@ -438,9 +454,11 @@ pc.addEventListener('iceconnectionstatechange', () => {
         if (label) label.textContent = `CONNECTED — ${lastCashierName}`;
         if (dot) dot.style.background = '#22c55e';
         if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+        setPosterVisible(false);
         statusFreezeUntil = Date.now() + 2000;
-      }
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'connecting' || pc.connectionState === 'new') {
+        // Show poster when not connected
+        setPosterVisible(true);
         if (Date.now() >= statusFreezeUntil) {
           if (label) label.textContent = 'READY';
           if (dot) dot.style.background = '#f59e0b';
