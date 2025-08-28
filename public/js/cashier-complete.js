@@ -127,10 +127,18 @@
     }
     window.__setReadyUI = setReadyUI; window.__setConnectedUI = setConnectedUI;
     if (btnPlay) btnPlay.onclick = async (ev) => {
-      // Always use Play as the chooser for displays; selecting will auto-start
       ev.preventDefault();
-      const items = await fetchDisplays();
-      showDropdown(items, btnPlay);
+      // If not paired, use Play as the chooser for displays; otherwise start session immediately
+      if (!basketId || basketId === 'unpaired') {
+        const items = await fetchDisplays();
+        showDropdown(items, btnPlay);
+        return;
+      }
+      try {
+        await fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' });
+      } catch {}
+      canConnect = true;
+      if (!rtcStarted && !rtcStarting) startRTC();
     };
     if (btnStop) btnStop.onclick = async () => {
       if (peersConnected) {
