@@ -51,6 +51,7 @@ let reconnectDelay = 500;
 let reconnectTimer = null;
 let peersConnected = false;
 let statusFreezeUntil = 0; // gate READY flicker shortly after offers/restarts
+let lastCashierName = 'Cashier';
 
 connect();
 init();
@@ -249,13 +250,11 @@ function connect(){
           const dot = pill ? pill.querySelector('.dot') : null;
           if (msg.status === 'connected') {
             peersConnected = true;
-            const first = String(msg.cashierName||'Cashier').split(/\s+/)[0];
-            if (label) label.textContent = `CONNECTED — ${first}`;
-            if (dot) dot.style.background = '#22c55e';
-            if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+            lastCashierName = String(msg.cashierName||'Cashier').split(/\s+/)[0];
+            // Do not set pill here; let RTCPeerConnection events drive the UI to avoid flicker
             startRTC();
           } else {
-            // Avoid flicker to READY while we just received/are processing an offer/reconnect
+            // Avoid flicker to READY while we are connecting/connected
             const pc = window.__pcDisplay;
             const midHandshake = (Date.now() < statusFreezeUntil) || (pc && (
               pc.connectionState === 'connecting' || pc.connectionState === 'connected' ||
@@ -410,13 +409,45 @@ console.log('RTC(display) init', { pairId: basketId, icePolicy, servers: Array.i
     pc.ontrack = (ev) => { ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
 pc.addEventListener('iceconnectionstatechange', () => {
       console.log('RTC(display) iceConnectionState:', pc.iceConnectionState);
-      if (pc.iceConnectionState === 'connected') { rtcBackoff = 1000; }
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') scheduleRtcRestart(pc.iceConnectionState);
+      const pill = document.getElementById('linkPill');
+      const label = document.getElementById('linkStatus');
+      const dot = pill ? pill.querySelector('.dot') : null;
+      if (pc.iceConnectionState === 'connected') {
+        rtcBackoff = 1000;
+        if (label) label.textContent = `CONNECTED — ${lastCashierName}`;
+        if (dot) dot.style.background = '#22c55e';
+        if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+        statusFreezeUntil = Date.now() + 2000;
+      }
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        if (Date.now() >= statusFreezeUntil) {
+          if (label) label.textContent = 'READY';
+          if (dot) dot.style.background = '#f59e0b';
+          if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+        }
+        scheduleRtcRestart(pc.iceConnectionState);
+      }
     });
     pc.addEventListener('connectionstatechange', () => {
       console.log('RTC(display) connectionState:', pc.connectionState);
-      if (pc.connectionState === 'connected') { rtcBackoff = 1000; }
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') scheduleRtcRestart(pc.connectionState);
+      const pill = document.getElementById('linkPill');
+      const label = document.getElementById('linkStatus');
+      const dot = pill ? pill.querySelector('.dot') : null;
+      if (pc.connectionState === 'connected') {
+        rtcBackoff = 1000;
+        if (label) label.textContent = `CONNECTED — ${lastCashierName}`;
+        if (dot) dot.style.background = '#22c55e';
+        if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+        statusFreezeUntil = Date.now() + 2000;
+      }
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        if (Date.now() >= statusFreezeUntil) {
+          if (label) label.textContent = 'READY';
+          if (dot) dot.style.background = '#f59e0b';
+          if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+        }
+        scheduleRtcRestart(pc.connectionState);
+      }
     });
     pc.addEventListener('icegatheringstatechange', () => console.log('RTC(display) iceGatheringState:', pc.iceGatheringState));
     pc.onicecandidate = async (ev) => {
