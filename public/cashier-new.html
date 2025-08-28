@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/public/css/style.css?v=1.0.1">
-  <script src="/public/js/device-activation.js?v=1.0.18" data-role="cashier" defer></script>
+  <script src="/public/js/device-activation.js?v=1.0.19" data-role="cashier" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -18,20 +18,14 @@
       .glass-btn.orange{ background:linear-gradient(180deg,#fbbf24,#f59e0b); color:#0b1220; border-color:#d97706; }
       .glass-btn.red{ background:linear-gradient(180deg,#f87171,#ef4444); color:#fff; border-color:#dc2626; }
       .osn-badge{ margin-left:8px; padding:4px 8px; border-radius:6px; background:#1f2937; color:#fff; font-size:12px; border:1px solid #334155; }
+      .osn-header{ margin-right:8px; padding:2px 6px; border-radius:6px; background:#111827; color:#fff; font-size:12px; border:1px solid #334155; display:inline-block; }
       .pay-btn{ margin-top:8px; width:100%; padding:10px 12px; border-radius:8px; background:#22c55e; color:#0b1220; font-weight:700; border:1px solid #16a34a; cursor:pointer; }
     </style>
     <img class="logo" src="/public/images/koobs-logo.png" alt="koobs" />
     <div class="glass-wrap">
-      <div class="live-pill" id="linkPill">
-        <span class="dot" aria-hidden="true"></span>
-        <span class="label" id="linkStatus">READY</span>
-      </div>
-      <button id="btnPlay" class="glass-btn orange" title="Start session">▶ Play</button>
-      <button id="btnStop" class="glass-btn red" style="display:none;" title="Stop session">■ Stop</button>
-      <span id="osnBadge" class="osn-badge" style="display:none;">OSN-00000</span>
-    </div>
-      <span class="dot" aria-hidden="true"></span>
-      <span class="label" id="linkStatus">READY</span>
+      <button id="btnPlay" class="glass-btn orange" title="Start session or choose display">▶ Play</button>
+      <button id="btnStop" class="glass-btn red" title="Stop session">■ Stop</button>
+      <span id="osnBadge" class="osn-badge" style="display:none;">KOA-0000</span>
     </div>
   </header>
 
@@ -47,8 +41,8 @@
       <!-- RIGHT: ORDER SUMMARY -->
       <div class="order-panel">
         <div class="billCard">
-          <header class="billHead">
-            <h3>Order Summary</h3>
+          <header class="billHead" style="align-items:flex-start;">
+            <h3 style="margin:0;"><span id="osnHeader" class="osn-header" style="display:none;"></span> Order Summary</h3>
             <div class="billStatus" id="billStatus">—</div>
           </header>
           <ul id="billItems" class="billItems"></ul>
@@ -78,6 +72,6 @@
     </div>
   </div>
 
-<script src="/public/js/cashier-complete.js?v=1.0.18" defer></script>
+<script src="/public/js/cashier-complete.js?v=1.0.19" defer></script>
 </body>
 </html>

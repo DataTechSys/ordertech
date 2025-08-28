@@ -258,6 +258,15 @@ function connect(){
             if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
           }
         }
+        if (msg.type === 'session:started' && msg.basketId === basketId) {
+          const h = document.getElementById('osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
+        }
+        if (msg.type === 'session:paid' && msg.basketId === basketId) {
+          const h = document.getElementById('osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
+        }
+        if (msg.type === 'session:ended' && msg.basketId === basketId) {
+          const h = document.getElementById('osnHeader'); if (h) { h.textContent = ''; h.style.display = 'none'; }
+        }
         if (msg.type === 'rtc:offer') {
           // A fresh offer is available; force-reset and (re)start RTC to fetch it
           try { stopRTC('new-offer'); } catch {}

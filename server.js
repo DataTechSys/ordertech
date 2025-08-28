@@ -500,6 +500,7 @@ addRoute('post', '/session/start', async (req, res) => {
     s.osn = genOSN(); s.status = 'active'; s.started_at = Date.now();
   }
   try { broadcast(id, { type:'session:started', basketId: id, osn: s.osn }); } catch {}
+  try { broadcastPeerStatus(id); } catch {}
   res.json({ ok:true, osn: s.osn });
 });
 addRoute('post', '/session/reset', async (req, res) => {
@@ -1271,9 +1272,19 @@ const clientMeta = new Map(); // ws -> { clientId, basketId, alive }
 
 // Lightweight session tracking (OSN) — in-memory; optional DB later
 const sessions = new Map(); // basketId -> { osn: string, status: 'ready'|'active'|'paid', started_at: number }
+// Sequential OSN: KOA#### where A..Z cycles and #### is 0001..9999
+let __OSN_LETTER = 'A';
+let __OSN_COUNTER = 1;
 function genOSN(){
-  const n = Math.floor(10000 + Math.random()*90000);
-  return `OSN-${n}`;
+  const num = String(__OSN_COUNTER).padStart(4, '0');
+  const osn = `KO${__OSN_LETTER}${num}`;
+  __OSN_COUNTER++;
+  if (__OSN_COUNTER > 9999) {
+    __OSN_COUNTER = 1;
+    const code = __OSN_LETTER.charCodeAt(0);
+    __OSN_LETTER = code >= 90 ? 'A' : String.fromCharCode(code + 1);
+  }
+  return osn;
 }
 function getSession(basketId){
   let s = sessions.get(basketId);

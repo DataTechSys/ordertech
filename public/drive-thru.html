@@ -7,7 +7,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/public/css/style.css?v=1.0.1">
-  <script src="/public/js/device-activation.js?v=1.0.18" data-role="display" defer></script>
+  <style>.osn-header{ margin-right:8px; padding:2px 6px; border-radius:6px; background:#111827; color:#fff; font-size:12px; border:1px solid #334155; display:inline-block; }</style>
+  <script src="/public/js/device-activation.js?v=1.0.19" data-role="display" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -30,8 +31,8 @@
       <!-- RIGHT: ORDER SUMMARY -->
       <div class="order-panel">
         <div class="billCard">
-          <header class="billHead">
-            <h3>Order Summary</h3>
+          <header class="billHead" style="align-items:flex-start;">
+            <h3 style="margin:0;"><span id="osnHeader" class="osn-header" style="display:none;"></span> Order Summary</h3>
             <div class="billStatus" id="billStatus">—</div>
           </header>
           <ul id="billItems" class="billItems"></ul>
@@ -60,6 +61,6 @@
     </div>
   </div>
 
-<script type="module" src="/public/js/drive-thru.js?v=1.0.18" defer></script>
+<script type="module" src="/public/js/drive-thru.js?v=1.0.19" defer></script>
 </body>
 </html>

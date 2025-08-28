@@ -19,9 +19,10 @@
       return Array.isArray(j.items) ? j.items : [];
     } catch { return []; }
   }
-  function showDropdown(items){
-    const pill = qs('#linkPill'); if (!pill) return;
-    const pillRect = pill.getBoundingClientRect();
+  function showDropdown(items, anchorEl){
+    const anchor = anchorEl || qs('#btnPlay') || document.body;
+    const rectSrc = (anchor.getBoundingClientRect ? anchor : document.body);
+    const pillRect = rectSrc.getBoundingClientRect ? rectSrc.getBoundingClientRect() : { top: 20, left: 20, bottom: 40 };
     let menu = qs('#displayDropdown');
     if (!menu){
       menu = document.createElement('div');
@@ -109,12 +110,7 @@
     menu.style.left = left + 'px';
     menu.style.top = top + 'px';
   }
-  function initPill(){
-    const pill = qs('#linkPill'); if (!pill) return;
-    setPill('READY', false);
-    const dot = pill.querySelector('.dot'); if (dot) dot.style.background = '#f59e0b'; if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
-    pill.style.cursor = 'pointer';
-    pill.onclick = async () => { const items = await fetchDisplays(); showDropdown(items); };
+  function initControls(){
     // Wire Play/Stop
     const btnPlay = qs('#btnPlay');
     const btnStop = qs('#btnStop');
@@ -130,9 +126,15 @@
       if (osnBadge && osnBadge.textContent) osnBadge.style.display = '';
     }
     window.__setReadyUI = setReadyUI; window.__setConnectedUI = setConnectedUI;
-    if (btnPlay) btnPlay.onclick = async () => {
+    if (btnPlay) btnPlay.onclick = async (ev) => {
+      // If not paired, use Play as the chooser for displays
+      if (!basketId || basketId === 'unpaired') {
+        ev.preventDefault();
+        const items = await fetchDisplays();
+        showDropdown(items, btnPlay);
+        return;
+      }
       try {
-        // Ensure a session OSN exists
         await fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' });
       } catch {}
       canConnect = true;
@@ -147,7 +149,7 @@
       }
     };
   }
-  document.addEventListener('DOMContentLoaded', initPill);
+  document.addEventListener('DOMContentLoaded', initControls);
   // Pairing gate: connect whenever a basket is present. ?pair=1 is treated as a one-shot hint only.
   const paramsGate = new URLSearchParams(location.search);
   const basketIdParam = paramsGate.get('basket') || '';
@@ -180,12 +182,6 @@
         const name = localStorage.getItem('DEVICE_NAME_CASHIER') || localStorage.getItem('DEVICE_NAME') || 'Cashier';
         ws.send(JSON.stringify({ type:'hello', basketId, role:'cashier', name }));
       } catch {}
-      const pill = document.getElementById('linkPill');
-      const label = document.getElementById('linkStatus');
-      const dot = pill ? pill.querySelector('.dot') : null;
-      if (label && !shouldConnect) label.textContent = 'READY';
-      if (dot && !shouldConnect) dot.style.background = '#f59e0b';
-      if (pill && !shouldConnect) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
       // If we connected via ?pair=1, clear the flag from the URL so refresh won't auto-connect
       if (shouldConnect) {
         const p = new URLSearchParams(location.search);
@@ -193,33 +189,26 @@
         const qs3 = p.toString();
         history.replaceState(null, '', location.pathname + (qs3 ? ('?' + qs3) : ''));
       }
-      // Start RTC immediately when we intended to pair; display will pick up the offer
-      if (canConnect) startRTC();
+      // Auto-start session and RTC when we intended to pair
+      if (canConnect) {
+        try { fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' }); } catch {}
+        startRTC();
+      }
     });
     ws.addEventListener('message', (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.type === 'basket:sync' || msg.type === 'basket:update') {
         applyBasket(msg.basket);
       } else if (msg.type === 'peer:status') {
-        const label = document.getElementById('linkStatus');
-        const pill = document.getElementById('linkPill');
-        const dot = pill ? pill.querySelector('.dot') : null;
         if (msg.status === 'connected') {
           peersConnected = true;
-          const disp = msg.displayName || 'Display';
-          if (label) label.textContent = `Connected — ${disp}`;
-          if (dot) dot.style.background = '#22c55e';
-          if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
           if (window.__setConnectedUI) window.__setConnectedUI();
           startRTC();
         } else {
           peersConnected = false;
-          if (label) label.textContent = 'READY';
-          if (dot) dot.style.background = '#f59e0b';
-          if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
           if (window.__setReadyUI) window.__setReadyUI();
         }
-      } else if (msg.type === 'rtc:stopped' && msg.basketId === basketId) {
+      }
         if (preClearing) {
           try { console.log('RTC(cashier) ignoring rtc:stopped (pre-clear)'); } catch {}
         } else {
@@ -229,12 +218,15 @@
         }
       } else if (msg.type === 'session:started' && msg.basketId === basketId) {
         const b = qs('#osnBadge'); if (b) { b.textContent = msg.osn || ''; b.style.display = msg.osn ? '' : 'none'; }
+        const h = qs('#osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
       } else if (msg.type === 'session:paid' && msg.basketId === basketId) {
         const b = qs('#osnBadge'); if (b) { b.textContent = msg.osn || ''; b.style.display = ''; }
+        const h = qs('#osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
         peersConnected = false;
         stopRTC('remote');
       } else if (msg.type === 'session:ended' && msg.basketId === basketId) {
         const b = qs('#osnBadge'); if (b) { b.textContent = ''; b.style.display = 'none'; }
+        const h = qs('#osnHeader'); if (h) { h.textContent = ''; h.style.display = 'none'; }
       } else if (msg.type === 'error') {
         console.warn('WS error:', msg.error);
       }
@@ -362,12 +354,6 @@
     } catch {}
     try { if (remoteEl) remoteEl.srcObject = null; } catch {}
     rtcStarted = false; rtcStarting = false; restartTimer && clearTimeout(restartTimer); restartTimer = null; rtcBackoff = 1000;
-    const pill = document.getElementById('linkPill');
-    const label = document.getElementById('linkStatus');
-    const dot = pill ? pill.querySelector('.dot') : null;
-    if (label) label.textContent = 'READY';
-    if (dot) dot.style.background = '#f59e0b';
-    if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
     if (window.__setReadyUI) window.__setReadyUI();
     try { window.__ICE_SERVERS = null; } catch {}
   }
