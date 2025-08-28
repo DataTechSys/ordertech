@@ -326,7 +326,9 @@ function setupPresenceHeartbeat(){
     try {
       const headers = { 'content-type':'application/json', 'x-device-token': token };
       if (tenant) headers['x-tenant-id'] = tenant;
-      await fetch('/presence/display', { method:'POST', headers, body: JSON.stringify({}) });
+      const name = localStorage.getItem('DEVICE_NAME_DISPLAY') || localStorage.getItem('DEVICE_NAME') || 'Drive‑Thru';
+      const branch = localStorage.getItem('DEVICE_BRANCH') || '';
+      await fetch('/presence/display', { method:'POST', headers, body: JSON.stringify({ id: basketId, name, branch }) });
     } catch {}
   }, 5000);
 }

@@ -84,7 +84,7 @@
     });
     // After content is laid out, clamp to viewport
     repositionDropdown(menu, pillRect);
-    const onDoc = (ev) => { if (!menu.contains(ev.target) && ev.target !== pill) { menu.remove(); document.removeEventListener('click', onDoc); } };
+    const onDoc = (ev) => { if (!menu.contains(ev.target) && ev.target !== anchor) { menu.remove(); document.removeEventListener('click', onDoc); } };
     setTimeout(() => document.addEventListener('click', onDoc), 0);
   }
 
@@ -127,18 +127,10 @@
     }
     window.__setReadyUI = setReadyUI; window.__setConnectedUI = setConnectedUI;
     if (btnPlay) btnPlay.onclick = async (ev) => {
-      // If not paired, use Play as the chooser for displays
-      if (!basketId || basketId === 'unpaired') {
-        ev.preventDefault();
-        const items = await fetchDisplays();
-        showDropdown(items, btnPlay);
-        return;
-      }
-      try {
-        await fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' });
-      } catch {}
-      canConnect = true;
-      if (!rtcStarted && !rtcStarting) startRTC();
+      // Always use Play as the chooser for displays; selecting will auto-start
+      ev.preventDefault();
+      const items = await fetchDisplays();
+      showDropdown(items, btnPlay);
     };
     if (btnStop) btnStop.onclick = async () => {
       if (peersConnected) {
