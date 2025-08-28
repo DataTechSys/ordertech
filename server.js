@@ -491,17 +491,62 @@ function getRoomMem(id){
   return r;
 }
 
+// --- Session lifecycle (OSN)
+addRoute('post', '/session/start', async (req, res) => {
+  const id = String(req.query.pairId||req.body?.pairId||'').trim();
+  if (!id) return res.status(400).json({ error:'pairId required' });
+  const s = getSession(id);
+  if (!s.osn || s.status !== 'active') {
+    s.osn = genOSN(); s.status = 'active'; s.started_at = Date.now();
+  }
+  try { broadcast(id, { type:'session:started', basketId: id, osn: s.osn }); } catch {}
+  res.json({ ok:true, osn: s.osn });
+});
+addRoute('post', '/session/reset', async (req, res) => {
+  const id = String(req.query.pairId||req.body?.pairId||'').trim();
+  if (!id) return res.status(400).json({ error:'pairId required' });
+  sessions.delete(id);
+  try { broadcast(id, { type:'session:ended', basketId: id }); } catch {}
+  res.json({ ok:true });
+});
+addRoute('post', '/session/pay', async (req, res) => {
+  const id = String(req.query.pairId||req.body?.pairId||'').trim();
+  if (!id) return res.status(400).json({ error:'pairId required' });
+  const s = getSession(id);
+  if (!s.osn) s.osn = genOSN();
+  s.status = 'paid';
+  try { broadcast(id, { type:'session:paid', basketId: id, osn: s.osn }); } catch {}
+  // Also stop RTC to ensure clean end
+  try { broadcast(id, { type:'rtc:stopped', basketId: id, reason: 'paid' }); } catch {}
+  res.json({ ok:true, osn: s.osn });
+});
+
 addRoute('post', '/webrtc/offer', async (req, res) => {
   const id = String(req.body?.pairId||'').trim(); const sdp = req.body?.sdp;
   if(!id || !sdp) return res.status(400).json({ error:'pairId and sdp required' });
   if (HAS_DB) {
-    await db(`insert into webrtc_rooms(pair_id, offer, updated_at) values ($1,$2,now())
-              on conflict (pair_id) do update set offer=excluded.offer, updated_at=now()`, [id, sdp]);
-    try { console.log(`[rtc] POST /webrtc/offer pair=${id} len=${sdp.length}`); } catch {}
+    // Reset any stale state (answer, ICE queues) when a new offer arrives
+    await db(`insert into webrtc_rooms(pair_id, offer, answer, ice_cashier_queued, ice_display_queued, updated_at)
+              values ($1,$2,null,'[]'::jsonb,'[]'::jsonb,now())
+              on conflict (pair_id)
+              do update set offer=excluded.offer,
+                            answer=null,
+                            ice_cashier_queued='[]'::jsonb,
+                            ice_display_queued='[]'::jsonb,
+                            updated_at=now()`,
+            [id, sdp]);
+    try { console.log(`[rtc] POST /webrtc/offer pair=${id} len=${sdp.length} (state reset)`); } catch {}
+    // Notify subscribers that a fresh offer is available
+    try { broadcast(id, { type: 'rtc:offer', basketId: id }); } catch {}
     return res.json({ ok:true, mode:'db' });
   } else {
-    const r = getRoomMem(id); r.offer = sdp; r.updated_at = new Date().toISOString();
-    try { console.log(`[rtc] POST /webrtc/offer (mem) pair=${id} len=${sdp.length}`); } catch {}
+    const r = getRoomMem(id);
+    r.offer = sdp;
+    r.answer = null;
+    r.ice = { cashier: [], display: [] };
+    r.updated_at = new Date().toISOString();
+    try { console.log(`[rtc] POST /webrtc/offer (mem) pair=${id} len=${sdp.length} (state reset)`); } catch {}
+    try { broadcast(id, { type: 'rtc:offer', basketId: id }); } catch {}
     return res.json({ ok:true, mode:'memory' });
   }
 });
@@ -532,14 +577,15 @@ addRoute('post', '/webrtc/answer', async (req, res) => {
 // Clear a session (offer, answer, candidates)
 addRoute('delete', '/webrtc/session/:pairId', async (req, res) => {
   const id = String(req.params.pairId||'').trim();
+  const reason = String(req.query?.reason || '').trim() || 'user';
   if (HAS_DB) {
     await db('delete from webrtc_rooms where pair_id=$1', [id]);
   } else {
     webrtcRooms.delete(id);
   }
   // Notify clients via websocket to tear down
-  broadcast(id, { type: 'rtc:stopped' });
-  try { console.log(`[rtc] DELETE /webrtc/session pair=${id}`); } catch {}
+  broadcast(id, { type: 'rtc:stopped', basketId: id, reason });
+  try { console.log(`[rtc] DELETE /webrtc/session pair=${id} reason=${reason}`); } catch {}
   res.json({ ok:true });
 });
 addRoute('get', '/webrtc/answer', async (req, res) => {
@@ -648,11 +694,15 @@ async function fetchTwilioIceServers(){
 }
 
 addRoute('get', '/webrtc/config', async (_req, res) => {
+  const base = buildIceServers(); // STUN + self-hosted TURN from env, if any
   try {
     const tw = await fetchTwilioIceServers();
-    if (tw && tw.length) return res.json({ iceServers: tw });
+    if (tw && tw.length) {
+      // Prefer P2P and self TURN first; append Twilio as fallback
+      return res.json({ iceServers: [...base, ...tw] });
+    }
   } catch (_e) {}
-  return res.json({ iceServers: buildIceServers() });
+  return res.json({ iceServers: base });
 });
 
 // ---- Presence (lightweight discovery for Drive‑Thru displays)
@@ -1218,6 +1268,18 @@ const wss = new WebSocket.Server({ noServer: true });
 const baskets = new Map(); // basketId -> { items: Map(sku -> {sku,name,price,qty}), total, version }
 const basketClients = new Map(); // basketId -> Set of ws
 const clientMeta = new Map(); // ws -> { clientId, basketId, alive }
+
+// Lightweight session tracking (OSN) — in-memory; optional DB later
+const sessions = new Map(); // basketId -> { osn: string, status: 'ready'|'active'|'paid', started_at: number }
+function genOSN(){
+  const n = Math.floor(10000 + Math.random()*90000);
+  return `OSN-${n}`;
+}
+function getSession(basketId){
+  let s = sessions.get(basketId);
+  if (!s) { s = { osn: '', status: 'ready', started_at: 0 }; sessions.set(basketId, s); }
+  return s;
+}
 
 function ensureBasket(basketId) {
   if (!baskets.has(basketId)) {

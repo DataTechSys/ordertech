@@ -1,4 +1,4 @@
-import { qs, qsa, fmt, getParams, loadCategories, loadProducts, startLocalCam, setRemoteVideo, createCart, api } from '/public/js/common.js';
+import { qs, qsa, fmt, getParams, loadCategories, loadProducts, startLocalCam, setRemoteVideo, createCart, api } from '/public/js/common.js?v=1.0.13';
 import { setDisplayId, renderBillList, renderTotals } from '/public/js/ui-common.js';
 import { computeTotals } from '/public/js/data.js';
 
@@ -47,6 +47,9 @@ let catsReady = false;
 let pendingCategory = '';
 let currentBasket = { items: [], total: 0, version: 0 };
 let imgMap = new Map();
+let reconnectDelay = 500;
+let reconnectTimer = null;
+let peersConnected = false;
 
 connect();
 init();
@@ -64,6 +67,24 @@ function clearRtcTimers(){
   try { if (t.candidatesInterval) clearInterval(t.candidatesInterval); } catch {}
   window.__rtcTimersDisplay = { pollOfferTimer: null, candidatesInterval: null };
 }
+function scheduleRtcRestart(reason){
+  if (restartTimer) return;
+  restartTimer = setTimeout(() => {
+    try {
+      const pc2 = window.__pcDisplay;
+      const connected = pc2 && (pc2.iceConnectionState === 'connected' || pc2.connectionState === 'connected');
+      if (!connected) {
+        console.warn('RTC(display) restart', { reason });
+        try { pc2 && pc2.close && pc2.close(); } catch {}
+        clearRtcTimers();
+        rtcStarted = false;
+        const delay = Math.min(rtcBackoff, 8000) + Math.floor(Math.random()*300);
+        rtcBackoff = Math.min(rtcBackoff * 2, 8000);
+        setTimeout(() => { try { startRTC(); } catch {} }, delay);
+      }
+    } finally { restartTimer = null; }
+  }, 2500);
+}
 function stopRTC(reason){
   try { console.log('RTC(display) stop', { reason }); } catch {}
   clearRtcTimers();
@@ -77,13 +98,17 @@ function stopRTC(reason){
   } catch {}
   try { if (remoteEl) remoteEl.srcObject = null; } catch {}
   rtcStarted = false; rtcStarting = false; restartTimer && clearTimeout(restartTimer); restartTimer = null; rtcBackoff = 1000;
+  // force refresh ICE servers next time
+  try { window.__ICE_SERVERS = null; } catch {}
   const pill = document.getElementById('linkPill');
   const label = document.getElementById('linkStatus');
   const dot = pill ? pill.querySelector('.dot') : null;
-  if (label) label.textContent = 'READY';
-  if (dot) dot.style.background = '#f59e0b';
-  if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
-}
+  const keepLabel = (reason === 'preclear');
+  if (!keepLabel) {
+    if (label) label.textContent = 'READY';
+    if (dot) dot.style.background = '#f59e0b';
+    if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+  }
 }
 async function startRTC(){
   if (rtcStarted || rtcStarting) return;
@@ -183,8 +208,11 @@ function renderProducts(list) {
 
 function connect(){
   try {
+    // Clear any pending reconnect to avoid duplicated sockets
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     ws = new WebSocket(proto + '://' + location.host);
     ws.addEventListener('open', () => {
+      reconnectDelay = 500;
       try { ws.send(JSON.stringify({ type: 'subscribe', basketId })); } catch {}
       // Identify as display with name for peer-status
       try {
@@ -203,22 +231,40 @@ function connect(){
     ws.addEventListener('message', async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        if (msg.type === 'rtc:stopped') {
+          if (msg.reason === 'preclear') {
+            stopRTC('preclear');
+            scheduleRtcRestart('preclear');
+          } else {
+            stopRTC('remote');
+          }
+          return;
+        }
         if (msg.type === 'peer:status') {
           const pill = document.getElementById('linkPill');
           const label = document.getElementById('linkStatus');
           const dot = pill ? pill.querySelector('.dot') : null;
           if (msg.status === 'connected') {
+            peersConnected = true;
             const first = String(msg.cashierName||'Cashier').split(/\s+/)[0];
             if (label) label.textContent = `CONNECTED — ${first}`;
             if (dot) dot.style.background = '#22c55e';
             if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
             startRTC();
           } else {
+            peersConnected = false;
             if (label) label.textContent = 'READY';
             if (dot) dot.style.background = '#f59e0b';
             if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
           }
         }
+        if (msg.type === 'rtc:offer') {
+          // A fresh offer is available; force-reset and (re)start RTC to fetch it
+          try { stopRTC('new-offer'); } catch {}
+          setTimeout(() => { try { startRTC(); } catch {} }, 150);
+          return;
+        }
+        if (!peersConnected) return; // ignore UI mirroring when not connected
         if (msg.type === 'ui:selectCategory') {
           const name = String(msg.name||'');
           if (!name) return;
@@ -249,7 +295,14 @@ function connect(){
       if (label) label.textContent = 'OFFLINE';
       if (dot) dot.style.background = '#ef4444';
       if (pill) { pill.style.background = '#ef4444'; pill.style.color = '#fff'; }
+      // Attempt to reconnect with backoff
+      if (!reconnectTimer) {
+        const delay = Math.min(reconnectDelay, 8000) + Math.floor(Math.random()*250);
+        reconnectDelay = Math.min(reconnectDelay * 2, 8000);
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
+      }
     });
+    ws.addEventListener('error', () => { try { ws.close(); } catch (_) {} });
   } catch {}
 }
 
@@ -342,15 +395,6 @@ pc.addEventListener('iceconnectionstatechange', () => {
       console.log('RTC(display) connectionState:', pc.connectionState);
       if (pc.connectionState === 'connected') { rtcBackoff = 1000; }
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') scheduleRtcRestart(pc.connectionState);
-    });
-    ws.addEventListener('message', async (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === 'rtc:stopped' && msg.basketId === basketId) {
-          console.log('RTC(display) received stop command');
-          stopRTC('remote');
-        }
-      } catch {}
     });
     pc.addEventListener('icegatheringstatechange', () => console.log('RTC(display) iceGatheringState:', pc.iceGatheringState));
     pc.onicecandidate = async (ev) => {

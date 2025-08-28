@@ -21,21 +21,54 @@
   }
   function showDropdown(items){
     const pill = qs('#linkPill'); if (!pill) return;
+    const pillRect = pill.getBoundingClientRect();
     let menu = qs('#displayDropdown');
     if (!menu){
       menu = document.createElement('div');
       menu.id = 'displayDropdown';
-      Object.assign(menu.style, { position:'absolute', top: (pill.getBoundingClientRect().bottom + window.scrollY + 8)+'px', left: (pill.getBoundingClientRect().left + window.scrollX)+'px', background:'#0b1220', border:'1px solid #243244', borderRadius:'8px', padding:'8px', zIndex:3000, minWidth:'260px', color:'#fff' });
+      Object.assign(menu.style, {
+        position:'absolute',
+        top: (pillRect.bottom + window.scrollY + 8)+'px',
+        left: (pillRect.left + window.scrollX)+'px',
+        background:'#0b1220',
+        border:'1px solid #243244',
+        borderRadius:'8px',
+        padding:'8px',
+        zIndex:3000,
+        minWidth:'260px',
+        maxWidth:'min(360px, 90vw)',
+        maxHeight:'min(60vh, 480px)',
+        overflowY:'auto',
+        color:'#fff',
+        boxSizing:'border-box',
+        boxShadow:'0 8px 24px rgba(0,0,0,0.3)'
+      });
       document.body.appendChild(menu);
+    } else {
+      // reset base position near pill before reflow
+      menu.style.top = (pillRect.bottom + window.scrollY + 8)+'px';
+      menu.style.left = (pillRect.left + window.scrollX)+'px';
     }
     menu.innerHTML = '';
     // Stop option moved outside dropdown - no longer needed here
-    if (!items.length){ menu.textContent = 'No displays online'; return; }
+    if (!items.length){ menu.textContent = 'No displays online'; repositionDropdown(menu, pillRect); return; }
     items.forEach(it => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = `${it.name || 'Display'}${it.branch?` — ${it.branch}`:''}`;
-      Object.assign(btn.style, { display:'block', width:'100%', textAlign:'left', background:'transparent', color:'#fff', border:'none', padding:'8px', cursor:'pointer' });
+      Object.assign(btn.style, {
+        display:'block',
+        width:'100%',
+        textAlign:'left',
+        background:'transparent',
+        color:'#fff',
+        border:'none',
+        padding:'8px',
+        cursor:'pointer',
+        whiteSpace:'normal',
+        overflowWrap:'anywhere',
+        lineHeight:'1.25'
+      });
       btn.onmouseenter = () => btn.style.background = '#1f2937';
       btn.onmouseleave = () => btn.style.background = 'transparent';
       btn.onclick = () => {
@@ -48,22 +81,71 @@
       };
       menu.appendChild(btn);
     });
+    // After content is laid out, clamp to viewport
+    repositionDropdown(menu, pillRect);
     const onDoc = (ev) => { if (!menu.contains(ev.target) && ev.target !== pill) { menu.remove(); document.removeEventListener('click', onDoc); } };
     setTimeout(() => document.addEventListener('click', onDoc), 0);
   }
+
+  function repositionDropdown(menu, pillRect){
+    const viewportRight = window.scrollX + document.documentElement.clientWidth;
+    const viewportBottom = window.scrollY + window.innerHeight;
+    const rect = menu.getBoundingClientRect();
+    let left = parseFloat(menu.style.left);
+    let top = parseFloat(menu.style.top);
+    // Clamp horizontally with 12px margin
+    const desiredRight = left + rect.width;
+    if (desiredRight > viewportRight - 12) {
+      left = Math.max(12 + window.scrollX, viewportRight - rect.width - 12);
+    }
+    if (left < 12 + window.scrollX) left = 12 + window.scrollX;
+    // If dropdown overflows bottom, try placing it above the pill
+    const desiredBottom = top + rect.height;
+    if (desiredBottom > viewportBottom - 12) {
+      const aboveTop = (pillRect.top + window.scrollY) - rect.height - 8;
+      if (aboveTop >= (12 + window.scrollY)) top = aboveTop;
+    }
+    if (top < 12 + window.scrollY) top = 12 + window.scrollY;
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
   function initPill(){
-  const pill = qs('#linkPill'); if (!pill) return;
-  const stopBtn = document.createElement('button');
-  stopBtn.id = 'stopRtcBtn';
-  stopBtn.textContent = '⏹ Stop';
-  Object.assign(stopBtn.style, { display:'none', background:'#ef4444', color:'#fff', border:'1px solid #b91c1c', borderRadius:'8px', padding:'8px 14px', cursor:'pointer', marginLeft:'12px', fontSize:'14px', fontWeight:'600' });
-  stopBtn.onclick = () => stopRTC('user');
-  pill.parentNode.insertBefore(stopBtn, pill.nextSibling);
+    const pill = qs('#linkPill'); if (!pill) return;
     setPill('READY', false);
-    // orange dot for READY by default
     const dot = pill.querySelector('.dot'); if (dot) dot.style.background = '#f59e0b'; if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
     pill.style.cursor = 'pointer';
     pill.onclick = async () => { const items = await fetchDisplays(); showDropdown(items); };
+    // Wire Play/Stop
+    const btnPlay = qs('#btnPlay');
+    const btnStop = qs('#btnStop');
+    const osnBadge = qs('#osnBadge');
+    function setReadyUI(){
+      if (btnPlay) { btnPlay.style.display = ''; btnPlay.classList.remove('green'); btnPlay.classList.add('orange'); }
+      if (btnStop) { btnStop.style.display = ''; }
+      if (osnBadge) osnBadge.style.display = 'none';
+    }
+    function setConnectedUI(){
+      if (btnPlay) { btnPlay.style.display = ''; btnPlay.classList.remove('orange'); btnPlay.classList.add('green'); }
+      if (btnStop) { btnStop.style.display = ''; }
+      if (osnBadge && osnBadge.textContent) osnBadge.style.display = '';
+    }
+    window.__setReadyUI = setReadyUI; window.__setConnectedUI = setConnectedUI;
+    if (btnPlay) btnPlay.onclick = async () => {
+      try {
+        // Ensure a session OSN exists
+        await fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' });
+      } catch {}
+      canConnect = true;
+      if (!rtcStarted && !rtcStarting) startRTC();
+    };
+    if (btnStop) btnStop.onclick = async () => {
+      if (peersConnected) {
+        stopRTC('user');
+        try { await fetch(`/webrtc/session/${encodeURIComponent(basketId)}?reason=user`, { method:'DELETE' }); } catch {}
+      } else {
+        try { await fetch(`/session/reset?pairId=${encodeURIComponent(basketId)}`, { method:'POST' }); } catch {}
+      }
+    };
   }
   document.addEventListener('DOMContentLoaded', initPill);
   // Pairing gate: connect whenever a basket is present. ?pair=1 is treated as a one-shot hint only.
@@ -75,6 +157,7 @@
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   let ws;
   let reconnectDelay = 500;
+  let peersConnected = false;
 
   const POPULER = 'Populer';
   let allProducts = [];
@@ -122,20 +205,36 @@
         const pill = document.getElementById('linkPill');
         const dot = pill ? pill.querySelector('.dot') : null;
         if (msg.status === 'connected') {
+          peersConnected = true;
           const disp = msg.displayName || 'Display';
           if (label) label.textContent = `Connected — ${disp}`;
           if (dot) dot.style.background = '#22c55e';
           if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
-          if (qs('#stopRtcBtn')) qs('#stopRtcBtn').style.display = '';
+          if (window.__setConnectedUI) window.__setConnectedUI();
           startRTC();
         } else {
+          peersConnected = false;
           if (label) label.textContent = 'READY';
           if (dot) dot.style.background = '#f59e0b';
           if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+          if (window.__setReadyUI) window.__setReadyUI();
         }
       } else if (msg.type === 'rtc:stopped' && msg.basketId === basketId) {
-        console.log('RTC(cashier) received stop command');
+        if (preClearing) {
+          try { console.log('RTC(cashier) ignoring rtc:stopped (pre-clear)'); } catch {}
+        } else {
+          console.log('RTC(cashier) received stop command');
+          peersConnected = false;
+          stopRTC('remote');
+        }
+      } else if (msg.type === 'session:started' && msg.basketId === basketId) {
+        const b = qs('#osnBadge'); if (b) { b.textContent = msg.osn || ''; b.style.display = msg.osn ? '' : 'none'; }
+      } else if (msg.type === 'session:paid' && msg.basketId === basketId) {
+        const b = qs('#osnBadge'); if (b) { b.textContent = msg.osn || ''; b.style.display = ''; }
+        peersConnected = false;
         stopRTC('remote');
+      } else if (msg.type === 'session:ended' && msg.basketId === basketId) {
+        const b = qs('#osnBadge'); if (b) { b.textContent = ''; b.style.display = 'none'; }
       } else if (msg.type === 'error') {
         console.warn('WS error:', msg.error);
       }
@@ -190,13 +289,13 @@
   function clearSelection(){
     if (selectedBtn) selectedBtn.classList.remove('selected');
     selectedId = null; selectedBtn = null;
-    try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:clearSelection', basketId })); } catch {}
+    try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:clearSelection', basketId })); } catch {}
   }
   function selectTile(btn, id){
     clearSelection();
     selectedId = id; selectedBtn = btn;
     if (selectedBtn) selectedBtn.classList.add('selected');
-    try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:selectProduct', basketId, productId: id })); } catch {}
+    try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:selectProduct', basketId, productId: id })); } catch {}
   }
   function onProductTileClick(p, btn){
     if (selectedId === p.id) {
@@ -243,11 +342,15 @@
   let rtcStarting = false;
   let rtcBackoff = 1000;
   let restartTimer = null;
+  // Ensure we pre-clear stale signaling state only once per page load
+  let didPreclear = false;
+  // Ignore rtc:stopped coming from our own pre-clear
+  let preClearing = false;
   function stopRTC(reason){
     try { console.log('RTC(cashier) stop', { reason }); } catch {}
     // Notify backend to clear session state so display stops polling
-    if (reason==='user') fetch(`/webrtc/session/${basketId}`, { method:'DELETE' }).catch(err=>console.warn('session delete failed',err));
-    canConnect = false;
+    if (reason==='user') fetch(`/webrtc/session/${encodeURIComponent(basketId)}?reason=user`, { method:'DELETE' }).catch(err=>console.warn('session delete failed',err));
+    if (reason==='user') canConnect = false;
     clearRtcTimers();
     try {
       const pc = window.__pcCashier; if (pc && pc.close) pc.close();
@@ -265,7 +368,8 @@
     if (label) label.textContent = 'READY';
     if (dot) dot.style.background = '#f59e0b';
     if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
-    if (qs('#stopRtcBtn')) qs('#stopRtcBtn').style.display = 'none';
+    if (window.__setReadyUI) window.__setReadyUI();
+    try { window.__ICE_SERVERS = null; } catch {}
   }
   function clearRtcTimers(){
     const t = window.__rtcTimersCashier || {};
@@ -322,7 +426,7 @@
 
   function emitCategory(name){
     try {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (peersConnected && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'ui:selectCategory', basketId, name }));
       }
     } catch {}
@@ -411,6 +515,16 @@
 
   const clearBtn = document.getElementById('clear-basket');
   if (clearBtn) clearBtn.addEventListener('click', () => window.onClearBasket());
+  const payBtn = document.getElementById('payBtn');
+  if (payBtn) payBtn.addEventListener('click', async () => {
+    try {
+      const r = await fetch(`/session/pay?pairId=${encodeURIComponent(basketId)}`, { method:'POST' });
+      await r.json().catch(()=>({}));
+    } catch {}
+    // ensure RTC is stopped and reset afterwards
+    stopRTC('user');
+    try { await fetch(`/webrtc/session/${encodeURIComponent(basketId)}?reason=paid`, { method:'DELETE' }); } catch {}
+  });
 
 
   async function getIceServers(){
@@ -447,7 +561,44 @@ const r = await fetch('/webrtc/config', { cache: 'no-store' });
 async function initRTC(){
     try {
       clearRtcTimers();
-      const localStream = await (window.startLocalCam ? window.startLocalCam(localEl) : navigator.mediaDevices.getUserMedia({video:true,audio:false}).then(s=>{localEl.srcObject=s;localEl.play().catch(()=>{});return s;}));
+      // Pre-clear any stale session state on the backend (offer/answer/ICE) once per load
+      if (!didPreclear) {
+        preClearing = true;
+        try {
+          await fetch(`/webrtc/session/${encodeURIComponent(basketId)}?reason=preclear`, { method:'DELETE' });
+          console.log('RTC(cashier) pre-cleared session state');
+        } catch (e) {
+          console.warn('RTC(cashier) pre-clear failed', e);
+        } finally {
+          didPreclear = true;
+          // Allow a short window for the rtc:stopped broadcast to arrive, then resume normal handling
+          setTimeout(() => { preClearing = false; }, 1500);
+        }
+      }
+      const localStream = await (window.startLocalCam ? window.startLocalCam(localEl) : (async () => {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+          audio: false
+        });
+        try {
+          const [t] = s.getVideoTracks();
+          if (t && typeof t.getCapabilities === 'function') {
+            const caps = t.getCapabilities();
+            const advanced = [];
+            if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes('continuous')) advanced.push({ exposureMode: 'continuous' });
+            if (Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('continuous')) advanced.push({ whiteBalanceMode: 'continuous' });
+            if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) advanced.push({ focusMode: 'continuous' });
+            if (caps.exposureCompensation && typeof caps.exposureCompensation.min === 'number' && typeof caps.exposureCompensation.max === 'number') {
+              const min = caps.exposureCompensation.min; const max = caps.exposureCompensation.max;
+              let neutral = 0; if (neutral < min) neutral = min; if (neutral > max) neutral = max;
+              advanced.push({ exposureCompensation: neutral });
+            }
+            if (advanced.length) await t.applyConstraints({ advanced });
+          }
+        } catch (e) { console.warn('Auto constraints not supported or failed (cashier):', e); }
+        if (localEl) { localEl.srcObject = s; localEl.play && localEl.play().catch(()=>{}); }
+        return s;
+      })());
       const ice = await getIceServers();
       const params = new URLSearchParams(location.search);
       const icePolicy = params.get('ice') === 'relay' ? 'relay' : 'all';
@@ -561,7 +712,7 @@ const candidatesInterval = setInterval(async () => {
     }
     const sel = { sizeId: opts.size?.[0]?.id || null, milkId: opts.milk?.[0]?.id || null };
     showOptionsUI(false, p, opts, sel);
-    try { ws && ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: { id:p.id, name:p.name, price:p.price }, options: opts, selection: sel })); } catch {}
+    try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: { id:p.id, name:p.name, price:p.price }, options: opts, selection: sel })); } catch {}
   }
 
   function computePriceWith(p, opts, sel){
@@ -606,21 +757,21 @@ const candidatesInterval = setInterval(async () => {
       if (e.target.name==='opt_size') sel.sizeId = e.target.value;
       if (e.target.name==='opt_milk') sel.milkId = e.target.value;
       render();
-      try { ws && ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection: sel })); } catch {}
+      try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection: sel })); } catch {}
     }
 
     body.onchange = readOnly ? null : onChange;
     btnCancel.style.display = readOnly ? 'none' : '';
     btnConfirm.style.display = readOnly ? 'none' : '';
 
-    btnCancel.onclick = () => { hideOptionsUI(); try { ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
+    btnCancel.onclick = () => { hideOptionsUI(); try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
     btnConfirm.onclick = () => {
       const price = computePriceWith(p, opts, sel);
       const suffix = selectionLabel(opts, sel);
       const variantKey = `${p.id}#size=${sel.sizeId||''}&milk=${sel.milkId||''}`;
       sendUpdate({ action:'add', item:{ sku: variantKey, name: suffix?`${p.name} (${suffix})`:p.name, price }, qty:1 });
       hideOptionsUI();
-      try { ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
+      try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
     };
 
     modal.style.display = 'flex';

@@ -36,7 +36,45 @@ export async function loadProducts(tenant, categoryName = '') {
 // camera helpers
 export async function startLocalCam(videoEl) {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    // Request a reasonable resolution without forcing a camera selection
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 }
+      },
+      audio: false
+    });
+
+    // Apply auto-exposure/white-balance/focus if supported by the camera/driver
+    try {
+      const [track] = stream.getVideoTracks();
+      if (track && typeof track.getCapabilities === 'function') {
+        const caps = track.getCapabilities();
+        const advanced = [];
+        if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes('continuous')) {
+          advanced.push({ exposureMode: 'continuous' });
+        }
+        if (Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('continuous')) {
+          advanced.push({ whiteBalanceMode: 'continuous' });
+        }
+        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+          advanced.push({ focusMode: 'continuous' });
+        }
+        if (caps.exposureCompensation && typeof caps.exposureCompensation.min === 'number' && typeof caps.exposureCompensation.max === 'number') {
+          const min = caps.exposureCompensation.min;
+          const max = caps.exposureCompensation.max;
+          let neutral = 0; if (neutral < min) neutral = min; if (neutral > max) neutral = max;
+          advanced.push({ exposureCompensation: neutral });
+        }
+        if (advanced.length) {
+          await track.applyConstraints({ advanced });
+        }
+      }
+    } catch (e2) {
+      console.warn('Auto constraints not supported or failed:', e2);
+    }
+
     if (videoEl) {
       videoEl.srcObject = stream;
       await videoEl.play().catch(() => {});
