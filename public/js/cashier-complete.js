@@ -200,7 +200,7 @@
           peersConnected = false;
           if (window.__setReadyUI) window.__setReadyUI();
         }
-      }
+      } else if (msg.type === 'rtc:stopped' && msg.basketId === basketId) {
         if (preClearing) {
           try { console.log('RTC(cashier) ignoring rtc:stopped (pre-clear)'); } catch {}
         } else {
