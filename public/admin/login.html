@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Koobs Admin Login</title>
+  <link rel="stylesheet" href="/public/admin/admin.css" />
+  <script src="/public/admin/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <main style="max-width:520px;margin:48px auto;">
+    <h2>Koobs Admin Login</h2>
+    <p>Sign in with Email/Password or Google. After sign-in, you'll be redirected to Admin and your ID token will be used automatically.</p>
+    <div class="grid">
+      <label>Email <input id="email" type="email" /></label>
+      <label>Password <input id="password" type="password" /></label>
+    </div>
+    <div class="row">
+      <button id="emailSignIn">Sign in with Email</button>
+      <button id="googleSignIn">Sign in with Google</button>
+    </div>
+    <p id="msg"></p>
+  </main>
+
+  <script>
+    // TODO: Replace with your Identity Platform (Firebase) web config
+    // Ask me to set this up once CIP is configured. For now this is a placeholder.
+    const firebaseConfig = window.firebaseConfig || {
+      apiKey: "{{API_KEY}}",
+      authDomain: "{{AUTH_DOMAIN}}"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    const msg = document.getElementById('msg');
+    function setMsg(t){ msg.textContent = t; }
+
+    document.getElementById('emailSignIn').onclick = async () => {
+      try {
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        await auth.signInWithEmailAndPassword(email, password);
+        const tok = await auth.currentUser.getIdToken();
+        localStorage.setItem('ID_TOKEN', tok);
+        location.href = '/public/admin/';
+      } catch (e) {
+        console.error('Email sign-in error:', e);
+        setMsg(`Email sign-in failed: ${e.code || ''} ${e.message || ''}`.trim());
+      }
+    };
+    document.getElementById('googleSignIn').onclick = async () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      // Always show account chooser to allow switching accounts
+      try { provider.setCustomParameters({ prompt: 'select_account' }); } catch {}
+      try {
+        await auth.signInWithPopup(provider);
+        const tok = await auth.currentUser.getIdToken();
+        localStorage.setItem('ID_TOKEN', tok);
+        location.href = '/public/admin/';
+      } catch (e) {
+        console.error('Google sign-in popup error:', e);
+        const code = e?.code || '';
+        const msgText = e?.message || '';
+        if (code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user') {
+          setMsg('Popup blocked or closed; attempting redirect sign-in...');
+          try {
+            try { provider.setCustomParameters({ prompt: 'select_account' }); } catch {}
+            await auth.signInWithRedirect(provider);
+          } catch (e2) {
+            console.error('Google sign-in redirect error:', e2);
+            setMsg(`Google sign-in failed (redirect): ${e2.code || ''} ${e2.message || ''}`.trim());
+          }
+        } else if (code === 'auth/operation-not-allowed') {
+          setMsg('Google sign-in disabled. Enable Google provider in Firebase/Identity Platform.');
+        } else if (code === 'auth/unauthorized-domain') {
+          setMsg('Unauthorized domain. Add this domain to Authorized domains in Firebase/Identity Platform.');
+        } else {
+          setMsg(`Google sign-in failed: ${code} ${msgText}`.trim());
+        }
+      }
+    };
+  </script>
+</body>
+</html>

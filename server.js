@@ -5,10 +5,18 @@ const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
 const fs = require('fs');
+let admin = null; // firebase-admin
+try {
+  admin = require('firebase-admin');
+  if (!admin.apps?.length) admin.initializeApp();
+} catch (e) {
+  admin = null;
+}
 
 const app = express();
 const PORT = process.env.PORT || 5050;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae';
+const crypto = require('crypto');
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -63,6 +71,71 @@ async function ensureDefaultTenant() {
   );
 }
 
+// Ensure licensing/activation schema exists (idempotent)
+async function ensureLicensingSchema(){
+  if (!HAS_DB) return;
+  // license_limit and branch_limit columns
+  await db("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_limit integer NOT NULL DEFAULT 1");
+  await db("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS branch_limit integer NOT NULL DEFAULT 3");
+  // enums
+  await db(`DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'device_role') THEN
+      CREATE TYPE device_role AS ENUM ('cashier','display');
+    END IF;
+  END$$;`);
+  await db(`DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'device_status') THEN
+      CREATE TYPE device_status AS ENUM ('active','revoked');
+    END IF;
+  END$$;`);
+  // devices table
+  await db(`
+    CREATE TABLE IF NOT EXISTS devices (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      name text,
+      role device_role NOT NULL,
+      status device_status NOT NULL DEFAULT 'active',
+      branch text,
+      device_token text UNIQUE NOT NULL,
+      activated_at timestamptz NOT NULL DEFAULT now(),
+      revoked_at timestamptz,
+      last_seen timestamptz,
+      meta jsonb NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+  await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant ON devices(tenant_id)");
+  await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant_role ON devices(tenant_id, role)");
+  await db("CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status)");
+  // branches table (unique name per tenant)
+  await db(`
+    CREATE TABLE IF NOT EXISTS branches (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, name)
+    )
+  `);
+  await db("CREATE INDEX IF NOT EXISTS idx_branches_tenant ON branches(tenant_id)");
+
+  // activation codes
+  await db(`
+    CREATE TABLE IF NOT EXISTS device_activation_codes (
+      code text PRIMARY KEY,
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL,
+      claimed_at timestamptz,
+      device_id uuid REFERENCES devices(id),
+      meta jsonb NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+  await db("CREATE INDEX IF NOT EXISTS idx_dac_tenant_expires ON device_activation_codes(tenant_id, expires_at)");
+}
+
 // ---- helpers
 function addRoute(method, route, ...handlers) {
   app[method](route, ...handlers);
@@ -71,12 +144,51 @@ function addRoute(method, route, ...handlers) {
 }
 const routes = [];
 
-// Tenant header middleware
-function requireTenant(req, res, next) {
-  const t = req.header('x-tenant-id') || DEFAULT_TENANT_ID;
-  // For now, default to Koobs tenant when header is not provided.
-  req.tenantId = t;
-  next();
+// Admin token (temporary until full auth is in place)
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const PLATFORM_ADMIN_EMAILS = String(process.env.PLATFORM_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+// Tenant resolution by hostname (X-Forwarded-Host -> Host), fallback to header or default
+function getForwardedHost(req) {
+  const xf = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase();
+  if (xf) return xf.split(':')[0];
+  const h = String(req.headers.host || '').toLowerCase();
+  return h.split(':')[0];
+}
+async function requireTenant(req, res, next) {
+  try {
+    let t = null;
+    if (HAS_DB) {
+      const host = getForwardedHost(req);
+      if (host) {
+        try {
+          const rows = await db('select tenant_id from tenant_domains where host=$1', [host]);
+          if (rows.length) t = rows[0].tenant_id;
+        } catch {}
+      }
+    }
+    if (!t) t = req.header('x-tenant-id') || DEFAULT_TENANT_ID;
+    req.tenantId = t;
+    next();
+  } catch (_e) {
+    req.tenantId = DEFAULT_TENANT_ID;
+    next();
+  }
+}
+
+// Auth middleware (Firebase ID token)
+async function verifyAuth(req, res, next){
+  try {
+    const h = String(req.headers.authorization||'');
+    if (!h.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
+    const idToken = h.slice(7);
+    if (!admin) return res.status(503).json({ error: 'auth_unavailable' });
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    req.user = { uid: decoded.uid, email: (decoded.email||'').toLowerCase() };
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
 }
 
 // ---- health/diag
@@ -355,51 +467,198 @@ addRoute('get', '/suggestions', requireTenant, async (req, res) => {
   res.json(rows);
 });
 
-// ---- WebRTC signaling (very simple, in-memory)
-// room: { offer, answer, ice: { cashier:[], display:[] }, updated_at }
+// ---- WebRTC signaling (use DB when available; fallback to in-memory)
+// Schema (DB): webrtc_rooms(pair_id text pk, offer text, answer text, ice_cashier_queued jsonb, ice_display_queued jsonb, updated_at timestamptz)
+async function ensureWebrtcSchema(){
+  if (!HAS_DB) return;
+  await db(`
+    CREATE TABLE IF NOT EXISTS webrtc_rooms (
+      pair_id text PRIMARY KEY,
+      offer text,
+      answer text,
+      ice_cashier_queued jsonb NOT NULL DEFAULT '[]'::jsonb,
+      ice_display_queued jsonb NOT NULL DEFAULT '[]'::jsonb,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+// In-memory fallback
 const webrtcRooms = new Map();
-function getRoom(id){
+function getRoomMem(id){
   let r = webrtcRooms.get(id);
   if(!r){ r = { offer:null, answer:null, ice:{ cashier:[], display:[] }, updated_at: new Date().toISOString() }; webrtcRooms.set(id, r); }
   return r;
 }
+
 addRoute('post', '/webrtc/offer', async (req, res) => {
   const id = String(req.body?.pairId||'').trim(); const sdp = req.body?.sdp;
   if(!id || !sdp) return res.status(400).json({ error:'pairId and sdp required' });
-  const r = getRoom(id); r.offer = sdp; r.updated_at = new Date().toISOString(); res.json({ ok:true });
+  if (HAS_DB) {
+    await db(`insert into webrtc_rooms(pair_id, offer, updated_at) values ($1,$2,now())
+              on conflict (pair_id) do update set offer=excluded.offer, updated_at=now()`, [id, sdp]);
+    try { console.log(`[rtc] POST /webrtc/offer pair=${id} len=${sdp.length}`); } catch {}
+    return res.json({ ok:true, mode:'db' });
+  } else {
+    const r = getRoomMem(id); r.offer = sdp; r.updated_at = new Date().toISOString();
+    try { console.log(`[rtc] POST /webrtc/offer (mem) pair=${id} len=${sdp.length}`); } catch {}
+    return res.json({ ok:true, mode:'memory' });
+  }
 });
 addRoute('get', '/webrtc/offer', async (req, res) => {
   const id = String(req.query.pairId||'').trim(); if(!id) return res.status(400).json({ error:'pairId required' });
-  const r = webrtcRooms.get(id); res.json({ sdp: r?.offer || null });
+  if (HAS_DB) {
+    const rows = await db('select offer from webrtc_rooms where pair_id=$1', [id]);
+    return res.json({ sdp: rows[0]?.offer || null });
+  } else {
+    const r = webrtcRooms.get(id); return res.json({ sdp: r?.offer || null });
+  }
 });
 addRoute('post', '/webrtc/answer', async (req, res) => {
   const id = String(req.body?.pairId||'').trim(); const sdp = req.body?.sdp;
   if(!id || !sdp) return res.status(400).json({ error:'pairId and sdp required' });
-  const r = getRoom(id); r.answer = sdp; r.updated_at = new Date().toISOString(); res.json({ ok:true });
+  if (HAS_DB) {
+    await db(`insert into webrtc_rooms(pair_id, answer, updated_at) values ($1,$2,now())
+              on conflict (pair_id) do update set answer=excluded.answer, updated_at=now()`, [id, sdp]);
+    try { console.log(`[rtc] POST /webrtc/answer pair=${id} len=${sdp.length}`); } catch {}
+    return res.json({ ok:true, mode:'db' });
+  } else {
+    const r = getRoomMem(id); r.answer = sdp; r.updated_at = new Date().toISOString();
+    try { console.log(`[rtc] POST /webrtc/answer (mem) pair=${id} len=${sdp.length}`); } catch {}
+    return res.json({ ok:true, mode:'memory' });
+  }
+});
+
+// Clear a session (offer, answer, candidates)
+addRoute('delete', '/webrtc/session/:pairId', async (req, res) => {
+  const id = String(req.params.pairId||'').trim();
+  if (HAS_DB) {
+    await db('delete from webrtc_rooms where pair_id=$1', [id]);
+  } else {
+    webrtcRooms.delete(id);
+  }
+  // Notify clients via websocket to tear down
+  broadcast(id, { type: 'rtc:stopped' });
+  try { console.log(`[rtc] DELETE /webrtc/session pair=${id}`); } catch {}
+  res.json({ ok:true });
 });
 addRoute('get', '/webrtc/answer', async (req, res) => {
   const id = String(req.query.pairId||'').trim(); if(!id) return res.status(400).json({ error:'pairId required' });
-  const r = webrtcRooms.get(id); res.json({ sdp: r?.answer || null });
+  if (HAS_DB) {
+    const rows = await db('select answer from webrtc_rooms where pair_id=$1', [id]);
+    return res.json({ sdp: rows[0]?.answer || null });
+  } else {
+    const r = webrtcRooms.get(id); return res.json({ sdp: r?.answer || null });
+  }
 });
 addRoute('post', '/webrtc/candidate', async (req, res) => {
   const id = String(req.body?.pairId||'').trim(); const role = String(req.body?.role||''); const cand = req.body?.candidate;
   if(!id || !role || !cand) return res.status(400).json({ error:'pairId, role, candidate required' });
-  const r = getRoom(id); if(!r.ice[role]) r.ice[role] = []; r.ice[role].push(cand); r.updated_at = new Date().toISOString(); res.json({ ok:true });
+  if (HAS_DB) {
+    // Append candidate to the sender's queue
+    const col = (role === 'cashier') ? 'ice_cashier_queued' : 'ice_display_queued';
+    const rows = await db('select '+col+' as q from webrtc_rooms where pair_id=$1', [id]);
+    let arr = [];
+    if (rows.length && Array.isArray(rows[0].q)) arr = rows[0].q; else if (rows.length && rows[0].q) arr = rows[0].q; // jsonb array
+    arr.push(cand);
+    await db(`insert into webrtc_rooms(pair_id, ${col}) values ($1,$2::jsonb)
+              on conflict (pair_id) do update set ${col}=excluded.${col}, updated_at=now()`, [id, JSON.stringify(arr)]);
+    try { console.log(`[rtc] POST /webrtc/candidate pair=${id} role=${role} queued_len=${arr.length}`); } catch {}
+    return res.json({ ok:true, mode:'db' });
+  } else {
+    const r = getRoomMem(id); if(!r.ice[role]) r.ice[role] = []; r.ice[role].push(cand); r.updated_at = new Date().toISOString();
+    try { console.log(`[rtc] POST /webrtc/candidate (mem) pair=${id} role=${role} queued_len=${r.ice[role].length}`); } catch {}
+    return res.json({ ok:true, mode:'memory' });
+  }
 });
 addRoute('get', '/webrtc/candidates', async (req, res) => {
   const id = String(req.query.pairId||'').trim(); const role = String(req.query.role||'');
   if(!id || !role) return res.status(400).json({ error:'pairId and role required' });
   const other = role === 'cashier' ? 'display' : 'cashier';
-  const r = getRoom(id);
-  const out = r.ice[other] || [];
-  r.ice[other] = []; // drain
-  res.json({ items: out });
+  if (HAS_DB) {
+    const col = (other === 'cashier') ? 'ice_cashier_queued' : 'ice_display_queued';
+    const rows = await db('select '+col+' as q from webrtc_rooms where pair_id=$1', [id]);
+    const out = (rows.length && rows[0].q) ? rows[0].q : [];
+    await db('update webrtc_rooms set '+col+"='[]'::jsonb, updated_at=now() where pair_id=$1", [id]);
+    try { console.log(`[rtc] GET /webrtc/candidates pair=${id} role=${role} returning=${Array.isArray(out)?out.length:0}`); } catch {}
+    return res.json({ items: out });
+  } else {
+    const r = getRoomMem(id);
+    const out = r.ice[other] || [];
+    r.ice[other] = []; // drain
+    try { console.log(`[rtc] GET /webrtc/candidates (mem) pair=${id} role=${role} returning=${out.length}`); } catch {}
+    return res.json({ items: out });
+  }
+});
+
+// Provide ICE servers (STUN/TURN) config to clients
+function buildIceServers(){
+  // Preferred: full JSON in ICE_SERVERS_JSON
+  const raw = process.env.ICE_SERVERS_JSON || '';
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+      if (parsed && Array.isArray(parsed.iceServers)) return parsed.iceServers;
+    } catch {}
+  }
+  // Simple TURN env
+  const turnUrls = String(process.env.TURN_URLS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const turnUsername = (process.env.TURN_USERNAME || '').trim();
+  const turnPassword = (process.env.TURN_PASSWORD || '').trim();
+  const out = [{ urls: ['stun:stun.l.google.com:19302'] }];
+  if (turnUrls.length && turnUsername && turnPassword) {
+    out.push({ urls: turnUrls, username: turnUsername, credential: turnPassword });
+  }
+  return out;
+}
+
+// Fetch Twilio ICE servers (ephemeral) via Tokens API if creds are configured
+async function fetchTwilioIceServers(){
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+  const authToken  = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+  const keySid     = (process.env.TWILIO_KEY_SID || '').trim();
+  const keySecret  = (process.env.TWILIO_KEY_SECRET || '').trim();
+  if (!accountSid) return [];
+  let basic = '';
+  if (keySid && keySecret) {
+    basic = Buffer.from(`${keySid}:${keySecret}`).toString('base64');
+  } else if (authToken) {
+    basic = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+  } else {
+    return [];
+  }
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Tokens.json`;
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({ Ttl: '1800' }).toString()
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const arr = Array.isArray(data.ice_servers) ? data.ice_servers : [];
+    return arr;
+  } catch (_e) {
+    return [];
+  }
+}
+
+addRoute('get', '/webrtc/config', async (_req, res) => {
+  try {
+    const tw = await fetchTwilioIceServers();
+    if (tw && tw.length) return res.json({ iceServers: tw });
+  } catch (_e) {}
+  return res.json({ iceServers: buildIceServers() });
 });
 
 // ---- Presence (lightweight discovery for Drive‑Thru displays)
 // In-memory per-tenant presence registry; entries expire after PRESENCE_TTL_MS of silence
 const PRESENCE_TTL_MS = 15000;
-const presenceByTenant = new Map(); // tenant_id -> Map(displayId -> { id, name, last_seen })
+const presenceByTenant = new Map(); // tenant_id -> Map(displayId -> { id, name, branch, last_seen })
 function getPresenceMap(tenantId){
   let m = presenceByTenant.get(tenantId);
   if(!m){ m = new Map(); presenceByTenant.set(tenantId, m); }
@@ -413,17 +672,41 @@ function prunePresence(m){
 }
 
 // Displays POST a heartbeat every ~5s
+// Display device heartbeat.
+// Backward compatible: if x-device-token present, require role=display; else accept manual id/name.
 addRoute('post', '/presence/display', requireTenant, async (req, res) => {
-  const id = String(req.body?.id||'').trim();
+  const token = String(req.header('x-device-token') || '').trim();
+  let id = String(req.body?.id||'').trim();
+  let name = String(req.body?.name||'Car');
+  let branch = String(req.body?.branch||'').trim();
+  let fromToken = false;
+  if (token && HAS_DB) {
+    const rows = await db(`select id, role::text as role, name, branch from devices where device_token=$1 and status='active'`, [token]);
+    if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
+    if (rows[0].role !== 'display') return res.status(403).json({ error: 'device_role_invalid' });
+    id = rows[0].id; name = rows[0].name || name; branch = rows[0].branch || branch; fromToken = true;
+    // update last_seen async
+    db(`update devices set last_seen=now() where id=$1`, [rows[0].id]).catch(()=>{});
+  }
   if(!id) return res.status(400).json({ error: 'id required' });
-  const name = String(req.body?.name||'Car');
   const m = getPresenceMap(req.tenantId);
-  m.set(id, { id, name, last_seen: Date.now() });
-  res.json({ ok:true });
+  m.set(id, { id, name, branch, last_seen: Date.now() });
+  const payload = { ok:true };
+  if (fromToken) { payload.id = id; payload.name = name; payload.branch = branch; }
+  res.json(payload);
 });
 
 // Cashier requests list of online displays for the tenant
+// Cashier requests list of online displays for the tenant.
+// If a device token is provided, it must be role=cashier.
 addRoute('get', '/presence/displays', requireTenant, async (req, res) => {
+  const token = String(req.header('x-device-token') || '').trim();
+  if (token && HAS_DB) {
+    const rows = await db(`select role::text as role from devices where device_token=$1 and status='active'`, [token]);
+    if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
+    if (rows[0].role !== 'cashier') return res.status(403).json({ error: 'device_role_invalid' });
+    db(`update devices set last_seen=now() where device_token=$1`, [token]).catch(()=>{});
+  }
   const m = getPresenceMap(req.tenantId);
   prunePresence(m);
   const now = Date.now();
@@ -478,7 +761,7 @@ addRoute('get', '/drive-thru/state', requireTenant, async (req, res) => {
   }
 });
 
-addRoute('post', '/drive-thru/state', requireTenant, async (req, res) => {
+addRoute('post', '/drive-thru/state', requireTenant, verifyAuth, requireTenantAdminResolved, async (req, res) => {
   const state = {
     banner: String(req.body?.banner || 'Welcome to Koobs Café ☕'),
     cashierCameraUrl: String(req.body?.cashierCameraUrl || ''),
@@ -507,12 +790,414 @@ addRoute('post', '/drive-thru/state', requireTenant, async (req, res) => {
   }
 });
 
+// ---- Device auth middleware
+async function requireDeviceAuth(req, res, next) {
+  try {
+    const tok = String(req.header('x-device-token') || '').trim();
+    if (!tok) return res.status(401).json({ error: 'device_unauthorized' });
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    const rows = await db(`select id, tenant_id, name, role::text as role, status::text as status, branch from devices where device_token=$1`, [tok]);
+    if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
+    const d = rows[0];
+    if (d.status !== 'active') return res.status(403).json({ error: 'device_inactive' });
+    req.device = d;
+    // if tenant not set, set from device
+    if (!req.tenantId) req.tenantId = d.tenant_id;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'device_unauthorized' });
+  }
+}
+
+// ---- Admin API and RBAC
+function isPlatformAdmin(req){
+  const tok = req.header('x-admin-token') || '';
+  if (ADMIN_TOKEN && tok === ADMIN_TOKEN) return true;
+  const email = (req.user?.email || '').toLowerCase();
+  return Boolean(email && PLATFORM_ADMIN_EMAILS.includes(email));
+}
+function requirePlatformAdmin(req, res, next){
+  if (isPlatformAdmin(req)) return next();
+  return res.status(401).json({ error: 'unauthorized' });
+}
+async function userHasTenantRole(email, tenantId, roles = ['owner','admin']){
+  if (!HAS_DB) return false;
+  if (!email || !tenantId) return false;
+  try {
+    const rows = await db(
+      `select 1
+       from tenant_users tu
+       join users u on u.id = tu.user_id
+       where tu.tenant_id = $1
+         and lower(u.email) = $2
+         and tu.role::text = any($3::text[])
+       limit 1`,
+      [tenantId, email.toLowerCase(), roles]
+    );
+    return rows.length > 0;
+  } catch { return false; }
+}
+async function requireTenantAdminResolved(req, res, next){
+  if (isPlatformAdmin(req)) return next();
+  const email = (req.user?.email || '').toLowerCase();
+  const tenantId = req.tenantId;
+  if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
+  if (await userHasTenantRole(email, tenantId)) return next();
+  return res.status(403).json({ error: 'forbidden' });
+}
+async function requireTenantAdminParam(req, res, next){
+  if (isPlatformAdmin(req)) return next();
+  const email = (req.user?.email || '').toLowerCase();
+  const tenantId = String(req.params.id || '').trim();
+  if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
+  if (await userHasTenantRole(email, tenantId)) return next();
+  return res.status(403).json({ error: 'forbidden' });
+}
+async function requireTenantAdminBodyTenant(req, res, next){
+  if (isPlatformAdmin(req)) return next();
+  const email = (req.user?.email || '').toLowerCase();
+  const tenantId = String(req.body?.tenant_id || req.body?.tenantId || '').trim();
+  if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
+  if (await userHasTenantRole(email, tenantId)) return next();
+  return res.status(403).json({ error: 'forbidden' });
+}
+// Backward-compat alias
+const requireAdmin = requirePlatformAdmin;
+
+// Dynamic Firebase config for Admin login (from env) with fallback to static file if env not set
+addRoute('get', '/public/admin/config.js', (_req, res) => {
+  const apiKey = process.env.FIREBASE_API_KEY || '';
+  const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
+  if (apiKey && authDomain) {
+    const cfg = { apiKey, authDomain };
+    return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};`);
+  }
+  try {
+    const fp = path.join(__dirname, 'public', 'admin', 'config.js');
+    const content = fs.readFileSync(fp, 'utf8');
+    return res.type('application/javascript').send(content);
+  } catch {
+    return res.type('application/javascript').send('window.firebaseConfig={apiKey:"",authDomain:""};');
+  }
+});
+
+// Super admin: list tenants
+addRoute('get', '/admin/tenants', verifyAuth, requirePlatformAdmin, async (_req, res) => {
+  if (!HAS_DB) return res.json([]);
+  const rows = await db('select id, name from tenants order by created_at desc');
+  res.json(rows);
+});
+
+// Super admin: create tenant (name, optional slug)
+addRoute('post', '/admin/tenants', verifyAuth, requirePlatformAdmin, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const name = String(req.body?.name||'').trim();
+  const slug = String(req.body?.slug||'').trim() || null;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const id = require('crypto').randomUUID();
+  await db('insert into tenants (id, name) values ($1,$2) on conflict (id) do nothing', [id, name]);
+  if (slug) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug]);
+  res.json({ id, name, slug });
+});
+
+// Super admin: update tenant name and/or slug
+addRoute('put', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const id = String(req.params.id||'').trim();
+  const name = req.body?.name != null ? String(req.body.name).trim() : null;
+  const slug = req.body?.slug != null ? String(req.body.slug).trim() : null;
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (name) await db('update tenants set name=$1 where id=$2', [name, id]);
+  if (slug != null) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug||null]);
+  res.json({ ok:true });
+});
+
+// Super admin: delete tenant (safe delete)
+addRoute('delete', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const id = String(req.params.id||'').trim();
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (id === DEFAULT_TENANT_ID) return res.status(400).json({ error: 'cannot_delete_default_tenant' });
+  try {
+    await db('delete from drive_thru_state where tenant_id=$1', [id]);
+  } catch {}
+  try {
+    await db('delete from tenants where id=$1', [id]);
+    return res.json({ ok:true });
+  } catch (e) {
+    return res.status(409).json({ error: 'tenant_in_use' });
+  }
+});
+
+// Tenant domains CRUD
+addRoute('get', '/admin/tenants/:id/domains', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const rows = await db('select host, verified_at from tenant_domains where tenant_id=$1 order by host asc', [req.params.id]);
+  res.json({ items: rows });
+});
+addRoute('post', '/admin/tenants/:id/domains', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const host = String(req.body?.host||'').toLowerCase().trim();
+  if (!host) return res.status(400).json({ error: 'host required' });
+  await db('insert into tenant_domains (host, tenant_id) values ($1,$2) on conflict (host) do update set tenant_id=excluded.tenant_id', [host, req.params.id]);
+  res.json({ ok: true });
+});
+addRoute('delete', '/admin/domains/:host', verifyAuth, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const host = String(req.params.host||'').toLowerCase().trim();
+  if (!host) return res.status(400).json({ error: 'host required' });
+  if (isPlatformAdmin(req)) {
+    await db('delete from tenant_domains where host=$1', [host]);
+    return res.json({ ok: true });
+  }
+  const email = (req.user?.email || '').toLowerCase();
+  if (!email) return res.status(401).json({ error: 'unauthorized' });
+  const rows = await db('select tenant_id from tenant_domains where host=$1', [host]);
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  const tenantId = rows[0].tenant_id;
+  if (!(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
+  await db('delete from tenant_domains where host=$1', [host]);
+  return res.json({ ok: true });
+});
+
+// Tenant settings + brand
+addRoute('get', '/admin/tenants/:id/settings', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ settings: {}, brand: {} });
+  const [settings] = await db('select tenant_id, slug, default_locale, currency, timezone, features from tenant_settings where tenant_id=$1', [req.params.id]);
+  const [brand] = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.params.id]);
+  res.json({ settings: settings||{}, brand: brand||{} });
+});
+addRoute('put', '/admin/tenants/:id/settings', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const s = req.body?.settings || {};
+  const b = req.body?.brand || {};
+  await db(`insert into tenant_settings (tenant_id, slug, default_locale, currency, timezone, features)
+            values ($1,$2,$3,$4,$5,$6)
+            on conflict (tenant_id) do update set slug=excluded.slug, default_locale=excluded.default_locale, currency=excluded.currency, timezone=excluded.timezone, features=excluded.features`,
+          [req.params.id, s.slug||null, s.default_locale||null, s.currency||null, s.timezone||null, s.features||{}]);
+  await db(`insert into tenant_brand (tenant_id, display_name, logo_url, color_primary, color_secondary)
+            values ($1,$2,$3,$4,$5)
+            on conflict (tenant_id) do update set display_name=excluded.display_name, logo_url=excluded.logo_url, color_primary=excluded.color_primary, color_secondary=excluded.color_secondary`,
+          [req.params.id, b.display_name||null, b.logo_url||null, b.color_primary||null, b.color_secondary||null]);
+  res.json({ ok: true });
+});
+
+// Signed upload URL for assets (logos, product images)
+const ASSETS_BUCKET = process.env.ASSETS_BUCKET || '';
+let storage = null, bucket = null;
+if (ASSETS_BUCKET) {
+  try {
+    const { Storage } = require('@google-cloud/storage');
+    storage = new Storage();
+    bucket = storage.bucket(ASSETS_BUCKET);
+  } catch (e) {
+    console.error('Storage init failed', e);
+  }
+}
+
+addRoute('post', '/admin/upload-url', verifyAuth, requireTenantAdminBodyTenant, async (req, res) => {
+  try {
+    if (!bucket) return res.status(503).json({ error: 'assets not configured' });
+    const tenantId = String(req.body?.tenant_id || req.body?.tenantId || '').trim() || req.header('x-tenant-id');
+    const filename = String(req.body?.filename || '').trim();
+    const kind = String(req.body?.kind || 'logo');
+    const contentType = String(req.body?.contentType || 'application/octet-stream');
+    if (!tenantId || !filename) return res.status(400).json({ error: 'tenant_id and filename required' });
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
+    const objectName = `tenants/${tenantId}/${kind}s/${Date.now()}-${safeName}`;
+    const file = bucket.file(objectName);
+    const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
+    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
+    res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+  } catch (e) {
+    res.status(500).json({ error: 'sign_failed' });
+  }
+});
+
+// ---- Device activation and licensing
+function genCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+function genNonce(){ return crypto.randomBytes(16).toString('hex'); }
+function genDeviceToken(){ return crypto.randomBytes(32).toString('hex'); }
+
+// Device starts pairing (tenant-scoped). Returns short code and nonce.
+addRoute('post', '/device/pair/start', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  let code = genCode();
+  // ensure uniqueness (very unlikely collision, loop a few times)
+  for (let i=0;i<5;i++){
+    const exists = await db('select 1 from device_activation_codes where code=$1', [code]);
+    if (!exists.length) break; code = genCode();
+  }
+  const nonce = genNonce();
+  const expires = new Date(Date.now() + 10*60*1000); // 10 minutes
+  await db('insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2,$3,$4)', [code, req.tenantId, expires.toISOString(), { nonce }]);
+  res.json({ code, expires_at: expires.toISOString(), nonce });
+});
+
+// Device polls pairing status; if claimed and nonce matches, returns device_token and role.
+addRoute('get', '/device/pair/:code/status', async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const code = String(req.params.code||'').trim();
+  const nonce = String(req.query.nonce||'').trim();
+  const rows = await db('select code, tenant_id, expires_at, claimed_at, device_id, meta from device_activation_codes where code=$1', [code]);
+  if (!rows.length) return res.json({ status: 'expired' });
+  const r = rows[0];
+  if (new Date(r.expires_at).getTime() < Date.now()) return res.json({ status: 'expired' });
+  if (!r.claimed_at || !r.device_id) return res.json({ status: 'pending' });
+  // return device token if nonce matches
+  if (nonce && r.meta?.nonce === nonce) {
+    const [dev] = await db('select id, name, device_token, role::text as role, tenant_id, branch from devices where id=$1', [r.device_id]);
+    if (!dev) return res.json({ status: 'pending' });
+    return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
+  }
+  return res.json({ status: 'claimed' });
+});
+
+// Super admin: view/update license limit
+addRoute('get', '/admin/tenants/:id/license', verifyAuth, async (req, res) => {
+  if (!HAS_DB) return res.json({ license_limit: 1, active_count: 0 });
+  const tenantId = req.params.id;
+  const email = (req.user?.email||'').toLowerCase();
+  if (!isPlatformAdmin(req) && !(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
+  const [t] = await db('select license_limit from tenants where id=$1', [tenantId]);
+  const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+  res.json({ license_limit: t?.license_limit ?? 1, active_count: count||0 });
+});
+addRoute('put', '/admin/tenants/:id/license', verifyAuth, requirePlatformAdmin, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = req.params.id;
+  const n = Math.max(1, Number(req.body?.license_limit || 1));
+  await db('update tenants set license_limit=$1 where id=$2', [n, tenantId]);
+  res.json({ ok:true, license_limit: n });
+});
+
+// Tenant admin: claim device using code
+addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = req.params.id;
+  const code = String(req.body?.code||'').trim();
+  const role = String(req.body?.role||'').trim().toLowerCase();
+  const name = String(req.body?.name||'').trim();
+  const branch = String(req.body?.branch||'').trim();
+  if (!code || (role !== 'cashier' && role !== 'display')) return res.status(400).json({ error: 'invalid_request' });
+  if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
+  const [lic] = await db('select license_limit from tenants where id=$1', [tenantId]);
+  const limit = lic?.license_limit ?? 1;
+  const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+  if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
+  const rows = await db('select code, tenant_id, expires_at, claimed_at from device_activation_codes where code=$1 and tenant_id=$2', [code, tenantId]);
+  if (!rows.length) return res.status(404).json({ error: 'code_not_found' });
+  const r = rows[0];
+  if (r.claimed_at) return res.status(409).json({ error: 'code_already_claimed' });
+  if (new Date(r.expires_at).getTime() < Date.now()) return res.status(409).json({ error: 'code_expired' });
+  const token = genDeviceToken();
+  const [dev] = await db(
+    `insert into devices (tenant_id, name, role, status, branch, device_token)
+     values ($1,$2,$3,'active',$4,$5)
+     returning id, tenant_id, name, role::text as role, status::text as status, branch, activated_at`,
+    [tenantId, name||null, role, branch||null, token]
+  );
+  await db('update device_activation_codes set claimed_at=now(), device_id=$1 where code=$2', [dev.id, code]);
+  res.json({ ok:true, device: dev });
+});
+
+// Tenant admin: list and revoke devices
+addRoute('get', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const rows = await db("select id, name, role::text as role, status::text as status, branch, activated_at, revoked_at, last_seen from devices where tenant_id=$1 order by activated_at desc", [req.params.id]);
+  res.json({ items: rows });
+});
+addRoute('post', '/admin/tenants/:id/devices/:deviceId/revoke', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await db("update devices set status='revoked', revoked_at=now() where tenant_id=$1 and id=$2", [req.params.id, req.params.deviceId]);
+  res.json({ ok:true });
+});
+
+// Tenant admin: delete device (only if revoked)
+addRoute('delete', '/admin/tenants/:id/devices/:deviceId', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = req.params.id;
+  const deviceId = req.params.deviceId;
+  // Ensure device exists and is revoked
+  const rows = await db("select id, status from devices where tenant_id=$1 and id=$2", [tenantId, deviceId]);
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  if (rows[0].status !== 'revoked') return res.status(409).json({ error: 'device_not_revoked' });
+  // Clear FK from activation codes, then delete
+  try {
+    await db("update device_activation_codes set device_id=null where device_id=$1", [deviceId]);
+  } catch {}
+  await db("delete from devices where tenant_id=$1 and id=$2", [tenantId, deviceId]);
+  res.json({ ok: true });
+});
+
+// Branch limits (view for tenant admin, edit for platform admin)
+addRoute('get', '/admin/tenants/:id/branch-limit', verifyAuth, async (req, res) => {
+  if (!HAS_DB) return res.json({ branch_limit: 3, branch_count: 0 });
+  const tenantId = req.params.id;
+  const email = (req.user?.email||'').toLowerCase();
+  if (!isPlatformAdmin(req) && !(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
+  const [t] = await db('select branch_limit from tenants where id=$1', [tenantId]);
+  const [{ count }] = await db('select count(*)::int as count from branches where tenant_id=$1', [tenantId]);
+  res.json({ branch_limit: t?.branch_limit ?? 3, branch_count: count||0 });
+});
+addRoute('put', '/admin/tenants/:id/branch-limit', verifyAuth, requirePlatformAdmin, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = req.params.id;
+  const n = Math.max(1, Number(req.body?.branch_limit || 3));
+  await db('update tenants set branch_limit=$1 where id=$2', [n, tenantId]);
+  res.json({ ok:true, branch_limit: n });
+});
+
+// Branch CRUD (tenant admin)
+addRoute('get', '/admin/tenants/:id/branches', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const rows = await db('select id, name, created_at from branches where tenant_id=$1 order by name asc', [req.params.id]);
+  res.json({ items: rows });
+});
+addRoute('post', '/admin/tenants/:id/branches', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const name = String(req.body?.name||'').trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const tenantId = req.params.id;
+  const [lim] = await db('select branch_limit from tenants where id=$1', [tenantId]);
+  const limit = lim?.branch_limit ?? 3;
+  const [{ count }] = await db('select count(*)::int as count from branches where tenant_id=$1', [tenantId]);
+  if ((count||0) >= limit) return res.status(409).json({ error: 'branch_limit_reached' });
+  // enforce unique name per tenant
+  const exists = await db('select 1 from branches where tenant_id=$1 and lower(name)=lower($2)', [tenantId, name]);
+  if (exists.length) return res.status(409).json({ error: 'branch_name_exists' });
+  const [b] = await db('insert into branches (tenant_id, name) values ($1,$2) returning id, name, created_at', [tenantId, name]);
+  res.json({ ok:true, branch: b });
+});
+addRoute('put', '/admin/tenants/:id/branches/:branchId', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const name = String(req.body?.name||'').trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const tenantId = req.params.id;
+  // check unique
+  const exists = await db('select 1 from branches where tenant_id=$1 and lower(name)=lower($2) and id<>$3', [tenantId, name, req.params.branchId]);
+  if (exists.length) return res.status(409).json({ error: 'branch_name_exists' });
+  await db('update branches set name=$1 where tenant_id=$2 and id=$3', [name, tenantId, req.params.branchId]);
+  res.json({ ok:true });
+});
+addRoute('delete', '/admin/tenants/:id/branches/:branchId', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = req.params.id;
+  const [b] = await db('select name from branches where tenant_id=$1 and id=$2', [tenantId, req.params.branchId]);
+  if (!b) return res.status(404).json({ error: 'not_found' });
+  const [{ cnt }] = await db('select count(*)::int as cnt from devices where tenant_id=$1 and status=\'active\' and branch=$2', [tenantId, b.name]);
+  if ((cnt||0) > 0) return res.status(409).json({ error: 'branch_has_devices' });
+  await db('delete from branches where tenant_id=$1 and id=$2', [tenantId, req.params.branchId]);
+  res.json({ ok:true });
+});
+
 // ---- Static UI
 const PUB = path.join(__dirname, 'public');
 // Serve static files at root (so /css/... and /js/... work)
 app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
 app.use('/public', express.static(PUB));
+addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'images', 'koobs-logo.png')));
 
 addRoute('get', '/drive', (_req, res) => res.sendFile(path.join(PUB, 'drive-thru.html')));
 addRoute('get', '/cashier', (req, res) => {
@@ -565,6 +1250,7 @@ function handleSubscribe(ws, msg) {
   if (basket.ui?.category) {
     send(ws, { type: 'ui:selectCategory', basketId, name: basket.ui.category, serverTs: Date.now() });
   }
+  broadcastPeerStatus(basketId);
 }
 
 function computeTotals(basket) {
@@ -692,7 +1378,7 @@ function handleUpdate(ws, msg) {
 }
 
 wss.on('connection', (ws, req) => {
-  clientMeta.set(ws, { clientId: uuidv4(), basketId: null, alive: true });
+  clientMeta.set(ws, { clientId: uuidv4(), basketId: null, alive: true, role: null, name: null });
 
   ws.on('message', raw => {
     let msg;
@@ -700,6 +1386,7 @@ wss.on('connection', (ws, req) => {
     if (!msg?.type) return send(ws, { type: 'error', error: 'missing_type' });
 
     if (msg.type === 'subscribe') return handleSubscribe(ws, msg);
+    if (msg.type === 'hello') { handleHello(ws, msg); return; }
     if (msg.type === 'basket:update') return handleUpdate(ws, msg);
     if (msg.type === 'basket:requestSync') return handleSubscribe(ws, msg); // safely re-sync
     if (msg.type === 'ui:selectCategory') return handleUiSelectCategory(ws, msg);
@@ -725,6 +1412,7 @@ function cleanup(ws) {
   const set = basketClients.get(meta.basketId);
   if (set) set.delete(ws);
   clientMeta.delete(ws);
+  if (meta.basketId) broadcastPeerStatus(meta.basketId);
 }
 
 setInterval(() => {
@@ -740,10 +1428,35 @@ setInterval(() => {
   }
 }, 30000);
 
+function handleHello(ws, msg){
+  const meta = clientMeta.get(ws) || {};
+  const role = String(msg.role||'').toLowerCase();
+  const name = String(msg.name||'').trim();
+  const next = { ...meta, role: (role==='cashier'||role==='display') ? role : null, name: name || meta.name };
+  clientMeta.set(ws, next);
+  if (next.basketId) broadcastPeerStatus(next.basketId);
+}
+
+function broadcastPeerStatus(basketId){
+  const set = basketClients.get(basketId);
+  if (!set) return;
+  let cashierName = null, displayName = null;
+  for (const ws of set) {
+    const meta = clientMeta.get(ws) || {};
+    if (meta.role === 'cashier' && !cashierName) cashierName = meta.name || 'Cashier';
+    if (meta.role === 'display' && !displayName) displayName = meta.name || 'Drive‑Thru';
+  }
+  const status = (cashierName && displayName) ? 'connected' : 'waiting';
+  const payload = { type:'peer:status', basketId, status, cashierName, displayName, serverTs: Date.now() };
+  broadcast(basketId, payload);
+}
+
 const server = app.listen(PORT, '0.0.0.0', async () => {
   if (HAS_DB) {
     try { await ensureStateTable(); } catch (e) { console.error('ensureStateTable failed', e); }
     try { await ensureDefaultTenant(); } catch (e) { console.error('ensureDefaultTenant failed', e); }
+    try { await ensureLicensingSchema(); } catch (e) { console.error('ensureLicensingSchema failed', e); }
+    try { await ensureWebrtcSchema(); } catch (e) { console.error('ensureWebrtcSchema failed', e); }
   }
   console.log(`API running on http://0.0.0.0:${PORT}`);
 });

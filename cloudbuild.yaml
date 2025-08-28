@@ -1,0 +1,25 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build','-t','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA','.']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['push','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      [
+        'run','deploy','${_SERVICE}',
+        '--image','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA',
+        '--region','${_REGION}',
+        '--platform','managed',
+        '--port','8080'
+      ]
+
+images:
+  - '${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA'
+
+substitutions:
+  _REGION: me-central1
+  _AR_LOCATION: us-central1
+  _SERVICE: smart-order-api

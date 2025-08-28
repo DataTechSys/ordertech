@@ -6,12 +6,16 @@
   "scripts": {
     "start": "node server.js",
     "seed": "node scripts/seed.js",
+    "migrate": "node scripts/migrate.js",
     "import:csv": "node scripts/import_csv.js data/categories.csv data/products.csv"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.11.2",
     "cors": "^2.8.5",
     "csv-parse": "^5.6.0",
     "express": "^5.1.0",
+    "firebase": "^12.1.0",
+    "firebase-admin": "^12.6.0",
     "pg": "^8.12.0",
     "uuid": "^11.1.0",
     "ws": "^8.18.3"

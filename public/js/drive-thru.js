@@ -30,7 +30,17 @@ const POPULER = 'Populer';
 let allProds = [];
 let popular = [];
 
-const basketId = new URLSearchParams(location.search).get('basket') || 'lane-1';
+let myId = localStorage.getItem('DEVICE_ID_DISPLAY') || '';
+let basketId = new URLSearchParams(location.search).get('basket') || '';
+if (myId && basketId !== myId) {
+  const params = new URLSearchParams(location.search);
+  params.set('basket', myId);
+  history.replaceState(null, '', location.pathname + '?' + params.toString());
+  basketId = myId;
+}
+if (!basketId) {
+  basketId = 'lane-1';
+}
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 let ws;
 let catsReady = false;
@@ -40,11 +50,53 @@ let imgMap = new Map();
 
 connect();
 init();
+setupPresenceHeartbeat();
+// Fallback: try starting RTC even if WS handshake is blocked by proxy/CDN
+setTimeout(() => { if (!rtcStarted && !rtcStarting) startRTC(); }, 1200);
+
+let rtcStarted = false;
+let rtcStarting = false;
+let rtcBackoff = 1000;
+let restartTimer = null;
+function clearRtcTimers(){
+  const t = window.__rtcTimersDisplay || {};
+  try { if (t.pollOfferTimer) clearInterval(t.pollOfferTimer); } catch {}
+  try { if (t.candidatesInterval) clearInterval(t.candidatesInterval); } catch {}
+  window.__rtcTimersDisplay = { pollOfferTimer: null, candidatesInterval: null };
+}
+function stopRTC(reason){
+  try { console.log('RTC(display) stop', { reason }); } catch {}
+  clearRtcTimers();
+  try {
+    const pc = window.__pcDisplay; if (pc && pc.close) pc.close();
+  } catch {}
+  window.__pcDisplay = null;
+  try {
+    const s = localEl && localEl.srcObject; if (s && s.getTracks) { for (const t of s.getTracks()) { try { t.stop(); } catch {} } }
+    if (localEl) localEl.srcObject = null;
+  } catch {}
+  try { if (remoteEl) remoteEl.srcObject = null; } catch {}
+  rtcStarted = false; rtcStarting = false; restartTimer && clearTimeout(restartTimer); restartTimer = null; rtcBackoff = 1000;
+  const pill = document.getElementById('linkPill');
+  const label = document.getElementById('linkStatus');
+  const dot = pill ? pill.querySelector('.dot') : null;
+  if (label) label.textContent = 'READY';
+  if (dot) dot.style.background = '#f59e0b';
+  if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+}
+}
+async function startRTC(){
+  if (rtcStarted || rtcStarting) return;
+  rtcStarting = true;
+  try {
+    const localStream = await startLocalCam(localEl);
+    await initRTC(localStream);
+    rtcStarted = true;
+  } catch (e) { console.warn('RTC start failed', e); }
+  finally { rtcStarting = false; }
+}
 
 async function init() {
-  const localStream = await startLocalCam(localEl);
-  initRTC(localStream);
-
   const cats = await loadCategories(tenant);
   allProds = await loadProducts(tenant);
   imgMap = new Map(allProds.map(p => [p.id, p.image_url]));
@@ -134,10 +186,39 @@ function connect(){
     ws = new WebSocket(proto + '://' + location.host);
     ws.addEventListener('open', () => {
       try { ws.send(JSON.stringify({ type: 'subscribe', basketId })); } catch {}
+      // Identify as display with name for peer-status
+      try {
+        const name = localStorage.getItem('DEVICE_NAME_DISPLAY') || localStorage.getItem('DEVICE_NAME') || 'Drive‑Thru';
+        ws.send(JSON.stringify({ type:'hello', basketId, role:'display', name }));
+      } catch {}
+      const pill = document.getElementById('linkPill');
+      const label = document.getElementById('linkStatus');
+      const dot = pill ? pill.querySelector('.dot') : null;
+      if (label) label.textContent = 'READY';
+      if (dot) dot.style.background = '#f59e0b';
+      if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+      // Start RTC immediately; display will poll for offer until cashier posts one
+      startRTC();
     });
     ws.addEventListener('message', async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        if (msg.type === 'peer:status') {
+          const pill = document.getElementById('linkPill');
+          const label = document.getElementById('linkStatus');
+          const dot = pill ? pill.querySelector('.dot') : null;
+          if (msg.status === 'connected') {
+            const first = String(msg.cashierName||'Cashier').split(/\s+/)[0];
+            if (label) label.textContent = `CONNECTED — ${first}`;
+            if (dot) dot.style.background = '#22c55e';
+            if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+            startRTC();
+          } else {
+            if (label) label.textContent = 'READY';
+            if (dot) dot.style.background = '#f59e0b';
+            if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+          }
+        }
         if (msg.type === 'ui:selectCategory') {
           const name = String(msg.name||'');
           if (!name) return;
@@ -161,11 +242,31 @@ function connect(){
         }
       } catch {}
     });
+    ws.addEventListener('close', () => {
+      const pill = document.getElementById('linkPill');
+      const label = document.getElementById('linkStatus');
+      const dot = pill ? pill.querySelector('.dot') : null;
+      if (label) label.textContent = 'OFFLINE';
+      if (dot) dot.style.background = '#ef4444';
+      if (pill) { pill.style.background = '#ef4444'; pill.style.color = '#fff'; }
+    });
   } catch {}
 }
 
 function addToBill(_p) {
   // No-op: drive-thru follows cashier basket now.
+}
+
+function setupPresenceHeartbeat(){
+  const token = localStorage.getItem('DEVICE_TOKEN_DISPLAY') || localStorage.getItem('DEVICE_TOKEN') || '';
+  if (!token) return; // not activated yet
+  setInterval(async () => {
+    try {
+      const headers = { 'content-type':'application/json', 'x-device-token': token };
+      if (tenant) headers['x-tenant-id'] = tenant;
+      await fetch('/presence/display', { method:'POST', headers, body: JSON.stringify({}) });
+    } catch {}
+  }, 5000);
 }
 
 function updateBillFromBasket(basket) {
@@ -210,36 +311,120 @@ function updateOptionsSelection(sel){
 }
 function hideOptionsUI(){ const m = document.getElementById('optionsModal'); if (m) m.style.display='none'; }
 
-function initRTC(localStream){
+async function initRTC(localStream){
   try {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    clearRtcTimers();
+    const ice = await getIceServers();
+    const params = new URLSearchParams(location.search);
+    const icePolicy = params.get('ice') === 'relay' ? 'relay' : 'all';
+    const pc = new RTCPeerConnection({ iceServers: ice, iceTransportPolicy: icePolicy });
+    window.__pcDisplay = pc;
+    const pendingRemote = [];
+    const addRemoteCandidate = async (cand) => {
+      if (pc.remoteDescription && pc.signalingState !== 'have-local-offer') {
+        try { await pc.addIceCandidate(new RTCIceCandidate(cand)); }
+        catch (e) { console.error('addIceCandidate failed (display)', { candidate: cand, error: e }); }
+      } else {
+        pendingRemote.push(cand);
+      }
+    };
+console.log('RTC(display) init', { pairId: basketId, icePolicy, servers: Array.isArray(ice) ? ice.length : 0 });
     if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
     const remoteStream = new MediaStream();
     if (remoteEl) { remoteEl.srcObject = remoteStream; remoteEl.play && remoteEl.play().catch(()=>{}); }
     pc.ontrack = (ev) => { ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
-    pc.onicecandidate = async (ev) => { if (ev.candidate) { try { await fetch('/webrtc/candidate', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, role:'display', candidate: ev.candidate }) }); } catch {} } };
+pc.addEventListener('iceconnectionstatechange', () => {
+      console.log('RTC(display) iceConnectionState:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected') { rtcBackoff = 1000; }
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') scheduleRtcRestart(pc.iceConnectionState);
+    });
+    pc.addEventListener('connectionstatechange', () => {
+      console.log('RTC(display) connectionState:', pc.connectionState);
+      if (pc.connectionState === 'connected') { rtcBackoff = 1000; }
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') scheduleRtcRestart(pc.connectionState);
+    });
+    ws.addEventListener('message', async (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'rtc:stopped' && msg.basketId === basketId) {
+          console.log('RTC(display) received stop command');
+          stopRTC('remote');
+        }
+      } catch {}
+    });
+    pc.addEventListener('icegatheringstatechange', () => console.log('RTC(display) iceGatheringState:', pc.iceGatheringState));
+    pc.onicecandidate = async (ev) => {
+      if (ev.candidate) {
+        try {
+await fetch('/webrtc/candidate', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, role:'display', candidate: ev.candidate }) });
+        } catch (err) { console.warn('POST /webrtc/candidate failed (display)', err); }
+      } else {
+        console.log('RTC(display) ICE gathering complete');
+      }
+    };
     // Wait/poll for offer, then answer
-    const pollOffer = setInterval(async () => {
+const pollOfferTimer = setInterval(async () => {
       try {
         const r = await fetch(`/webrtc/offer?pairId=${encodeURIComponent(basketId)}`);
         const j = await r.json();
         if (j && j.sdp && pc.signalingState === 'stable') {
+          console.log('GET /webrtc/offer (display) received');
           await pc.setRemoteDescription({ type:'offer', sdp: j.sdp });
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
+          console.log('POST /webrtc/answer (display)');
           await fetch('/webrtc/answer', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId: basketId, sdp: answer.sdp }) });
-          clearInterval(pollOffer);
+          // flush buffered candidates
+          if (pendingRemote.length) {
+            console.log('RTC(display) flushing buffered remote candidates', { count: pendingRemote.length });
+            for (const c of pendingRemote.splice(0)) { await addRemoteCandidate(c); }
+          }
+          // burst fetch candidates immediately after answering
+          try {
+              const r2 = await fetch(`/webrtc/candidates?pairId=${encodeURIComponent(basketId)}&role=display`);
+              const j2 = await r2.json();
+              const items2 = Array.isArray(j2.items) ? j2.items : [];
+              if (items2.length) console.log('IMMEDIATE GET /webrtc/candidates (display)', { count: items2.length });
+              for (const c of items2) { await addRemoteCandidate(c); }
+            } catch {}
+          clearInterval(pollOfferTimer);
+          window.__rtcTimersDisplay = window.__rtcTimersDisplay || {};
+          window.__rtcTimersDisplay.pollOfferTimer = null;
+        } else if (!j.sdp && pc.remoteDescription) {
+          console.log('GET /webrtc/offer (display) is gone; session ended');
+          stopRTC('offer-gone');
+        } else {
+          console.log('GET /webrtc/offer (display) no offer yet');
         }
-      } catch {}
-    }, 1200);
-    setInterval(async () => {
+      } catch (err) { console.warn('GET /webrtc/offer failed (display)', err); }
+}, 1200);
+    window.__rtcTimersDisplay = window.__rtcTimersDisplay || {};
+    window.__rtcTimersDisplay.pollOfferTimer = pollOfferTimer;
+const candidatesInterval = setInterval(async () => {
       try {
         const r = await fetch(`/webrtc/candidates?pairId=${encodeURIComponent(basketId)}&role=display`);
         const j = await r.json();
-        for (const c of (j.items||[])) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} }
-      } catch {}
-    }, 1000);
+        const items = Array.isArray(j.items) ? j.items : [];
+        if (items.length) console.log('GET /webrtc/candidates (display)', { count: items.length });
+        for (const c of items) { await addRemoteCandidate(c); }
+      } catch (err) { console.warn('GET /webrtc/candidates failed (display)', err); }
+    }, 1800);
+    window.__rtcTimersDisplay = window.__rtcTimersDisplay || {};
+    window.__rtcTimersDisplay.candidatesInterval = candidatesInterval;
   } catch (e) { console.warn('RTC init failed', e); }
+}
+
+async function getIceServers(){
+  if (window.__ICE_SERVERS) return window.__ICE_SERVERS;
+  try {
+const r = await fetch('/webrtc/config', { cache: 'no-store' });
+    const j = await r.json();
+    const arr = (j && Array.isArray(j.iceServers)) ? j.iceServers : [{ urls: ['stun:stun.l.google.com:19302'] }];
+    window.__ICE_SERVERS = arr;
+    return arr;
+  } catch {
+    return [{ urls: ['stun:stun.l.google.com:19302'] }];
+  }
 }
 
 function computePopular(all) {
