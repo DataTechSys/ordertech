@@ -224,6 +224,9 @@ addRoute('get', '/__code', (_req, res) => {
 // ---- basic catalog & orders
 // Use data/product.json in non-DB mode so UI renders real categories, products and image URLs
 const JSON_CATALOG = loadJsonCatalog();
+// Global photo map (for local assets fallback)
+let PHOTO_MAP = {};
+try { PHOTO_MAP = JSON.parse(fs.readFileSync(path.join(__dirname, 'photos', 'map.json'), 'utf8')) || {}; } catch {}
 function loadJsonCatalog(){
   // Try Foodics CSVs first (data/categories.csv and data/products.csv)
   try {
@@ -417,6 +420,24 @@ addRoute('get', '/products', requireTenant, async (req, res) => {
       order by c.name, p.name
     `;
     const rows = await db(sql, category_name ? [req.tenantId, category_name] : [req.tenantId]);
+    // Fallbacks for missing image_url:
+    // 1) Try CSV/JSON catalog by name (may provide remote Foodics URL)
+    // 2) Try local PHOTO_MAP (served from /public/images/products via /photos)
+    try {
+      if (Array.isArray(rows) && rows.length) {
+        const byName = new Map((JSON_CATALOG.products||[]).map(p => [p.name, p.image_url]));
+        for (const r of rows) {
+          if (!r.image_url) {
+            let u = byName.get(r.name);
+            if (!u) {
+              const f = PHOTO_MAP[r.name];
+              if (f) u = `/public/images/products/${encodeURIComponent(f)}`;
+            }
+            if (u) r.image_url = u;
+          }
+        }
+      }
+    } catch {}
     res.json(rows);
   } catch (_e) {
     res.json([]);
@@ -1591,6 +1612,8 @@ app.use((req, res, next) => {
 app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
 app.use('/public', express.static(PUB));
+// Serve product images directly from /photos under /public/images/products
+app.use('/public/images/products', express.static(path.join(__dirname, 'photos')));
 addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'images', 'koobs-logo.png')));
 
 // Simple in-memory image cache for proxy (/img)
