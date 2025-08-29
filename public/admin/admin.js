@@ -16,6 +16,9 @@
   }
   navItems.forEach(n => n.addEventListener('click', (e) => { e.preventDefault(); switchPanel(n.dataset.panel); }));
 
+  // Ensure sidebar starts expanded (desktop)
+  try { document.getElementById('sidebar')?.classList.remove('collapsed'); } catch {}
+
   // Collapsible sidebar + overlay per suggested structure
   (function () {
     const sidebar = document.getElementById('sidebar');
@@ -212,14 +215,14 @@
     for (const t of arr){
       const li = document.createElement('li');
       const left = document.createElement('span'); left.textContent = `${t.name} (${t.id.slice(0,8)})`;
-      const edit = document.createElement('button'); edit.textContent = 'Rename';
+      const edit = document.createElement('button'); edit.textContent = 'Rename'; edit.className = 'btn small';
       edit.onclick = async () => {
         const nn = prompt('New tenant name', t.name); if (!nn) return;
         const r = await fetch(`/admin/tenants/${t.id}`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ name: nn }) });
         if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Rename failed: ' + (e.error || r.status)); return; }
         await fetchTenants();
       };
-      const del = document.createElement('button'); del.textContent = 'Delete';
+      const del = document.createElement('button'); del.textContent = 'Delete'; del.className = 'btn small';
       del.onclick = async () => {
         if (!confirm('Delete this tenant? This will remove tenant data.')) return;
         const r = await fetch(`/admin/tenants/${t.id}`, { method:'DELETE', headers: adminHeaders() });
@@ -254,7 +257,7 @@
     for (const d of data.items || []){
       const li = document.createElement('li');
       const span = document.createElement('span'); span.textContent = d.host;
-      const del = document.createElement('button'); del.textContent = 'Remove';
+      const del = document.createElement('button'); del.textContent = 'Remove'; del.className = 'btn small';
       del.onclick = async () => {
         await fetch(`/admin/domains/${encodeURIComponent(d.host)}`, { method: 'DELETE', headers: adminHeaders() });
         await refreshDomains();
@@ -299,35 +302,40 @@
     deviceList.innerHTML = '';
     if (res.ok) {
       const data = await res.json();
-      for (const d of data.items || []){
-        const li = document.createElement('li');
-        const left = document.createElement('span');
-        left.textContent = `${d.name || '(unnamed)'} — ${d.role.toUpperCase()} ${d.branch ? '('+d.branch+')' : ''}`;
-        const right = document.createElement('small');
-        right.textContent = `${d.status.toUpperCase()} • ${d.last_seen ? new Date(d.last_seen).toLocaleString() : 'no heartbeat'}`;
-        // Buttons area
+      const rows = (data.items || []).map(d => {
+        const last = d.last_seen ? new Date(d.last_seen).toLocaleString() : '—';
+        const role = (d.role||'').toUpperCase();
+        const status = (d.status||'').toUpperCase();
+        const branch = d.branch || '—';
+        const name = d.name || '(unnamed)';
         const isRevoked = (d.status||'').toLowerCase() === 'revoked';
-        if (!isRevoked) {
-          const revoke = document.createElement('button');
-          revoke.textContent = 'Revoke';
-          revoke.onclick = async () => {
-            await fetch(`/admin/tenants/${t}/devices/${d.id}/revoke`, { method:'POST', headers: adminHeaders() });
-            await refreshLicenseAndDevices();
-          };
-          li.appendChild(left); li.appendChild(right); li.appendChild(revoke);
-        } else {
-          const del = document.createElement('button');
-          del.textContent = 'Delete';
-          del.onclick = async () => {
+        const action = isRevoked
+          ? `<button class=\"btn small\" data-act=\"del\" data-id=\"${d.id}\">Delete</button>`
+          : `<button class=\"btn small\" data-act=\"revoke\" data-id=\"${d.id}\">Revoke</button>`;
+        return `<tr>
+          <td>${name}</td>
+          <td>${role}</td>
+          <td>${branch}</td>
+          <td>${status}</td>
+          <td>${last}</td>
+          <td style=\"text-align:right\">${action}</td>
+        </tr>`;
+      }).join('');
+      deviceList.innerHTML = `<table class=\"table\" id=\"deviceTable\"><thead><tr><th>Name</th><th>Role</th><th>Branch</th><th>Status</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+      deviceList.querySelectorAll('[data-act]')?.forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          const act = btn.getAttribute('data-act');
+          if (act === 'revoke') {
+            await fetch(`/admin/tenants/${t}/devices/${id}/revoke`, { method:'POST', headers: adminHeaders() });
+          } else if (act === 'del') {
             if (!confirm('Delete this revoked device? This action cannot be undone.')) return;
-            const r = await fetch(`/admin/tenants/${t}/devices/${d.id}`, { method:'DELETE', headers: adminHeaders() });
+            const r = await fetch(`/admin/tenants/${t}/devices/${id}`, { method:'DELETE', headers: adminHeaders() });
             if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Delete failed: ' + (e.error || r.status)); return; }
-            await refreshLicenseAndDevices();
-          };
-          li.appendChild(left); li.appendChild(right); li.appendChild(del);
-        }
-        deviceList.appendChild(li);
-      }
+          }
+          await refreshLicenseAndDevices();
+        });
+      });
     }
   }
 
@@ -375,14 +383,14 @@
         // render list item
         const li = document.createElement('li');
         const left = document.createElement('span'); left.textContent = b.name;
-        const rename = document.createElement('button'); rename.textContent = 'Rename';
+        const rename = document.createElement('button'); rename.textContent = 'Rename'; rename.className = 'btn small';
         rename.onclick = async () => {
           const nn = prompt('New branch name', b.name); if (!nn) return;
           const r = await fetch(`/admin/tenants/${t}/branches/${b.id}`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ name: nn }) });
           if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Rename failed: ' + (e.error || r.status)); return; }
           await refreshBranches();
         };
-        const del = document.createElement('button'); del.textContent = 'Delete';
+        const del = document.createElement('button'); del.textContent = 'Delete'; del.className = 'btn small';
         del.onclick = async () => {
           if (!confirm('Delete branch? Devices assigned to this branch will block delete.')) return;
           const r = await fetch(`/admin/tenants/${t}/branches/${b.id}`, { method:'DELETE', headers: adminHeaders() });
