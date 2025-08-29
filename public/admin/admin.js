@@ -1,6 +1,6 @@
 (() => {
   // Sidebar nav wiring
-  const navItems = Array.from(document.querySelectorAll('.nav [data-panel]'));
+  const navItems = Array.from(document.querySelectorAll('.menu [data-panel]'));
   const panels = Array.from(document.querySelectorAll('.panel'));
   const panelById = (id) => document.getElementById(id);
   const navSuper = document.getElementById('navSuper');
@@ -15,6 +15,78 @@
     const n = navItems.find(x => x.dataset.panel === panelId); if (n) n.classList.add('active');
   }
   navItems.forEach(n => n.addEventListener('click', (e) => { e.preventDefault(); switchPanel(n.dataset.panel); }));
+
+  // Collapsible sidebar + overlay per suggested structure
+  (function () {
+    const sidebar = document.getElementById('sidebar');
+    const collapseBtn = document.getElementById('sidebarCollapse');
+    const mobileBtn = document.getElementById('mobileMenu');
+
+    // Desktop collapse
+    collapseBtn?.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+    });
+
+    // Mobile overlay open/close
+    mobileBtn?.addEventListener('click', () => {
+      const clone = sidebar.cloneNode(true);
+      clone.id = 'sidebar-overlay';
+      clone.classList.remove('collapsed');
+      clone.classList.add('overlay');
+      const dim = document.createElement('div');
+      dim.className = 'sidebar-dim show';
+
+      function closeOverlay(){
+        try { document.body.removeChild(dim); } catch {}
+        try { document.body.removeChild(clone); } catch {}
+        document.removeEventListener('keydown', onEsc);
+      }
+      function onEsc(e){ if (e.key === 'Escape') closeOverlay(); }
+      dim.addEventListener('click', closeOverlay);
+      document.addEventListener('keydown', onEsc);
+
+      // mount & wire
+      document.body.appendChild(dim);
+      document.body.appendChild(clone);
+      wireCollapsibles(clone);
+      // wire nav clicks inside overlay
+      clone.querySelectorAll('[data-panel]').forEach(a => {
+        a.addEventListener('click', (ev) => { ev.preventDefault(); switchPanel(a.dataset.panel); closeOverlay(); });
+      });
+    });
+
+    // Collapsibles on initial sidebar
+    wireCollapsibles(sidebar);
+
+    function wireCollapsibles(root){
+      root.querySelectorAll('[data-section]').forEach(sec => {
+        const head = sec.querySelector('.menu-head');
+        const body = sec.querySelector('.menu-body');
+        const chev = head.querySelector('.chev');
+        const isOpen = sec.classList.contains('open');
+        head.setAttribute('aria-expanded', String(isOpen));
+        if (!isOpen) { body.hidden = true; chev.textContent = '▸'; }
+        head.addEventListener('click', () => {
+          const expanded = head.getAttribute('aria-expanded') === 'true';
+          head.setAttribute('aria-expanded', String(!expanded));
+          body.hidden = expanded;
+          chev.textContent = expanded ? '▸' : '▾';
+          sec.classList.toggle('open', !expanded);
+        });
+      });
+      root.querySelectorAll('[data-submenu]').forEach(sm => {
+        const head = sm.querySelector('.submenu-head');
+        const body = sm.querySelector('.submenu-body');
+        const chev = head.querySelector('.chev');
+        head.addEventListener('click', () => {
+          const expanded = head.getAttribute('aria-expanded') === 'true';
+          head.setAttribute('aria-expanded', String(!expanded));
+          body.style.display = expanded ? 'none' : 'grid';
+          chev.textContent = expanded ? '▸' : '▾';
+        });
+      });
+    }
+  })();
 
   let IS_PLATFORM_ADMIN = false;
 

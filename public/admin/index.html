@@ -11,50 +11,63 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
-      <div class="org">
-        <div class="org-left">
-          <div class="org-badge">S</div>
-          <div class="org-name">Stripe Inc…</div>
-        </div>
-        <div class="org-actions">
-          <button class="btn icon ghost" title="Search">🔍</button>
-          <button class="btn icon ghost" title="More">⋯</button>
-        </div>
+    <aside class="sidebar" id="sidebar" aria-label="Main">
+      <div class="brand">
+        <button class="btn icon ghost sidebar-toggle" id="sidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">☰</button>
+        <div class="logo" aria-hidden="true"></div>
+        <div class="name">Smart Order</div>
       </div>
-      <button class="btn dark block create-doc">＋ Create doc</button>
 
-      <div class="nav-group">Menu</div>
-      <nav class="nav">
-        <a href="#"><span class="icon"></span><span class="label">Hub</span></a>
-        <a href="#"><span class="icon"></span><span class="label">Departments</span></a>
-        <a href="#"><span class="icon"></span><span class="label">Teams</span></a>
-        <a href="#"><span class="icon"></span><span class="label">Projects</span></a>
-        <a href="#"><span class="icon"></span><span class="label">Reports</span></a>
-        <a href="#"><span class="icon"></span><span class="label">Recent Docs</span></a>
-        <a href="#"><span class="icon"></span><span class="label">Assigned to me</span></a>
-        <a href="#"><span class="icon"></span><span class="label">All Docs</span></a>
-      </nav>
+      <button class="btn primary create-doc">+ Create doc</button>
 
-      <div class="nav-group">Company Space</div>
-      <nav class="nav">
-        <a id="navSuper" href="#" class="active" data-panel="panel-super"><span class="icon"></span><span class="label">Super Admin</span></a>
-        <a id="navMarketing" href="#" data-panel="panel-marketing"><span class="icon"></span><span class="label">Marketing</span></a>
-        <a id="navCompany" href="#" data-panel="panel-company"><span class="icon"></span><span class="label">Company Profile</span></a>
-        <a id="navProducts" href="#" data-panel="panel-products"><span class="icon"></span><span class="label">Products</span></a>
+      <nav class="menu" role="tree">
+        <!-- Company Space with app panels -->
+        <div class="menu-section open" data-section>
+          <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-company">
+            <span class="chev">▾</span>
+            <span class="icon"></span>
+            <span class="label">Company Space</span>
+          </button>
+          <div class="menu-body" id="sec-company">
+            <a id="navSuper" class="menu-item active" href="#" data-panel="panel-super"><span class="dot"></span><span class="label">Super Admin</span></a>
+            <a id="navMarketing" class="menu-item" href="#" data-panel="panel-marketing"><span class="dot"></span><span class="label">Marketing</span></a>
+            <a id="navCompany" class="menu-item" href="#" data-panel="panel-company"><span class="dot"></span><span class="label">Company Profile</span></a>
+            <a id="navProducts" class="menu-item" href="#" data-panel="panel-products"><span class="dot"></span><span class="label">Products</span></a>
+          </div>
+        </div>
+
+        <!-- Example extra section (collapsed by default) -->
+        <div class="menu-section" data-section>
+          <button class="menu-head" role="treeitem" aria-expanded="false" aria-controls="sec-ops">
+            <span class="chev">▸</span>
+            <span class="icon"></span>
+            <span class="label">Operations</span>
+          </button>
+          <div class="menu-body" id="sec-ops" hidden>
+            <a class="menu-item" href="#"><span class="dot"></span><span class="label">Staffing</span></a>
+            <a class="menu-item" href="#"><span class="dot"></span><span class="label">Vendors</span></a>
+            <a class="menu-item" href="#"><span class="dot"></span><span class="label">Logistics</span></a>
+          </div>
+        </div>
       </nav>
     </aside>
 
     <header class="topbar">
-      <div class="breadcrumbs">
-        <a href="#">Company Space</a>
-        <span class="sep">/</span>
+      <nav class="breadcrumbs">
+        <a href="#">Company Space</a><span class="sep">›</span>
         <span>Admin</span>
-      </div>
+      </nav>
+
       <div class="searchbar">
+        <div class="btn-group">
+          <button class="btn small list-pill" type="button"><span>List</span><span class="caret">▾</span></button>
+          <button class="btn small" type="button"><span>Filter</span><span class="caret">▾</span></button>
+          <button class="btn small" type="button"><span>Sort</span><span class="caret">↕</span></button>
+        </div>
         <span id="adminUser" class="chip">Signed in</span>
         <button id="logoutBtn" class="btn">Logout</button>
       </div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
     </header>
 
     <main class="main">
