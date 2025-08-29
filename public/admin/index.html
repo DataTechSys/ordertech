@@ -12,16 +12,33 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="logo"></div>
-        <div class="name">Smart Order</div>
+      <div class="org">
+        <div class="org-left">
+          <div class="org-badge">S</div>
+          <div class="org-name">Stripe Inc…</div>
+        </div>
+        <div class="org-actions">
+          <button class="btn icon ghost" title="Search">🔍</button>
+          <button class="btn icon ghost" title="More">⋯</button>
+        </div>
       </div>
-      <div class="nav-group">Admin</div>
+      <button class="btn dark block create-doc">＋ Create doc</button>
+
+      <div class="nav-group">Menu</div>
+      <nav class="nav">
+        <a href="#"><span class="icon"></span><span class="label">Hub</span></a>
+        <a href="#"><span class="icon"></span><span class="label">Departments</span></a>
+        <a href="#"><span class="icon"></span><span class="label">Teams</span></a>
+        <a href="#"><span class="icon"></span><span class="label">Projects</span></a>
+        <a href="#"><span class="icon"></span><span class="label">Reports</span></a>
+        <a href="#"><span class="icon"></span><span class="label">Recent Docs</span></a>
+        <a href="#"><span class="icon"></span><span class="label">Assigned to me</span></a>
+        <a href="#"><span class="icon"></span><span class="label">All Docs</span></a>
+      </nav>
+
+      <div class="nav-group">Company Space</div>
       <nav class="nav">
         <a id="navSuper" href="#" class="active" data-panel="panel-super"><span class="icon"></span><span class="label">Super Admin</span></a>
-      </nav>
-      <div class="nav-group">Tenant</div>
-      <nav class="nav">
         <a id="navMarketing" href="#" data-panel="panel-marketing"><span class="icon"></span><span class="label">Marketing</span></a>
         <a id="navCompany" href="#" data-panel="panel-company"><span class="icon"></span><span class="label">Company Profile</span></a>
         <a id="navProducts" href="#" data-panel="panel-products"><span class="icon"></span><span class="label">Products</span></a>
