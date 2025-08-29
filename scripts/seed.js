@@ -53,6 +53,7 @@ function uuid() { return crypto.randomUUID(); }
         name text NOT NULL,
         description text,
         price numeric(10,2) NOT NULL,
+        image_url text,
         created_at timestamptz NOT NULL DEFAULT now()
       )`);
 

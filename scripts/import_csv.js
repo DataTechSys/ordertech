@@ -55,6 +55,7 @@ async function ensureTables(client) {
       name text NOT NULL,
       description text,
       price numeric(10,2) NOT NULL DEFAULT 0,
+      image_url text,
       image_ext text,
       created_at timestamptz NOT NULL DEFAULT now()
     )`);
@@ -132,10 +133,10 @@ async function downloadImage(url, outPath) {
       const imgUrl = p.image || '';
       const ext = imageExtFromUrl(imgUrl);
       await c.query(
-        `INSERT INTO products (id, tenant_id, category_id, name, description, price, image_ext)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, price=EXCLUDED.price, image_ext=EXCLUDED.image_ext`,
-        [id, TENANT_ID, category_id, name, desc, price, ext]
+        `INSERT INTO products (id, tenant_id, category_id, name, description, price, image_url, image_ext)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, price=EXCLUDED.price, image_url=EXCLUDED.image_url, image_ext=EXCLUDED.image_ext`,
+        [id, TENANT_ID, category_id, name, desc, price, imgUrl || null, ext]
       );
       if (imgUrl) {
         const out = path.join(imgDir, `${id}.${ext}`);

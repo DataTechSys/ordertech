@@ -138,6 +138,12 @@ async function ensureLicensingSchema(){
   await db("CREATE INDEX IF NOT EXISTS idx_dac_tenant_expires ON device_activation_codes(tenant_id, expires_at)");
 }
 
+// Ensure products table has image_url column (idempotent)
+async function ensureProductImageUrlColumn(){
+  if (!HAS_DB) return;
+  try { await db("ALTER TABLE IF EXISTS products ADD COLUMN IF NOT EXISTS image_url text"); } catch (_) {}
+}
+
 // ---- helpers
 function addRoute(method, route, ...handlers) {
   app[method](route, ...handlers);
@@ -403,7 +409,7 @@ addRoute('get', '/products', requireTenant, async (req, res) => {
   try {
     const { category_name } = req.query;
     const sql = `
-      select p.id, p.name, p.description, p.price, p.category_id, c.name as category_name
+      select p.id, p.name, p.description, p.price, p.category_id, c.name as category_name, p.image_url
       from products p
       join categories c on c.id=p.category_id
       where p.tenant_id=$1
@@ -1966,6 +1972,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     try { await ensureDefaultTenant(); } catch (e) { console.error('ensureDefaultTenant failed', e); }
     try { await ensureLicensingSchema(); } catch (e) { console.error('ensureLicensingSchema failed', e); }
     try { await ensureWebrtcSchema(); } catch (e) { console.error('ensureWebrtcSchema failed', e); }
+    try { await ensureProductImageUrlColumn(); } catch (e) { console.error('ensureProductImageUrlColumn failed', e); }
   }
   console.log(`API running on http://0.0.0.0:${PORT}`);
 });
