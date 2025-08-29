@@ -1,6 +1,6 @@
 (() => {
   // Sidebar nav wiring
-  const navItems = Array.from(document.querySelectorAll('.nav-item'));
+  const navItems = Array.from(document.querySelectorAll('.nav [data-panel]'));
   const panels = Array.from(document.querySelectorAll('.panel'));
   const panelById = (id) => document.getElementById(id);
   const navSuper = document.getElementById('navSuper');
@@ -14,7 +14,7 @@
     const p = panelById(panelId); if (p) p.classList.add('show');
     const n = navItems.find(x => x.dataset.panel === panelId); if (n) n.classList.add('active');
   }
-  navItems.forEach(n => n.addEventListener('click', () => switchPanel(n.dataset.panel)));
+  navItems.forEach(n => n.addEventListener('click', (e) => { e.preventDefault(); switchPanel(n.dataset.panel); }));
 
   let IS_PLATFORM_ADMIN = false;
 
@@ -386,14 +386,16 @@
       const j = await r.json();
       const items = Array.isArray(j.items) ? j.items : [];
       for (const u of items){
-        const card = document.createElement('div'); card.className = 'poster';
+        const card = document.createElement('div'); card.className = 'card';
+        const media = document.createElement('div'); media.className = 'media'; media.style.padding = '0';
         const img = document.createElement('img'); img.src = u; img.alt = 'poster';
-        const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = u.split('/').pop();
-        card.appendChild(img); card.appendChild(cap);
+        media.appendChild(img);
+        const body = document.createElement('div'); body.className = 'body'; body.textContent = u.split('/').pop();
+        card.appendChild(media); card.appendChild(body);
         posterGrid.appendChild(card);
       }
-      if (!items.length) posterGrid.innerHTML = '<small style="color:#9ca3af;">No posters found in /public/images/poster</small>';
-    } catch { posterGrid.innerHTML = '<small style="color:#9ca3af;">Failed to load posters</small>'; }
+      if (!items.length) posterGrid.innerHTML = '<div class="empty">No posters found in /public/images/poster</div>';
+    } catch { posterGrid.innerHTML = '<div class="empty">Failed to load posters</div>'; }
   }
   refreshPostersBtn?.addEventListener('click', loadPosters);
 

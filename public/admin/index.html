@@ -4,168 +4,172 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Order — Admin</title>
-  <link rel="stylesheet" href="/public/admin/admin.css" />
+  <link rel="stylesheet" href="/public/admin/style.css" />
   <script src="/public/admin/config.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-  <header class="admin-topbar">
-    <div class="brand">
-      <img src="/public/images/koobs-logo.png" alt="logo" />
-      <span>Smart Order Admin</span>
-    </div>
-    <div class="env">
-      <span id="adminUser"></span>
-      <button id="logoutBtn">Logout</button>
-    </div>
-  </header>
-
-  <div class="admin-layout">
+  <div class="app">
     <aside class="sidebar">
+      <div class="brand">
+        <div class="logo"></div>
+        <div class="name">Smart Order</div>
+      </div>
+      <div class="nav-group">Admin</div>
       <nav class="nav">
-        <div class="nav-group">
-          <div id="navSuper" class="nav-item active" data-panel="panel-super" title="Super Admin">
-            <span class="icon">🛡️</span>
-            <span>Super Admin</span>
-          </div>
-        </div>
-        <div class="nav-divider"></div>
-        <div class="nav-group">
-          <div id="navMarketing" class="nav-item" data-panel="panel-marketing" title="Marketing">
-            <span class="icon">🖼️</span>
-            <span>Marketing</span>
-          </div>
-          <div id="navCompany" class="nav-item" data-panel="panel-company" title="Company Profile">
-            <span class="icon">🏢</span>
-            <span>Company Profile</span>
-          </div>
-          <div id="navProducts" class="nav-item" data-panel="panel-products" title="Products">
-            <span class="icon">📦</span>
-            <span>Products</span>
-          </div>
-        </div>
+        <a id="navSuper" href="#" class="active" data-panel="panel-super"><span class="icon"></span><span class="label">Super Admin</span></a>
+      </nav>
+      <div class="nav-group">Tenant</div>
+      <nav class="nav">
+        <a id="navMarketing" href="#" data-panel="panel-marketing"><span class="icon"></span><span class="label">Marketing</span></a>
+        <a id="navCompany" href="#" data-panel="panel-company"><span class="icon"></span><span class="label">Company Profile</span></a>
+        <a id="navProducts" href="#" data-panel="panel-products"><span class="icon"></span><span class="label">Products</span></a>
       </nav>
     </aside>
 
-    <main class="content">
+    <header class="topbar">
+      <div class="breadcrumbs">
+        <a href="#">Company Space</a>
+        <span class="sep">/</span>
+        <span>Admin</span>
+      </div>
+      <div class="searchbar">
+        <span id="adminUser" class="chip">Signed in</span>
+        <button id="logoutBtn" class="btn">Logout</button>
+      </div>
+    </header>
+
+    <main class="main">
       <!-- Super Admin Panel -->
       <section id="panel-super" class="panel show">
-        <header class="panel-head"><h2>Super Admin</h2></header>
-        <div class="panel-body">
-          <section>
+        <h2 class="page-title">Super Admin</h2>
+        <section class="card">
+          <div class="body">
             <h3>Tenants</h3>
-            <div class="row">
-              <button id="refreshTenants">Refresh</button>
-              <select id="tenantSelect"></select>
+            <div class="toolbar">
+              <button id="refreshTenants" class="btn">Refresh</button>
+              <select id="tenantSelect" class="select" ></select>
             </div>
-            <div class="row">
-              <input id="newTenantName" placeholder="New tenant name" />
-              <input id="newTenantSlug" placeholder="Slug (optional)" />
-              <button id="createTenant">Create Tenant</button>
+            <div class="grid cols-3">
+              <input id="newTenantName" class="input" placeholder="New tenant name" />
+              <input id="newTenantSlug" class="input" placeholder="Slug (optional)" />
+              <button id="createTenant" class="btn primary">Create Tenant</button>
             </div>
             <ul id="tenantList"></ul>
-          </section>
+          </div>
+        </section>
 
-          <section>
+        <section class="card mt-4">
+          <div class="body">
             <h3>Devices</h3>
-            <div class="row">
-              <span>Usage: <span id="licenseUsage">-</span></span>
-              <label style="margin-left:12px;">License limit <input id="licenseLimit" type="number" min="1" style="width:100px;" /></label>
-              <button id="saveLicense">Save Limit</button>
+            <div class="grid cols-3 mt-2">
+              <div class="chip">Usage <span id="licenseUsage">-</span></div>
+              <label class="flex center">License limit <input id="licenseLimit" class="input" type="number" min="1" style="max-width:120px; margin-left:8px;" /></label>
+              <button id="saveLicense" class="btn">Save Limit</button>
             </div>
-            <div class="row">
-              <input id="claimCode" placeholder="Activation code" />
-              <select id="claimRole">
+            <div class="grid cols-4 mt-2">
+              <input id="claimCode" class="input" placeholder="Activation code" />
+              <select id="claimRole" class="select">
                 <option value="cashier">Cashier (master)</option>
                 <option value="display">Drive-thru (slave)</option>
               </select>
-              <input id="claimName" placeholder="Device name (optional)" />
-              <select id="claimBranchSel"><option value="">Select branch (required for display)</option></select>
-              <button id="claimDevice">Claim Device</button>
+              <input id="claimName" class="input" placeholder="Device name (optional)" />
+              <div class="flex center">
+                <select id="claimBranchSel" class="select" style="width:100%"><option value="">Select branch (required for display)</option></select>
+              </div>
+              <div class="flex">
+                <button id="claimDevice" class="btn primary">Claim Device</button>
+              </div>
             </div>
-            <ul id="deviceList"></ul>
-          </section>
+            <ul id="deviceList" class="mt-3"></ul>
+          </div>
+        </section>
 
-          <section>
+        <section class="card mt-4">
+          <div class="body">
             <h3>Branches</h3>
-            <div class="row">
-              <span>Usage: <span id="branchUsage">-</span></span>
-              <label style="margin-left:12px;">Branch limit <input id="branchLimit" type="number" min="1" style="width:100px;" /></label>
-              <button id="saveBranchLimit">Save Branch Limit</button>
+            <div class="grid cols-3 mt-2">
+              <div class="chip">Usage <span id="branchUsage">-</span></div>
+              <label class="flex center">Branch limit <input id="branchLimit" class="input" type="number" min="1" style="max-width:120px; margin-left:8px;" /></label>
+              <button id="saveBranchLimit" class="btn">Save Branch Limit</button>
             </div>
-            <div class="row">
-              <input id="newBranchName" placeholder="Branch name" />
-              <button id="addBranch">Add Branch</button>
+            <div class="flex mt-2">
+              <input id="newBranchName" class="input" placeholder="Branch name" />
+              <button id="addBranch" class="btn">Add Branch</button>
             </div>
-            <ul id="branchList"></ul>
-          </section>
+            <ul id="branchList" class="mt-2"></ul>
+          </div>
+        </section>
 
-          <section>
+        <section class="card mt-4">
+          <div class="body">
             <h3>Domains</h3>
-            <div class="row">
-              <input id="domainHost" placeholder="e.g. cafe.app.ordertech.me" />
-              <button id="addDomain">Add Domain</button>
+            <div class="flex mt-2">
+              <input id="domainHost" class="input" placeholder="e.g. cafe.app.ordertech.me" />
+              <button id="addDomain" class="btn">Add Domain</button>
             </div>
-            <ul id="domainList"></ul>
-          </section>
-        </div>
+            <ul id="domainList" class="mt-2"></ul>
+          </div>
+        </section>
       </section>
 
       <!-- Marketing Panel -->
       <section id="panel-marketing" class="panel">
-        <header class="panel-head"><h2>Marketing</h2></header>
-        <div class="panel-body">
-          <section>
+        <h2 class="page-title">Marketing</h2>
+        <section class="card">
+          <div class="body">
             <h3>Rotating Posters</h3>
-            <div class="row">
-              <button id="refreshPosters">Refresh Posters</button>
-              <small style="color:#9ca3af">Uploads coming soon — for now, posters are served from /public/images/poster</small>
+            <div class="toolbar">
+              <button id="refreshPosters" class="btn">Refresh Posters</button>
+              <span class="badge">uploads coming soon</span>
             </div>
-            <div id="posterGrid" class="poster-grid"></div>
-          </section>
+            <div id="posterGrid" class="grid cols-4"></div>
+          </div>
+        </section>
 
-          <section>
+        <section class="card mt-4">
+          <div class="body">
             <h3>Marketing Text / Display Banner</h3>
-            <div class="grid">
-              <label>Banner Text <input id="dtBanner" /></label>
-              <label>Featured Product IDs (comma) <input id="dtFeatured" /></label>
+            <div class="grid cols-2 mt-2">
+              <label class="grid"><span class="label">Banner Text</span><input id="dtBanner" class="input" /></label>
+              <label class="grid"><span class="label">Featured Product IDs (comma)</span><input id="dtFeatured" class="input" /></label>
             </div>
-            <div class="row">
-              <button id="saveDisplay">Save</button>
+            <div class="mt-2">
+              <button id="saveDisplay" class="btn primary">Save</button>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </section>
 
       <!-- Company Profile Panel -->
       <section id="panel-company" class="panel">
-        <header class="panel-head"><h2>Company Profile</h2></header>
-        <div class="panel-body">
-          <section>
+        <h2 class="page-title">Company Profile</h2>
+        <section class="card">
+          <div class="body">
             <h3>Branding</h3>
-            <div class="grid">
-              <label>Display Name <input id="brandName" /></label>
-              <label>Logo URL <input id="logoUrl" /></label>
-              <label>Logo File <input id="logoFile" type="file" accept="image/*" /></label>
-              <button id="uploadLogo">Upload Logo</button>
-              <label>Primary Color <input id="colorPrimary" /></label>
-              <label>Secondary Color <input id="colorSecondary" /></label>
+            <div class="grid cols-3 mt-2">
+              <label class="grid"><span class="label">Display Name</span><input id="brandName" class="input" /></label>
+              <label class="grid"><span class="label">Logo URL</span><input id="logoUrl" class="input" /></label>
+              <label class="grid"><span class="label">Logo File</span><input id="logoFile" class="input" type="file" accept="image/*" /></label>
+              <div><button id="uploadLogo" class="btn">Upload Logo</button></div>
+              <label class="grid"><span class="label">Primary Color</span><input id="colorPrimary" class="input" /></label>
+              <label class="grid"><span class="label">Secondary Color</span><input id="colorSecondary" class="input" /></label>
             </div>
-            <button id="saveBrand">Save Branding</button>
-          </section>
-        </div>
+            <div class="mt-2"><button id="saveBrand" class="btn primary">Save Branding</button></div>
+          </div>
+        </section>
       </section>
 
       <!-- Products Panel -->
       <section id="panel-products" class="panel">
-        <header class="panel-head"><h2>Products</h2></header>
-        <div class="panel-body">
-          <section>
+        <h2 class="page-title">Products</h2>
+        <section class="card">
+          <div class="body">
             <h3>Catalog Management</h3>
-            <p style="color:#9ca3af">Create Categories, Products, and Modifiers, with images and pricing. Coming soon.</p>
-          </section>
-        </div>
+            <p class="lead">Create Categories, Products, and Modifiers, with images and pricing. Coming soon.</p>
+          </div>
+        </section>
       </section>
     </main>
   </div>
