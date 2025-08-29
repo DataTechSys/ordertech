@@ -1,4 +1,23 @@
 (() => {
+  // Sidebar nav wiring
+  const navItems = Array.from(document.querySelectorAll('.nav-item'));
+  const panels = Array.from(document.querySelectorAll('.panel'));
+  const panelById = (id) => document.getElementById(id);
+  const navSuper = document.getElementById('navSuper');
+  const navMarketing = document.getElementById('navMarketing');
+  const navCompany = document.getElementById('navCompany');
+  const navProducts = document.getElementById('navProducts');
+
+  function switchPanel(panelId){
+    panels.forEach(p => p.classList.remove('show'));
+    navItems.forEach(n => n.classList.remove('active'));
+    const p = panelById(panelId); if (p) p.classList.add('show');
+    const n = navItems.find(x => x.dataset.panel === panelId); if (n) n.classList.add('active');
+  }
+  navItems.forEach(n => n.addEventListener('click', () => switchPanel(n.dataset.panel)));
+
+  let IS_PLATFORM_ADMIN = false;
+
   const refreshBtn = document.getElementById('refreshTenants');
   const tenantSel = document.getElementById('tenantSelect');
   const createBtn = document.getElementById('createTenant');
@@ -18,10 +37,12 @@
   const uploadLogoBtn = document.getElementById('uploadLogo');
 
   const dtBanner = document.getElementById('dtBanner');
-  const dtCashier = document.getElementById('dtCashier');
-  const dtCustomer = document.getElementById('dtCustomer');
   const dtFeatured = document.getElementById('dtFeatured');
   const saveDisplayBtn = document.getElementById('saveDisplay');
+
+  // Marketing panel posters
+  const posterGrid = document.getElementById('posterGrid');
+  const refreshPostersBtn = document.getElementById('refreshPosters');
 
   const adminUser = document.getElementById('adminUser');
   const logoutBtn = document.getElementById('logoutBtn');
@@ -51,7 +72,7 @@
     const idTok = localStorage.getItem('ID_TOKEN') || '';
     const h = { 'content-type': 'application/json' };
     if (idTok) h['authorization'] = 'Bearer ' + idTok;
-    const selected = tenantSel.value || '';
+    const selected = tenantSel?.value || '';
     if (selected) h['x-tenant-id'] = selected; // fallback when host mapping isn't set yet
     return h;
   }
@@ -68,7 +89,14 @@
         const tok = await user.getIdToken();
         localStorage.setItem('ID_TOKEN', tok);
       } catch {}
-      fetchTenants();
+      await tryDetectPlatformAdmin();
+      if (IS_PLATFORM_ADMIN) { switchPanel('panel-super'); }
+      else { navSuper?.classList.add('hidden'); switchPanel('panel-company'); }
+      if (IS_PLATFORM_ADMIN) fetchTenants();
+      // Load non-admin panels for current tenant selection when available later
+      refreshBranding().catch(()=>{});
+      refreshDisplayState().catch(()=>{});
+      loadPosters().catch(()=>{});
     });
     logoutBtn.onclick = async () => {
       try { await auth.signOut(); } catch {}
@@ -77,13 +105,20 @@
     };
   }
 
+  async function tryDetectPlatformAdmin(){
+    try {
+      const res = await fetch('/admin/tenants', { headers: adminHeaders() });
+      IS_PLATFORM_ADMIN = res.ok;
+      if (!IS_PLATFORM_ADMIN) {
+        // Hide Super Admin nav and panel gracefully
+        if (navSuper) navSuper.style.display = 'none';
+      }
+    } catch { IS_PLATFORM_ADMIN = false; }
+  }
+
   async function fetchTenants(){
     const res = await fetch('/admin/tenants', { headers: adminHeaders() });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert('Unable to load tenants: ' + (err.error || res.status));
-      return;
-    }
+    if (!res.ok) return; // Non-admins simply won't see tenants
     const arr = await res.json();
     tenantSel.innerHTML = '';
     for (const t of arr) {
@@ -125,7 +160,7 @@
   }
 
   refreshBtn.onclick = fetchTenants;
-  tenantSel.onchange = async () => { await refreshDomains(); await refreshBranding(); await refreshLicenseAndDevices(); await refreshBranches(); };
+  tenantSel?.addEventListener('change', async () => { await refreshDomains(); await refreshBranding(); await refreshLicenseAndDevices(); await refreshBranches(); await refreshDisplayState(); });
   createBtn.onclick = async () => {
     const name = newTenantName.value.trim();
     const slug = newTenantSlug.value.trim();
@@ -166,7 +201,7 @@
   };
 
   async function refreshBranding(){
-    const t = tenantSel.value; if (!t) return;
+    const t = tenantSel?.value; if (!t) return;
     const res = await fetch(`/admin/tenants/${t}/settings`, { headers: adminHeaders() });
     if (!res.ok) return;
     const data = await res.json();
@@ -325,13 +360,42 @@
     await refreshBranding();
   };
 
+  async function refreshDisplayState(){
+    const t = tenantSel?.value; if (!t) return;
+    try {
+      const r = await fetch('/drive-thru/state', { headers: adminHeaders() });
+      const j = await r.json();
+      dtBanner.value = j.banner || '';
+      if (Array.isArray(j.featuredProductIds)) dtFeatured.value = j.featuredProductIds.join(',');
+    } catch {}
+  }
+
   saveDisplayBtn.onclick = async () => {
-    const t = tenantSel.value; if (!t) return;
+    const t = tenantSel?.value; if (!t) return;
     const featured = dtFeatured.value.split(',').map(s => s.trim()).filter(Boolean);
-    const body = { banner: dtBanner.value, cashierCameraUrl: dtCashier.value, customerCameraUrl: dtCustomer.value, featuredProductIds: featured };
+    const body = { banner: dtBanner.value, featuredProductIds: featured };
     await fetch('/drive-thru/state', { method: 'POST', headers: adminHeaders(), body: JSON.stringify(body) });
-    alert('Display saved');
+    alert('Marketing text saved');
   };
+
+  async function loadPosters(){
+    if (!posterGrid) return;
+    posterGrid.innerHTML = '';
+    try {
+      const r = await fetch('/posters', { cache: 'no-store' });
+      const j = await r.json();
+      const items = Array.isArray(j.items) ? j.items : [];
+      for (const u of items){
+        const card = document.createElement('div'); card.className = 'poster';
+        const img = document.createElement('img'); img.src = u; img.alt = 'poster';
+        const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = u.split('/').pop();
+        card.appendChild(img); card.appendChild(cap);
+        posterGrid.appendChild(card);
+      }
+      if (!items.length) posterGrid.innerHTML = '<small style="color:#9ca3af;">No posters found in /public/images/poster</small>';
+    } catch { posterGrid.innerHTML = '<small style="color:#9ca3af;">Failed to load posters</small>'; }
+  }
+  refreshPostersBtn?.addEventListener('click', loadPosters);
 
   ensureAuth();
 })();

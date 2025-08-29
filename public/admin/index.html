@@ -10,96 +10,165 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Smart Order Admin</h1>
+  <header class="admin-topbar">
+    <div class="brand">
+      <img src="/public/images/koobs-logo.png" alt="logo" />
+      <span>Smart Order Admin</span>
+    </div>
     <div class="env">
       <span id="adminUser"></span>
       <button id="logoutBtn">Logout</button>
     </div>
   </header>
 
-  <main>
-    <section>
-      <h2>Tenants</h2>
-      <div class="row">
-        <button id="refreshTenants">Refresh</button>
-        <select id="tenantSelect"></select>
-      </div>
-      <div class="row">
-        <input id="newTenantName" placeholder="New tenant name" />
-        <input id="newTenantSlug" placeholder="Slug (optional)" />
-        <button id="createTenant">Create Tenant</button>
-      </div>
-      <ul id="tenantList"></ul>
-    </section>
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <nav class="nav">
+        <div class="nav-group">
+          <div id="navSuper" class="nav-item active" data-panel="panel-super" title="Super Admin">
+            <span class="icon">🛡️</span>
+            <span>Super Admin</span>
+          </div>
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-group">
+          <div id="navMarketing" class="nav-item" data-panel="panel-marketing" title="Marketing">
+            <span class="icon">🖼️</span>
+            <span>Marketing</span>
+          </div>
+          <div id="navCompany" class="nav-item" data-panel="panel-company" title="Company Profile">
+            <span class="icon">🏢</span>
+            <span>Company Profile</span>
+          </div>
+          <div id="navProducts" class="nav-item" data-panel="panel-products" title="Products">
+            <span class="icon">📦</span>
+            <span>Products</span>
+          </div>
+        </div>
+      </nav>
+    </aside>
 
-    <section>
-      <h2>Devices</h2>
-      <div class="row">
-        <span>Usage: <span id="licenseUsage">-</span></span>
-        <label style="margin-left:12px;">License limit <input id="licenseLimit" type="number" min="1" style="width:100px;" /></label>
-        <button id="saveLicense">Save Limit</button>
-      </div>
-      <div class="row">
-        <input id="claimCode" placeholder="Activation code" />
-        <select id="claimRole">
-          <option value="cashier">Cashier (master)</option>
-          <option value="display">Drive-thru (slave)</option>
-        </select>
-        <input id="claimName" placeholder="Device name (optional)" />
-        <select id="claimBranchSel"><option value="">Select branch (required for display)</option></select>
-        <button id="claimDevice">Claim Device</button>
-      </div>
-      <ul id="deviceList"></ul>
-    </section>
+    <main class="content">
+      <!-- Super Admin Panel -->
+      <section id="panel-super" class="panel show">
+        <header class="panel-head"><h2>Super Admin</h2></header>
+        <div class="panel-body">
+          <section>
+            <h3>Tenants</h3>
+            <div class="row">
+              <button id="refreshTenants">Refresh</button>
+              <select id="tenantSelect"></select>
+            </div>
+            <div class="row">
+              <input id="newTenantName" placeholder="New tenant name" />
+              <input id="newTenantSlug" placeholder="Slug (optional)" />
+              <button id="createTenant">Create Tenant</button>
+            </div>
+            <ul id="tenantList"></ul>
+          </section>
 
-    <section>
-      <h2>Branches</h2>
-      <div class="row">
-        <span>Usage: <span id="branchUsage">-</span></span>
-        <label style="margin-left:12px;">Branch limit <input id="branchLimit" type="number" min="1" style="width:100px;" /></label>
-        <button id="saveBranchLimit">Save Branch Limit</button>
-      </div>
-      <div class="row">
-        <input id="newBranchName" placeholder="Branch name" />
-        <button id="addBranch">Add Branch</button>
-      </div>
-      <ul id="branchList"></ul>
-    </section>
+          <section>
+            <h3>Devices</h3>
+            <div class="row">
+              <span>Usage: <span id="licenseUsage">-</span></span>
+              <label style="margin-left:12px;">License limit <input id="licenseLimit" type="number" min="1" style="width:100px;" /></label>
+              <button id="saveLicense">Save Limit</button>
+            </div>
+            <div class="row">
+              <input id="claimCode" placeholder="Activation code" />
+              <select id="claimRole">
+                <option value="cashier">Cashier (master)</option>
+                <option value="display">Drive-thru (slave)</option>
+              </select>
+              <input id="claimName" placeholder="Device name (optional)" />
+              <select id="claimBranchSel"><option value="">Select branch (required for display)</option></select>
+              <button id="claimDevice">Claim Device</button>
+            </div>
+            <ul id="deviceList"></ul>
+          </section>
 
-    <section>
-      <h2>Domains</h2>
-      <div class="row">
-        <input id="domainHost" placeholder="e.g. cafe.app.ordertech.me" />
-        <button id="addDomain">Add Domain</button>
-      </div>
-      <ul id="domainList"></ul>
-    </section>
+          <section>
+            <h3>Branches</h3>
+            <div class="row">
+              <span>Usage: <span id="branchUsage">-</span></span>
+              <label style="margin-left:12px;">Branch limit <input id="branchLimit" type="number" min="1" style="width:100px;" /></label>
+              <button id="saveBranchLimit">Save Branch Limit</button>
+            </div>
+            <div class="row">
+              <input id="newBranchName" placeholder="Branch name" />
+              <button id="addBranch">Add Branch</button>
+            </div>
+            <ul id="branchList"></ul>
+          </section>
 
-    <section>
-      <h2>Branding</h2>
-      <div class="grid">
-        <label>Display Name <input id="brandName" /></label>
-        <label>Logo URL <input id="logoUrl" /></label>
-        <label>Logo File <input id="logoFile" type="file" accept="image/*" /></label>
-        <button id="uploadLogo">Upload Logo</button>
-        <label>Primary Color <input id="colorPrimary" /></label>
-        <label>Secondary Color <input id="colorSecondary" /></label>
-      </div>
-      <button id="saveBrand">Save Branding</button>
-    </section>
+          <section>
+            <h3>Domains</h3>
+            <div class="row">
+              <input id="domainHost" placeholder="e.g. cafe.app.ordertech.me" />
+              <button id="addDomain">Add Domain</button>
+            </div>
+            <ul id="domainList"></ul>
+          </section>
+        </div>
+      </section>
 
-    <section>
-      <h2>Drive‑Thru Display</h2>
-      <div class="grid">
-        <label>Banner <input id="dtBanner" /></label>
-        <label>Cashier Camera URL <input id="dtCashier" /></label>
-        <label>Customer Camera URL <input id="dtCustomer" /></label>
-        <label>Featured Product IDs (comma) <input id="dtFeatured" /></label>
-      </div>
-      <button id="saveDisplay">Save Display State</button>
-    </section>
-  </main>
+      <!-- Marketing Panel -->
+      <section id="panel-marketing" class="panel">
+        <header class="panel-head"><h2>Marketing</h2></header>
+        <div class="panel-body">
+          <section>
+            <h3>Rotating Posters</h3>
+            <div class="row">
+              <button id="refreshPosters">Refresh Posters</button>
+              <small style="color:#9ca3af">Uploads coming soon — for now, posters are served from /public/images/poster</small>
+            </div>
+            <div id="posterGrid" class="poster-grid"></div>
+          </section>
+
+          <section>
+            <h3>Marketing Text / Display Banner</h3>
+            <div class="grid">
+              <label>Banner Text <input id="dtBanner" /></label>
+              <label>Featured Product IDs (comma) <input id="dtFeatured" /></label>
+            </div>
+            <div class="row">
+              <button id="saveDisplay">Save</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- Company Profile Panel -->
+      <section id="panel-company" class="panel">
+        <header class="panel-head"><h2>Company Profile</h2></header>
+        <div class="panel-body">
+          <section>
+            <h3>Branding</h3>
+            <div class="grid">
+              <label>Display Name <input id="brandName" /></label>
+              <label>Logo URL <input id="logoUrl" /></label>
+              <label>Logo File <input id="logoFile" type="file" accept="image/*" /></label>
+              <button id="uploadLogo">Upload Logo</button>
+              <label>Primary Color <input id="colorPrimary" /></label>
+              <label>Secondary Color <input id="colorSecondary" /></label>
+            </div>
+            <button id="saveBrand">Save Branding</button>
+          </section>
+        </div>
+      </section>
+
+      <!-- Products Panel -->
+      <section id="panel-products" class="panel">
+        <header class="panel-head"><h2>Products</h2></header>
+        <div class="panel-body">
+          <section>
+            <h3>Catalog Management</h3>
+            <p style="color:#9ca3af">Create Categories, Products, and Modifiers, with images and pricing. Coming soon.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="/public/admin/admin.js"></script>
 </body>
