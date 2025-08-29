@@ -14,3 +14,47 @@ workflows:
   - name: Bust Browser Cache Tip
     command: echo "Hard refresh: Cmd+Shift+R (Mac). If still cached, append ?v=$(date +%s)"
     tags: [smart_order]
+
+  - name: Show Project Context
+    command: open docs/PROJECT_CONTEXT.md
+    tags: [smart_order, context]
+
+  - name: Show Operations Cheat Sheet
+    command: open docs/OPERATIONS.md
+    tags: [smart_order, context]
+
+  - name: Check LB host rules & path matchers
+    command: gcloud compute url-maps describe smartorder-koobs-map --format=json
+    tags: [smart_order, lb]
+
+  - name: Check LB IP (forwarding rules)
+    command: gcloud compute forwarding-rules list --global --format="table(name,IPAddress,portRange,target)"
+    tags: [smart_order, lb]
+
+  - name: Check SSL certificates
+    command: gcloud compute ssl-certificates list --format="table(name,managed.status,managed.domains)"
+    tags: [smart_order, lb]
+
+  - name: Check DNS for app.ordertech.me
+    command: dig +short app.ordertech.me A AAAA
+    tags: [smart_order, dns]
+
+  - name: Describe Cloud Run (prod europe-west1)
+    command: gcloud run services describe smart-order --region=europe-west1 --format="value(status.url)"
+    tags: [smart_order, cloud_run]
+
+  - name: Deploy Cloud Run (prod europe-west1)
+    command: gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+    tags: [smart_order, cloud_run]
+
+  - name: Deploy Cloud Run (test me-central1)
+    command: gcloud run deploy smart-order --source . --project=smart-order-469705 --region=me-central1 --allow-unauthenticated
+    tags: [smart_order, cloud_run]
+
+  - name: Open Admin (prod)
+    command: open https://app.ordertech.me/public/admin/
+    tags: [smart_order, urls]
+
+  - name: Open Health (prod)
+    command: open https://app.ordertech.me/health
+    tags: [smart_order, urls]

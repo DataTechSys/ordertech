@@ -15,3 +15,9 @@ yarn-error.log*
 .env
 .env.*
 
+# Local dev helpers
+.cloud-sql-proxy.pid
+cloud-sql-proxy
+nohup.out
+.server.log
+

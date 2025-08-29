@@ -1,4 +1,4 @@
-import { qs, qsa, fmt, getParams, loadCategories, loadProducts, startLocalCam, setRemoteVideo, createCart, api } from '/public/js/common.js?v=1.0.13';
+import { qs, qsa, fmt, getParams, loadCategories, loadProducts, startLocalCam, setRemoteVideo, createCart, api, proxiedImageSrc } from '/public/js/common.js?v=1.0.14';
 import { setDisplayId, renderBillList, renderTotals } from '/public/js/ui-common.js';
 import { computeTotals } from '/public/js/data.js';
 
@@ -190,7 +190,7 @@ async function startRTC(){
 async function init() {
   const cats = await loadCategories(tenant);
   allProds = await loadProducts(tenant);
-  imgMap = new Map(allProds.map(p => [p.id, p.image_url]));
+  imgMap = new Map(allProds.map(p => [p.id, proxiedImageSrc(p.image_url)]));
   popular = computePopular(allProds);
   renderCategories(cats);
   catsReady = true;
@@ -245,7 +245,7 @@ function renderProducts(list) {
     card.onclick = () => addToBill(p);
 
     const img = document.createElement('img');
-    const src = p.image_url || '/public/images/products/placeholder.jpg';
+    const src = proxiedImageSrc(p.image_url) || '/public/images/products/placeholder.jpg';
     img.src = src;
     img.addEventListener('load', () => {
       console.log(`Image loaded: ${src}`);

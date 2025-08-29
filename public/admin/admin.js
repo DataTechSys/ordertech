@@ -3,16 +3,17 @@
   const navItems = Array.from(document.querySelectorAll('.menu [data-panel]'));
   const panels = Array.from(document.querySelectorAll('.panel'));
   const panelById = (id) => document.getElementById(id);
-  const navSuper = document.getElementById('navSuper');
-  const navMarketing = document.getElementById('navMarketing');
   const navCompany = document.getElementById('navCompany');
   const navProducts = document.getElementById('navProducts');
+  const secSuper = document.getElementById('secSuper');
+  const navDashboard = document.getElementById('navDashboard');
 
   function switchPanel(panelId){
     panels.forEach(p => p.classList.remove('show'));
     navItems.forEach(n => n.classList.remove('active'));
     const p = panelById(panelId); if (p) p.classList.add('show');
     const n = navItems.find(x => x.dataset.panel === panelId); if (n) n.classList.add('active');
+    try { localStorage.setItem('ADMIN_LAST_PANEL', panelId); } catch {}
   }
   navItems.forEach(n => n.addEventListener('click', (e) => { e.preventDefault(); switchPanel(n.dataset.panel); }));
 
@@ -24,10 +25,12 @@
     const sidebar = document.getElementById('sidebar');
     const collapseBtn = document.getElementById('sidebarCollapse');
     const mobileBtn = document.getElementById('mobileMenu');
+    const appEl = document.querySelector('.app');
 
     // Desktop collapse
     collapseBtn?.addEventListener('click', () => {
       sidebar.classList.toggle('collapsed');
+      appEl?.classList.toggle('is-collapsed');
     });
 
     // Mobile overlay open/close
@@ -92,6 +95,12 @@
   })();
 
   let IS_PLATFORM_ADMIN = false;
+  let CURRENT_TENANT_ID = '';
+  let CATEGORIES_CACHE = [];
+  let PRODUCTS_CACHE = [];
+  let CURRENT_EDIT_PRODUCT_ID = '';
+  const SELECTED_PRODUCTS = new Set();
+  const SELECTED_CATEGORIES = new Set();
 
   const refreshBtn = document.getElementById('refreshTenants');
   const tenantSel = document.getElementById('tenantSelect');
@@ -118,6 +127,32 @@
   // Marketing panel posters
   const posterGrid = document.getElementById('posterGrid');
   const refreshPostersBtn = document.getElementById('refreshPosters');
+
+  // Catalog (Categories / Products)
+  const refreshCategories = document.getElementById('refreshCategories');
+  const categoryListEl = document.getElementById('categoryList');
+  const categoryTableWrap = document.getElementById('categoryTableWrap');
+  const deleteSelectedCategoriesBtn = document.getElementById('deleteSelectedCategories');
+  const importCategoriesBtn = document.getElementById('importCategories');
+  const refreshProductsBtn = document.getElementById('refreshProducts');
+  const prodCategory = document.getElementById('prodCategory');
+  const productTableWrap = document.getElementById('productTableWrap');
+  const newProductBtn = document.getElementById('newProductBtn');
+  const deleteSelectedProductsBtn = document.getElementById('deleteSelectedProducts');
+  const importProductsBtn = document.getElementById('importProducts');
+  // Product modal elements
+  const productModal = document.getElementById('productModal');
+  const productModalTitle = document.getElementById('productModalTitle');
+  const productModalClose = document.getElementById('productModalClose');
+  const productModalCancel = document.getElementById('productModalCancel');
+  const productModalSave = document.getElementById('productModalSave');
+  const prodFormSku = document.getElementById('prodFormSku');
+  const prodFormName = document.getElementById('prodFormName');
+  const prodFormCategory = document.getElementById('prodFormCategory');
+  const prodFormPrice = document.getElementById('prodFormPrice');
+  const prodFormImageUrl = document.getElementById('prodFormImageUrl');
+  const prodFormActive = document.getElementById('prodFormActive');
+  let productModalDeleteBtn = null;
 
   const adminUser = document.getElementById('adminUser');
   const logoutBtn = document.getElementById('logoutBtn');
@@ -147,7 +182,7 @@
     const idTok = localStorage.getItem('ID_TOKEN') || '';
     const h = { 'content-type': 'application/json' };
     if (idTok) h['authorization'] = 'Bearer ' + idTok;
-    const selected = tenantSel?.value || '';
+    const selected = tenantSel?.value || CURRENT_TENANT_ID || '';
     if (selected) h['x-tenant-id'] = selected; // fallback when host mapping isn't set yet
     return h;
   }
@@ -165,13 +200,23 @@
         localStorage.setItem('ID_TOKEN', tok);
       } catch {}
       await tryDetectPlatformAdmin();
-      if (IS_PLATFORM_ADMIN) { switchPanel('panel-super'); }
-      else { navSuper?.classList.add('hidden'); switchPanel('panel-company'); }
+      if (!IS_PLATFORM_ADMIN) { try { secSuper?.classList.add('hidden'); } catch {} }
+      // For tenant admins (no selector), detect tenant id from metrics
+      if (!tenantSel?.value) { try { await detectTenantId(); } catch {} }
+      // Default landing: restore last visited panel if available
+      const savedPanel = (function(){ try { return localStorage.getItem('ADMIN_LAST_PANEL') || ''; } catch { return ''; } })();
+      const initialPanel = (savedPanel && panelById(savedPanel)) ? savedPanel : 'panel-dashboard';
+      switchPanel(initialPanel);
       if (IS_PLATFORM_ADMIN) fetchTenants();
-      // Load non-admin panels for current tenant selection when available later
+      // Initial loads
+      refreshDashboard().catch(()=>{});
       refreshBranding().catch(()=>{});
       refreshDisplayState().catch(()=>{});
       loadPosters().catch(()=>{});
+      refreshBilling().catch(()=>{});
+      // Catalog
+      loadCategoriesList().catch(()=>{});
+      loadProductsList().catch(()=>{});
     });
     logoutBtn.onclick = async () => {
       try { await auth.signOut(); } catch {}
@@ -185,10 +230,17 @@
       const res = await fetch('/admin/tenants', { headers: adminHeaders() });
       IS_PLATFORM_ADMIN = res.ok;
       if (!IS_PLATFORM_ADMIN) {
-        // Hide Super Admin nav and panel gracefully
-        if (navSuper) navSuper.style.display = 'none';
+        // Hide Super Admin section gracefully
+        try { secSuper?.classList.add('hidden'); } catch {}
       }
-    } catch { IS_PLATFORM_ADMIN = false; }
+    } catch { IS_PLATFORM_ADMIN = false; try { secSuper?.classList.add('hidden'); } catch {} }
+  }
+
+  async function detectTenantId(){
+    try {
+      const r = await fetch('/admin/metrics', { headers: adminHeaders(), cache: 'no-store' });
+      if (r.ok) { const j = await r.json(); if (j.tenant_id) CURRENT_TENANT_ID = j.tenant_id; }
+    } catch {}
   }
 
   async function fetchTenants(){
@@ -207,6 +259,8 @@
     await refreshBranding();
     await refreshLicenseAndDevices();
     await refreshBranches();
+    await refreshDashboard();
+    await refreshBilling();
   }
 
   function renderTenantList(arr){
@@ -235,7 +289,7 @@
   }
 
   refreshBtn.onclick = fetchTenants;
-  tenantSel?.addEventListener('change', async () => { await refreshDomains(); await refreshBranding(); await refreshLicenseAndDevices(); await refreshBranches(); await refreshDisplayState(); });
+  tenantSel?.addEventListener('change', async () => { await refreshDomains(); await refreshBranding(); await refreshLicenseAndDevices(); await refreshBranches(); await refreshDisplayState(); await refreshDashboard(); await refreshBilling(); await loadCategoriesList(); await loadProductsList(); });
   createBtn.onclick = async () => {
     const name = newTenantName.value.trim();
     const slug = newTenantSlug.value.trim();
@@ -408,6 +462,7 @@
     const res = await fetch(`/admin/tenants/${t}/branch-limit`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ branch_limit: n }) });
     if (!res.ok) { alert('Only platform admin can change branch limit'); return; }
     await refreshBranches();
+    await refreshDashboard();
   };
 
   addBranch.onclick = async () => {
@@ -438,6 +493,7 @@
     const body = { brand: { display_name: brandName.value, logo_url: logoUrl.value, color_primary: colorPrimary.value, color_secondary: colorSecondary.value } };
     await fetch(`/admin/tenants/${t}/settings`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify(body) });
     await refreshBranding();
+    await refreshDashboard();
   };
 
   async function refreshDisplayState(){
@@ -478,6 +534,399 @@
     } catch { posterGrid.innerHTML = '<div class="empty">Failed to load posters</div>'; }
   }
   refreshPostersBtn?.addEventListener('click', loadPosters);
+  refreshCategories?.addEventListener('click', async () => { await loadCategoriesList(); });
+  refreshProductsBtn?.addEventListener('click', loadProductsList);
+  prodCategory?.addEventListener('change', loadProductsList);
+
+  // Import CSV Categories button (uses admin auth headers)
+  function hookImportCategoriesButton(btn){
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Select tenant first'); return; }
+      if (!confirm('Import categories from data/categories.csv for the selected tenant? This replaces categories in memory. Continue?')) return;
+      const body = { source: 'csv', categories: true, products: false, replace: true };
+      const r = await fetch(`/admin/tenants/${t}/catalog/import`, { method:'POST', headers: adminHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Import failed: ' + (e.error || r.status)); return; }
+      await loadCategoriesList();
+      await loadProductsList();
+      alert('Categories imported');
+    });
+  }
+  (function ensureImportCategoriesButton(){
+    if (importCategoriesBtn) { hookImportCategoriesButton(importCategoriesBtn); return; }
+    try {
+      const btn = document.createElement('button');
+      btn.id = 'importCategories';
+      btn.className = 'btn';
+      btn.textContent = 'Import CSV Categories';
+      if (refreshCategories && refreshCategories.parentNode) {
+        refreshCategories.parentNode.insertBefore(btn, refreshCategories.nextSibling);
+      } else if (deleteSelectedCategoriesBtn && deleteSelectedCategoriesBtn.parentNode) {
+        deleteSelectedCategoriesBtn.parentNode.insertBefore(btn, deleteSelectedCategoriesBtn);
+      } else if (categoryTableWrap && categoryTableWrap.parentNode) {
+        categoryTableWrap.parentNode.insertBefore(btn, categoryTableWrap);
+      } else {
+        document.body.appendChild(btn);
+      }
+      hookImportCategoriesButton(btn);
+    } catch {}
+  })();
+
+  // Import CSV Products button (uses admin auth headers)
+  function hookImportProductsButton(btn){
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Select tenant first'); return; }
+      if (!confirm('Import products from data/products.csv for the selected tenant? This replaces products in memory. Continue?')) return;
+      const body = { source: 'csv', categories: false, products: true, replace: true };
+      const r = await fetch(`/admin/tenants/${t}/catalog/import`, { method:'POST', headers: adminHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Import failed: ' + (e.error || r.status)); return; }
+      await loadCategoriesList();
+      await loadProductsList();
+      alert('Products imported');
+    });
+  }
+  (function ensureImportProductsButton(){
+    if (importProductsBtn) { hookImportProductsButton(importProductsBtn); return; }
+    try {
+      const btn = document.createElement('button');
+      btn.id = 'importProducts';
+      btn.className = 'btn';
+      btn.textContent = 'Import CSV Products';
+      if (refreshProductsBtn && refreshProductsBtn.parentNode) {
+        refreshProductsBtn.parentNode.insertBefore(btn, refreshProductsBtn.nextSibling);
+      } else if (productTableWrap && productTableWrap.parentNode) {
+        productTableWrap.parentNode.insertBefore(btn, productTableWrap);
+      } else {
+        document.body.appendChild(btn);
+      }
+      hookImportProductsButton(btn);
+    } catch {}
+  })();
+
+  // Bulk delete handlers
+  deleteSelectedProductsBtn?.addEventListener('click', async () => {
+    const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
+    if (SELECTED_PRODUCTS.size === 0) return;
+    if (!confirm(`Delete ${SELECTED_PRODUCTS.size} selected product(s)?`)) return;
+    for (const id of Array.from(SELECTED_PRODUCTS)){
+      try {
+        const res = await fetch(`/admin/tenants/${t}/products/${encodeURIComponent(id)}`, { method: 'DELETE', headers: adminHeaders() });
+        // ignore non-OK; continue
+      } catch {}
+    }
+    SELECTED_PRODUCTS.clear();
+    updateProductBulkActionsVisibility();
+    await loadProductsList();
+  });
+  deleteSelectedCategoriesBtn?.addEventListener('click', async () => {
+    const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
+    if (SELECTED_CATEGORIES.size === 0) return;
+    if (!confirm(`Delete ${SELECTED_CATEGORIES.size} selected categor(y/ies)? Categories with products cannot be deleted.`)) return;
+    const failed = [];
+    for (const id of Array.from(SELECTED_CATEGORIES)){
+      try {
+        const res = await fetch(`/admin/tenants/${t}/categories/${encodeURIComponent(id)}`, { method: 'DELETE', headers: adminHeaders() });
+        if (!res.ok) {
+          let reason = 'failed';
+          try { const e = await res.json(); reason = e.error || reason; } catch {}
+          failed.push({ id, reason });
+        }
+      } catch { failed.push({ id, reason: 'network' }); }
+    }
+    SELECTED_CATEGORIES.clear();
+    updateCategoryBulkActionsVisibility();
+    await loadCategoriesList();
+    if (failed.length) alert('Some categories were not deleted: ' + failed.map(f => `${f.id}(${f.reason})`).join(', '));
+  });
+
+  // Product modal logic
+  function closeProductModal(){ productModal?.classList.remove('open'); productModal?.setAttribute('aria-hidden', 'true'); CURRENT_EDIT_PRODUCT_ID = ''; }
+  function openProductModal(product){
+    if (!productModal) return;
+    CURRENT_EDIT_PRODUCT_ID = product?.id || product?.sku || '';
+    productModalTitle.textContent = product && (product.id || product.sku) ? 'Edit Product' : 'New Product';
+    // Ensure Delete button exists and wire it
+    try {
+      if (!productModalDeleteBtn && productModalSave && productModalSave.parentElement) {
+        productModalDeleteBtn = document.createElement('button');
+        productModalDeleteBtn.id = 'productModalDelete';
+        productModalDeleteBtn.className = 'btn danger';
+        productModalDeleteBtn.textContent = 'Delete';
+        productModalDeleteBtn.style.marginRight = 'auto';
+        productModalSave.parentElement.insertBefore(productModalDeleteBtn, productModalSave.parentElement.firstChild);
+        productModalDeleteBtn.addEventListener('click', async () => {
+          const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
+          const id = CURRENT_EDIT_PRODUCT_ID; if (!id) return;
+          if (!confirm('Delete this product?')) return;
+          const res = await fetch(`/admin/tenants/${t}/products/${encodeURIComponent(id)}`, { method:'DELETE', headers: adminHeaders() });
+          if (!res.ok) { const e = await res.json().catch(()=>({})); alert('Delete failed: ' + (e.error || res.status)); return; }
+          closeProductModal();
+          await loadProductsList();
+        });
+      }
+    } catch {}
+    // Populate category select
+    prodFormCategory.innerHTML = '';
+    for (const c of CATEGORIES_CACHE) {
+      const opt = document.createElement('option'); opt.value = c.id || c.name || ''; opt.textContent = c.name || ''; prodFormCategory.appendChild(opt);
+    }
+    // Prefer mapping by category_id; fallback by name
+    const categoryId = product?.category_id || (CATEGORIES_CACHE.find(c => c.name === product?.category_name)?.id) || '';
+    prodFormSku.value = product?.sku || product?.id || '';
+    prodFormName.value = product?.name || '';
+    prodFormCategory.value = categoryId || (prodFormCategory.options[0]?.value || '');
+    prodFormPrice.value = (product?.price != null) ? String(product.price) : '';
+    prodFormImageUrl.value = product?.image_url || '';
+    prodFormActive.checked = (product?.active == null) ? true : !!product.active;
+
+    // Show Delete only for existing products
+    if (productModalDeleteBtn) productModalDeleteBtn.style.display = (CURRENT_EDIT_PRODUCT_ID ? '' : 'none');
+
+    productModal.classList.add('open');
+    productModal.setAttribute('aria-hidden', 'false');
+  }
+
+  productModalClose?.addEventListener('click', closeProductModal);
+  productModalCancel?.addEventListener('click', closeProductModal);
+  productModal?.addEventListener('click', (e) => { if (e.target === productModal) closeProductModal(); });
+  newProductBtn?.addEventListener('click', () => openProductModal({}));
+
+  productModalSave?.addEventListener('click', async () => {
+    const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
+    const body = {
+      sku: prodFormSku.value.trim(),
+      name: prodFormName.value.trim(),
+      category_id: prodFormCategory.value,
+      price: Number(prodFormPrice.value || 0),
+      image_url: prodFormImageUrl.value.trim(),
+      active: !!prodFormActive.checked,
+    };
+    // If editing existing product, use PUT; else POST
+    const isEdit = !!CURRENT_EDIT_PRODUCT_ID;
+    let url = `/admin/tenants/${t}/products`;
+    let method = 'POST';
+    if (isEdit) { url = `/admin/tenants/${t}/products/${encodeURIComponent(CURRENT_EDIT_PRODUCT_ID)}`; method = 'PUT'; }
+    // Basic validation
+    if (!body.name || !body.category_id) { alert('Name and Category are required'); return; }
+    const res = await fetch(url, { method, headers: adminHeaders(), body: JSON.stringify(body) });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); alert('Save failed: ' + (e.error || res.status)); return; }
+    closeProductModal();
+    await loadProductsList();
+  });
+
+  // Dashboard quick status
+  async function refreshDashboard(){
+    const t = tenantSel?.value || '';
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+    // Tenant selection labels
+    try {
+      const selOpt = tenantSel?.selectedOptions?.[0];
+      setText('dbTenantName', selOpt ? selOpt.textContent : (t ? t.slice(0,8) : '—'));
+      setText('dbTenantId', t || '—');
+    } catch { setText('dbTenantName', '—'); setText('dbTenantId', '—'); }
+
+    // Brand name
+    try {
+      if (t) {
+        const res = await fetch(`/admin/tenants/${t}/settings`, { headers: adminHeaders() });
+        if (res.ok) {
+          const j = await res.json();
+          setText('dbBrandName', j.brand?.display_name || '—');
+        } else { setText('dbBrandName', '—'); }
+      } else { setText('dbBrandName', '—'); }
+    } catch { setText('dbBrandName', '—'); }
+
+    // Active devices
+    try {
+      if (t) {
+        const r = await fetch(`/admin/tenants/${t}/devices`, { headers: adminHeaders() });
+        if (r.ok) {
+          const j = await r.json();
+          const active = (j.items||[]).filter(d => String(d.status).toLowerCase() === 'active').length;
+          setText('dbActiveDevices', String(active));
+        } else { setText('dbActiveDevices', '-'); }
+      } else { setText('dbActiveDevices', '-'); }
+    } catch { setText('dbActiveDevices', '-'); }
+
+    // Online displays
+    try {
+      const r = await fetch('/presence/displays', { headers: adminHeaders(), cache: 'no-store' });
+      if (r.ok) {
+        const j = await r.json();
+        setText('dbDisplaysOnline', String((j.items||[]).length));
+      } else { setText('dbDisplaysOnline', '-'); }
+    } catch { setText('dbDisplaysOnline', '-'); }
+
+    // Sessions active (optional)
+    try {
+      const r = await fetch('/admin/metrics', { headers: adminHeaders(), cache: 'no-store' });
+      if (r.ok) {
+        const j = await r.json();
+        const v = (j.sessions_active_total != null) ? String(j.sessions_active_total) : 'Coming soon';
+        setText('dbSessionsActive', v);
+      } else { setText('dbSessionsActive', 'Coming soon'); }
+    } catch { setText('dbSessionsActive', 'Coming soon'); }
+  }
+
+  // Categories list
+  async function loadCategoriesList(){
+    try {
+      const r = await fetch('/categories', { headers: adminHeaders(), cache: 'no-store' });
+      if (!r.ok) {
+        if (categoryTableWrap) categoryTableWrap.innerHTML = '<div class="empty">Failed to load</div>';
+        return;
+      }
+      const arr = await r.json();
+      CATEGORIES_CACHE = Array.isArray(arr) ? arr : [];
+
+      // Populate product category filter
+      if (prodCategory) {
+        const prev = prodCategory.value || '';
+        prodCategory.innerHTML = '<option value="">All</option>';
+        for (const c of CATEGORIES_CACHE) {
+          const opt = document.createElement('option');
+          opt.value = c.name || '';
+          opt.textContent = c.name || '';
+          prodCategory.appendChild(opt);
+        }
+        if (prev && Array.from(prodCategory.options).some(o => o.value === prev)) prodCategory.value = prev;
+      }
+
+      // Build categories table with product counts & thumbnail
+      let allProducts = [];
+      try {
+        const rp = await fetch('/products', { headers: adminHeaders(), cache: 'no-store' });
+        if (rp.ok) allProducts = await rp.json();
+      } catch {}
+      const byCat = new Map();
+      for (const p of (Array.isArray(allProducts)?allProducts:[])){
+        const cid = p.category_id;
+        if (!cid) continue;
+        const obj = byCat.get(cid) || { count: 0, image_url: '' };
+        obj.count++;
+        if (!obj.image_url && p.image_url) obj.image_url = p.image_url;
+        byCat.set(cid, obj);
+      }
+
+      SELECTED_CATEGORIES.clear();
+      const rows = CATEGORIES_CACHE.map(c => {
+        const meta = byCat.get(c.id) || { count: 0, image_url: '' };
+        const raw = c.image || meta.image_url || '';
+        const src = raw ? (/^https?:/i.test(raw) ? `/img?u=${encodeURIComponent(raw)}` : raw) : '';
+        const img = src ? `<img class=\"thumb\" src=\"${src}\" alt=\"${(c.name||'')}\">` : `<div class=\"thumb\" style=\"display:grid;place-items:center;color:#94a3b8;\">—</div>`;
+        return `<tr class=\"cat-row\" data-id=\"${c.id}\">\n          <td class=\"cell-center\"><input type=\"checkbox\" class=\"cat-select\" data-id=\"${c.id}\"></td>\n          <td>${img}</td>\n          <td>${c.name || ''}</td>\n          <td>${c.reference || c.id || ''}</td>\n          <td>${meta.count || 0}</td>\n        </tr>`;
+      }).join('');
+      if (categoryTableWrap){
+        categoryTableWrap.innerHTML = `<table class="table" id="categoryTable"><thead><tr><th class="cell-center"><input type="checkbox" id="catSelectAll"></th><th>Thumbnail</th><th>Name</th><th>Reference</th><th>Products</th></tr></thead><tbody>${rows}</tbody></table>`;
+        const catSelectAll = document.getElementById('catSelectAll');
+        const catChecks = categoryTableWrap.querySelectorAll('input.cat-select');
+        catSelectAll?.addEventListener('change', () => {
+          SELECTED_CATEGORIES.clear();
+          catChecks.forEach(cb => { cb.checked = catSelectAll.checked; if (cb.checked) SELECTED_CATEGORIES.add(cb.getAttribute('data-id')); });
+          updateCategoryBulkActionsVisibility();
+        });
+        catChecks.forEach(cb => {
+          cb.addEventListener('click', ev => ev.stopPropagation());
+          cb.addEventListener('change', () => {
+            const id = cb.getAttribute('data-id');
+            if (cb.checked) SELECTED_CATEGORIES.add(id); else SELECTED_CATEGORIES.delete(id);
+            if (!cb.checked && catSelectAll) catSelectAll.checked = false;
+            updateCategoryBulkActionsVisibility();
+          });
+        });
+      }
+
+    } catch (e) {
+      if (categoryTableWrap) categoryTableWrap.innerHTML = '<div class="empty">Failed to load</div>';
+    }
+  }
+
+  // Products list
+  async function loadProductsList(){
+    try {
+      const params = new URLSearchParams();
+      const cat = prodCategory?.value || '';
+      if (cat) params.set('category_name', cat);
+      const url = '/products' + (params.toString() ? ('?' + params.toString()) : '');
+      const r = await fetch(url, { headers: adminHeaders(), cache: 'no-store' });
+      if (!r.ok) { if (productTableWrap) productTableWrap.innerHTML = '<div class="empty">Failed to load products</div>'; return; }
+      const arr = await r.json();
+      PRODUCTS_CACHE = Array.isArray(arr) ? arr : [];
+      SELECTED_PRODUCTS.clear();
+      const rows = PRODUCTS_CACHE.map(p => {
+        const sku = p.sku || p.id || '';
+        const src = p.image_url ? (/^https?:/i.test(p.image_url) ? `/img?u=${encodeURIComponent(p.image_url)}` : p.image_url) : '';
+        const img = src ? `<img class=\"thumb\" src=\"${src}\" alt=\"${(p.name||'')}\">` : `<div class=\"thumb\" style=\"display:grid;place-items:center;color:#94a3b8;\">—</div>`;
+        const active = (p.active == null ? true : !!p.active);
+        return `<tr class=\"row-click\" data-id=\"${sku}\">\n          <td class=\"cell-center\"><input type=\"checkbox\" class=\"prod-select\" data-id=\"${sku}\"></td>\n          <td>${img}</td>\n          <td>${(p.name||'')}</td>\n          <td>${sku}</td>\n          <td>${(p.category_name||'')}</td>\n          <td>${Number(p.price||0).toFixed(3)}</td>\n          <td>${active ? 'Yes' : 'No'}</td>\n        </tr>`;
+      }).join('');
+      if (productTableWrap) {
+        productTableWrap.innerHTML = `<table class=\"table\" id=\"productTable\"><thead><tr><th class=\"cell-center\"><input type=\"checkbox\" id=\"prodSelectAll\"></th><th>Thumbnail</th><th>Name</th><th>SKU</th><th>Category</th><th>Price</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>`;
+        const prodSelectAll = document.getElementById('prodSelectAll');
+        const prodChecks = productTableWrap.querySelectorAll('input.prod-select');
+        prodSelectAll?.addEventListener('change', () => {
+          SELECTED_PRODUCTS.clear();
+          prodChecks.forEach(cb => { cb.checked = prodSelectAll.checked; if (cb.checked) SELECTED_PRODUCTS.add(cb.getAttribute('data-id')); });
+          updateProductBulkActionsVisibility();
+        });
+        prodChecks.forEach(cb => {
+          cb.addEventListener('click', ev => ev.stopPropagation());
+          cb.addEventListener('change', () => {
+            const id = cb.getAttribute('data-id');
+            if (cb.checked) SELECTED_PRODUCTS.add(id); else SELECTED_PRODUCTS.delete(id);
+            if (!cb.checked && prodSelectAll) prodSelectAll.checked = false;
+            updateProductBulkActionsVisibility();
+          });
+        });
+        // Row click to edit
+        productTableWrap.querySelectorAll('tr.row-click')?.forEach(tr => {
+          tr.addEventListener('click', (ev) => {
+            const target = ev.target;
+            if (target && target.getAttribute && target.getAttribute('data-act') === 'delete') return; // handled separately
+            if (target && target.closest && target.closest('input[type="checkbox"]')) return;
+            const id = tr.getAttribute('data-id');
+            const p = PRODUCTS_CACHE.find(x => (x.id===id || x.sku===id));
+            openProductModal(p || { id });
+          });
+        });
+        updateProductBulkActionsVisibility();
+      }
+    } catch (e) {
+      if (productTableWrap) productTableWrap.innerHTML = '<div class="empty">Failed to load products</div>';
+    }
+  }
+
+  function updateProductBulkActionsVisibility(){
+    if (deleteSelectedProductsBtn) deleteSelectedProductsBtn.classList.toggle('hidden', SELECTED_PRODUCTS.size === 0);
+  }
+
+  function updateCategoryBulkActionsVisibility(){
+    if (deleteSelectedCategoriesBtn) deleteSelectedCategoriesBtn.classList.toggle('hidden', SELECTED_CATEGORIES.size === 0);
+  }
+  // Billing panel support
+  const licenseUsageBilling = document.getElementById('licenseUsageBilling');
+  const licenseLimitBilling = document.getElementById('licenseLimitBilling');
+  const saveLicenseBilling = document.getElementById('saveLicenseBilling');
+  async function refreshBilling(){
+    const t = tenantSel?.value; if (!t) return;
+    try {
+      const lic = await fetch(`/admin/tenants/${t}/license`, { headers: adminHeaders() });
+      if (lic.ok) {
+        const data = await lic.json();
+        if (licenseUsageBilling) licenseUsageBilling.textContent = `${data.active_count} / ${data.license_limit}`;
+        if (licenseLimitBilling) licenseLimitBilling.value = data.license_limit || 1;
+      } else { if (licenseUsageBilling) licenseUsageBilling.textContent = '-'; }
+    } catch { if (licenseUsageBilling) licenseUsageBilling.textContent = '-'; }
+  }
+  saveLicenseBilling?.addEventListener('click', async () => {
+    const t = tenantSel?.value; if (!t) return;
+    const n = Math.max(1, Number(licenseLimitBilling.value||1));
+    const res = await fetch(`/admin/tenants/${t}/license`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ license_limit: n }) });
+    if (!res.ok) { alert('Only platform admin can change license limit'); return; }
+    await refreshBilling(); await refreshLicenseAndDevices(); await refreshDashboard();
+  });
 
   ensureAuth();
 })();

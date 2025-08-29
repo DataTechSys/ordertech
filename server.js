@@ -25,6 +25,8 @@ app.use(express.urlencoded({ extended: true }));
 // ---- State storage (in-memory first; DB when configured)
 const USE_MEM_STATE = !process.env.DATABASE_URL;
 const memDriveThruState = new Map(); // tenant_id -> state
+// In-memory catalog overrides per tenant (when DB not configured)
+const memCatalogByTenant = new Map(); // tenant_id -> { categories:[], products:[] }
 
 // ---- DB
 const HAS_DB = Boolean(process.env.DATABASE_URL);
@@ -217,6 +219,77 @@ addRoute('get', '/__code', (_req, res) => {
 // Use data/product.json in non-DB mode so UI renders real categories, products and image URLs
 const JSON_CATALOG = loadJsonCatalog();
 function loadJsonCatalog(){
+  // Try Foodics CSVs first (data/categories.csv and data/products.csv)
+  try {
+    const catsPath = path.join(__dirname, 'data', 'categories.csv');
+    const prodsPath = path.join(__dirname, 'data', 'products.csv');
+    if (fs.existsSync(catsPath) && fs.existsSync(prodsPath)) {
+      const csvLine = (s) => {
+        const out = [];
+        let cur = '';
+        let i = 0;
+        let inQ = false;
+        while (i < s.length) {
+          const ch = s[i];
+          if (inQ) {
+            if (ch === '"') {
+              if (s[i+1] === '"') { cur += '"'; i += 2; continue; }
+              inQ = false; i++; continue;
+            } else { cur += ch; i++; continue; }
+          } else {
+            if (ch === '"') { inQ = true; i++; continue; }
+            if (ch === ',') { out.push(cur); cur = ''; i++; continue; }
+            cur += ch; i++;
+          }
+        }
+        out.push(cur);
+        return out;
+      };
+      const parseCsv = (txt) => {
+        const lines = String(txt || '').split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (!lines.length) return [];
+        const headers = csvLine(lines[0]).map(h => String(h || '').trim());
+        const rows = [];
+        for (let li = 1; li < lines.length; li++) {
+          const cols = csvLine(lines[li]);
+          if (cols.length === 1 && cols[0] === '') continue;
+          const obj = {};
+          for (let j = 0; j < headers.length; j++) obj[headers[j]] = cols[j] != null ? cols[j] : '';
+          rows.push(obj);
+        }
+        return rows;
+      };
+      const catRows = parseCsv(fs.readFileSync(catsPath, 'utf8'));
+      const prodRows = parseCsv(fs.readFileSync(prodsPath, 'utf8'));
+      const categories = [];
+      const products = [];
+      const catByRef = new Map(); // reference -> {id, name}
+      for (const r of catRows) {
+        const cid = String(r.id || '').trim();
+        const name = String(r.name || '').trim();
+        const name_ar = String(r.name_localized || '').trim();
+        const ref = String(r.reference || '').trim();
+        const image = String(r.image || '').trim();
+        if (!cid || !name) continue;
+        categories.push({ id: cid, name, name_ar, reference: ref, image });
+        if (ref) catByRef.set(ref, { id: cid, name });
+      }
+      for (const p of prodRows) {
+        const id = String(p.id || '').trim();
+        const name = String(p.name || '').trim();
+        const price = Number(p.price || 0) || 0;
+        const image_url = String(p.image || '').trim();
+        const active = String(p.is_active || '').toLowerCase() === 'yes';
+        const cref = String(p.category_reference || '').trim();
+        const cat = cref ? catByRef.get(cref) : null;
+        const category_id = cat ? cat.id : '';
+        const category_name = cat ? cat.name : '';
+        if (!id || !name) continue;
+        products.push({ id, name, price, image_url, active, category_id, category_name });
+      }
+      return { categories, products };
+    }
+  } catch {}
   try {
     const fp = path.join(__dirname, 'data', 'product.json');
     const raw = fs.readFileSync(fp, 'utf8');
@@ -297,6 +370,9 @@ addRoute('get', '/tenants', async (_req, res) => {
 });
 
 addRoute('get', '/categories', requireTenant, async (req, res) => {
+  // If in-memory catalog overrides exist for this tenant, use them
+  const mem = memCatalogByTenant.get(req.tenantId);
+  if (mem) return res.json(mem.categories || []);
   if (!HAS_DB) return res.json(JSON_CATALOG.categories);
   try {
     const rows = await db(
@@ -311,6 +387,14 @@ addRoute('get', '/categories', requireTenant, async (req, res) => {
 });
 
 addRoute('get', '/products', requireTenant, async (req, res) => {
+  // In-memory override
+  const mem = memCatalogByTenant.get(req.tenantId);
+  if (mem) {
+    const { category_name } = req.query;
+    let list = mem.products || [];
+    if (category_name) list = list.filter(p => p.category_name === category_name);
+    return res.json(list);
+  }
   if (!HAS_DB) {
     const { category_name } = req.query;
     const list = category_name ? JSON_CATALOG.products.filter(p => p.category_name === category_name) : JSON_CATALOG.products;
@@ -727,6 +811,23 @@ function prunePresence(m){
   }
 }
 
+// Admin metrics (tenant-scoped) for dashboard
+addRoute('get', '/admin/metrics', verifyAuth, requireTenant, async (req, res) => {
+  try {
+    const m = getPresenceMap(req.tenantId);
+    prunePresence(m);
+    const now = Date.now();
+    const displays = Array.from(m.values()).filter(v => (now - v.last_seen) < PRESENCE_TTL_MS).length;
+    let sessionsActive = 0;
+    try {
+      for (const s of sessions.values()) { if (s?.status === 'active') sessionsActive++; }
+    } catch {}
+    res.json({ tenant_id: req.tenantId, displays_online: displays, sessions_active_total: sessionsActive });
+  } catch (_e) {
+    res.json({ tenant_id: req.tenantId, displays_online: 0, sessions_active_total: null });
+  }
+});
+
 // Displays POST a heartbeat every ~5s
 // Display device heartbeat.
 // Backward compatible: if x-device-token present, require role=display; else accept manual id/name.
@@ -922,6 +1023,8 @@ const requireAdmin = requirePlatformAdmin;
 
 // Dynamic Firebase config for Admin login (from env) with fallback to static file if env not set
 addRoute('get', '/public/admin/config.js', (_req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
   if (apiKey && authDomain) {
@@ -983,6 +1086,225 @@ addRoute('delete', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async
   } catch (e) {
     return res.status(409).json({ error: 'tenant_in_use' });
   }
+});
+
+// Admin Catalog CRUD (in-memory when DB not configured)
+function ensureMemCatalog(tenantId){
+  let c = memCatalogByTenant.get(tenantId);
+  if (!c) {
+    // seed from JSON catalog for first-time
+    c = { categories: JSON.parse(JSON.stringify(JSON_CATALOG.categories||[])), products: JSON.parse(JSON.stringify(JSON_CATALOG.products||[])) };
+    // Add defaults for missing fields
+    c.products = c.products.map(p => ({ ...p, active: p.active != null ? p.active : true, sku: p.sku || p.id }));
+    memCatalogByTenant.set(tenantId, c);
+  }
+  return c;
+}
+function slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
+
+// List categories (already exists: /admin/tenants/:id/branches). New CRUD below.
+addRoute('post', '/admin/tenants/:id/categories', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const name = String(req.body?.name||'').trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const mem = ensureMemCatalog(tenantId);
+  const id = 'c-' + slugify(name);
+  if (mem.categories.some(c => c.id === id || (c.name||'').toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: 'category_exists' });
+  mem.categories.push({ id, name });
+  return res.json({ ok:true, category: { id, name } });
+});
+addRoute('put', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const cid = req.params.cid;
+  const name = String(req.body?.name||'').trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const mem = ensureMemCatalog(tenantId);
+  const c = mem.categories.find(x => x.id === cid);
+  if (!c) return res.status(404).json({ error: 'not_found' });
+  c.name = name;
+  // update products category_name
+  mem.products.forEach(p => { if (p.category_id === cid) p.category_name = name; });
+  return res.json({ ok:true });
+});
+addRoute('delete', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const cid = req.params.cid;
+  const mem = ensureMemCatalog(tenantId);
+  const used = mem.products.some(p => p.category_id === cid);
+  if (used) return res.status(409).json({ error: 'category_in_use' });
+  const before = mem.categories.length;
+  mem.categories = mem.categories.filter(c => c.id !== cid);
+  return res.json({ ok: mem.categories.length < before });
+});
+
+// Products CRUD
+addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const body = req.body||{};
+  const name = String(body.name||'').trim();
+  const sku = String(body.sku||'').trim();
+  const category_id = String(body.category_id||'').trim();
+  const price = Number(body.price||0);
+  const image_url = String(body.image_url||'').trim();
+  const active = body.active != null ? Boolean(body.active) : true;
+  if (!name || !category_id) return res.status(400).json({ error: 'name_and_category_required' });
+  const mem = ensureMemCatalog(tenantId);
+  const cat = mem.categories.find(c => c.id === category_id);
+  if (!cat) return res.status(404).json({ error: 'category_not_found' });
+  const id = sku || 'p-' + slugify(name) + '-' + Math.floor(Math.random()*10000);
+  if (mem.products.some(p => p.id === id)) return res.status(409).json({ error: 'sku_exists' });
+  const prod = { id, sku: id, name, category_id, category_name: cat.name, price, image_url, active };
+  mem.products.push(prod);
+  return res.json({ ok:true, product: prod });
+});
+addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const pid = req.params.pid;
+  const mem = ensureMemCatalog(tenantId);
+  const p = mem.products.find(x => x.id === pid);
+  if (!p) return res.status(404).json({ error: 'not_found' });
+  const body = req.body||{};
+  if (body.name != null) p.name = String(body.name);
+  if (body.price != null) p.price = Number(body.price)||0;
+  if (body.image_url != null) p.image_url = String(body.image_url);
+  if (body.active != null) p.active = Boolean(body.active);
+  if (body.category_id != null) {
+    const cid = String(body.category_id);
+    const cat = mem.categories.find(c => c.id === cid);
+    if (!cat) return res.status(404).json({ error: 'category_not_found' });
+    p.category_id = cid; p.category_name = cat.name;
+  }
+  if (body.sku != null) {
+    const sku = String(body.sku).trim();
+    if (sku && sku !== p.id && mem.products.some(x => x.id === sku)) return res.status(409).json({ error: 'sku_exists' });
+    if (sku) { p.id = sku; p.sku = sku; }
+  }
+  return res.json({ ok:true, product: p });
+});
+addRoute('delete', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const pid = req.params.pid;
+  const mem = ensureMemCatalog(tenantId);
+  const before = mem.products.length;
+  mem.products = mem.products.filter(p => p.id !== pid);
+  return res.json({ ok: mem.products.length < before });
+});
+
+// Parse Foodics CSVs from /data directory (categories.csv, products.csv)
+function parseFoodicsCsvs(){
+  try {
+    const catsPath = path.join(__dirname, 'data', 'categories.csv');
+    const prodsPath = path.join(__dirname, 'data', 'products.csv');
+    if (!fs.existsSync(catsPath)) return null;
+    // products.csv optional when importing categories only
+    const csvLine = (s) => {
+      const out = [];
+      let cur = '';
+      let i = 0;
+      let inQ = false;
+      while (i < s.length) {
+        const ch = s[i];
+        if (inQ) {
+          if (ch === '"') {
+            if (s[i+1] === '"') { cur += '"'; i += 2; continue; }
+            inQ = false; i++; continue;
+          } else { cur += ch; i++; continue; }
+        } else {
+          if (ch === '"') { inQ = true; i++; continue; }
+          if (ch === ',') { out.push(cur); cur = ''; i++; continue; }
+          cur += ch; i++;
+        }
+      }
+      out.push(cur);
+      return out;
+    };
+    const parseCsv = (txt) => {
+      const lines = String(txt || '').split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (!lines.length) return [];
+      const headers = csvLine(lines[0]).map(h => String(h || '').trim());
+      const rows = [];
+      for (let li = 1; li < lines.length; li++) {
+        const cols = csvLine(lines[li]);
+        if (cols.length === 1 && cols[0] === '') continue;
+        const obj = {};
+        for (let j = 0; j < headers.length; j++) obj[headers[j]] = cols[j] != null ? cols[j] : '';
+        rows.push(obj);
+      }
+      return rows;
+    };
+    const catRows = parseCsv(fs.readFileSync(catsPath, 'utf8'));
+    const prodRows = fs.existsSync(prodsPath) ? parseCsv(fs.readFileSync(prodsPath, 'utf8')) : [];
+
+    const categories = [];
+    const products = [];
+    const catByRef = new Map(); // reference -> {id, name}
+    for (const r of catRows) {
+      const cid = String(r.id || '').trim();
+      const name = String(r.name || '').trim();
+      const name_ar = String(r.name_localized || '').trim();
+      const ref = String(r.reference || '').trim();
+      const image = String(r.image || '').trim();
+      if (!cid || !name) continue;
+      categories.push({ id: cid, name, name_ar, reference: ref, image });
+      if (ref) catByRef.set(ref, { id: cid, name });
+    }
+    for (const p of prodRows) {
+      const id = String(p.id || '').trim();
+      const name = String(p.name || '').trim();
+      const price = Number(p.price || 0) || 0;
+      const image_url = String(p.image || '').trim();
+      const active = String(p.is_active || '').toLowerCase() === 'yes';
+      const cref = String(p.category_reference || '').trim();
+      const cat = cref ? catByRef.get(cref) : null;
+      const category_id = cat ? cat.id : '';
+      const category_name = cat ? cat.name : '';
+      if (!id || !name) continue;
+      products.push({ id, name, price, image_url, active, category_id, category_name });
+    }
+    return { categories, products };
+  } catch (_e) {
+    return null;
+  }
+}
+
+// Import catalog (CSV/JSON) into in-memory store (non-DB mode). Tenant admin only.
+addRoute('post', '/admin/tenants/:id/catalog/import', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
+  const tenantId = req.params.id;
+  const source = String(req.body?.source || 'csv').toLowerCase();
+  const doCats = (req.body?.categories !== false); // default true
+  const doProds = (req.body?.products === true);    // default false (requested: categories only)
+  const replace = (req.body?.replace !== false);    // default true
+
+  let data = null;
+  if (source === 'csv') data = parseFoodicsCsvs();
+  else if (source === 'json') data = JSON_CATALOG;
+  if (!data) return res.status(400).json({ error: 'source_unavailable' });
+
+  const mem = ensureMemCatalog(tenantId);
+  if (doCats) {
+    const nextCats = Array.isArray(data.categories) ? data.categories : [];
+    if (replace) mem.categories = JSON.parse(JSON.stringify(nextCats));
+  }
+  if (doProds) {
+    const nextProds = Array.isArray(data.products) ? data.products : [];
+    mem.products = JSON.parse(JSON.stringify(nextProds));
+  }
+  // sync product.category_name with categories by id
+  try {
+    const byId = new Map((mem.categories||[]).map(c => [c.id, c.name]));
+    for (const p of (mem.products||[])) {
+      if (p.category_id && byId.has(p.category_id)) p.category_name = byId.get(p.category_id);
+    }
+  } catch {}
+
+  return res.json({ ok: true, source, categories: (mem.categories||[]).length, products: (mem.products||[]).length });
 });
 
 // Tenant domains CRUD
@@ -1249,11 +1571,34 @@ addRoute('delete', '/admin/tenants/:id/branches/:branchId', verifyAuth, requireT
 
 // ---- Static UI
 const PUB = path.join(__dirname, 'public');
+// Cache-control for admin assets (avoid stale UI between deploys)
+app.use((req, res, next) => {
+  try {
+    if (req.path && req.path.startsWith('/public/admin/')) {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.set('Pragma', 'no-cache');
+    }
+  } catch {}
+  next();
+});
 // Serve static files at root (so /css/... and /js/... work)
 app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
 app.use('/public', express.static(PUB));
 addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'images', 'koobs-logo.png')));
+
+// Simple in-memory image cache for proxy (/img)
+const memImageCache = new Map(); // url -> { buf:Buffer, type:string, etag:string, exp:number }
+function isPrivateHostOrIp(host){
+  if (!host) return true;
+  const h = String(host).toLowerCase();
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+  // Basic private ranges
+  if (/^10\./.test(h)) return true;
+  if (/^192\.168\./.test(h)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(h)) return true;
+  return false;
+}
 
 // Posters list for rotating display overlay
 addRoute('get', '/posters', (_req, res) => {
@@ -1266,6 +1611,78 @@ addRoute('get', '/posters', (_req, res) => {
     res.json({ items });
   } catch {
     res.json({ items: [] });
+  }
+});
+
+// Image proxy: fetch remote HTTP(S) images and serve them with caching to avoid mixed-content and CORS issues.
+// Usage: GET /img?u=<encoded URL>
+addRoute('get', '/img', async (req, res) => {
+  try {
+    const u = String(req.query.u || req.query.url || '').trim();
+    if (!u) return res.status(400).send('missing url');
+    let parsed;
+    try { parsed = new URL(u); } catch { return res.status(400).send('invalid url'); }
+    if (!(parsed.protocol === 'http:' || parsed.protocol === 'https:')) return res.status(400).send('invalid protocol');
+    if (isPrivateHostOrIp(parsed.hostname)) return res.status(400).send('forbidden host');
+    // Host allowlist: default to Foodics only. Override via IMG_PROXY_ALLOW_HOSTS (comma-separated domains)
+    // Matching is strict: host must equal domain or be a subdomain of it.
+    // Allowlist tokens:
+    // - exact domain or subdomain (e.g., foodics.com)
+    // - wildcard prefix (e.g., *.foodics.com)
+    // - substring tokens if prefixed with '~' (e.g., ~foodics) to accommodate vendor images hosted on S3/CDN
+    const allowEnv = (process.env.IMG_PROXY_ALLOW_HOSTS || 'foodics.com,~foodics')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+    const hostLc = String(parsed.hostname || '').toLowerCase();
+    const allowed = allowEnv.some(token => {
+      if (token.startsWith('~')) {
+        const sub = token.slice(1);
+        return sub && hostLc.includes(sub);
+      }
+      let d = token;
+      if (d.startsWith('*.')) d = d.slice(2);
+      return hostLc === d || hostLc.endsWith('.' + d);
+    });
+    if (!allowed) return res.status(403).send('host not allowed');
+
+    const key = parsed.toString();
+    const now = Date.now();
+    const cached = memImageCache.get(key);
+    if (cached && cached.exp > now) {
+      const inm = String(req.headers['if-none-match'] || '');
+      if (inm && inm === cached.etag) {
+        res.status(304).end();
+        return;
+      }
+      res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      res.set('ETag', cached.etag);
+      res.type(cached.type || 'application/octet-stream');
+      return res.send(cached.buf);
+    }
+
+    const AC = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (AC) setTimeout(() => { try { AC.abort(); } catch {} }, 10000);
+    const r = await fetch(key, { signal: AC?.signal, headers: { 'user-agent': 'Mozilla/5.0 (compatible; SmartOrder/1.0)' } });
+    if (!r.ok) return res.status(502).send('upstream error');
+    const ct = String(r.headers.get('content-type') || '').toLowerCase();
+    if (!ct.startsWith('image/')) return res.status(415).send('unsupported content');
+    const len = Number(r.headers.get('content-length') || 0);
+    if (len > 8 * 1024 * 1024) return res.status(413).send('too large');
+    const arr = await r.arrayBuffer();
+    const buf = Buffer.from(arr);
+    if (buf.length > 8 * 1024 * 1024) return res.status(413).send('too large');
+    const etag = 'W/"' + require('crypto').createHash('sha1').update(buf).digest('hex') + '"';
+    memImageCache.set(key, { buf, type: ct, etag, exp: now + 3600 * 1000 }); // 1h TTL
+
+    const inm = String(req.headers['if-none-match'] || '');
+    if (inm && inm === etag) return res.status(304).end();
+    res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    res.set('ETag', etag);
+    res.type(ct);
+    return res.send(buf);
+  } catch (_e) {
+    return res.status(500).send('proxy_failed');
   }
 });
 

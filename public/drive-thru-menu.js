@@ -50,7 +50,11 @@
 
   function moneyKWD(n){ return `KWD ${Number(n).toFixed(3)}`; }
   function slugify(name){ return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
-  function productImageSrc(p){ return p.image_url || `/public/images/products/${slugify(p.name)}.jpg`; }
+function productImageSrc(p){
+  const u = p.image_url;
+  if (u && /^https?:\/\//i.test(u)) return `/img?u=${encodeURIComponent(u)}`;
+  return u || `/public/images/products/${slugify(p.name)}.jpg`;
+}
 
   function buildAllergenRow(name){
     const tags = ALLERGENS[name] || [];

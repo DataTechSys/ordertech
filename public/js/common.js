@@ -4,6 +4,13 @@ export function qs(sel, el = document) { return el.querySelector(sel); }
 export function qsa(sel, el = document) { return Array.from(el.querySelectorAll(sel)); }
 export const fmt = (n) => (Math.round(Number(n) * 100) / 100).toFixed(2);
 
+// Wrap remote http(s) image URLs to go through the server proxy; leave local paths as-is
+export function proxiedImageSrc(u){
+  if (!u) return '';
+  const s = String(u);
+  return /^https?:\/\//i.test(s) ? `/img?u=${encodeURIComponent(s)}` : s;
+}
+
 // tenant + remote params
 export function getParams() {
   const u = new URL(location.href);
