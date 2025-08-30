@@ -1,3 +1,15 @@
+2025-08-30 09:21Z — Admin UI polish
+- Products: removed category filter; table now has [Checkbox, Photo, Name, SKU, Category, Price (KWD), Active]
+- SKU display shows short code (or PSN-###) instead of long IDs
+- Added product thumbnails in table and medium preview in edit modal
+- Thin table separators for a cleaner, organized look
+- Categories: added optional Photo column; Category modal shows Products count (read-only)
+- Wired edit/delete for rows and bulk delete
+
+Next:
+- Pushed feature/admin-ui-wiring and deployed to Cloud Run (pending below)
+- Verify production at https://app.ordertech.me/public/admin/index.html after deploy completes
+
 dev_log — project activity log
 
 IMPORTANT: SESSION LOGGING POLICY

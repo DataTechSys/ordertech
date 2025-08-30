@@ -133,43 +133,149 @@ function wireSidebar() {
   });
 }
 
-// ---------- Modal (Product) ----------
+// ---------- Modals (Product & Category) ----------
+let CURRENT_PRODUCT = null; // object or null
+let CURRENT_CATEGORY = null;
+
+function openProductEditor(prod){
+  CURRENT_PRODUCT = prod || null;
+  const modalBackdrop = $("#productModal");
+  $("#productModalTitle").textContent = prod ? 'Edit Product' : 'New Product';
+  // Prefill
+  $("#prodFormSku").value = prod?.sku || prod?.id || '';
+  $("#prodFormName").value = prod?.name || '';
+  $("#prodFormCategory").value = prod?.category_id || '';
+  $("#prodFormPrice").value = prod?.price != null ? String(prod.price) : '';
+  $("#prodFormImageUrl").value = prod?.image_url || '';
+  const pv = $("#prodPreview"); if (pv) pv.src = prod?.image_url || '';
+  $("#prodFormActive").checked = prod?.active == null ? true : !!prod.active;
+  const delBtn = $("#productModalDelete");
+  if (delBtn) delBtn.classList.toggle('hidden', !prod || !prod.id);
+  modalBackdrop.classList.add("open");
+  modalBackdrop.setAttribute("aria-hidden", "false");
+}
+
 function wireProductModal() {
   const modalBackdrop = $("#productModal");
   const openBtn = $("#newProductBtn");
   const closeBtn = $("#productModalClose");
   const cancelBtn = $("#productModalCancel");
   const saveBtn = $("#productModalSave");
+  const deleteBtn = $("#productModalDelete");
 
-  const open = () => {
-    modalBackdrop.classList.add("open");
-    modalBackdrop.setAttribute("aria-hidden", "false");
-  };
   const close = () => {
     modalBackdrop.classList.remove("open");
     modalBackdrop.setAttribute("aria-hidden", "true");
   };
 
-  openBtn?.addEventListener("click", open);
+  openBtn?.addEventListener("click", () => openProductEditor(null));
   closeBtn?.addEventListener("click", close);
   cancelBtn?.addEventListener("click", close);
-  modalBackdrop?.addEventListener("click", (e) => {
-    if (e.target === modalBackdrop) close();
+  modalBackdrop?.addEventListener("click", (e) => { if (e.target === modalBackdrop) close(); });
+
+  // Live preview when URL changes
+  const urlInput = $("#prodFormImageUrl");
+  urlInput?.addEventListener('input', () => {
+    const pv = $("#prodPreview"); if (pv) pv.src = urlInput.value || '';
   });
 
-  // Save (stub)
-  saveBtn?.addEventListener("click", () => {
-    const data = {
-      sku: $("#prodFormSku")?.value?.trim() || "",
-      name: $("#prodFormName")?.value?.trim() || "",
-      category: $("#prodFormCategory")?.value || "",
-      price: parseFloat($("#prodFormPrice")?.value || "0"),
-      imageUrl: $("#prodFormImageUrl")?.value?.trim() || "",
-      active: $("#prodFormActive")?.checked || false
-    };
-    console.log("Save product", data);
-    close();
-    toast("Product saved (stub). Hook me to the backend.");
+  // Save (create or update)
+  saveBtn?.addEventListener("click", async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      const body = {
+        sku: $("#prodFormSku")?.value?.trim() || "",
+        name: $("#prodFormName")?.value?.trim() || "",
+        category_id: $("#prodFormCategory")?.value || "",
+        price: parseFloat($("#prodFormPrice")?.value || "0"),
+        image_url: $("#prodFormImageUrl")?.value?.trim() || "",
+        active: $("#prodFormActive")?.checked || false
+      };
+      if (!body.name || !body.category_id) { toast('Name and category required'); return; }
+      if (CURRENT_PRODUCT && CURRENT_PRODUCT.id) {
+        // Update
+        const updates = { ...CURRENT_PRODUCT };
+        const patch = {};
+        if (body.name !== (CURRENT_PRODUCT.name||'')) patch.name = body.name;
+        if (String(body.category_id) !== String(CURRENT_PRODUCT.category_id||'')) patch.category_id = body.category_id;
+        if (!isNaN(body.price) && Number(body.price) !== Number(CURRENT_PRODUCT.price||0)) patch.price = body.price;
+        if ((body.image_url||'') !== (CURRENT_PRODUCT.image_url||'')) patch.image_url = body.image_url;
+        if (Boolean(body.active) !== Boolean(CURRENT_PRODUCT.active == null ? true : CURRENT_PRODUCT.active)) patch.active = body.active;
+        const sku = (body.sku||'').trim(); if (sku && sku !== CURRENT_PRODUCT.id) patch.sku = sku;
+        await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(CURRENT_PRODUCT.id)}`, { method: 'PUT', body: patch });
+        toast('Product updated');
+      } else {
+        await api(`/admin/tenants/${encodeURIComponent(id)}/products`, { method: 'POST', body });
+        toast('Product created');
+      }
+      close();
+      await loadProducts();
+    } catch (e) {}
+  });
+
+  // Delete
+  deleteBtn?.addEventListener('click', async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      if (!CURRENT_PRODUCT || !CURRENT_PRODUCT.id) return;
+      if (!confirm('Delete this product?')) return;
+      await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(CURRENT_PRODUCT.id)}`, { method: 'DELETE' });
+      toast('Product deleted');
+      close();
+      await loadProducts();
+    } catch (e) {}
+  });
+}
+
+function openCategoryEditor(cat){
+  CURRENT_CATEGORY = cat || null;
+  const modalBackdrop = $("#categoryModal");
+  $("#categoryModalTitle").textContent = cat ? 'Edit Category' : 'Category';
+  $("#catFormName").value = cat?.name || '';
+  $("#catFormRef").value = cat?.reference || cat?.ref || cat?.slug || '';
+  $("#catFormCreated").value = cat?.created_at ? new Date(cat.created_at).toLocaleString() : '';
+  try {
+    const counts = buildCategoryCounts();
+    $("#catFormProducts").value = String(counts.get(cat?.id) || 0);
+  } catch {}
+  const delBtn = $("#categoryModalDelete"); if (delBtn) delBtn.classList.toggle('hidden', !cat || !cat.id);
+  modalBackdrop.classList.add('open');
+  modalBackdrop.setAttribute('aria-hidden','false');
+}
+
+function wireCategoryModal(){
+  const modalBackdrop = $("#categoryModal");
+  const closeBtn = $("#categoryModalClose");
+  const cancelBtn = $("#categoryModalCancel");
+  const saveBtn = $("#categoryModalSave");
+  const deleteBtn = $("#categoryModalDelete");
+  const close = () => { modalBackdrop.classList.remove('open'); modalBackdrop.setAttribute('aria-hidden','true'); };
+  closeBtn?.addEventListener('click', close);
+  cancelBtn?.addEventListener('click', close);
+  modalBackdrop?.addEventListener('click', (e) => { if (e.target === modalBackdrop) close(); });
+  saveBtn?.addEventListener('click', async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      if (!CURRENT_CATEGORY || !CURRENT_CATEGORY.id) { toast('Select a category row'); return; }
+      const name = $("#catFormName")?.value?.trim(); if (!name) { toast('Name required'); return; }
+      await api(`/admin/tenants/${encodeURIComponent(id)}/categories/${encodeURIComponent(CURRENT_CATEGORY.id)}`, { method: 'PUT', body: { name } });
+      toast('Category updated');
+      close();
+      await loadCategories();
+      await loadProducts();
+    } catch (e) {}
+  });
+  deleteBtn?.addEventListener('click', async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      if (!CURRENT_CATEGORY || !CURRENT_CATEGORY.id) return;
+      if (!confirm('Delete this category? Products under it must be moved or deleted first.')) return;
+      await api(`/admin/tenants/${encodeURIComponent(id)}/categories/${encodeURIComponent(CURRENT_CATEGORY.id)}`, { method: 'DELETE' });
+      toast('Category deleted');
+      close();
+      await loadCategories();
+      await loadProducts();
+    } catch (e) {}
   });
 }
 
@@ -268,7 +374,26 @@ function wireStubs() {
   // Categories / Products
   $("#refreshCategories")?.addEventListener("click", () => loadCategories().catch(()=>{}));
   $("#refreshProducts")?.addEventListener("click", () => loadProducts().catch(()=>{}));
-  $("#prodCategory")?.addEventListener("change", () => loadProducts().catch(()=>{}));
+  $("#deleteSelectedCategories")?.addEventListener('click', async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      const ids = $$("#categoryTableWrap .cat-chk:checked").map(cb => cb.value);
+      if (!ids.length) return; if (!confirm(`Delete ${ids.length} category(s)?`)) return;
+      for (const cid of ids) { try { await api(`/admin/tenants/${encodeURIComponent(id)}/categories/${encodeURIComponent(cid)}`, { method: 'DELETE' }); } catch {} }
+      toast('Selected categories deleted');
+      await loadCategories(); await loadProducts();
+    } catch (e) {}
+  });
+  $("#deleteSelectedProducts")?.addEventListener('click', async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      const ids = $$("#productTableWrap .prod-chk:checked").map(cb => cb.value);
+      if (!ids.length) return; if (!confirm(`Delete ${ids.length} product(s)?`)) return;
+      for (const pid of ids) { try { await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(pid)}`, { method: 'DELETE' }); } catch {} }
+      toast('Selected products deleted');
+      await loadProducts();
+    } catch (e) {}
+  });
 
   // Tenants select change
   $("#tenantSelect")?.addEventListener("change", (e) => {
@@ -311,6 +436,7 @@ function init() {
   wireCollapsibles();     // accordion + ARIA + chevrons
   wireSidebar();
   wireProductModal();
+  wireCategoryModal();
   wireStubs();
 
   // Optional: Fill quick status placeholders
@@ -571,40 +697,134 @@ async function loadDomains(id) {
   } catch {}
 }
 
+function fmtKWD(n){
+  if (n == null || isNaN(n)) return '—';
+  try { return new Intl.NumberFormat('en-KW', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Number(n)) + ' KWD'; } catch {
+    const x = Number(n).toFixed(3);
+    return x.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' KWD';
+  }
+}
+function displaySku(p){
+  const raw = (p.sku || p.id || '').toString().trim();
+  // If sku exists and isn't obviously a long code/uuid, show it
+  if (raw && raw.length <= 12 && !/[0-9a-f]{8}-[0-9a-f]{4}-/i.test(raw)) return raw;
+  // Derive a short human code like PSN-145
+  let sum = 0; const s = raw || 'SKU';
+  for (let i=0;i<s.length;i++) sum = (sum * 31 + s.charCodeAt(i)) >>> 0;
+  const num = (sum % 900) + 100; // 100..999
+  return `PSN-${num}`;
+}
+
+function buildCategoryCounts(){
+  const map = new Map();
+  for (const p of (STATE.products||[])) {
+    const cid = p.category_id || p.category || p.categoryId || null;
+    if (!cid) continue;
+    map.set(cid, (map.get(cid)||0)+1);
+  }
+  return map;
+}
+
+function renderCategoriesTable(){
+  const wrap = $("#categoryTableWrap"); if (!wrap) return;
+  const counts = buildCategoryCounts();
+  let html = '';
+  html += '<table class="table"><thead><tr>' +
+          '<th class="col-checkbox"><input id="catChkAll" type="checkbox" class="checkbox"/></th>' +
+          '<th class="col-photo">Photo</th>' +
+          '<th>Name</th>' +
+          '<th>Reference</th>' +
+          '<th class="col-num">Products</th>' +
+          '<th class="col-date">Created</th>' +
+          '</tr></thead><tbody>';
+  for (const c of (STATE.categories||[])){
+    const ref = c.reference || c.ref || c.slug || '';
+    const created = c.created_at ? new Date(c.created_at).toLocaleString() : '—';
+    const cnt = counts.get(c.id) || 0;
+    const img = c.image ? `<img class="thumb" src="${c.image}" alt="">` : `<div class="thumb" aria-hidden="true"></div>`;
+    html += `<tr class="row-click" data-cid="${c.id}">` +
+            `<td class="col-checkbox"><input type="checkbox" class="checkbox cat-chk" value="${c.id}"></td>` +
+            `<td class="col-photo">${img}</td>` +
+            `<td class="col-name"><a href="#" class="row-link" data-cid="${c.id}">${c.name||''}</a></td>` +
+            `<td class="col-sku">${ref||'—'}</td>` +
+            `<td class="col-num">${cnt}</td>` +
+            `<td class="col-date">${created}</td>` +
+            `</tr>`;
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  // Wire: select-all and row clicks
+  const all = $("#catChkAll");
+  const rowChecks = $$(".cat-chk", wrap);
+  const bulkBtn = $("#deleteSelectedCategories");
+  const updateBulk = () => { const any = rowChecks.some(cb => cb.checked); if (bulkBtn) bulkBtn.classList.toggle('hidden', !any); };
+  all?.addEventListener('change', () => { rowChecks.forEach(cb => cb.checked = all.checked); updateBulk(); });
+  rowChecks.forEach(cb => cb.addEventListener('change', updateBulk));
+  $$("a.row-link[data-cid]", wrap).forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const cid = a.getAttribute('data-cid'); const cat = (STATE.categories||[]).find(x => String(x.id)===String(cid)); if (cat) openCategoryEditor(cat); }));
+}
+
+function renderProductsTable(){
+  const wrap = $("#productTableWrap"); if (!wrap) return;
+  let html = '';
+  html += '<table class="table"><thead><tr>' +
+          '<th class="col-checkbox"><input id="prodChkAll" type="checkbox" class="checkbox"/></th>' +
+          '<th class="col-photo">Photo</th>' +
+          '<th>Name</th>' +
+          '<th>SKU</th>' +
+          '<th>Category</th>' +
+          '<th class="col-price">Price</th>' +
+          '<th>Active</th>' +
+          '</tr></thead><tbody>';
+  for (const p of (STATE.products||[])){
+    const sku = displaySku(p);
+    const active = (p.active == null) ? 'Active' : (p.active ? 'Active' : 'Inactive');
+    const pillClass = (p.active == null || p.active) ? 'status-pill ok' : 'status-pill off';
+    const img = p.image_url ? `<img class="thumb" src="${p.image_url}" alt="">` : `<div class="thumb" aria-hidden="true"></div>`;
+    html += `<tr class="row-click" data-pid="${p.id}">` +
+            `<td class="col-checkbox"><input type="checkbox" class="checkbox prod-chk" value="${p.id}"></td>` +
+            `<td class="col-photo">${img}</td>` +
+            `<td class="col-name"><a href="#" class="row-link" data-pid="${p.id}">${p.name||''}</a></td>` +
+            `<td class="col-sku">${sku}</td>` +
+            `<td>${p.category_name||''}</td>` +
+            `<td class="col-price">${fmtKWD(p.price)}</td>` +
+            `<td><span class="${pillClass}">${active}</span></td>` +
+            `</tr>`;
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  // Wire
+  const all = $("#prodChkAll");
+  const rowChecks = $$(".prod-chk", wrap);
+  const bulkBtn = $("#deleteSelectedProducts");
+  const updateBulk = () => { const any = rowChecks.some(cb => cb.checked); if (bulkBtn) bulkBtn.classList.toggle('hidden', !any); };
+  all?.addEventListener('change', () => { rowChecks.forEach(cb => cb.checked = all.checked); updateBulk(); });
+  rowChecks.forEach(cb => cb.addEventListener('change', updateBulk));
+  $$("a.row-link[data-pid]", wrap).forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); const pid = a.getAttribute('data-pid'); const prod = (STATE.products||[]).find(x => String(x.id)===String(pid)); if (prod) openProductEditor(prod); }));
+}
+
 async function loadCategories() {
   const id = STATE.selectedTenantId; if (!id) return;
   try {
     const rows = await api('/categories', { tenantId: id });
     STATE.categories = Array.isArray(rows) ? rows : [];
-    // prodCategory select
-    const sc = $("#prodCategory"); if (sc) {
-      const current = sc.value || '';
-      sc.innerHTML = '<option value="">All</option>';
-      for (const c of STATE.categories) { const o = document.createElement('option'); o.value = c.name; o.textContent = c.name; sc.appendChild(o); }
-      if (current) sc.value = current;
+    // product modal category select
+    const pm = $("#prodFormCategory"); if (pm) {
+      const sel = pm; const keep = sel.value; sel.innerHTML='';
+      for (const c of STATE.categories) { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); }
+      if (keep) sel.value = keep;
     }
-    // table
-    const wrap = $("#categoryTableWrap"); if (wrap) {
-      let html = '<div class="table"><div class="row head"><div>Name</div><div>ID</div></div>';
-      for (const c of STATE.categories) html += `<div class="row"><div>${c.name}</div><div style="font-family:monospace">${c.id||''}</div></div>`;
-      html += '</div>';
-      wrap.innerHTML = html;
-    }
+    renderCategoriesTable();
   } catch {}
 }
 
 async function loadProducts() {
   const id = STATE.selectedTenantId; if (!id) return;
   try {
-    const catName = $("#prodCategory")?.value || '';
-    const rows = await api('/products', { tenantId: id, query: catName ? { category_name: catName } : undefined });
+    const rows = await api('/products', { tenantId: id });
     STATE.products = Array.isArray(rows) ? rows : [];
-    const wrap = $("#productTableWrap"); if (wrap) {
-      let html = '<div class="table"><div class="row head"><div>Name</div><div>Category</div><div>Price</div></div>';
-      for (const p of STATE.products) html += `<div class="row"><div>${p.name}</div><div>${p.category_name||''}</div><div>${p.price!=null?p.price:''}</div></div>`;
-      html += '</div>';
-      wrap.innerHTML = html;
-    }
+    renderProductsTable();
+    // Refresh category counts after products change
+    renderCategoriesTable();
   } catch {}
 }
 
