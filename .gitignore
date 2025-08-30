@@ -20,4 +20,5 @@ yarn-error.log*
 cloud-sql-proxy
 nohup.out
 .server.log
+scripts/dev_db.env
 
