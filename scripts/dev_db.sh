@@ -33,9 +33,11 @@ INSTANCE_NAME="${INSTANCE_NAME:-}"  # e.g. smart-order-pg
 PROXY_PORT="${PROXY_PORT:-5432}"
 
 # DB credentials (db user/name and a Secret Manager secret holding the password)
+# OR provide DB_URL_SECRET to fetch the full DATABASE_URL and we will rewrite host to 127.0.0.1:PORT
 DB_USER="${DB_USER:-}"
 DB_NAME="${DB_NAME:-}"
 DB_PASSWORD_SECRET="${DB_PASSWORD_SECRET:-}"
+DB_URL_SECRET="${DB_URL_SECRET:-}"
 
 # Internal
 PID_DIR="/tmp"
@@ -87,8 +89,22 @@ _start_proxy(){
 
 _export_env(){
   _need_sourced "start"
+  if [ -n "$DB_URL_SECRET" ]; then
+    # Fetch full DATABASE_URL from Secret Manager, rewrite host:port to localhost:PROXY_PORT
+    local raw_url
+    raw_url="$(gcloud secrets versions access latest --secret="$DB_URL_SECRET" 2>/dev/null || true)"
+    [ -n "$raw_url" ] || _die "Could not fetch DATABASE_URL from Secret Manager: $DB_URL_SECRET"
+    # Parse url safely with node (available in this repo)
+    local local_url
+    local_url=$(node -e 'try{const u=new URL(process.env.RAW_URL);u.hostname="127.0.0.1";u.port=String(process.env.PROXY_PORT||5432);u.protocol="postgres:";console.log(u.toString())}catch(e){process.exit(1)}' RAW_URL="$raw_url" PROXY_PORT="$PROXY_PORT" || true)
+    [ -n "$local_url" ] || _die "Failed to rewrite DATABASE_URL for localhost"
+    export DATABASE_URL="$local_url"
+    export REQUIRE_DB=1
+    _info "Env set via DB_URL_SECRET: REQUIRE_DB=1 and DATABASE_URL → 127.0.0.1:${PROXY_PORT}"
+    return 0
+  fi
   if [ -z "$DB_USER" ] || [ -z "$DB_NAME" ] || [ -z "$DB_PASSWORD_SECRET" ]; then
-    _die "Set DB_USER, DB_NAME, DB_PASSWORD_SECRET (see scripts/dev_db.env.example)"
+    _die "Set DB_URL_SECRET or DB_USER, DB_NAME, DB_PASSWORD_SECRET (see scripts/dev_db.env.example)"
   fi
   # Fetch password from Secret Manager each time to avoid printing secrets
   local pass
