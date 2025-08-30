@@ -44,6 +44,32 @@
     }
   }
 
+  function getLocalCode(){
+    try {
+      const key = ROLE === 'cashier' ? 'DEVICE_LOCAL_CODE_CASHIER' : 'DEVICE_LOCAL_CODE_DISPLAY';
+      let c = localStorage.getItem(key) || '';
+      if (!/^\d{6}$/.test(c)) {
+        c = String(Math.floor(100000 + Math.random()*900000));
+        localStorage.setItem(key, c);
+      }
+      return c;
+    } catch {
+      return '000000';
+    }
+  }
+
+  async function registerLocalCode(){
+    try {
+      const code = getLocalCode();
+      const name = localStorage.getItem(DEVICE_NAME_KEY) || localStorage.getItem('DEVICE_NAME') || '';
+      const branch = localStorage.getItem(BRANCH_KEY) || '';
+      await fetch('/device/pair/register', {
+        method:'POST', headers:{ 'content-type':'application/json' },
+        body: JSON.stringify({ code, role: ROLE, name, branch })
+      });
+    } catch {}
+  }
+
   function showOverlay(){
     if (hasToken()) return; // already activated
     const ov = el('div', { id:'activationOverlay' }, []);
@@ -62,64 +88,66 @@
     const status = el('div', { id:'actStatus' }); status.style.opacity='0.8'; status.style.margin='8px 0';
 
     const row = el('div', {}, []); Object.assign(row.style, { display:'flex', justifyContent:'center', gap:'8px', marginTop:'12px' });
-    const btn = el('button', { id:'getCodeBtn', text:'Get Activation Code' });
-    Object.assign(btn.style, { padding:'10px 14px', borderRadius:'8px', background:'#2563eb', border:'1px solid #1d4ed8', color:'#fff', cursor:'pointer' });
-    row.appendChild(btn);
+    // Button removed; device shows a fixed local code
 
-    const close = el('button', { text:'Use without activation' });
-    Object.assign(close.style, { padding:'8px 12px', borderRadius:'8px', background:'transparent', border:'1px solid #334155', color:'#9ca3af', cursor:'pointer' });
-    close.onclick = () => { document.body.removeChild(ov); };
+    // For display role, do not allow bypassing activation
+    let close = null;
+    if (ROLE !== 'display') {
+      close = el('button', { text:'Close' });
+      Object.assign(close.style, { padding:'8px 12px', borderRadius:'8px', background:'transparent', border:'1px solid #334155', color:'#9ca3af', cursor:'pointer' });
+      close.onclick = () => { try { document.body.removeChild(ov); } catch {} };
+    }
 
-    card.appendChild(h); card.appendChild(p); card.appendChild(codeBox); card.appendChild(status); card.appendChild(row); card.appendChild(el('div',{},[close]));
+    card.appendChild(h);
+    card.appendChild(p);
+    card.appendChild(codeBox);
+    card.appendChild(status);
+    card.appendChild(row);
+    if (close) card.appendChild(el('div',{},[close]));
     ov.appendChild(card); document.body.appendChild(ov);
 
-    btn.onclick = async () => {
-      try {
-        btn.disabled = true; btn.textContent = 'Generating...'; status.textContent = '';
-        const res = await fetch('/device/pair/start', { method:'POST', headers: { 'content-type':'application/json' } });
-        if (!res.ok) throw new Error('HTTP '+res.status);
-        const j = await res.json();
-        const code = String(j.code||'');
-        const nonce = String(j.nonce||'');
-        const exp = new Date(j.expires_at || Date.now()+10*60*1000);
-        codeBox.textContent = code.replace(/(\d{3})(\d{3})/, '$1 $2');
-        let remain = Math.floor((exp.getTime() - Date.now())/1000);
-        status.textContent = `Enter this code in Admin > Devices. Expires in ${remain}s`;
-        const tick = setInterval(() => {
-          remain -= 1; if (remain < 0) { clearInterval(tick); status.textContent = 'Code expired, generate again.'; btn.disabled=false; btn.textContent='Get Activation Code'; stopPoll(); return; }
-          status.textContent = `Enter this code in Admin > Devices. Expires in ${remain}s`;
-        }, 1000);
-        // poll claim
-        stopPoll();
-        pollTimer = setInterval(async () => {
-          try {
-            const r = await fetch(`/device/pair/${encodeURIComponent(code)}/status?nonce=${encodeURIComponent(nonce)}`);
-            const s = await r.json();
-            if (s && s.status === 'claimed' && s.device_token) {
-              setToken(s.device_token);
-              if (s.tenant_id) localStorage.setItem(TENANT_KEY, s.tenant_id);
-              if (s.branch) localStorage.setItem(BRANCH_KEY, s.branch);
-              if (s.device_id) localStorage.setItem(DEVICE_ID_KEY, s.device_id);
-              if (s.name) localStorage.setItem(DEVICE_NAME_KEY, s.name);
-              clearInterval(tick);
-              stopPoll();
-              status.textContent = 'Activated! Saving settings...';
-              setTimeout(() => { try { document.body.removeChild(ov); } catch {}; location.reload(); }, 600);
-            }
-            if (s && s.status === 'expired') {
-              clearInterval(tick); stopPoll(); btn.disabled=false; btn.textContent='Get Activation Code'; status.textContent='Code expired, generate again.';
-            }
-          } catch {}
-        }, 2000);
-      } catch (e) {
-        status.textContent = 'Failed to generate code. Retry.';
-        btn.disabled = false; btn.textContent = 'Get Activation Code';
-      }
-    };
+    // Show fixed local code and begin polling until claimed
+    (function initActivation(){
+      const code = getLocalCode();
+      codeBox.textContent = code.replace(/(\d{3})(\d{3})/, '$1 $2');
+      status.textContent = 'Enter this code in Admin > Devices to activate.';
+      registerLocalCode().catch(()=>{});
+      stopPoll();
+      pollTimer = setInterval(async () => {
+        try {
+          const r = await fetch(`/device/pair/${encodeURIComponent(code)}/status`);
+          const s = await r.json();
+          if (s && s.status === 'claimed' && s.device_token) {
+            setToken(s.device_token);
+            if (s.tenant_id) localStorage.setItem(TENANT_KEY, s.tenant_id);
+            if (s.branch) localStorage.setItem(BRANCH_KEY, s.branch);
+            if (s.device_id) localStorage.setItem(DEVICE_ID_KEY, s.device_id);
+            if (s.name) localStorage.setItem(DEVICE_NAME_KEY, s.name);
+            stopPoll();
+            status.textContent = 'Activated! Saving settings...';
+            setTimeout(() => { try { document.body.removeChild(ov); } catch {}; location.reload(); }, 600);
+          }
+        } catch {}
+      }, 2000);
+    })();
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
-    if (!hasToken()) { showOverlay(); return; }
+    if (!hasToken()) {
+      // register code in background and show overlay
+      try { await registerLocalCode(); } catch {}
+      // For display, also update in-page notice if present
+      try {
+        const isDisplay = ROLE === 'display';
+        if (isDisplay) {
+          const code = getLocalCode();
+          const n = document.getElementById('posterNotice');
+          if (n) n.textContent = `No Active Key — Code: ${code}`;
+        }
+      } catch {}
+      showOverlay();
+      return;
+    }
     const ok = await validateToken();
     if (!ok) {
       try {
@@ -127,6 +155,7 @@
         localStorage.removeItem(TENANT_KEY);
         localStorage.removeItem(BRANCH_KEY);
       } catch {}
+      try { await registerLocalCode(); } catch {}
       showOverlay();
     }
   });
