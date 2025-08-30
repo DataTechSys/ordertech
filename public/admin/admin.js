@@ -1,932 +1,632 @@
-(() => {
-  // Sidebar nav wiring
-  const navItems = Array.from(document.querySelectorAll('.menu [data-panel]'));
-  const panels = Array.from(document.querySelectorAll('.panel'));
-  const panelById = (id) => document.getElementById(id);
-  const navCompany = document.getElementById('navCompany');
-  const navProducts = document.getElementById('navProducts');
-  const secSuper = document.getElementById('secSuper');
-  const navDashboard = document.getElementById('navDashboard');
+// /public/admin/admin.js
 
-  function switchPanel(panelId){
-    panels.forEach(p => p.classList.remove('show'));
-    navItems.forEach(n => n.classList.remove('active'));
-    const p = panelById(panelId); if (p) p.classList.add('show');
-    const n = navItems.find(x => x.dataset.panel === panelId); if (n) n.classList.add('active');
-    try { localStorage.setItem('ADMIN_LAST_PANEL', panelId); } catch {}
+// ---------- tiny DOM helpers ----------
+const $  = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+
+// ---------- Panels / routing ----------
+function showPanel(id) {
+  $$(".panel").forEach(p => p.classList.remove("show"));
+  const panel = document.getElementById(id);
+  if (panel) panel.classList.add("show");
+}
+
+function activateNav(link) {
+  $$(".menu a.menu-item").forEach(a => a.classList.remove("active"));
+  if (link) link.classList.add("active");
+
+  // breadcrumbs: last crumb = active label
+  const label = link?.querySelector(".label")?.textContent?.trim() || "Admin";
+  const crumb = $(".breadcrumbs .sep + span");
+  if (crumb) crumb.textContent = label;
+
+  // ensure its section is expanded (use accordion API)
+  const section = link?.closest(".menu-section[data-section]");
+  if (section) setSectionExpanded(section, true, /*exclusive*/ true);
+}
+
+function wirePanelNav() {
+  $$(".menu a.menu-item[data-panel]").forEach(a => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const target = a.getAttribute("data-panel");
+      if (target) showPanel(target);
+      activateNav(a);
+    });
+  });
+
+  // Default route: Dashboard if present
+  const defaultLink = $("#navDashboard");
+  if (defaultLink) {
+    activateNav(defaultLink);
+    showPanel(defaultLink.getAttribute("data-panel"));
   }
-  navItems.forEach(n => n.addEventListener('click', (e) => { e.preventDefault(); switchPanel(n.dataset.panel); }));
+}
 
-  // Ensure sidebar starts expanded (desktop)
-  try { document.getElementById('sidebar')?.classList.remove('collapsed'); } catch {}
+// ---------- Accordion (collapsible sections, exclusive open) ----------
+function getSectionParts(section) {
+  const head = $(".menu-head", section);
+  const targetId = head?.getAttribute("aria-controls");
+  const body = targetId ? document.getElementById(targetId) : head?.nextElementSibling;
+  const chev = head?.querySelector(".chev");
+  return { head, body, chev };
+}
 
-  // Collapsible sidebar + overlay per suggested structure
-  (function () {
-    const sidebar = document.getElementById('sidebar');
-    const collapseBtn = document.getElementById('sidebarCollapse');
-    const mobileBtn = document.getElementById('mobileMenu');
-    const appEl = document.querySelector('.app');
+// Set a single section expanded/collapsed
+function setSectionExpanded(section, expanded, exclusive = false) {
+  const { head, body, chev } = getSectionParts(section);
+  if (!head || !body || !body.classList.contains("menu-body")) return;
 
-    // Desktop collapse
-    collapseBtn?.addEventListener('click', () => {
-      sidebar.classList.toggle('collapsed');
-      appEl?.classList.toggle('is-collapsed');
-    });
+  // If already in desired state, bail (but still enforce exclusivity if requested)
+  const cur = head.getAttribute("aria-expanded") === "true";
+  if (cur === expanded && !exclusive) return;
 
-    // Mobile overlay open/close
-    mobileBtn?.addEventListener('click', () => {
-      const clone = sidebar.cloneNode(true);
-      clone.id = 'sidebar-overlay';
-      clone.classList.remove('collapsed');
-      clone.classList.add('overlay');
-      const dim = document.createElement('div');
-      dim.className = 'sidebar-dim show';
+  head.setAttribute("aria-expanded", String(expanded));
+  body.toggleAttribute("hidden", !expanded);
+  if (chev) chev.textContent = expanded ? "▾" : "▸";
 
-      function closeOverlay(){
-        try { document.body.removeChild(dim); } catch {}
-        try { document.body.removeChild(clone); } catch {}
-        document.removeEventListener('keydown', onEsc);
+  // Exclusive: close all other sections
+  if (exclusive && expanded) {
+    $$(".menu-section[data-section]").forEach(other => {
+      if (other !== section) {
+        const { head: oh, body: ob, chev: oc } = getSectionParts(other);
+        if (oh && ob && ob.classList.contains("menu-body")) {
+          oh.setAttribute("aria-expanded", "false");
+          ob.setAttribute("hidden", "");
+          if (oc) oc.textContent = "▸";
+        }
       }
-      function onEsc(e){ if (e.key === 'Escape') closeOverlay(); }
-      dim.addEventListener('click', closeOverlay);
-      document.addEventListener('keydown', onEsc);
-
-      // mount & wire
-      document.body.appendChild(dim);
-      document.body.appendChild(clone);
-      wireCollapsibles(clone);
-      // wire nav clicks inside overlay
-      clone.querySelectorAll('[data-panel]').forEach(a => {
-        a.addEventListener('click', (ev) => { ev.preventDefault(); switchPanel(a.dataset.panel); closeOverlay(); });
-      });
     });
+  }
+}
 
-    // Collapsibles on initial sidebar
-    wireCollapsibles(sidebar);
+function wireCollapsibles() {
+  $$(".menu-section[data-section]").forEach(section => {
+    const { head, body, chev } = getSectionParts(section);
+    if (!head || !body || !body.classList.contains("menu-body")) return;
 
-    function wireCollapsibles(root){
-      root.querySelectorAll('[data-section]').forEach(sec => {
-        const head = sec.querySelector('.menu-head');
-        const body = sec.querySelector('.menu-body');
-        const chev = head.querySelector('.chev');
-        const isOpen = sec.classList.contains('open');
-        head.setAttribute('aria-expanded', String(isOpen));
-        if (!isOpen) { body.hidden = true; chev.textContent = '▸'; }
-        head.addEventListener('click', () => {
-          const expanded = head.getAttribute('aria-expanded') === 'true';
-          head.setAttribute('aria-expanded', String(!expanded));
-          body.hidden = expanded;
-          chev.textContent = expanded ? '▸' : '▾';
-          sec.classList.toggle('open', !expanded);
-        });
-      });
-      root.querySelectorAll('[data-submenu]').forEach(sm => {
-        const head = sm.querySelector('.submenu-head');
-        const body = sm.querySelector('.submenu-body');
-        const chev = head.querySelector('.chev');
-        head.addEventListener('click', () => {
-          const expanded = head.getAttribute('aria-expanded') === 'true';
-          head.setAttribute('aria-expanded', String(!expanded));
-          body.style.display = expanded ? 'none' : 'grid';
-          chev.textContent = expanded ? '▸' : '▾';
-        });
-      });
+    // Initial: honor aria-expanded, default true if missing
+    const initiallyExpanded = head.getAttribute("aria-expanded") === "true";
+    body.toggleAttribute("hidden", !initiallyExpanded);
+    if (chev) chev.textContent = initiallyExpanded ? "▾" : "▸";
+
+    // Toggle click (exclusive accordion)
+    head.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const expanded = head.getAttribute("aria-expanded") === "true";
+      setSectionExpanded(section, !expanded, /*exclusive*/ true);
+    });
+  });
+}
+
+// ---------- Sidebar collapse / mobile overlay ----------
+function wireSidebar() {
+  const app = $(".app");
+  const sidebar = $("#sidebar");
+  const collapseBtn = $("#sidebarCollapse");
+  const mobileBtn = $("#mobileMenu");
+
+  // Desktop collapse (compact width)
+  collapseBtn?.addEventListener("click", () => {
+    app.classList.toggle("is-collapsed");
+    sidebar.classList.toggle("collapsed");
+  });
+
+  // Mobile overlay toggle
+  mobileBtn?.addEventListener("click", () => {
+    const existingDim = $("#sidebarDim");
+    if (existingDim) {
+      existingDim.remove();
+      sidebar.classList.remove("overlay");
+      return;
     }
-  })();
+    const dim = document.createElement("div");
+    dim.id = "sidebarDim";
+    dim.className = "sidebar-dim show";
+    dim.addEventListener("click", () => {
+      sidebar.classList.remove("overlay");
+      dim.remove();
+    });
+    document.body.appendChild(dim);
+    sidebar.classList.add("overlay");
+  });
+}
 
-  let IS_PLATFORM_ADMIN = false;
-  let CURRENT_TENANT_ID = '';
-  let CATEGORIES_CACHE = [];
-  let PRODUCTS_CACHE = [];
-  let CURRENT_EDIT_PRODUCT_ID = '';
-  const SELECTED_PRODUCTS = new Set();
-  const SELECTED_CATEGORIES = new Set();
+// ---------- Modal (Product) ----------
+function wireProductModal() {
+  const modalBackdrop = $("#productModal");
+  const openBtn = $("#newProductBtn");
+  const closeBtn = $("#productModalClose");
+  const cancelBtn = $("#productModalCancel");
+  const saveBtn = $("#productModalSave");
 
-  const refreshBtn = document.getElementById('refreshTenants');
-  const tenantSel = document.getElementById('tenantSelect');
-  const createBtn = document.getElementById('createTenant');
-  const newTenantName = document.getElementById('newTenantName');
-  const newTenantSlug = document.getElementById('newTenantSlug');
+  const open = () => {
+    modalBackdrop.classList.add("open");
+    modalBackdrop.setAttribute("aria-hidden", "false");
+  };
+  const close = () => {
+    modalBackdrop.classList.remove("open");
+    modalBackdrop.setAttribute("aria-hidden", "true");
+  };
 
-  const domainHost = document.getElementById('domainHost');
-  const addDomainBtn = document.getElementById('addDomain');
-  const domainList = document.getElementById('domainList');
+  openBtn?.addEventListener("click", open);
+  closeBtn?.addEventListener("click", close);
+  cancelBtn?.addEventListener("click", close);
+  modalBackdrop?.addEventListener("click", (e) => {
+    if (e.target === modalBackdrop) close();
+  });
 
-  const brandName = document.getElementById('brandName');
-  const logoUrl = document.getElementById('logoUrl');
-  const colorPrimary = document.getElementById('colorPrimary');
-  const colorSecondary = document.getElementById('colorSecondary');
-  const saveBrandBtn = document.getElementById('saveBrand');
-  const logoFile = document.getElementById('logoFile');
-  const uploadLogoBtn = document.getElementById('uploadLogo');
+  // Save (stub)
+  saveBtn?.addEventListener("click", () => {
+    const data = {
+      sku: $("#prodFormSku")?.value?.trim() || "",
+      name: $("#prodFormName")?.value?.trim() || "",
+      category: $("#prodFormCategory")?.value || "",
+      price: parseFloat($("#prodFormPrice")?.value || "0"),
+      imageUrl: $("#prodFormImageUrl")?.value?.trim() || "",
+      active: $("#prodFormActive")?.checked || false
+    };
+    console.log("Save product", data);
+    close();
+    toast("Product saved (stub). Hook me to the backend.");
+  });
+}
 
-  const dtBanner = document.getElementById('dtBanner');
-  const dtFeatured = document.getElementById('dtFeatured');
-  const saveDisplayBtn = document.getElementById('saveDisplay');
+// ---------- Button wiring (connect UI to backend) ----------
+function wireStubs() {
+  // Tenants
+  $("#refreshTenants")?.addEventListener("click", () => loadTenants(/*force*/ true).catch(()=>{}));
+  $("#createTenant")?.addEventListener("click", async () => {
+    try {
+      if (!STATE.isSuperAdmin) { toast("Requires platform admin."); return; }
+      const name = $("#newTenantName")?.value?.trim();
+      const slug = $("#newTenantSlug")?.value?.trim();
+      if (!name) { toast("Enter tenant name"); return; }
+      const body = { name };
+      if (slug) body.slug = slug;
+      const t = await api(`/admin/tenants`, { method: 'POST', body });
+      toast(`Created tenant: ${t?.name || ''}`);
+      await loadTenants(true, t?.id);
+    } catch (e) { /* handled in api */ }
+  });
 
-  // Marketing panel posters
-  const posterGrid = document.getElementById('posterGrid');
-  const refreshPostersBtn = document.getElementById('refreshPosters');
-
-  // Catalog (Categories / Products)
-  const refreshCategories = document.getElementById('refreshCategories');
-  const categoryListEl = document.getElementById('categoryList');
-  const categoryTableWrap = document.getElementById('categoryTableWrap');
-  const deleteSelectedCategoriesBtn = document.getElementById('deleteSelectedCategories');
-  const importCategoriesBtn = document.getElementById('importCategories');
-  const refreshProductsBtn = document.getElementById('refreshProducts');
-  const prodCategory = document.getElementById('prodCategory');
-  const productTableWrap = document.getElementById('productTableWrap');
-  const newProductBtn = document.getElementById('newProductBtn');
-  const deleteSelectedProductsBtn = document.getElementById('deleteSelectedProducts');
-  const importProductsBtn = document.getElementById('importProducts');
-  // Product modal elements
-  const productModal = document.getElementById('productModal');
-  const productModalTitle = document.getElementById('productModalTitle');
-  const productModalClose = document.getElementById('productModalClose');
-  const productModalCancel = document.getElementById('productModalCancel');
-  const productModalSave = document.getElementById('productModalSave');
-  const prodFormSku = document.getElementById('prodFormSku');
-  const prodFormName = document.getElementById('prodFormName');
-  const prodFormCategory = document.getElementById('prodFormCategory');
-  const prodFormPrice = document.getElementById('prodFormPrice');
-  const prodFormImageUrl = document.getElementById('prodFormImageUrl');
-  const prodFormActive = document.getElementById('prodFormActive');
-  let productModalDeleteBtn = null;
-
-  const adminUser = document.getElementById('adminUser');
-  const logoutBtn = document.getElementById('logoutBtn');
-
-  // Devices
-  const licenseUsage = document.getElementById('licenseUsage');
-  const licenseLimit = document.getElementById('licenseLimit');
-  const saveLicense = document.getElementById('saveLicense');
-  const claimCode = document.getElementById('claimCode');
-  const claimRole = document.getElementById('claimRole');
-  const claimName = document.getElementById('claimName');
-  const claimBranch = document.getElementById('claimBranch');
-  const claimDevice = document.getElementById('claimDevice');
-  const deviceList = document.getElementById('deviceList');
-  const tenantList = document.getElementById('tenantList');
+  // Devices & license
+  $("#saveLicense")?.addEventListener("click", async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast("Select a tenant"); return; }
+      const n = Number($("#licenseLimit")?.value || 0);
+      await api(`/admin/tenants/${encodeURIComponent(id)}/license`, { method: 'PUT', body: { license_limit: n } });
+      toast("License limit saved");
+      await loadLicenseAndDevices(id);
+    } catch (e) {}
+  });
+  $("#claimDevice")?.addEventListener("click", async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast("Select a tenant"); return; }
+      const code = $("#claimCode")?.value?.trim();
+      const role = $("#claimRole")?.value?.trim();
+      const name = $("#claimName")?.value?.trim();
+      const branch = $("#claimBranchSel")?.value?.trim();
+      if (!code || !role) { toast("Enter code and role"); return; }
+      if (role === 'display' && !branch) { toast("Select branch for display device"); return; }
+      await api(`/admin/tenants/${encodeURIComponent(id)}/devices/claim`, { method: 'POST', body: { code, role, name, branch } });
+      toast("Device claimed");
+      await loadLicenseAndDevices(id);
+    } catch (e) {}
+  });
 
   // Branches
-  const branchUsage = document.getElementById('branchUsage');
-  const branchLimit = document.getElementById('branchLimit');
-  const saveBranchLimit = document.getElementById('saveBranchLimit');
-  const newBranchName = document.getElementById('newBranchName');
-  const addBranch = document.getElementById('addBranch');
-  const branchList = document.getElementById('branchList');
-  const claimBranchSel = document.getElementById('claimBranchSel');
-
-  function adminHeaders(){
-    const idTok = localStorage.getItem('ID_TOKEN') || '';
-    const h = { 'content-type': 'application/json' };
-    if (idTok) h['authorization'] = 'Bearer ' + idTok;
-    const selected = tenantSel?.value || CURRENT_TENANT_ID || '';
-    if (selected) h['x-tenant-id'] = selected; // fallback when host mapping isn't set yet
-    return h;
-  }
-
-  async function ensureAuth(){
+  $("#addBranch")?.addEventListener("click", async () => {
     try {
-      if (!firebase?.apps?.length) { firebase.initializeApp(window.firebaseConfig || {}); }
+      const id = STATE.selectedTenantId; if (!id) { toast("Select a tenant"); return; }
+      const name = $("#newBranchName")?.value?.trim(); if (!name) { toast("Enter branch name"); return; }
+      await api(`/admin/tenants/${encodeURIComponent(id)}/branches`, { method: 'POST', body: { name } });
+      $("#newBranchName").value = "";
+      toast("Branch added");
+      await loadBranches(id, /*refreshOnly*/ true);
+    } catch (e) {}
+  });
+  $("#saveBranchLimit")?.addEventListener("click", async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast("Select a tenant"); return; }
+      const n = Number($("#branchLimit")?.value || 0);
+      await api(`/admin/tenants/${encodeURIComponent(id)}/branch-limit`, { method: 'PUT', body: { branch_limit: n } });
+      toast("Branch limit saved");
+      await loadBranches(id, /*refreshOnly*/ true);
+    } catch (e) {}
+  });
+
+  // Domains
+  $("#addDomain")?.addEventListener("click", async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast("Select a tenant"); return; }
+      const host = $("#domainHost")?.value?.trim()?.toLowerCase();
+      if (!host) { toast("Enter domain host"); return; }
+      await api(`/admin/tenants/${encodeURIComponent(id)}/domains`, { method: 'POST', body: { host } });
+      $("#domainHost").value = "";
+      toast("Domain added");
+      await loadDomains(id);
+    } catch (e) {}
+  });
+
+  // Posters
+  $("#refreshPosters")?.addEventListener("click", () => loadPosters().catch(()=>{}));
+
+  // Display state (messages)
+  $("#saveDisplay")?.addEventListener("click", async () => {
+    try {
+      const id = STATE.selectedTenantId; if (!id) { toast("Select a tenant"); return; }
+      const banner = $("#dtBanner")?.value || '';
+      const featured = ($("#dtFeatured")?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+      const body = { banner, featuredProductIds: featured };
+      await api(`/drive-thru/state`, { method: 'POST', tenantId: id, body });
+      toast("Display settings saved");
+    } catch (e) {}
+  });
+
+  // Categories / Products
+  $("#refreshCategories")?.addEventListener("click", () => loadCategories().catch(()=>{}));
+  $("#refreshProducts")?.addEventListener("click", () => loadProducts().catch(()=>{}));
+  $("#prodCategory")?.addEventListener("change", () => loadProducts().catch(()=>{}));
+
+  // Tenants select change
+  $("#tenantSelect")?.addEventListener("change", (e) => {
+    const id = e.target.value || '';
+    const opt = e.target.selectedOptions?.[0];
+    const name = opt ? opt.textContent : '';
+    setSelectedTenant(id, name);
+    refreshAllForTenant().catch(()=>{});
+  });
+
+  // Auth
+  $("#logoutBtn")?.addEventListener("click", async () => {
+    try {
+      if (window.firebase?.auth) await window.firebase.auth().signOut();
     } catch {}
-    const auth = firebase.auth();
-    auth.onAuthStateChanged(async (user) => {
-      if (!user) { location.href = '/public/admin/login.html'; return; }
-      adminUser.textContent = user.displayName || user.email || 'Signed in';
-      try {
-        const tok = await user.getIdToken();
-        localStorage.setItem('ID_TOKEN', tok);
-      } catch {}
-      await tryDetectPlatformAdmin();
-      if (!IS_PLATFORM_ADMIN) { try { secSuper?.classList.add('hidden'); } catch {} }
-      // For tenant admins (no selector), detect tenant id from metrics
-      if (!tenantSel?.value) { try { await detectTenantId(); } catch {} }
-      // Default landing: restore last visited panel if available
-      const savedPanel = (function(){ try { return localStorage.getItem('ADMIN_LAST_PANEL') || ''; } catch { return ''; } })();
-      const initialPanel = (savedPanel && panelById(savedPanel)) ? savedPanel : 'panel-dashboard';
-      switchPanel(initialPanel);
-      if (IS_PLATFORM_ADMIN) fetchTenants();
-      // Initial loads
-      refreshDashboard().catch(()=>{});
-      refreshBranding().catch(()=>{});
-      refreshDisplayState().catch(()=>{});
-      loadPosters().catch(()=>{});
-      refreshBilling().catch(()=>{});
-      // Catalog
-      loadCategoriesList().catch(()=>{});
-      loadProductsList().catch(()=>{});
-    });
-    logoutBtn.onclick = async () => {
-      try { await auth.signOut(); } catch {}
-      localStorage.removeItem('ID_TOKEN');
-      location.href = '/public/admin/login.html';
-    };
+    try { localStorage.removeItem('ID_TOKEN'); } catch {}
+    location.href = '/public/admin/login.html';
+  });
+}
+
+// ---------- Simple toast (uses .toast styles in CSS) ----------
+let toastTimeout;
+function toast(msg, ms = 1800) {
+  let t = $("#_toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "_toast";
+    t.className = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => (t.style.display = "none"), ms);
+}
+
+// ---------- Initialize ----------
+function init() {
+  wirePanelNav();
+  wireCollapsibles();     // accordion + ARIA + chevrons
+  wireSidebar();
+  wireProductModal();
+  wireStubs();
+
+  // Optional: Fill quick status placeholders
+  if ($("#dbBrandName")) $("#dbBrandName").textContent = "—";
+  if ($("#dbTenantId")) $("#dbTenantId").textContent = "—";
+  if ($("#dbTenantName")) $("#dbTenantName").textContent = "—";
+
+  // Bootstrap auth + initial data
+  bootstrapAuth();
+}
+
+// ===== Admin wiring implementation =====
+const STATE = {
+  isSuperAdmin: false,
+  selectedTenantId: null,
+  selectedTenantName: '',
+  tenants: [],
+  categories: [],
+  products: []
+};
+
+function setSelectedTenant(id, name) {
+  STATE.selectedTenantId = id || null;
+  STATE.selectedTenantName = name || '';
+  try { localStorage.setItem('SELECTED_TENANT_ID', STATE.selectedTenantId || ''); } catch {}
+  const crumb = $("#tenantNameCrumb");
+  if (crumb) crumb.textContent = name || '—';
+  const idSpan = $("#dbTenantId"); if (idSpan) idSpan.textContent = id || '—';
+  const nmSpan = $("#dbTenantName"); if (nmSpan) nmSpan.textContent = name || '—';
+}
+
+function getIdToken() { try { return localStorage.getItem('ID_TOKEN') || ''; } catch { return ''; } }
+function getAdminToken() { try { return localStorage.getItem('ADMIN_TOKEN') || ''; } catch { return ''; } }
+
+async function api(path, { method = 'GET', body, headers = {}, tenantId, query } = {}) {
+  const url = new URL(path, window.location.origin);
+  if (query && typeof query === 'object') {
+    for (const [k,v] of Object.entries(query)) if (v != null && v !== '') url.searchParams.set(k, String(v));
+  }
+  const reqHeaders = { 'Content-Type': 'application/json', ...headers };
+  const idTok = getIdToken(); if (idTok) reqHeaders['Authorization'] = 'Bearer ' + idTok;
+  const adminTok = getAdminToken(); if (adminTok) reqHeaders['x-admin-token'] = adminTok;
+  const tid = tenantId || STATE.selectedTenantId; if (tid) reqHeaders['x-tenant-id'] = tid;
+  const res = await fetch(url.toString(), { method, headers: reqHeaders, body: body ? JSON.stringify(body) : undefined, credentials: 'include' });
+  const text = await res.text();
+  let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+  if (!res.ok) {
+    handleApiError(res.status, data);
+    const err = new Error('API error'); err.status = res.status; err.data = data; throw err;
+  }
+  return data;
+}
+
+function handleApiError(status, data) {
+  const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Request failed';
+  if (status === 401) { toast('Unauthorized. Redirecting to login…'); setTimeout(() => location.href = '/public/admin/login.html', 1200); return; }
+  if (status === 403) { toast('Forbidden. Your account may not be a platform admin.'); return; }
+  if (status === 503) { toast('Service unavailable. Please retry shortly.'); return; }
+  toast(String(msg));
+}
+
+function ensureFirebaseApp() {
+  if (!window.firebase) return null;
+  try {
+    if (!window.firebase.apps?.length) window.firebase.initializeApp(window.firebaseConfig || {});
+    return window.firebase;
+  } catch { return window.firebase || null; }
+}
+
+function bootstrapAuth() {
+  const fb = ensureFirebaseApp();
+  // Capture admin_token from query for convenience
+  try {
+    const u = new URL(window.location.href);
+    const at = u.searchParams.get('admin_token');
+    if (at) { localStorage.setItem('ADMIN_TOKEN', at); u.searchParams.delete('admin_token'); history.replaceState({}, '', u.toString()); }
+  } catch {}
+
+  if (!fb?.auth) {
+    const tok = getIdToken();
+    if (!tok) { location.href = '/public/admin/login.html'; return; }
+    // Proceed with existing token (no refresh)
+    detectAdminModeAndLoadTenants().catch(()=>{});
+    return;
   }
 
-  async function tryDetectPlatformAdmin(){
+  fb.auth().onAuthStateChanged(async (user) => {
+    if (!user) { location.href = '/public/admin/login.html'; return; }
     try {
-      const res = await fetch('/admin/tenants', { headers: adminHeaders() });
-      IS_PLATFORM_ADMIN = res.ok;
-      if (!IS_PLATFORM_ADMIN) {
-        // Hide Super Admin section gracefully
-        try { secSuper?.classList.add('hidden'); } catch {}
-      }
-    } catch { IS_PLATFORM_ADMIN = false; try { secSuper?.classList.add('hidden'); } catch {} }
-  }
-
-  async function detectTenantId(){
-    try {
-      const r = await fetch('/admin/metrics', { headers: adminHeaders(), cache: 'no-store' });
-      if (r.ok) { const j = await r.json(); if (j.tenant_id) CURRENT_TENANT_ID = j.tenant_id; }
+      const t = await user.getIdToken(/*forceRefresh*/ true);
+      localStorage.setItem('ID_TOKEN', t);
     } catch {}
-  }
+    await detectAdminModeAndLoadTenants().catch(()=>{});
+  });
+  fb.auth().onIdTokenChanged(async (user) => {
+    if (user) { try { const t = await user.getIdToken(/*forceRefresh*/ true); localStorage.setItem('ID_TOKEN', t); } catch {} }
+  });
+}
 
-  async function fetchTenants(){
-    const res = await fetch('/admin/tenants', { headers: adminHeaders() });
-    if (!res.ok) return; // Non-admins simply won't see tenants
-    const arr = await res.json();
-    tenantSel.innerHTML = '';
-    for (const t of arr) {
+async function detectAdminModeAndLoadTenants() {
+  // Try admin endpoint first
+  try {
+    const rows = await api('/admin/tenants');
+    STATE.isSuperAdmin = true;
+    await renderTenants(rows);
+  } catch (e) {
+    // Fallback to public tenants list (read-only)
+    STATE.isSuperAdmin = false;
+    try {
+      const rows = await api('/tenants', { tenantId: null });
+      await renderTenants(rows || []);
+    } catch { renderTenants([]); }
+  }
+  await refreshAllForTenant();
+}
+
+async function renderTenants(rows) {
+  STATE.tenants = Array.isArray(rows) ? rows : [];
+  const sel = $("#tenantSelect");
+  const list = $("#tenantList");
+  if (sel) {
+    sel.innerHTML = '';
+    for (const t of STATE.tenants) {
       const opt = document.createElement('option');
-      opt.value = t.id; opt.textContent = `${t.name} (${t.id.slice(0,8)})`;
-      tenantSel.appendChild(opt);
+      opt.value = t.id; opt.textContent = t.name || t.id; sel.appendChild(opt);
     }
-    if (arr.length) tenantSel.value = arr[0].id;
-    renderTenantList(arr);
-    await refreshDomains();
-    await refreshBranding();
-    await refreshLicenseAndDevices();
-    await refreshBranches();
-    await refreshDashboard();
-    await refreshBilling();
   }
-
-  function renderTenantList(arr){
-    if (!tenantList) return;
-    tenantList.innerHTML = '';
-    for (const t of arr){
+  if (list) {
+    list.innerHTML = '';
+    for (const t of STATE.tenants) {
       const li = document.createElement('li');
-      const left = document.createElement('span'); left.textContent = `${t.name} (${t.id.slice(0,8)})`;
-      const edit = document.createElement('button'); edit.textContent = 'Rename'; edit.className = 'btn small';
-      edit.onclick = async () => {
-        const nn = prompt('New tenant name', t.name); if (!nn) return;
-        const r = await fetch(`/admin/tenants/${t.id}`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ name: nn }) });
-        if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Rename failed: ' + (e.error || r.status)); return; }
-        await fetchTenants();
-      };
-      const del = document.createElement('button'); del.textContent = 'Delete'; del.className = 'btn small';
-      del.onclick = async () => {
-        if (!confirm('Delete this tenant? This will remove tenant data.')) return;
-        const r = await fetch(`/admin/tenants/${t.id}`, { method:'DELETE', headers: adminHeaders() });
-        if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Delete failed: ' + (e.error || r.status)); return; }
-        await fetchTenants();
-      };
-      li.appendChild(left); li.appendChild(edit); li.appendChild(del);
-      tenantList.appendChild(li);
+      li.textContent = `${t.name || 'Tenant'} — ${t.id}`;
+      list.appendChild(li);
     }
   }
+  // Restore selection or default to first
+  let wantedId = null;
+  try { wantedId = localStorage.getItem('SELECTED_TENANT_ID') || null; } catch {}
+  if (!wantedId && STATE.tenants.length) wantedId = STATE.tenants[0].id;
+  const chosen = STATE.tenants.find(x => x.id === wantedId) || STATE.tenants[0] || null;
+  if (chosen) {
+    if (sel) sel.value = chosen.id;
+    setSelectedTenant(chosen.id, chosen.name || '');
+  } else {
+    setSelectedTenant(null, '');
+  }
+}
 
-  refreshBtn.onclick = fetchTenants;
-  tenantSel?.addEventListener('change', async () => { await refreshDomains(); await refreshBranding(); await refreshLicenseAndDevices(); await refreshBranches(); await refreshDisplayState(); await refreshDashboard(); await refreshBilling(); await loadCategoriesList(); await loadProductsList(); });
-  createBtn.onclick = async () => {
-    const name = newTenantName.value.trim();
-    const slug = newTenantSlug.value.trim();
-    if (!name) return alert('Name required');
-    const res = await fetch('/admin/tenants', {
-      method: 'POST', headers: adminHeaders(), body: JSON.stringify({ name, slug })
-    });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); alert('Create failed: ' + (e.error || res.status)); return; }
-    await fetchTenants();
-    newTenantName.value = ''; newTenantSlug.value = '';
-  };
+async function refreshAllForTenant() {
+  const id = STATE.selectedTenantId; if (!id) return;
+  await Promise.all([
+    loadBrandAndMetrics(id).catch(()=>{}),
+    loadLicenseAndDevices(id).catch(()=>{}),
+    loadBranches(id).catch(()=>{}),
+    loadDomains(id).catch(()=>{}),
+    loadCategories().catch(()=>{}),
+    loadProducts().catch(()=>{}),
+    loadPosters().catch(()=>{})
+  ]);
+}
 
-  async function refreshDomains(){
-    const t = tenantSel.value; if (!t) return;
-    const res = await fetch(`/admin/tenants/${t}/domains`, { headers: adminHeaders() });
-    if (!res.ok) { return; }
-    const data = await res.json();
-    domainList.innerHTML = '';
-    for (const d of data.items || []){
+async function loadBrandAndMetrics(id) {
+  // Settings/brand
+  try {
+    const r = await api(`/admin/tenants/${encodeURIComponent(id)}/settings`);
+    const brand = r?.brand || {};
+    if ($("#dbBrandName")) $("#dbBrandName").textContent = brand.display_name || '—';
+  } catch { if ($("#dbBrandName")) $("#dbBrandName").textContent = '—'; }
+  // Metrics
+  try {
+    const m = await api('/admin/metrics', { tenantId: id });
+    if ($("#dbDisplaysOnline")) $("#dbDisplaysOnline").textContent = String(m?.displays_online ?? 0);
+    if ($("#dbSessionsActive")) $("#dbSessionsActive").textContent = String(m?.sessions_active_total ?? 0);
+  } catch {
+    if ($("#dbDisplaysOnline")) $("#dbDisplaysOnline").textContent = '-';
+    if ($("#dbSessionsActive")) $("#dbSessionsActive").textContent = '—';
+  }
+}
+
+async function loadLicenseAndDevices(id) {
+  // License
+  try {
+    const r = await api(`/admin/tenants/${encodeURIComponent(id)}/license`);
+    const usageText = `${r?.active_count ?? 0} / ${r?.license_limit ?? 0}`;
+    if ($("#licenseUsage")) $("#licenseUsage").textContent = usageText;
+    if ($("#licenseLimit")) $("#licenseLimit").value = Number(r?.license_limit ?? 0);
+  } catch {}
+  // Devices
+  try {
+    const r = await api(`/admin/tenants/${encodeURIComponent(id)}/devices`);
+    const ul = $("#deviceList"); if (ul) ul.innerHTML = '';
+    for (const d of (r?.items || [])) {
       const li = document.createElement('li');
-      const span = document.createElement('span'); span.textContent = d.host;
-      const del = document.createElement('button'); del.textContent = 'Remove'; del.className = 'btn small';
-      del.onclick = async () => {
-        await fetch(`/admin/domains/${encodeURIComponent(d.host)}`, { method: 'DELETE', headers: adminHeaders() });
-        await refreshDomains();
-      };
-      li.appendChild(span); li.appendChild(del); domainList.appendChild(li);
+      const name = d.name || '(unnamed)';
+      li.innerHTML = `${name} — ${d.role} — ${d.status}${d.branch ? ' — '+d.branch : ''} ${d.last_seen ? ' — last seen '+new Date(d.last_seen).toLocaleString() : ''}`;
+      // actions
+      const btns = document.createElement('span'); btns.style.marginLeft = '8px';
+      const revoke = document.createElement('button'); revoke.className = 'btn'; revoke.textContent = 'Revoke';
+      revoke.addEventListener('click', async () => { try { await api(`/admin/tenants/${encodeURIComponent(id)}/devices/${encodeURIComponent(d.id)}/revoke`, { method: 'POST' }); toast('Revoked'); await loadLicenseAndDevices(id); } catch {} });
+      const del = document.createElement('button'); del.className = 'btn danger'; del.style.marginLeft='6px'; del.textContent = 'Delete';
+      del.addEventListener('click', async () => { if (!confirm('Delete device? Only allowed if revoked.')) return; try { await api(`/admin/tenants/${encodeURIComponent(id)}/devices/${encodeURIComponent(d.id)}`, { method: 'DELETE' }); toast('Deleted'); await loadLicenseAndDevices(id); } catch {} });
+      btns.appendChild(revoke); btns.appendChild(del); li.appendChild(btns);
+      if (ul) ul.appendChild(li);
     }
-  }
+  } catch {}
+}
 
-  addDomainBtn.onclick = async () => {
-    const host = domainHost.value.trim(); if (!host) return;
-    const t = tenantSel.value; if (!t) return alert('Select tenant first');
-    const res = await fetch(`/admin/tenants/${t}/domains`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ host }) });
-    if (!res.ok) { alert('Add failed'); return; }
-    domainHost.value = '';
-    await refreshDomains();
-  };
-
-  async function refreshBranding(){
-    const t = tenantSel?.value; if (!t) return;
-    const res = await fetch(`/admin/tenants/${t}/settings`, { headers: adminHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    brandName.value = data.brand?.display_name || '';
-    logoUrl.value = data.brand?.logo_url || '';
-    colorPrimary.value = data.brand?.color_primary || '';
-    colorSecondary.value = data.brand?.color_secondary || '';
-  }
-
-  async function refreshLicenseAndDevices(){
-    const t = tenantSel.value; if (!t) return;
-    // license
-    const lic = await fetch(`/admin/tenants/${t}/license`, { headers: adminHeaders() });
-    if (lic.ok) {
-      const data = await lic.json();
-      licenseUsage.textContent = `${data.active_count} / ${data.license_limit}`;
-      licenseLimit.value = data.license_limit || 1;
-    } else {
-      licenseUsage.textContent = '-';
+async function loadBranches(id, refreshOnly = false) {
+  try {
+    const r = await api(`/admin/tenants/${encodeURIComponent(id)}/branches`);
+    const items = r?.items || [];
+    if (!refreshOnly) {
+      // Populate claimBranch select
+      const sel = $("#claimBranchSel"); if (sel) { sel.innerHTML = '<option value="">Select branch (required for display)</option>'; for (const b of items) { const o = document.createElement('option'); o.value = b.id; o.textContent = b.name; sel.appendChild(o); } }
     }
-    // devices
-    const res = await fetch(`/admin/tenants/${t}/devices`, { headers: adminHeaders() });
-    deviceList.innerHTML = '';
-    if (res.ok) {
-      const data = await res.json();
-      const rows = (data.items || []).map(d => {
-        const last = d.last_seen ? new Date(d.last_seen).toLocaleString() : '—';
-        const role = (d.role||'').toUpperCase();
-        const status = (d.status||'').toUpperCase();
-        const branch = d.branch || '—';
-        const name = d.name || '(unnamed)';
-        const isRevoked = (d.status||'').toLowerCase() === 'revoked';
-        const action = isRevoked
-          ? `<button class=\"btn small\" data-act=\"del\" data-id=\"${d.id}\">Delete</button>`
-          : `<button class=\"btn small\" data-act=\"revoke\" data-id=\"${d.id}\">Revoke</button>`;
-        return `<tr>
-          <td>${name}</td>
-          <td>${role}</td>
-          <td>${branch}</td>
-          <td>${status}</td>
-          <td>${last}</td>
-          <td style=\"text-align:right\">${action}</td>
-        </tr>`;
-      }).join('');
-      deviceList.innerHTML = `<table class=\"table\" id=\"deviceTable\"><thead><tr><th>Name</th><th>Role</th><th>Branch</th><th>Status</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
-      deviceList.querySelectorAll('[data-act]')?.forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          const act = btn.getAttribute('data-act');
-          if (act === 'revoke') {
-            await fetch(`/admin/tenants/${t}/devices/${id}/revoke`, { method:'POST', headers: adminHeaders() });
-          } else if (act === 'del') {
-            if (!confirm('Delete this revoked device? This action cannot be undone.')) return;
-            const r = await fetch(`/admin/tenants/${t}/devices/${id}`, { method:'DELETE', headers: adminHeaders() });
-            if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Delete failed: ' + (e.error || r.status)); return; }
-          }
-          await refreshLicenseAndDevices();
-        });
-      });
+    const ul = $("#branchList"); if (ul) ul.innerHTML = '';
+    for (const b of items) {
+      const li = document.createElement('li');
+      li.textContent = `${b.name}`;
+      const btns = document.createElement('span'); btns.style.marginLeft='8px';
+      const edit = document.createElement('button'); edit.className = 'btn'; edit.textContent = 'Rename';
+      edit.addEventListener('click', async () => { const nv = prompt('New name', b.name); if (!nv || nv.trim()===b.name) return; try { await api(`/admin/tenants/${encodeURIComponent(id)}/branches/${encodeURIComponent(b.id)}`, { method: 'PUT', body: { name: nv.trim() } }); toast('Updated'); await loadBranches(id, true); } catch {} });
+      const del = document.createElement('button'); del.className = 'btn danger'; del.style.marginLeft='6px'; del.textContent = 'Delete';
+      del.addEventListener('click', async () => { if (!confirm('Delete branch?')) return; try { await api(`/admin/tenants/${encodeURIComponent(id)}/branches/${encodeURIComponent(b.id)}`, { method: 'DELETE' }); toast('Deleted'); await loadBranches(id, true); } catch {} });
+      btns.appendChild(edit); btns.appendChild(del); li.appendChild(btns);
+      if (ul) ul.appendChild(li);
     }
-  }
-
-  saveLicense.onclick = async () => {
-    const t = tenantSel.value; if (!t) return;
-    const n = Math.max(1, Number(licenseLimit.value||1));
-    const res = await fetch(`/admin/tenants/${t}/license`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ license_limit: n }) });
-    if (!res.ok) { alert('Only platform admin can change license limit'); return; }
-    await refreshLicenseAndDevices();
-  };
-
-  claimDevice.onclick = async () => {
-    const t = tenantSel.value; if (!t) return;
-    const branchName = claimRole.value === 'display' ? claimBranchSel.value : '';
-    if (claimRole.value === 'display' && !branchName) { alert('Select branch for display device'); return; }
-    const body = { code: claimCode.value.trim(), role: claimRole.value, name: claimName.value.trim(), branch: branchName };
-    const res = await fetch(`/admin/tenants/${t}/devices/claim`, { method:'POST', headers: adminHeaders(), body: JSON.stringify(body) });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); alert('Claim failed: ' + (e.error || res.status)); return; }
-    claimCode.value=''; claimName.value=''; claimBranchSel.value='';
-    await refreshLicenseAndDevices(); await refreshBranches();
-  };
-
-  // Branch management
-  async function refreshBranches(){
-    const t = tenantSel.value; if (!t) return;
-    // license
-    const lic = await fetch(`/admin/tenants/${t}/branch-limit`, { headers: adminHeaders() });
-    if (lic.ok) {
-      const data = await lic.json();
-      branchUsage.textContent = `${data.branch_count} / ${data.branch_limit}`;
-      branchLimit.value = data.branch_limit || 3;
-    } else {
-      branchUsage.textContent = '-';
-    }
-    // list
-    const res = await fetch(`/admin/tenants/${t}/branches`, { headers: adminHeaders() });
-    branchList.innerHTML = '';
-    claimBranchSel.innerHTML = '<option value="">Select branch (required for display)</option>';
-    if (res.ok) {
-      const data = await res.json();
-      for (const b of data.items || []){
-        // populate claim selector
-        const opt = document.createElement('option');
-        opt.value = b.name; opt.textContent = b.name; claimBranchSel.appendChild(opt);
-        // render list item
-        const li = document.createElement('li');
-        const left = document.createElement('span'); left.textContent = b.name;
-        const rename = document.createElement('button'); rename.textContent = 'Rename'; rename.className = 'btn small';
-        rename.onclick = async () => {
-          const nn = prompt('New branch name', b.name); if (!nn) return;
-          const r = await fetch(`/admin/tenants/${t}/branches/${b.id}`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ name: nn }) });
-          if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Rename failed: ' + (e.error || r.status)); return; }
-          await refreshBranches();
-        };
-        const del = document.createElement('button'); del.textContent = 'Delete'; del.className = 'btn small';
-        del.onclick = async () => {
-          if (!confirm('Delete branch? Devices assigned to this branch will block delete.')) return;
-          const r = await fetch(`/admin/tenants/${t}/branches/${b.id}`, { method:'DELETE', headers: adminHeaders() });
-          if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Delete failed: ' + (e.error || r.status)); return; }
-          await refreshBranches();
-        };
-        li.appendChild(left); li.appendChild(rename); li.appendChild(del); branchList.appendChild(li);
-      }
-    }
-  }
-
-  saveBranchLimit.onclick = async () => {
-    const t = tenantSel.value; if (!t) return;
-    const n = Math.max(1, Number(branchLimit.value||3));
-    const res = await fetch(`/admin/tenants/${t}/branch-limit`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ branch_limit: n }) });
-    if (!res.ok) { alert('Only platform admin can change branch limit'); return; }
-    await refreshBranches();
-    await refreshDashboard();
-  };
-
-  addBranch.onclick = async () => {
-    const t = tenantSel.value; if (!t) return;
-    const name = newBranchName.value.trim(); if (!name) return;
-    const res = await fetch(`/admin/tenants/${t}/branches`, { method:'POST', headers: adminHeaders(), body: JSON.stringify({ name }) });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); alert('Add branch failed: ' + (e.error || res.status)); return; }
-    newBranchName.value='';
-    await refreshBranches();
-  };
-
-  uploadLogoBtn.onclick = async () => {
-    const t = tenantSel.value; if (!t) return alert('Select tenant first');
-    const file = logoFile.files?.[0]; if (!file) return alert('Choose a file');
-    // Request signed URL
-    const signRes = await fetch('/admin/upload-url', { method:'POST', headers: adminHeaders(), body: JSON.stringify({ tenant_id: t, filename: file.name, kind: 'logo', contentType: file.type || 'application/octet-stream' }) });
-    if (!signRes.ok) { alert('Failed to sign'); return; }
-    const sig = await signRes.json();
-    // Upload via PUT
-    const put = await fetch(sig.url, { method: 'PUT', headers: { 'Content-Type': sig.contentType }, body: file });
-    if (!put.ok) { alert('Upload failed'); return; }
-    logoUrl.value = sig.publicUrl;
-    alert('Logo uploaded');
-  };
-
-  saveBrandBtn.onclick = async () => {
-    const t = tenantSel.value; if (!t) return;
-    const body = { brand: { display_name: brandName.value, logo_url: logoUrl.value, color_primary: colorPrimary.value, color_secondary: colorSecondary.value } };
-    await fetch(`/admin/tenants/${t}/settings`, { method: 'PUT', headers: adminHeaders(), body: JSON.stringify(body) });
-    await refreshBranding();
-    await refreshDashboard();
-  };
-
-  async function refreshDisplayState(){
-    const t = tenantSel?.value; if (!t) return;
+    // Branch limit
     try {
-      const r = await fetch('/drive-thru/state', { headers: adminHeaders() });
-      const j = await r.json();
-      dtBanner.value = j.banner || '';
-      if (Array.isArray(j.featuredProductIds)) dtFeatured.value = j.featuredProductIds.join(',');
+      const lim = await api(`/admin/tenants/${encodeURIComponent(id)}/branch-limit`);
+      if ($("#branchLimit")) $("#branchLimit").value = Number(lim?.branch_limit ?? 0);
+      if ($("#branchUsage")) $("#branchUsage").textContent = `${lim?.branch_count ?? 0} / ${lim?.branch_limit ?? 0}`;
     } catch {}
-  }
+  } catch {}
+}
 
-  saveDisplayBtn.onclick = async () => {
-    const t = tenantSel?.value; if (!t) return;
-    const featured = dtFeatured.value.split(',').map(s => s.trim()).filter(Boolean);
-    const body = { banner: dtBanner.value, featuredProductIds: featured };
-    await fetch('/drive-thru/state', { method: 'POST', headers: adminHeaders(), body: JSON.stringify(body) });
-    alert('Marketing text saved');
-  };
-
-  async function loadPosters(){
-    if (!posterGrid) return;
-    posterGrid.innerHTML = '';
-    try {
-      const r = await fetch('/posters', { cache: 'no-store' });
-      const j = await r.json();
-      const items = Array.isArray(j.items) ? j.items : [];
-      for (const u of items){
-        const card = document.createElement('div'); card.className = 'card';
-        const media = document.createElement('div'); media.className = 'media'; media.style.padding = '0';
-        const img = document.createElement('img'); img.src = u; img.alt = 'poster';
-        media.appendChild(img);
-        const body = document.createElement('div'); body.className = 'body'; body.textContent = u.split('/').pop();
-        card.appendChild(media); card.appendChild(body);
-        posterGrid.appendChild(card);
-      }
-      if (!items.length) posterGrid.innerHTML = '<div class="empty">No posters found in /public/images/poster</div>';
-    } catch { posterGrid.innerHTML = '<div class="empty">Failed to load posters</div>'; }
-  }
-  refreshPostersBtn?.addEventListener('click', loadPosters);
-  refreshCategories?.addEventListener('click', async () => { await loadCategoriesList(); });
-  refreshProductsBtn?.addEventListener('click', loadProductsList);
-  prodCategory?.addEventListener('change', loadProductsList);
-
-  // Import CSV Categories button (uses admin auth headers)
-  function hookImportCategoriesButton(btn){
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Select tenant first'); return; }
-      if (!confirm('Import categories from data/categories.csv for the selected tenant? This replaces categories in memory. Continue?')) return;
-      const body = { source: 'csv', categories: true, products: false, replace: true };
-      const r = await fetch(`/admin/tenants/${t}/catalog/import`, { method:'POST', headers: adminHeaders(), body: JSON.stringify(body) });
-      if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Import failed: ' + (e.error || r.status)); return; }
-      await loadCategoriesList();
-      await loadProductsList();
-      alert('Categories imported');
-    });
-  }
-  (function ensureImportCategoriesButton(){
-    if (importCategoriesBtn) { hookImportCategoriesButton(importCategoriesBtn); return; }
-    try {
-      const btn = document.createElement('button');
-      btn.id = 'importCategories';
-      btn.className = 'btn';
-      btn.textContent = 'Import CSV Categories';
-      if (refreshCategories && refreshCategories.parentNode) {
-        refreshCategories.parentNode.insertBefore(btn, refreshCategories.nextSibling);
-      } else if (deleteSelectedCategoriesBtn && deleteSelectedCategoriesBtn.parentNode) {
-        deleteSelectedCategoriesBtn.parentNode.insertBefore(btn, deleteSelectedCategoriesBtn);
-      } else if (categoryTableWrap && categoryTableWrap.parentNode) {
-        categoryTableWrap.parentNode.insertBefore(btn, categoryTableWrap);
-      } else {
-        document.body.appendChild(btn);
-      }
-      hookImportCategoriesButton(btn);
-    } catch {}
-  })();
-
-  // Import CSV Products button (uses admin auth headers)
-  function hookImportProductsButton(btn){
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Select tenant first'); return; }
-      if (!confirm('Import products from data/products.csv for the selected tenant? This replaces products in memory. Continue?')) return;
-      const body = { source: 'csv', categories: false, products: true, replace: true };
-      const r = await fetch(`/admin/tenants/${t}/catalog/import`, { method:'POST', headers: adminHeaders(), body: JSON.stringify(body) });
-      if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Import failed: ' + (e.error || r.status)); return; }
-      await loadCategoriesList();
-      await loadProductsList();
-      alert('Products imported');
-    });
-  }
-  (function ensureImportProductsButton(){
-    if (importProductsBtn) { hookImportProductsButton(importProductsBtn); return; }
-    try {
-      const btn = document.createElement('button');
-      btn.id = 'importProducts';
-      btn.className = 'btn';
-      btn.textContent = 'Import CSV Products';
-      if (refreshProductsBtn && refreshProductsBtn.parentNode) {
-        refreshProductsBtn.parentNode.insertBefore(btn, refreshProductsBtn.nextSibling);
-      } else if (productTableWrap && productTableWrap.parentNode) {
-        productTableWrap.parentNode.insertBefore(btn, productTableWrap);
-      } else {
-        document.body.appendChild(btn);
-      }
-      hookImportProductsButton(btn);
-    } catch {}
-  })();
-
-  // Bulk delete handlers
-  deleteSelectedProductsBtn?.addEventListener('click', async () => {
-    const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
-    if (SELECTED_PRODUCTS.size === 0) return;
-    if (!confirm(`Delete ${SELECTED_PRODUCTS.size} selected product(s)?`)) return;
-    for (const id of Array.from(SELECTED_PRODUCTS)){
-      try {
-        const res = await fetch(`/admin/tenants/${t}/products/${encodeURIComponent(id)}`, { method: 'DELETE', headers: adminHeaders() });
-        // ignore non-OK; continue
-      } catch {}
+async function loadDomains(id) {
+  try {
+    const r = await api(`/admin/tenants/${encodeURIComponent(id)}/domains`);
+    const items = r?.items || [];
+    const ul = $("#domainList"); if (ul) ul.innerHTML = '';
+    for (const d of items) {
+      const li = document.createElement('li');
+      const verified = d.verified_at ? ` — verified ${new Date(d.verified_at).toLocaleDateString()}` : '';
+      li.textContent = `${d.host}${verified}`;
+      const del = document.createElement('button'); del.className = 'btn danger'; del.style.marginLeft='6px'; del.textContent = 'Delete';
+      del.addEventListener('click', async () => { if (!confirm('Delete domain?')) return; try { await api(`/admin/domains/${encodeURIComponent(d.host)}`, { method: 'DELETE' }); toast('Deleted'); await loadDomains(id); } catch {} });
+      li.appendChild(del);
+      if (ul) ul.appendChild(li);
     }
-    SELECTED_PRODUCTS.clear();
-    updateProductBulkActionsVisibility();
-    await loadProductsList();
-  });
-  deleteSelectedCategoriesBtn?.addEventListener('click', async () => {
-    const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
-    if (SELECTED_CATEGORIES.size === 0) return;
-    if (!confirm(`Delete ${SELECTED_CATEGORIES.size} selected categor(y/ies)? Categories with products cannot be deleted.`)) return;
-    const failed = [];
-    for (const id of Array.from(SELECTED_CATEGORIES)){
-      try {
-        const res = await fetch(`/admin/tenants/${t}/categories/${encodeURIComponent(id)}`, { method: 'DELETE', headers: adminHeaders() });
-        if (!res.ok) {
-          let reason = 'failed';
-          try { const e = await res.json(); reason = e.error || reason; } catch {}
-          failed.push({ id, reason });
-        }
-      } catch { failed.push({ id, reason: 'network' }); }
+  } catch {}
+}
+
+async function loadCategories() {
+  const id = STATE.selectedTenantId; if (!id) return;
+  try {
+    const rows = await api('/categories', { tenantId: id });
+    STATE.categories = Array.isArray(rows) ? rows : [];
+    // prodCategory select
+    const sc = $("#prodCategory"); if (sc) {
+      const current = sc.value || '';
+      sc.innerHTML = '<option value="">All</option>';
+      for (const c of STATE.categories) { const o = document.createElement('option'); o.value = c.name; o.textContent = c.name; sc.appendChild(o); }
+      if (current) sc.value = current;
     }
-    SELECTED_CATEGORIES.clear();
-    updateCategoryBulkActionsVisibility();
-    await loadCategoriesList();
-    if (failed.length) alert('Some categories were not deleted: ' + failed.map(f => `${f.id}(${f.reason})`).join(', '));
-  });
-
-  // Product modal logic
-  function closeProductModal(){ productModal?.classList.remove('open'); productModal?.setAttribute('aria-hidden', 'true'); CURRENT_EDIT_PRODUCT_ID = ''; }
-  function openProductModal(product){
-    if (!productModal) return;
-    CURRENT_EDIT_PRODUCT_ID = product?.id || product?.sku || '';
-    productModalTitle.textContent = product && (product.id || product.sku) ? 'Edit Product' : 'New Product';
-    // Ensure Delete button exists and wire it
-    try {
-      if (!productModalDeleteBtn && productModalSave && productModalSave.parentElement) {
-        productModalDeleteBtn = document.createElement('button');
-        productModalDeleteBtn.id = 'productModalDelete';
-        productModalDeleteBtn.className = 'btn danger';
-        productModalDeleteBtn.textContent = 'Delete';
-        productModalDeleteBtn.style.marginRight = 'auto';
-        productModalSave.parentElement.insertBefore(productModalDeleteBtn, productModalSave.parentElement.firstChild);
-        productModalDeleteBtn.addEventListener('click', async () => {
-          const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
-          const id = CURRENT_EDIT_PRODUCT_ID; if (!id) return;
-          if (!confirm('Delete this product?')) return;
-          const res = await fetch(`/admin/tenants/${t}/products/${encodeURIComponent(id)}`, { method:'DELETE', headers: adminHeaders() });
-          if (!res.ok) { const e = await res.json().catch(()=>({})); alert('Delete failed: ' + (e.error || res.status)); return; }
-          closeProductModal();
-          await loadProductsList();
-        });
-      }
-    } catch {}
-    // Populate category select
-    prodFormCategory.innerHTML = '';
-    for (const c of CATEGORIES_CACHE) {
-      const opt = document.createElement('option'); opt.value = c.id || c.name || ''; opt.textContent = c.name || ''; prodFormCategory.appendChild(opt);
+    // table
+    const wrap = $("#categoryTableWrap"); if (wrap) {
+      let html = '<div class="table"><div class="row head"><div>Name</div><div>ID</div></div>';
+      for (const c of STATE.categories) html += `<div class="row"><div>${c.name}</div><div style="font-family:monospace">${c.id||''}</div></div>`;
+      html += '</div>';
+      wrap.innerHTML = html;
     }
-    // Prefer mapping by category_id; fallback by name
-    const categoryId = product?.category_id || (CATEGORIES_CACHE.find(c => c.name === product?.category_name)?.id) || '';
-    prodFormSku.value = product?.sku || product?.id || '';
-    prodFormName.value = product?.name || '';
-    prodFormCategory.value = categoryId || (prodFormCategory.options[0]?.value || '');
-    prodFormPrice.value = (product?.price != null) ? String(product.price) : '';
-    prodFormImageUrl.value = product?.image_url || '';
-    prodFormActive.checked = (product?.active == null) ? true : !!product.active;
+  } catch {}
+}
 
-    // Show Delete only for existing products
-    if (productModalDeleteBtn) productModalDeleteBtn.style.display = (CURRENT_EDIT_PRODUCT_ID ? '' : 'none');
-
-    productModal.classList.add('open');
-    productModal.setAttribute('aria-hidden', 'false');
-  }
-
-  productModalClose?.addEventListener('click', closeProductModal);
-  productModalCancel?.addEventListener('click', closeProductModal);
-  productModal?.addEventListener('click', (e) => { if (e.target === productModal) closeProductModal(); });
-  newProductBtn?.addEventListener('click', () => openProductModal({}));
-
-  productModalSave?.addEventListener('click', async () => {
-    const t = tenantSel?.value || CURRENT_TENANT_ID; if (!t) { alert('Missing tenant'); return; }
-    const body = {
-      sku: prodFormSku.value.trim(),
-      name: prodFormName.value.trim(),
-      category_id: prodFormCategory.value,
-      price: Number(prodFormPrice.value || 0),
-      image_url: prodFormImageUrl.value.trim(),
-      active: !!prodFormActive.checked,
-    };
-    // If editing existing product, use PUT; else POST
-    const isEdit = !!CURRENT_EDIT_PRODUCT_ID;
-    let url = `/admin/tenants/${t}/products`;
-    let method = 'POST';
-    if (isEdit) { url = `/admin/tenants/${t}/products/${encodeURIComponent(CURRENT_EDIT_PRODUCT_ID)}`; method = 'PUT'; }
-    // Basic validation
-    if (!body.name || !body.category_id) { alert('Name and Category are required'); return; }
-    const res = await fetch(url, { method, headers: adminHeaders(), body: JSON.stringify(body) });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); alert('Save failed: ' + (e.error || res.status)); return; }
-    closeProductModal();
-    await loadProductsList();
-  });
-
-  // Dashboard quick status
-  async function refreshDashboard(){
-    const t = tenantSel?.value || '';
-    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-
-    // Tenant selection labels
-    try {
-      const selOpt = tenantSel?.selectedOptions?.[0];
-      setText('dbTenantName', selOpt ? selOpt.textContent : (t ? t.slice(0,8) : '—'));
-      setText('dbTenantId', t || '—');
-    } catch { setText('dbTenantName', '—'); setText('dbTenantId', '—'); }
-
-    // Brand name
-    try {
-      if (t) {
-        const res = await fetch(`/admin/tenants/${t}/settings`, { headers: adminHeaders() });
-        if (res.ok) {
-          const j = await res.json();
-          setText('dbBrandName', j.brand?.display_name || '—');
-        } else { setText('dbBrandName', '—'); }
-      } else { setText('dbBrandName', '—'); }
-    } catch { setText('dbBrandName', '—'); }
-
-    // Active devices
-    try {
-      if (t) {
-        const r = await fetch(`/admin/tenants/${t}/devices`, { headers: adminHeaders() });
-        if (r.ok) {
-          const j = await r.json();
-          const active = (j.items||[]).filter(d => String(d.status).toLowerCase() === 'active').length;
-          setText('dbActiveDevices', String(active));
-        } else { setText('dbActiveDevices', '-'); }
-      } else { setText('dbActiveDevices', '-'); }
-    } catch { setText('dbActiveDevices', '-'); }
-
-    // Online displays
-    try {
-      const r = await fetch('/presence/displays', { headers: adminHeaders(), cache: 'no-store' });
-      if (r.ok) {
-        const j = await r.json();
-        setText('dbDisplaysOnline', String((j.items||[]).length));
-      } else { setText('dbDisplaysOnline', '-'); }
-    } catch { setText('dbDisplaysOnline', '-'); }
-
-    // Sessions active (optional)
-    try {
-      const r = await fetch('/admin/metrics', { headers: adminHeaders(), cache: 'no-store' });
-      if (r.ok) {
-        const j = await r.json();
-        const v = (j.sessions_active_total != null) ? String(j.sessions_active_total) : 'Coming soon';
-        setText('dbSessionsActive', v);
-      } else { setText('dbSessionsActive', 'Coming soon'); }
-    } catch { setText('dbSessionsActive', 'Coming soon'); }
-  }
-
-  // Categories list
-  async function loadCategoriesList(){
-    try {
-      const r = await fetch('/categories', { headers: adminHeaders(), cache: 'no-store' });
-      if (!r.ok) {
-        if (categoryTableWrap) categoryTableWrap.innerHTML = '<div class="empty">Failed to load</div>';
-        return;
-      }
-      const arr = await r.json();
-      CATEGORIES_CACHE = Array.isArray(arr) ? arr : [];
-
-      // Populate product category filter
-      if (prodCategory) {
-        const prev = prodCategory.value || '';
-        prodCategory.innerHTML = '<option value="">All</option>';
-        for (const c of CATEGORIES_CACHE) {
-          const opt = document.createElement('option');
-          opt.value = c.name || '';
-          opt.textContent = c.name || '';
-          prodCategory.appendChild(opt);
-        }
-        if (prev && Array.from(prodCategory.options).some(o => o.value === prev)) prodCategory.value = prev;
-      }
-
-      // Build categories table with product counts & thumbnail
-      let allProducts = [];
-      try {
-        const rp = await fetch('/products', { headers: adminHeaders(), cache: 'no-store' });
-        if (rp.ok) allProducts = await rp.json();
-      } catch {}
-      const byCat = new Map();
-      for (const p of (Array.isArray(allProducts)?allProducts:[])){
-        const cid = p.category_id;
-        if (!cid) continue;
-        const obj = byCat.get(cid) || { count: 0, image_url: '' };
-        obj.count++;
-        if (!obj.image_url && p.image_url) obj.image_url = p.image_url;
-        byCat.set(cid, obj);
-      }
-
-      SELECTED_CATEGORIES.clear();
-      const rows = CATEGORIES_CACHE.map(c => {
-        const meta = byCat.get(c.id) || { count: 0, image_url: '' };
-        const raw = c.image || meta.image_url || '';
-        const src = raw ? (/^https?:/i.test(raw) ? `/img?u=${encodeURIComponent(raw)}` : raw) : '';
-        const img = src ? `<img class=\"thumb\" src=\"${src}\" alt=\"${(c.name||'')}\">` : `<div class=\"thumb\" style=\"display:grid;place-items:center;color:#94a3b8;\">—</div>`;
-        return `<tr class=\"cat-row\" data-id=\"${c.id}\">\n          <td class=\"cell-center\"><input type=\"checkbox\" class=\"cat-select\" data-id=\"${c.id}\"></td>\n          <td>${img}</td>\n          <td>${c.name || ''}</td>\n          <td>${c.reference || c.id || ''}</td>\n          <td>${meta.count || 0}</td>\n        </tr>`;
-      }).join('');
-      if (categoryTableWrap){
-        categoryTableWrap.innerHTML = `<table class="table" id="categoryTable"><thead><tr><th class="cell-center"><input type="checkbox" id="catSelectAll"></th><th>Thumbnail</th><th>Name</th><th>Reference</th><th>Products</th></tr></thead><tbody>${rows}</tbody></table>`;
-        const catSelectAll = document.getElementById('catSelectAll');
-        const catChecks = categoryTableWrap.querySelectorAll('input.cat-select');
-        catSelectAll?.addEventListener('change', () => {
-          SELECTED_CATEGORIES.clear();
-          catChecks.forEach(cb => { cb.checked = catSelectAll.checked; if (cb.checked) SELECTED_CATEGORIES.add(cb.getAttribute('data-id')); });
-          updateCategoryBulkActionsVisibility();
-        });
-        catChecks.forEach(cb => {
-          cb.addEventListener('click', ev => ev.stopPropagation());
-          cb.addEventListener('change', () => {
-            const id = cb.getAttribute('data-id');
-            if (cb.checked) SELECTED_CATEGORIES.add(id); else SELECTED_CATEGORIES.delete(id);
-            if (!cb.checked && catSelectAll) catSelectAll.checked = false;
-            updateCategoryBulkActionsVisibility();
-          });
-        });
-      }
-
-    } catch (e) {
-      if (categoryTableWrap) categoryTableWrap.innerHTML = '<div class="empty">Failed to load</div>';
+async function loadProducts() {
+  const id = STATE.selectedTenantId; if (!id) return;
+  try {
+    const catName = $("#prodCategory")?.value || '';
+    const rows = await api('/products', { tenantId: id, query: catName ? { category_name: catName } : undefined });
+    STATE.products = Array.isArray(rows) ? rows : [];
+    const wrap = $("#productTableWrap"); if (wrap) {
+      let html = '<div class="table"><div class="row head"><div>Name</div><div>Category</div><div>Price</div></div>';
+      for (const p of STATE.products) html += `<div class="row"><div>${p.name}</div><div>${p.category_name||''}</div><div>${p.price!=null?p.price:''}</div></div>`;
+      html += '</div>';
+      wrap.innerHTML = html;
     }
-  }
+  } catch {}
+}
 
-  // Products list
-  async function loadProductsList(){
-    try {
-      const params = new URLSearchParams();
-      const cat = prodCategory?.value || '';
-      if (cat) params.set('category_name', cat);
-      const url = '/products' + (params.toString() ? ('?' + params.toString()) : '');
-      const r = await fetch(url, { headers: adminHeaders(), cache: 'no-store' });
-      if (!r.ok) { if (productTableWrap) productTableWrap.innerHTML = '<div class="empty">Failed to load products</div>'; return; }
-      const arr = await r.json();
-      PRODUCTS_CACHE = Array.isArray(arr) ? arr : [];
-      SELECTED_PRODUCTS.clear();
-      const rows = PRODUCTS_CACHE.map(p => {
-        const sku = p.sku || p.id || '';
-        const src = p.image_url ? (/^https?:/i.test(p.image_url) ? `/img?u=${encodeURIComponent(p.image_url)}` : p.image_url) : '';
-        const img = src ? `<img class=\"thumb\" src=\"${src}\" alt=\"${(p.name||'')}\">` : `<div class=\"thumb\" style=\"display:grid;place-items:center;color:#94a3b8;\">—</div>`;
-        const active = (p.active == null ? true : !!p.active);
-        return `<tr class=\"row-click\" data-id=\"${sku}\">\n          <td class=\"cell-center\"><input type=\"checkbox\" class=\"prod-select\" data-id=\"${sku}\"></td>\n          <td>${img}</td>\n          <td>${(p.name||'')}</td>\n          <td>${sku}</td>\n          <td>${(p.category_name||'')}</td>\n          <td>${Number(p.price||0).toFixed(3)}</td>\n          <td>${active ? 'Yes' : 'No'}</td>\n        </tr>`;
-      }).join('');
-      if (productTableWrap) {
-        productTableWrap.innerHTML = `<table class=\"table\" id=\"productTable\"><thead><tr><th class=\"cell-center\"><input type=\"checkbox\" id=\"prodSelectAll\"></th><th>Thumbnail</th><th>Name</th><th>SKU</th><th>Category</th><th>Price</th><th>Active</th></tr></thead><tbody>${rows}</tbody></table>`;
-        const prodSelectAll = document.getElementById('prodSelectAll');
-        const prodChecks = productTableWrap.querySelectorAll('input.prod-select');
-        prodSelectAll?.addEventListener('change', () => {
-          SELECTED_PRODUCTS.clear();
-          prodChecks.forEach(cb => { cb.checked = prodSelectAll.checked; if (cb.checked) SELECTED_PRODUCTS.add(cb.getAttribute('data-id')); });
-          updateProductBulkActionsVisibility();
-        });
-        prodChecks.forEach(cb => {
-          cb.addEventListener('click', ev => ev.stopPropagation());
-          cb.addEventListener('change', () => {
-            const id = cb.getAttribute('data-id');
-            if (cb.checked) SELECTED_PRODUCTS.add(id); else SELECTED_PRODUCTS.delete(id);
-            if (!cb.checked && prodSelectAll) prodSelectAll.checked = false;
-            updateProductBulkActionsVisibility();
-          });
-        });
-        // Row click to edit
-        productTableWrap.querySelectorAll('tr.row-click')?.forEach(tr => {
-          tr.addEventListener('click', (ev) => {
-            const target = ev.target;
-            if (target && target.getAttribute && target.getAttribute('data-act') === 'delete') return; // handled separately
-            if (target && target.closest && target.closest('input[type="checkbox"]')) return;
-            const id = tr.getAttribute('data-id');
-            const p = PRODUCTS_CACHE.find(x => (x.id===id || x.sku===id));
-            openProductModal(p || { id });
-          });
-        });
-        updateProductBulkActionsVisibility();
-      }
-    } catch (e) {
-      if (productTableWrap) productTableWrap.innerHTML = '<div class="empty">Failed to load products</div>';
+async function loadPosters() {
+  try {
+    const r = await api('/posters', { tenantId: null });
+    const items = r?.items || [];
+    const grid = $("#posterGrid"); if (!grid) return; grid.innerHTML = '';
+    for (const u of items) {
+      const card = document.createElement('div'); card.className = 'card';
+      const body = document.createElement('div'); body.className = 'body';
+      const img = document.createElement('img'); img.src = u; img.alt = 'Poster'; img.style.maxWidth='100%'; img.style.height='auto';
+      body.appendChild(img); card.appendChild(body); grid.appendChild(card);
     }
-  }
+  } catch {}
+}
 
-  function updateProductBulkActionsVisibility(){
-    if (deleteSelectedProductsBtn) deleteSelectedProductsBtn.classList.toggle('hidden', SELECTED_PRODUCTS.size === 0);
+async function loadTenants(force = false, setId = null) {
+  // Decide based on admin mode
+  let rows = [];
+  try {
+    if (STATE.isSuperAdmin) rows = await api('/admin/tenants'); else rows = await api('/tenants', { tenantId: null });
+  } catch {}
+  await renderTenants(rows);
+  if (setId) {
+    const t = (STATE.tenants||[]).find(x => x.id === setId);
+    if (t) setSelectedTenant(t.id, t.name||'');
   }
+  await refreshAllForTenant();
+}
 
-  function updateCategoryBulkActionsVisibility(){
-    if (deleteSelectedCategoriesBtn) deleteSelectedCategoriesBtn.classList.toggle('hidden', SELECTED_CATEGORIES.size === 0);
-  }
-  // Billing panel support
-  const licenseUsageBilling = document.getElementById('licenseUsageBilling');
-  const licenseLimitBilling = document.getElementById('licenseLimitBilling');
-  const saveLicenseBilling = document.getElementById('saveLicenseBilling');
-  async function refreshBilling(){
-    const t = tenantSel?.value; if (!t) return;
-    try {
-      const lic = await fetch(`/admin/tenants/${t}/license`, { headers: adminHeaders() });
-      if (lic.ok) {
-        const data = await lic.json();
-        if (licenseUsageBilling) licenseUsageBilling.textContent = `${data.active_count} / ${data.license_limit}`;
-        if (licenseLimitBilling) licenseLimitBilling.value = data.license_limit || 1;
-      } else { if (licenseUsageBilling) licenseUsageBilling.textContent = '-'; }
-    } catch { if (licenseUsageBilling) licenseUsageBilling.textContent = '-'; }
-  }
-  saveLicenseBilling?.addEventListener('click', async () => {
-    const t = tenantSel?.value; if (!t) return;
-    const n = Math.max(1, Number(licenseLimitBilling.value||1));
-    const res = await fetch(`/admin/tenants/${t}/license`, { method:'PUT', headers: adminHeaders(), body: JSON.stringify({ license_limit: n }) });
-    if (!res.ok) { alert('Only platform admin can change license limit'); return; }
-    await refreshBilling(); await refreshLicenseAndDevices(); await refreshDashboard();
-  });
-
-  ensureAuth();
-})();
+document.addEventListener("DOMContentLoaded", init);
