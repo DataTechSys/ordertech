@@ -94,3 +94,52 @@ Notes for future sessions
   === 2025-08-31T09:00:00Z — short description ===
   and list what changed, what we verified, and any pending actions.
 
+=== 2025-08-30T09:30:35Z — Local DB via Cloud SQL Auth Proxy (best approach) ===
+- Chosen approach: Use the Cloud SQL Auth Proxy locally so the Node server on localhost talks to the same Cloud SQL instance as Cloud Run, securely.
+- Safety: Prefer a staging Cloud SQL instance for day-to-day development. If you must use production, use least-privileged DB roles and be careful when running admin actions.
+
+Prereqs
+- Access: your user or a service account must have roles/cloudsql.client on project smart-order-469705.
+- CLI: gcloud configured and authenticated (gcloud auth login).
+- Proxy: install via Homebrew: brew install cloud-sql-proxy (macOS).
+
+Find your instance connection name
+- This is PROJECT:REGION:INSTANCE, e.g. smart-order-469705:europe-west1:smart-order-pg
+  gcloud sql instances list
+  gcloud sql instances describe {{INSTANCE_NAME}} --format='value(connectionName)'
+
+Run the proxy (local → Cloud SQL)
+- Using your gcloud user creds (no key file):
+  cloud-sql-proxy smart-order-469705:europe-west1:{{INSTANCE_NAME}} --port 5432
+- Or with a service account key:
+  cloud-sql-proxy smart-order-469705:europe-west1:{{INSTANCE_NAME}} --port 5432 --credentials-file=/path/to/service-account.json
+
+Configure local env (do NOT inline secrets)
+- Retrieve the DB password from Secret Manager and expose DATABASE_URL for the app:
+  DB_USER={{DB_USER}}
+  DB_NAME={{DB_NAME}}
+  DB_PASS=$(gcloud secrets versions access latest --secret={{DB_PASSWORD_SECRET}})
+  export DATABASE_URL="postgres://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}"
+  export REQUIRE_DB=1
+
+Run locally and verify
+- Start server: npm start
+- Health: curl -s http://localhost:5050/dbz → expect ok:true with db/time
+- Now /categories and /products use the Cloud SQL data via the proxy.
+
+Recommended roles
+- Create a read-only DB role for browsing, and a separate constrained role for admin writes when needed.
+- For routine dev, prefer a staging DB that mirrors prod schema/data.
+
+Stop/disable
+- Stop the proxy process (Ctrl+C) and unset DATABASE_URL/REQUIRE_DB to return to local/in-memory mode.
+
+=== 2025-08-30T09:35:39Z — Added scripts/dev_db.sh helper for Cloud SQL Proxy ===
+- New helper: scripts/dev_db.sh (source this script to control proxy and env)
+  - . scripts/dev_db.sh start    → starts the proxy and exports DATABASE_URL, REQUIRE_DB
+  - . scripts/dev_db.sh stop     → stops the proxy and unsets env
+  - . scripts/dev_db.sh status   → prints proxy/env status
+  - . scripts/dev_db.sh help     → usage + config instructions
+- Example config: scripts/dev_db.env.example (copy to scripts/dev_db.env and fill PROJECT_ID/REGION/INSTANCE/DB vars)
+- Requirements: gcloud CLI, cloud-sql-proxy installed, roles/cloudsql.client access
+- Notes: Uses Secret Manager to fetch DB password at runtime; keeps secrets out of files/console
