@@ -366,7 +366,8 @@ async function api(path, { method = 'GET', body, headers = {}, tenantId, query }
 
 function handleApiError(status, data) {
   const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Request failed';
-  if (status === 401) { toast('Unauthorized. Redirecting to login…'); setTimeout(() => location.href = '/public/admin/login.html', 1200); return; }
+  // Do not redirect on 401 here; allow callers to fallback (e.g., switch to read-only mode)
+  if (status === 401) { toast('Unauthorized. Some features may be limited.'); return; }
   if (status === 403) { toast('Forbidden. Your account may not be a platform admin.'); return; }
   if (status === 503) { toast('Service unavailable. Please retry shortly.'); return; }
   toast(String(msg));
@@ -398,7 +399,13 @@ function bootstrapAuth() {
   }
 
   fb.auth().onAuthStateChanged(async (user) => {
-    if (!user) { location.href = '/public/admin/login.html'; return; }
+    if (!user) {
+      // If we already have an ID token from the login page, proceed without redirect
+      const existing = getIdToken();
+      if (existing) { await detectAdminModeAndLoadTenants().catch(()=>{}); return; }
+      location.href = '/public/admin/login.html';
+      return;
+    }
     try {
       const t = await user.getIdToken(/*forceRefresh*/ true);
       localStorage.setItem('ID_TOKEN', t);

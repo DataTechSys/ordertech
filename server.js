@@ -30,6 +30,7 @@ const memCatalogByTenant = new Map(); // tenant_id -> { categories:[], products:
 
 // ---- DB
 const HAS_DB = Boolean(process.env.DATABASE_URL);
+const REQUIRE_DB = /^(1|true|yes|on)$/i.test(String(process.env.REQUIRE_DB||''));
 const pool = HAS_DB ? new Pool({ connectionString: process.env.DATABASE_URL }) : null;
 
 async function db(sql, params = []) {
@@ -144,6 +145,12 @@ async function ensureProductImageUrlColumn(){
   try { await db("ALTER TABLE IF EXISTS products ADD COLUMN IF NOT EXISTS image_url text"); } catch (_) {}
 }
 
+// Ensure products table has active column (soft-delete support)
+async function ensureProductActiveColumn(){
+  if (!HAS_DB) return;
+  try { await db("ALTER TABLE IF EXISTS products ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true"); } catch (_) {}
+}
+
 // ---- helpers
 function addRoute(method, route, ...handlers) {
   app[method](route, ...handlers);
@@ -187,6 +194,16 @@ async function requireTenant(req, res, next) {
 // Auth middleware (Firebase ID token)
 async function verifyAuth(req, res, next){
   try {
+    // Allow platform admin override via x-admin-token for environments where Firebase Admin is unavailable (e.g., local dev)
+    try {
+      const tok = String(req.headers['x-admin-token'] || '').trim();
+      if (ADMIN_TOKEN && tok && tok === ADMIN_TOKEN) {
+        const email = (PLATFORM_ADMIN_EMAILS && PLATFORM_ADMIN_EMAILS[0]) || 'admin@local';
+        req.user = { uid: 'admin-token', email: email };
+        return next();
+      }
+    } catch {}
+
     const h = String(req.headers.authorization||'');
     if (!h.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
     const idToken = h.slice(7);
@@ -379,6 +396,7 @@ addRoute('get', '/tenants', async (_req, res) => {
 });
 
 addRoute('get', '/categories', requireTenant, async (req, res) => {
+  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // If in-memory catalog overrides exist for this tenant, use them
   const mem = memCatalogByTenant.get(req.tenantId);
   if (mem) return res.json(mem.categories || []);
@@ -396,6 +414,7 @@ addRoute('get', '/categories', requireTenant, async (req, res) => {
 });
 
 addRoute('get', '/products', requireTenant, async (req, res) => {
+  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // In-memory override
   const mem = memCatalogByTenant.get(req.tenantId);
   if (mem) {
@@ -416,6 +435,7 @@ addRoute('get', '/products', requireTenant, async (req, res) => {
       from products p
       join categories c on c.id=p.category_id
       where p.tenant_id=$1
+      and coalesce(p.active, true)
       ${category_name ? 'and c.name=$2' : ''}
       order by c.name, p.name
     `;
@@ -612,6 +632,7 @@ addRoute('post', '/session/start', async (req, res) => {
   }
   try { broadcast(id, { type:'session:started', basketId: id, osn: s.osn }); } catch {}
   try { broadcastPeerStatus(id); } catch {}
+  try { broadcastAdminLive(); } catch {}
   res.json({ ok:true, osn: s.osn });
 });
 addRoute('post', '/session/reset', async (req, res) => {
@@ -619,6 +640,7 @@ addRoute('post', '/session/reset', async (req, res) => {
   if (!id) return res.status(400).json({ error:'pairId required' });
   sessions.delete(id);
   try { broadcast(id, { type:'session:ended', basketId: id }); } catch {}
+  try { broadcastAdminLive(); } catch {}
   res.json({ ok:true });
 });
 addRoute('post', '/session/pay', async (req, res) => {
@@ -628,6 +650,7 @@ addRoute('post', '/session/pay', async (req, res) => {
   if (!s.osn) s.osn = genOSN();
   s.status = 'paid';
   try { broadcast(id, { type:'session:paid', basketId: id, osn: s.osn }); } catch {}
+  try { broadcastAdminLive(); } catch {}
   // Clear basket on pay
   try {
     const b = ensureBasket(id); b.items.clear(); computeTotals(b); b.version++;
@@ -655,6 +678,7 @@ addRoute('post', '/webrtc/offer', async (req, res) => {
     try { console.log(`[rtc] POST /webrtc/offer pair=${id} len=${sdp.length} (state reset)`); } catch {}
     // Notify subscribers that a fresh offer is available
     try { broadcast(id, { type: 'rtc:offer', basketId: id }); } catch {}
+    try { broadcastAdminLive(); } catch {}
     return res.json({ ok:true, mode:'db' });
   } else {
     const r = getRoomMem(id);
@@ -683,6 +707,7 @@ addRoute('post', '/webrtc/answer', async (req, res) => {
     await db(`insert into webrtc_rooms(pair_id, answer, updated_at) values ($1,$2,now())
               on conflict (pair_id) do update set answer=excluded.answer, updated_at=now()`, [id, sdp]);
     try { console.log(`[rtc] POST /webrtc/answer pair=${id} len=${sdp.length}`); } catch {}
+    try { broadcastAdminLive(); } catch {}
     return res.json({ ok:true, mode:'db' });
   } else {
     const r = getRoomMem(id); r.answer = sdp; r.updated_at = new Date().toISOString();
@@ -703,6 +728,7 @@ addRoute('delete', '/webrtc/session/:pairId', async (req, res) => {
   // Notify clients via websocket to tear down
   broadcast(id, { type: 'rtc:stopped', basketId: id, reason });
   try { console.log(`[rtc] DELETE /webrtc/session pair=${id} reason=${reason}`); } catch {}
+  try { broadcastAdminLive(); } catch {}
   res.json({ ok:true });
 });
 addRoute('get', '/webrtc/answer', async (req, res) => {
@@ -855,6 +881,135 @@ addRoute('get', '/admin/metrics', verifyAuth, requireTenant, async (req, res) =>
   }
 });
 
+// ---- Live admin telemetry (devices, sessions)
+function peerNamesForBasket(basketId){
+  let cashierName = null, displayName = null;
+  const set = basketClients.get(basketId);
+  if (set) {
+    for (const ws of set) {
+      const meta = clientMeta.get(ws) || {};
+      if (!cashierName && meta.role === 'cashier' && meta.name) cashierName = meta.name;
+      if (!displayName && meta.role === 'display' && meta.name) displayName = meta.name;
+    }
+  }
+  return { cashierName, displayName };
+}
+
+async function computeLiveDevices(tenantId){
+  const now = Date.now();
+  const items = [];
+  if (HAS_DB) {
+    try {
+      const rows = await db("select id, name, role::text as role, status::text as status, branch, last_seen from devices where tenant_id=$1 order by name asc", [tenantId]);
+      for (const d of rows) {
+        const online = d.last_seen ? (now - new Date(d.last_seen).getTime()) < PRESENCE_TTL_MS : false;
+        // infer connected/session by matching active sockets by role+name
+        let connected = false, session_id = null;
+        for (const [bid, set] of basketClients.entries()) {
+          for (const ws of set) {
+            const meta = clientMeta.get(ws) || {};
+            if (meta.role === d.role && (meta.name||'').trim() && (d.name||'').trim() && meta.name.trim() === d.name.trim()) {
+              connected = true; session_id = bid; break;
+            }
+          }
+          if (connected) break;
+        }
+        items.push({ id: d.id, name: d.name, role: d.role, status: d.status, branch: d.branch, last_seen: d.last_seen, online, connected, session_id });
+      }
+      return items;
+    } catch {}
+  }
+  // No DB: derive from presence map
+  const m = getPresenceMap(tenantId);
+  prunePresence(m);
+  for (const v of m.values()) {
+    const online = (now - v.last_seen) < PRESENCE_TTL_MS;
+    let connected = false, session_id = null;
+    for (const [bid, set] of basketClients.entries()) {
+      for (const ws of set) {
+        const meta = clientMeta.get(ws) || {};
+        if (meta.role === 'display' && meta.name && v.name && meta.name.trim() === v.name.trim()) { connected = true; session_id = bid; break; }
+      }
+      if (connected) break;
+    }
+    items.push({ id: v.id, name: v.name, role: 'display', status: 'active', branch: v.branch, last_seen: new Date(v.last_seen).toISOString(), online, connected, session_id });
+  }
+  return items;
+}
+
+async function computeLiveSessions(tenantId){
+  // Build device name sets for this tenant to filter sessions
+  const names = { cashier: new Set(), display: new Set() };
+  if (HAS_DB) {
+    try {
+      const rows = await db("select name, role::text as role from devices where tenant_id=$1", [tenantId]);
+      for (const r of rows) { if (r.name && (r.role==='cashier'||r.role==='display')) names[r.role].add(r.name.trim()); }
+    } catch {}
+  }
+  const items = [];
+  for (const [bid, s] of sessions.entries()) {
+    const { cashierName, displayName } = peerNamesForBasket(bid);
+    if (names.cashier.size || names.display.size) {
+      if (cashierName && !names.cashier.has(cashierName)) continue;
+      if (displayName && !names.display.has(displayName)) continue;
+    }
+    items.push({ basket_id: bid, osn: s.osn || null, status: s.status || 'ready', started_at: s.started_at || 0, cashierName: cashierName || null, displayName: displayName || null });
+  }
+  // newest first by started_at
+  items.sort((a,b) => (b.started_at||0) - (a.started_at||0));
+  return items;
+}
+
+function broadcastAdminLive(){
+  // Snapshot for default tenant (multi-tenant filtering can be added later)
+  (async () => {
+    try {
+      const devices = await computeLiveDevices(DEFAULT_TENANT_ID);
+      const sessionsList = await computeLiveSessions(DEFAULT_TENANT_ID);
+      const payloadDevices = JSON.stringify({ type:'admin:devices', tenant_id: DEFAULT_TENANT_ID, items: devices, serverTs: Date.now() });
+      const payloadSessions = JSON.stringify({ type:'admin:sessions', tenant_id: DEFAULT_TENANT_ID, items: sessionsList, serverTs: Date.now() });
+      for (const ws of wss.clients) {
+        const meta = clientMeta.get(ws) || {};
+        if (meta.role === 'admin' && ws.readyState === ws.OPEN) {
+          try { ws.send(payloadDevices); } catch {}
+          try { ws.send(payloadSessions); } catch {}
+        }
+      }
+    } catch {}
+  })();
+}
+
+addRoute('get', '/admin/tenants/:id/live/devices', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  try {
+    const items = await computeLiveDevices(req.params.id);
+    res.json({ items });
+  } catch (_e) {
+    res.json({ items: [] });
+  }
+});
+
+addRoute('get', '/admin/tenants/:id/live/sessions', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  try {
+    const items = await computeLiveSessions(req.params.id);
+    res.json({ items });
+  } catch (_e) {
+    res.json({ items: [] });
+  }
+});
+
+// Evict (end) a session by basketId
+addRoute('post', '/admin/sessions/:basketId/evict', verifyAuth, requireTenant, requireTenantAdminResolved, async (req, res) => {
+  const id = String(req.params.basketId||'').trim();
+  const reason = String(req.body?.reason||'admin').trim();
+  if (!id) return res.status(400).json({ error: 'invalid_basket_id' });
+  try { if (HAS_DB) await db('delete from webrtc_rooms where pair_id=$1', [id]); } catch {}
+  try { sessions.delete(id); } catch {}
+  try { broadcast(id, { type:'rtc:stopped', basketId: id, reason }); } catch {}
+  try { broadcast(id, { type:'session:ended', basketId: id, reason }); } catch {}
+  try { broadcastAdminLive(); } catch {}
+  res.json({ ok:true });
+});
+
 // Displays POST a heartbeat every ~5s
 // Display device heartbeat.
 // Backward compatible: if x-device-token present, require role=display; else accept manual id/name.
@@ -875,6 +1030,7 @@ addRoute('post', '/presence/display', requireTenant, async (req, res) => {
   if(!id) return res.status(400).json({ error: 'id required' });
   const m = getPresenceMap(req.tenantId);
   m.set(id, { id, name, branch, last_seen: Date.now() });
+  try { broadcastAdminLive(); } catch {}
   const payload = { ok:true };
   if (fromToken) { payload.id = id; payload.name = name; payload.branch = branch; }
   res.json(payload);
@@ -897,6 +1053,7 @@ addRoute('get', '/presence/displays', requireTenant, async (req, res) => {
   const items = Array.from(m.values())
     .filter(v => (now - v.last_seen) < PRESENCE_TTL_MS)
     .sort((a,b) => b.last_seen - a.last_seen);
+  try { broadcastAdminLive(); } catch {}
   res.json({ items });
 });
 
@@ -1130,98 +1287,149 @@ function ensureMemCatalog(tenantId){
 function slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 
 // List categories (already exists: /admin/tenants/:id/branches). New CRUD below.
+// Admin Catalog CRUD (DB-backed and in-memory)
 addRoute('post', '/admin/tenants/:id/categories', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
   const tenantId = req.params.id;
   const name = String(req.body?.name||'').trim();
   if (!name) return res.status(400).json({ error: 'name_required' });
-  const mem = ensureMemCatalog(tenantId);
-  const id = 'c-' + slugify(name);
-  if (mem.categories.some(c => c.id === id || (c.name||'').toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: 'category_exists' });
-  mem.categories.push({ id, name });
-  return res.json({ ok:true, category: { id, name } });
+  if (HAS_DB) {
+    const exists = await db('select 1 from categories where tenant_id=$1 and lower(name)=lower($2)', [tenantId, name]);
+    if (exists.length) return res.status(409).json({ error: 'category_exists' });
+    const row = await db('insert into categories (tenant_id, name) values ($1,$2) returning id, name', [tenantId, name]);
+    return res.json({ ok:true, category: row[0] });
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const id = 'c-' + slugify(name);
+    if (mem.categories.some(c => c.id === id || (c.name||'').toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: 'category_exists' });
+    mem.categories.push({ id, name });
+    return res.json({ ok:true, category: { id, name } });
+  }
 });
 addRoute('put', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
   const tenantId = req.params.id;
   const cid = req.params.cid;
   const name = String(req.body?.name||'').trim();
   if (!name) return res.status(400).json({ error: 'name_required' });
-  const mem = ensureMemCatalog(tenantId);
-  const c = mem.categories.find(x => x.id === cid);
-  if (!c) return res.status(404).json({ error: 'not_found' });
-  c.name = name;
-  // update products category_name
-  mem.products.forEach(p => { if (p.category_id === cid) p.category_name = name; });
-  return res.json({ ok:true });
+  if (HAS_DB) {
+    const exists = await db('select 1 from categories where tenant_id=$1 and lower(name)=lower($2) and id<>$3', [tenantId, name, cid]);
+    if (exists.length) return res.status(409).json({ error: 'category_exists' });
+    await db('update categories set name=$1 where tenant_id=$2 and id=$3', [name, tenantId, cid]);
+    return res.json({ ok:true });
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const c = mem.categories.find(x => x.id === cid);
+    if (!c) return res.status(404).json({ error: 'not_found' });
+    c.name = name;
+    mem.products.forEach(p => { if (p.category_id === cid) p.category_name = name; });
+    return res.json({ ok:true });
+  }
 });
 addRoute('delete', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
   const tenantId = req.params.id;
   const cid = req.params.cid;
-  const mem = ensureMemCatalog(tenantId);
-  const used = mem.products.some(p => p.category_id === cid);
-  if (used) return res.status(409).json({ error: 'category_in_use' });
-  const before = mem.categories.length;
-  mem.categories = mem.categories.filter(c => c.id !== cid);
-  return res.json({ ok: mem.categories.length < before });
+  if (HAS_DB) {
+    const rows = await db('select count(*)::int as cnt from products where tenant_id=$1 and category_id=$2', [tenantId, cid]);
+    const cnt = rows && rows[0] ? rows[0].cnt : 0;
+    if (cnt > 0) return res.status(409).json({ error: 'category_in_use' });
+    await db('delete from categories where tenant_id=$1 and id=$2', [tenantId, cid]);
+    return res.json({ ok:true });
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const used = mem.products.some(p => p.category_id === cid);
+    if (used) return res.status(409).json({ error: 'category_in_use' });
+    const before = mem.categories.length;
+    mem.categories = mem.categories.filter(c => c.id !== cid);
+    return res.json({ ok: mem.categories.length < before });
+  }
 });
 
 // Products CRUD
 addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
   const tenantId = req.params.id;
   const body = req.body||{};
   const name = String(body.name||'').trim();
-  const sku = String(body.sku||'').trim();
   const category_id = String(body.category_id||'').trim();
   const price = Number(body.price||0);
   const image_url = String(body.image_url||'').trim();
   const active = body.active != null ? Boolean(body.active) : true;
   if (!name || !category_id) return res.status(400).json({ error: 'name_and_category_required' });
-  const mem = ensureMemCatalog(tenantId);
-  const cat = mem.categories.find(c => c.id === category_id);
-  if (!cat) return res.status(404).json({ error: 'category_not_found' });
-  const id = sku || 'p-' + slugify(name) + '-' + Math.floor(Math.random()*10000);
-  if (mem.products.some(p => p.id === id)) return res.status(409).json({ error: 'sku_exists' });
-  const prod = { id, sku: id, name, category_id, category_name: cat.name, price, image_url, active };
-  mem.products.push(prod);
-  return res.json({ ok:true, product: prod });
+  if (HAS_DB) {
+    const cat = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, category_id]);
+    if (!cat.length) return res.status(404).json({ error: 'category_not_found' });
+    const row = await db('insert into products (tenant_id, name, category_id, price, image_url, active) values ($1,$2,$3,$4,$5,$6) returning id, name, price, category_id, image_url, active', [tenantId, name, category_id, price||0, image_url || null, active]);
+    return res.json({ ok:true, product: row[0] });
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const cat = mem.categories.find(c => c.id === category_id);
+    if (!cat) return res.status(404).json({ error: 'category_not_found' });
+    const id = (String(body.sku||'').trim()) || 'p-' + slugify(name) + '-' + Math.floor(Math.random()*10000);
+    if (mem.products.some(p => p.id === id)) return res.status(409).json({ error: 'sku_exists' });
+    const prod = { id, sku: id, name, category_id, category_name: cat.name, price, image_url, active };
+    mem.products.push(prod);
+    return res.json({ ok:true, product: prod });
+  }
 });
 addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
   const tenantId = req.params.id;
   const pid = req.params.pid;
-  const mem = ensureMemCatalog(tenantId);
-  const p = mem.products.find(x => x.id === pid);
-  if (!p) return res.status(404).json({ error: 'not_found' });
   const body = req.body||{};
-  if (body.name != null) p.name = String(body.name);
-  if (body.price != null) p.price = Number(body.price)||0;
-  if (body.image_url != null) p.image_url = String(body.image_url);
-  if (body.active != null) p.active = Boolean(body.active);
-  if (body.category_id != null) {
-    const cid = String(body.category_id);
-    const cat = mem.categories.find(c => c.id === cid);
-    if (!cat) return res.status(404).json({ error: 'category_not_found' });
-    p.category_id = cid; p.category_name = cat.name;
+  if (HAS_DB) {
+    // ensure product exists
+    const ex = await db('select id from products where tenant_id=$1 and id=$2', [tenantId, pid]);
+    if (!ex.length) return res.status(404).json({ error: 'not_found' });
+    if (body.category_id != null) {
+      const cid = String(body.category_id);
+      const cat = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, cid]);
+      if (!cat.length) return res.status(404).json({ error: 'category_not_found' });
+      await db('update products set category_id=$1 where tenant_id=$2 and id=$3', [cid, tenantId, pid]);
+    }
+    if (body.name != null) await db('update products set name=$1 where tenant_id=$2 and id=$3', [String(body.name), tenantId, pid]);
+    if (body.price != null) await db('update products set price=$1 where tenant_id=$2 and id=$3', [Number(body.price)||0, tenantId, pid]);
+    if (body.image_url != null) await db('update products set image_url=$1 where tenant_id=$2 and id=$3', [String(body.image_url), tenantId, pid]);
+    if (body.active != null) await db('update products set active=$1 where tenant_id=$2 and id=$3', [Boolean(body.active), tenantId, pid]);
+    return res.json({ ok:true });
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const p = mem.products.find(x => x.id === pid);
+    if (!p) return res.status(404).json({ error: 'not_found' });
+    if (body.name != null) p.name = String(body.name);
+    if (body.price != null) p.price = Number(body.price)||0;
+    if (body.image_url != null) p.image_url = String(body.image_url);
+    if (body.active != null) p.active = Boolean(body.active);
+    if (body.category_id != null) {
+      const cid = String(body.category_id);
+      const cat = mem.categories.find(c => c.id === cid);
+      if (!cat) return res.status(404).json({ error: 'category_not_found' });
+      p.category_id = cid; p.category_name = cat.name;
+    }
+    if (body.sku != null) {
+      const sku = String(body.sku).trim();
+      if (sku && sku !== p.id && mem.products.some(x => x.id === sku)) return res.status(409).json({ error: 'sku_exists' });
+      if (sku) { p.id = sku; p.sku = sku; }
+    }
+    return res.json({ ok:true, product: p });
   }
-  if (body.sku != null) {
-    const sku = String(body.sku).trim();
-    if (sku && sku !== p.id && mem.products.some(x => x.id === sku)) return res.status(409).json({ error: 'sku_exists' });
-    if (sku) { p.id = sku; p.sku = sku; }
-  }
-  return res.json({ ok:true, product: p });
 });
 addRoute('delete', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (HAS_DB) return res.status(503).json({ error: 'DB not supported yet' });
   const tenantId = req.params.id;
   const pid = req.params.pid;
-  const mem = ensureMemCatalog(tenantId);
-  const before = mem.products.length;
-  mem.products = mem.products.filter(p => p.id !== pid);
-  return res.json({ ok: mem.products.length < before });
+  if (HAS_DB) {
+    try {
+      // Soft delete: mark inactive to preserve order history and avoid FK issues
+      await db('alter table if exists products add column if not exists active boolean not null default true');
+      await db('update products set active=false where tenant_id=$1 and id=$2', [tenantId, pid]);
+      return res.json({ ok:true });
+    } catch (e) {
+      return res.status(503).json({ error: 'db_failed' });
+    }
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const before = mem.products.length;
+    mem.products = mem.products.filter(p => p.id !== pid);
+    return res.json({ ok: mem.products.length < before });
+  }
 });
+
 
 // Parse Foodics CSVs from /data directory (categories.csv, products.csv)
 function parseFoodicsCsvs(){
@@ -1608,13 +1816,13 @@ app.use((req, res, next) => {
   } catch {}
   next();
 });
+// Serve product images directly from /photos under /public/images/products (place before generic static mounts)
+app.use('/public/images/products', express.static(path.join(__dirname, 'photos')));
 // Serve static files at root (so /css/... and /js/... work)
 app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
 app.use('/public', express.static(PUB));
-// Serve product images directly from /photos under /public/images/products
-app.use('/public/images/products', express.static(path.join(__dirname, 'photos')));
-addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'images', 'koobs-logo.png')));
+addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'favicon.ico')));
 
 // Simple in-memory image cache for proxy (/img)
 const memImageCache = new Map(); // url -> { buf:Buffer, type:string, etag:string, exp:number }
@@ -1970,8 +2178,12 @@ function handleHello(ws, msg){
   const meta = clientMeta.get(ws) || {};
   const role = String(msg.role||'').toLowerCase();
   const name = String(msg.name||'').trim();
-  const next = { ...meta, role: (role==='cashier'||role==='display') ? role : null, name: name || meta.name };
+  const allowed = (role==='cashier'||role==='display'||role==='admin') ? role : null;
+  const next = { ...meta, role: allowed, name: name || meta.name };
   clientMeta.set(ws, next);
+  if (next.role === 'admin') {
+    try { broadcastAdminLive(); } catch {}
+  }
   if (next.basketId) broadcastPeerStatus(next.basketId);
 }
 
@@ -1996,6 +2208,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     try { await ensureLicensingSchema(); } catch (e) { console.error('ensureLicensingSchema failed', e); }
     try { await ensureWebrtcSchema(); } catch (e) { console.error('ensureWebrtcSchema failed', e); }
     try { await ensureProductImageUrlColumn(); } catch (e) { console.error('ensureProductImageUrlColumn failed', e); }
+    try { await ensureProductActiveColumn(); } catch (e) { console.error('ensureProductActiveColumn failed', e); }
   }
   console.log(`API running on http://0.0.0.0:${PORT}`);
 });
