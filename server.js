@@ -395,7 +395,18 @@ addRoute('get', '/tenants', async (_req, res) => {
   }
 });
 
-addRoute('get', '/categories', requireTenant, async (req, res) => {
+// Redirect browser requests to the HTML page at /categories/
+addRoute('get', /^\/categories$/, (req, res, next) => {
+  try {
+    const accept = String(req.headers.accept || '');
+    if (accept.includes('text/html')) {
+      return res.redirect(302, '/categories/');
+    }
+  } catch {}
+  return next();
+});
+
+addRoute('get', /^\/categories$/, requireTenant, async (req, res) => {
   if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // If in-memory catalog overrides exist for this tenant, use them
   const mem = memCatalogByTenant.get(req.tenantId);
@@ -413,7 +424,35 @@ addRoute('get', '/categories', requireTenant, async (req, res) => {
   }
 });
 
-addRoute('get', '/products', requireTenant, async (req, res) => {
+// New API namespace
+addRoute('get', '/api/categories', requireTenant, async (req, res) => {
+  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const mem = memCatalogByTenant.get(req.tenantId);
+  if (mem) return res.json(mem.categories || []);
+  if (!HAS_DB) return res.json(JSON_CATALOG.categories);
+  try {
+    const rows = await db(
+      'select id, name from categories where tenant_id=$1 order by name asc',
+      [req.tenantId]
+    );
+    res.json(rows);
+  } catch (_e) {
+    res.json(JSON_CATALOG.categories);
+  }
+});
+
+// Serve UI at /products only when the client accepts HTML; otherwise fall through to API route below
+addRoute('get', /^\/products$/, (req, res, next) => {
+  try {
+    const accept = String(req.headers.accept || '');
+    if (accept.includes('text/html')) {
+      return res.redirect(302, '/products/');
+    }
+  } catch {}
+  return next();
+});
+
+addRoute('get', /^\/products$/, requireTenant, async (req, res) => {
   if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // In-memory override
   const mem = memCatalogByTenant.get(req.tenantId);
@@ -443,6 +482,54 @@ addRoute('get', '/products', requireTenant, async (req, res) => {
     // Fallbacks for missing image_url:
     // 1) Try CSV/JSON catalog by name (may provide remote Foodics URL)
     // 2) Try local PHOTO_MAP (served from /public/images/products via /photos)
+    try {
+      if (Array.isArray(rows) && rows.length) {
+        const byName = new Map((JSON_CATALOG.products||[]).map(p => [p.name, p.image_url]));
+        for (const r of rows) {
+          if (!r.image_url) {
+            let u = byName.get(r.name);
+            if (!u) {
+              const f = PHOTO_MAP[r.name];
+              if (f) u = `/public/images/products/${encodeURIComponent(f)}`;
+            }
+            if (u) r.image_url = u;
+          }
+        }
+      }
+    } catch {}
+    res.json(rows);
+  } catch (_e) {
+    res.json([]);
+  }
+});
+
+// New API namespace
+addRoute('get', '/api/products', requireTenant, async (req, res) => {
+  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const mem = memCatalogByTenant.get(req.tenantId);
+  if (mem) {
+    const { category_name } = req.query;
+    let list = mem.products || [];
+    if (category_name) list = list.filter(p => p.category_name === category_name);
+    return res.json(list);
+  }
+  if (!HAS_DB) {
+    const { category_name } = req.query;
+    const list = category_name ? JSON_CATALOG.products.filter(p => p.category_name === category_name) : JSON_CATALOG.products;
+    return res.json(list);
+  }
+  try {
+    const { category_name } = req.query;
+    const sql = `
+      select p.id, p.name, p.description, p.price, p.category_id, c.name as category_name, p.image_url
+      from products p
+      join categories c on c.id=p.category_id
+      where p.tenant_id=$1
+      and coalesce(p.active, true)
+      ${category_name ? 'and c.name=$2' : ''}
+      order by c.name, p.name
+    `;
+    const rows = await db(sql, category_name ? [req.tenantId, category_name] : [req.tenantId]);
     try {
       if (Array.isArray(rows) && rows.length) {
         const byName = new Map((JSON_CATALOG.products||[]).map(p => [p.name, p.image_url]));
@@ -1627,27 +1714,171 @@ addRoute('post', '/admin/upload-url', verifyAuth, requireTenantAdminBodyTenant, 
   }
 });
 
+// ---- Modifiers schema and API
+async function ensureModifiersSchema(){
+  if (!HAS_DB) return;
+  await db(`
+    CREATE TABLE IF NOT EXISTS modifier_groups (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      reference text,
+      min_select integer,
+      max_select integer,
+      required boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(tenant_id, reference)
+    )
+  `);
+  await db(`
+    CREATE TABLE IF NOT EXISTS modifier_options (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      group_id uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      price numeric(10,3) NOT NULL DEFAULT 0,
+      is_active boolean NOT NULL DEFAULT true,
+      sort_order integer,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await db('CREATE INDEX IF NOT EXISTS ix_modifier_groups_tenant_ref ON modifier_groups(tenant_id, reference)');
+  await db('CREATE INDEX IF NOT EXISTS ix_modifier_options_group ON modifier_options(group_id)');
+}
+
+// List modifier groups
+addRoute('get', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  await ensureModifiersSchema();
+  const rows = await db('select id, tenant_id, name, reference, min_select, max_select, required, created_at from modifier_groups where tenant_id=$1 order by name asc', [req.params.id]);
+  res.json({ items: rows });
+});
+// Create group
+addRoute('post', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  const name = String(req.body?.name||'').trim();
+  const reference = String(req.body?.reference||'').trim() || null;
+  const min_select = req.body?.min_select != null ? Number(req.body.min_select) : null;
+  const max_select = req.body?.max_select != null ? Number(req.body.max_select) : null;
+  const required = req.body?.required != null ? Boolean(req.body.required) : false;
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const [row] = await db('insert into modifier_groups (tenant_id, name, reference, min_select, max_select, required) values ($1,$2,$3,$4,$5,$6) returning id, name, reference, min_select, max_select, required', [req.params.id, name, reference, min_select, max_select, required]);
+  res.json({ ok:true, group: row });
+});
+// Update group
+addRoute('put', '/admin/tenants/:id/modifiers/groups/:gid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  const id = req.params.id; const gid = req.params.gid;
+  const f = req.body||{};
+  if (f.name != null) await db('update modifier_groups set name=$1 where tenant_id=$2 and id=$3', [String(f.name), id, gid]);
+  if (f.reference != null) await db('update modifier_groups set reference=$1 where tenant_id=$2 and id=$3', [String(f.reference||''), id, gid]);
+  if (f.min_select != null) await db('update modifier_groups set min_select=$1 where tenant_id=$2 and id=$3', [Number(f.min_select), id, gid]);
+  if (f.max_select != null) await db('update modifier_groups set max_select=$1 where tenant_id=$2 and id=$3', [Number(f.max_select), id, gid]);
+  if (f.required != null) await db('update modifier_groups set required=$1 where tenant_id=$2 and id=$3', [Boolean(f.required), id, gid]);
+  res.json({ ok:true });
+});
+// Delete group
+addRoute('delete', '/admin/tenants/:id/modifiers/groups/:gid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  await db('delete from modifier_groups where tenant_id=$1 and id=$2', [req.params.id, req.params.gid]);
+  res.json({ ok:true });
+});
+
+// List options (optional group_id filter)
+addRoute('get', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  await ensureModifiersSchema();
+  const gid = String(req.query.group_id || '').trim();
+  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, o.name, o.price, o.is_active, o.sort_order, o.created_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
+  const params = [req.params.id];
+  if (gid) { sql += ' and o.group_id=$2'; params.push(gid); }
+  sql += ' order by g.name asc, coalesce(o.sort_order, 999999) asc, o.name asc';
+  const rows = await db(sql, params);
+  res.json({ items: rows });
+});
+// Create option
+addRoute('post', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  const id = req.params.id; const f = req.body||{};
+  const group_id = String(f.group_id||'').trim(); if (!group_id) return res.status(400).json({ error: 'group_id_required' });
+  const name = String(f.name||'').trim(); if (!name) return res.status(400).json({ error: 'name_required' });
+  const price = Number(f.price||0)||0; const is_active = f.is_active != null ? Boolean(f.is_active) : true; const sort_order = f.sort_order != null ? Number(f.sort_order) : null;
+  const [row] = await db('insert into modifier_options (tenant_id, group_id, name, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6) returning id, group_id, name, price, is_active, sort_order', [id, group_id, name, price, is_active, sort_order]);
+  res.json({ ok:true, option: row });
+});
+// Update option
+addRoute('put', '/admin/tenants/:id/modifiers/options/:oid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  const id=req.params.id, oid=req.params.oid; const f=req.body||{};
+  if (f.group_id != null) await db('update modifier_options set group_id=$1 where tenant_id=$2 and id=$3', [String(f.group_id), id, oid]);
+  if (f.name != null) await db('update modifier_options set name=$1 where tenant_id=$2 and id=$3', [String(f.name), id, oid]);
+  if (f.price != null) await db('update modifier_options set price=$1 where tenant_id=$2 and id=$3', [Number(f.price)||0, id, oid]);
+  if (f.is_active != null) await db('update modifier_options set is_active=$1 where tenant_id=$2 and id=$3', [Boolean(f.is_active), id, oid]);
+  if (f.sort_order != null) await db('update modifier_options set sort_order=$1 where tenant_id=$2 and id=$3', [Number(f.sort_order), id, oid]);
+  res.json({ ok:true });
+});
+// Delete option
+addRoute('delete', '/admin/tenants/:id/modifiers/options/:oid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  await db('delete from modifier_options where tenant_id=$1 and id=$2', [req.params.id, req.params.oid]);
+  res.json({ ok:true });
+});
+
 // ---- Device activation and licensing
 function genCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
 function genNonce(){ return crypto.randomBytes(16).toString('hex'); }
 function genDeviceToken(){ return crypto.randomBytes(32).toString('hex'); }
 
+// Device registers its own 6-digit local code (idempotent upsert).
+addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try {
+    await ensureLicensingSchema();
+    const code = String(req.body?.code||'').trim();
+    const role = String(req.body?.role||'').trim().toLowerCase();
+    const name = String(req.body?.name||'').trim() || null;
+    const branch = String(req.body?.branch||'').trim() || null;
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_code' });
+    const meta = { local: true, role, name, branch };
+    await db(`insert into device_activation_codes (code, tenant_id, expires_at, meta)
+              values ($1,$2, now() + interval '14 days', $3::jsonb)
+              on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta`,
+            [code, req.tenantId, JSON.stringify(meta)]);
+    return res.json({ ok:true });
+  } catch (e) {
+    return res.status(500).json({ error: 'register_failed' });
+  }
+});
+
 // Device starts pairing (tenant-scoped). Returns short code and nonce.
 addRoute('post', '/device/pair/start', requireTenant, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
-  let code = genCode();
-  // ensure uniqueness (very unlikely collision, loop a few times)
-  for (let i=0;i<5;i++){
-    const exists = await db('select 1 from device_activation_codes where code=$1', [code]);
-    if (!exists.length) break; code = genCode();
+  try {
+    // Ensure required licensing/activation tables exist
+    await ensureLicensingSchema();
+    let code = genCode();
+    // ensure uniqueness (very unlikely collision, loop a few times)
+    for (let i = 0; i < 5; i++) {
+      const exists = await db('select 1 from device_activation_codes where code=$1', [code]);
+      if (!exists.length) break;
+      code = genCode();
+    }
+    const nonce = genNonce();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await db('insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2,$3,$4::jsonb)', [code, req.tenantId, expires.toISOString(), JSON.stringify({ nonce })]);
+    return res.json({ code, expires_at: expires.toISOString(), nonce });
+  } catch (e) {
+    return res.status(500).json({ error: 'pair_start_failed' });
   }
-  const nonce = genNonce();
-  const expires = new Date(Date.now() + 10*60*1000); // 10 minutes
-  await db('insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2,$3,$4)', [code, req.tenantId, expires.toISOString(), { nonce }]);
-  res.json({ code, expires_at: expires.toISOString(), nonce });
 });
 
-// Device polls pairing status; if claimed and nonce matches, returns device_token and role.
+// Device polls pairing status; if claimed, returns device_token and role (nonce optional).
 addRoute('get', '/device/pair/:code/status', async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const code = String(req.params.code||'').trim();
@@ -1657,10 +1888,10 @@ addRoute('get', '/device/pair/:code/status', async (req, res) => {
   const r = rows[0];
   if (new Date(r.expires_at).getTime() < Date.now()) return res.json({ status: 'expired' });
   if (!r.claimed_at || !r.device_id) return res.json({ status: 'pending' });
-  // return device token if nonce matches
-  if (nonce && r.meta?.nonce === nonce) {
-    const [dev] = await db('select id, name, device_token, role::text as role, tenant_id, branch from devices where id=$1', [r.device_id]);
-    if (!dev) return res.json({ status: 'pending' });
+  // return device token if nonce matches OR if no nonce is required
+  const [dev] = await db('select id, name, device_token, role::text as role, tenant_id, branch from devices where id=$1', [r.device_id]);
+  if (!dev) return res.json({ status: 'pending' });
+  if (!nonce || (r.meta && r.meta.nonce && r.meta.nonce === nonce)) {
     return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
   }
   return res.json({ status: 'claimed' });
@@ -1691,18 +1922,35 @@ addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAd
   const code = String(req.body?.code||'').trim();
   const role = String(req.body?.role||'').trim().toLowerCase();
   const name = String(req.body?.name||'').trim();
-  const branch = String(req.body?.branch||'').trim();
+  let branch = String(req.body?.branch||'').trim();
   if (!code || (role !== 'cashier' && role !== 'display')) return res.status(400).json({ error: 'invalid_request' });
+  // If branch looks like a UUID, resolve to branch name
+  if (branch && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branch)) {
+    const [b] = await db('select name from branches where tenant_id=$1 and id=$2', [tenantId, branch]);
+    if (!b) return res.status(404).json({ error: 'branch_not_found' });
+    branch = b.name;
+  }
   if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
   const [lic] = await db('select license_limit from tenants where id=$1', [tenantId]);
   const limit = lic?.license_limit ?? 1;
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
   if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
-  const rows = await db('select code, tenant_id, expires_at, claimed_at from device_activation_codes where code=$1 and tenant_id=$2', [code, tenantId]);
-  if (!rows.length) return res.status(404).json({ error: 'code_not_found' });
-  const r = rows[0];
-  if (r.claimed_at) return res.status(409).json({ error: 'code_already_claimed' });
-  if (new Date(r.expires_at).getTime() < Date.now()) return res.status(409).json({ error: 'code_expired' });
+  // Find activation record by code (any tenant). Create if missing.
+  let rows = await db('select code, tenant_id, expires_at, claimed_at from device_activation_codes where code=$1', [code]);
+  let needInsert = false;
+  if (!rows.length) {
+    needInsert = true;
+  } else {
+    const r0 = rows[0];
+    if (r0.claimed_at) return res.status(409).json({ error: 'code_already_claimed' });
+    if (new Date(r0.expires_at).getTime() < Date.now()) needInsert = true;
+  }
+  if (needInsert) {
+    await db('insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2, now() + interval \''+ (14*24*60) +' minutes\', $3::jsonb) on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=coalesce(device_activation_codes.meta,\'{}\'::jsonb) || excluded.meta', [code, tenantId, JSON.stringify({ created_by: 'admin-claim' })]);
+  } else {
+    // ensure tenant binding
+    await db('update device_activation_codes set tenant_id=$1 where code=$2', [tenantId, code]);
+  }
   const token = genDeviceToken();
   const [dev] = await db(
     `insert into devices (tenant_id, name, role, status, branch, device_token)
@@ -1818,6 +2066,15 @@ app.use((req, res, next) => {
 });
 // Serve product images directly from /photos under /public/images/products (place before generic static mounts)
 app.use('/public/images/products', express.static(path.join(__dirname, 'photos')));
+
+// Legacy page redirects (.html -> directory)
+addRoute('get', '/products.html', (_req, res) => res.redirect(301, '/products/'));
+addRoute('get', '/categories.html', (_req, res) => res.redirect(301, '/categories/'));
+addRoute('get', '/modifiers/groups.html', (_req, res) => res.redirect(301, '/modifiers/groups/'));
+// Singular aliases to plural
+addRoute('get', '/product', (_req, res) => res.redirect(301, '/products/'));
+addRoute('get', '/product/', (_req, res) => res.redirect(301, '/products/'));
+
 // Serve static files at root (so /css/... and /js/... work)
 app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
