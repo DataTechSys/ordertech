@@ -1,0 +1,84 @@
+dev_log — project activity log
+
+IMPORTANT: SESSION LOGGING POLICY
+- At the start of every session, append a new timestamped entry here and log EVERY action and command we run.
+- This log is the single source of truth between sessions. Do not proceed without updating it.
+- Use the format: "=== YYYY-MM-DDThh:mm:ssZ — short description ===" followed by bullet points.
+
+Local Admin Token (dev) quickstart
+- For local Admin endpoints without Firebase Admin:
+  - export ADMIN_TOKEN=dev
+  - npm start
+  - Open http://localhost:5050/public/admin/?admin_token=dev
+- To clear/override: run localStorage.removeItem('ADMIN_TOKEN') in the browser console, or visit with a different admin_token to overwrite.
+
+=== 2025-08-30T07:06:47Z — Admin UI auth stability, prod deploy, dev token ===
+- Admin UI: avoid login redirect loops by not hard-redirecting on 401 and by proceeding if an ID token exists in localStorage.
+- Server: allow x-admin-token to bypass Firebase Admin auth locally when ADMIN_TOKEN matches (platform admin override).
+- Deploy: gcloud run deploy smart-order --region=europe-west1 --source .
+  - Service URL: https://smart-order-715493130630.europe-west1.run.app
+  - Domain: app.ordertech.me → smart-order
+- Platform admin: hussain@mosawi.com (in PLATFORM_ADMIN_EMAILS)
+
+Session: 2025-08-30T06:47:34Z
+Path: /Users/mosawi/datatech/ordertech
+Shell: zsh 5.9 on macOS
+
+Summary of actions in this session
+- Wired Admin UI to backend (auth + API calls) and committed on a new branch.
+- Verified Cloud Run EU production setup and custom domain mapping.
+- Restarted local server; Admin login now serves correctly on localhost.
+
+Cloud Run (EU) — production
+- Project: smart-order-469705
+- Region: europe-west1
+- Service: smart-order
+- Service URL: https://smart-order-64v5pfkeba-ew.a.run.app
+- Custom domain mapping: app.ordertech.me → routeName smart-order (region europe-west1)
+- Service env (non-sensitive summary):
+  - PLATFORM_ADMIN_EMAILS = hussain@mosawi.com
+  - REQUIRE_DB = 1 (DB required)
+  - DATABASE_URL = from Secret Manager (value not logged)
+  - PGPASSWORD = [redacted]
+
+Repository changes
+- Branch created (local): feature/admin-ui-wiring
+- Edited: public/admin/admin.js
+- Commit: "Admin UI: wire backend API and auth (tenants, metrics, devices, branches, domains, catalog)"
+
+Admin UI wiring highlights
+- Firebase auth bootstrap (redirect if signed-out; refresh/store ID token; optional admin_token URL param saved to localStorage).
+- Centralized API helper injects: Authorization (ID token), x-admin-token (if present), x-tenant-id; robust error handling.
+- Admin capability detection: tries /admin/tenants; falls back to /tenants for read-only.
+- Panels wired:
+  - Tenants: list/select/create (platform-admin)
+  - Dashboard: brand + live metrics
+  - Devices/licensing: list/revoke/delete, claim device, license limit
+  - Branches: list/add/rename/delete, branch-limit
+  - Domains: list/add/delete
+  - Catalog: read categories/products with x-tenant-id; category filter
+  - Posters: list cards
+  - Display state: save banner/featured (requires auth + tenant admin)
+
+Local status
+- Server restarted; Admin login page:
+  - http://localhost:5050/public/admin/login.html → 200 OK after restart
+- Public endpoints available: /categories, /products
+
+Next actions (owner)
+- Push branch and open PR to main:
+  - git remote add origin <YOUR_REPO_URL>
+  - git push -u origin feature/admin-ui-wiring
+  - gh pr create --fill --base main --head feature/admin-ui-wiring (optional)
+- Ensure Firebase/Identity Platform Authorized domains include:
+  - app.ordertech.me, and localhost (for local testing)
+- Optional: serve Admin Firebase config dynamically via env on Cloud Run:
+  - gcloud run services update smart-order \
+      --region europe-west1 \
+      --update-env-vars FIREBASE_API_KEY='{{API_KEY}}',FIREBASE_AUTH_DOMAIN='{{AUTH_DOMAIN}}'
+
+Notes for future sessions
+- Append new entries to this dev_log with a timestamped header like:
+  === 2025-08-31T09:00:00Z — short description ===
+  and list what changed, what we verified, and any pending actions.
+
