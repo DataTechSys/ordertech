@@ -1,4 +1,4 @@
-// /js/admin-common.js (migrated from /public/admin/js/admin-common.js)
+// /js/admin-common.js (migrated from legacy admin/js/admin-common.js)
 (function(){
   const $  = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));

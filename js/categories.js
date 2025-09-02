@@ -1,4 +1,4 @@
-// /js/categories.js (migrated from /public/admin/js/categories.js)
+// /js/categories.js (migrated from legacy admin/js/categories.js)
 (function(){
   const $ = (sel, el=document) => el.querySelector(sel);
   const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));

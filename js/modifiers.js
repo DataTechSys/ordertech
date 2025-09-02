@@ -1,4 +1,4 @@
-// /js/modifiers.js (migrated from /public/admin/js/modifiers.js)
+// /js/modifiers.js (migrated from legacy admin/js/modifiers.js)
 (function(){
   const $ = (sel, el=document) => el.querySelector(sel);
   const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));

@@ -1,4 +1,4 @@
-// /js/products.js (migrated from /public/admin/js/products.js)
+// /js/products.js (migrated from legacy admin/js/products.js)
 (function(){
   const $ = (sel, el=document) => el.querySelector(sel);
   const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));

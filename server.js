@@ -581,7 +581,7 @@ function loadJsonCatalog(){
     } catch {}
     // scan products images dir once to help guess filenames
     let imgFiles = [];
-    try { imgFiles = fs.readdirSync(path.join(__dirname, 'public', 'images', 'products')); } catch {}
+    try { imgFiles = fs.readdirSync(path.join(__dirname, 'images', 'products')); } catch {}
     const lcSet = new Set(imgFiles.map(f => f.toLowerCase()));
 
     const categories = [];
@@ -627,7 +627,7 @@ function loadJsonCatalog(){
         } else {
           file = findImage(name_en, name_ar);
         }
-        const image_url = file ? `/public/images/products/${encodeURIComponent(file)}` : undefined;
+        const image_url = file ? `/images/products/${encodeURIComponent(file)}` : undefined;
         products.push({ id, name: name_en, name_ar, price, category_id: cid, category_name: cname, image_url });
       }
     }
@@ -755,7 +755,7 @@ reference
     }
     // Fallbacks for missing image_url:
     // 1) Try CSV/JSON catalog by name (may provide remote Foodics URL)
-    // 2) Try local PHOTO_MAP (served from /public/images/products via /photos)
+    // 2) Try local PHOTO_MAP (served from /images/products with /photos fallback)
     try {
       if (Array.isArray(rows) && rows.length) {
         const byName = new Map((JSON_CATALOG.products||[]).map(p => [p.name, p.image_url]));
@@ -764,7 +764,7 @@ reference
             let u = byName.get(r.name);
             if (!u) {
               const f = PHOTO_MAP[r.name];
-              if (f) u = `/public/images/products/${encodeURIComponent(f)}`;
+              if (f) u = `/images/products/${encodeURIComponent(f)}`;
             }
             if (u) r.image_url = u;
           }
@@ -826,7 +826,7 @@ addRoute('get', '/api/products', requireTenant, async (req, res) => {
             let u = byName.get(r.name);
             if (!u) {
               const f = PHOTO_MAP[r.name];
-              if (f) u = `/public/images/products/${encodeURIComponent(f)}`;
+              if (f) u = `/images/products/${encodeURIComponent(f)}`;
             }
             if (u) r.image_url = u;
           }
@@ -1638,7 +1638,7 @@ async function requireTenantAdminBodyTenant(req, res, next){
 const requireAdmin = requirePlatformAdmin;
 
 // Dynamic Firebase config for Admin login (from env) with fallback to static file if env not set
-addRoute('get', '/public/admin/config.js', (_req, res) => {
+addRoute('get', '/config.js', (_req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
@@ -1648,22 +1648,11 @@ addRoute('get', '/public/admin/config.js', (_req, res) => {
     return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};`);
   }
   try {
-const fp = path.join(__dirname, 'admin', 'config.js');
+    const fp = path.join(__dirname, 'admin', 'config.js');
     const content = fs.readFileSync(fp, 'utf8');
     return res.type('application/javascript').send(content);
   } catch {
     return res.type('application/javascript').send('window.firebaseConfig={apiKey:"",authDomain:""};');
-  }
-});
-
-// New root config route for admin pages
-addRoute('get', '/config.js', (req, res) => {
-  // Simple redirect to the static admin config (which may be env-rendered by /public/admin/config.js route)
-  try {
-    const q = req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-    return res.redirect(307, '/public/admin/config.js' + q);
-  } catch {
-    return res.redirect(307, '/public/admin/config.js');
   }
 });
 
@@ -2815,7 +2804,6 @@ addRoute('delete', '/admin/tenants/:id/branches/:branchId', verifyAuth, requireT
 });
 
 // ---- Static UI
-const PUB = path.join(__dirname, 'public');
 // Cache-control for admin assets: allow short caching to improve load times; rely on versioned URLs to bust cache
 app.use((req, res, next) => {
   try {
@@ -2825,9 +2813,6 @@ app.use((req, res, next) => {
   } catch {}
   next();
 });
-// Serve product images from public first, then fallback to /photos (place before generic static mounts)
-app.use('/public/images/products', express.static(path.join(__dirname, 'images', 'products')));
-app.use('/public/images/products', express.static(path.join(__dirname, 'photos')));
 // New direct mounts for non-legacy paths
 app.use('/images/products', express.static(path.join(__dirname, 'images', 'products')));
 app.use('/images/products', express.static(path.join(__dirname, 'photos')));
@@ -2840,29 +2825,7 @@ app.use('/sidebar', express.static(path.join(__dirname, 'sidebar')));
 // Expose CSV data (e.g., top_sellers.csv) for frontend consumption
 app.use('/data', express.static(path.join(__dirname, 'data')));
 
-// Legacy page redirects (.html -> directory)
-addRoute('get', '/products.html', (_req, res) => res.redirect(301, '/products/'));
-addRoute('get', '/categories.html', (_req, res) => res.redirect(301, '/categories/'));
-addRoute('get', '/modifiers/groups.html', (_req, res) => res.redirect(301, '/modifiers/'));
-// Legacy page redirects for relocated pages
-addRoute('get', '/public/drive-thru.html', (_req, res) => res.redirect(301, '/drive'));
-addRoute('get', '/public/cashier.html', (_req, res) => res.redirect(301, '/cashier'));
 
-// Legacy admin redirects (public/admin -> new root pages)
-addRoute('get', '/public/admin', (_req, res) => res.redirect(301, '/products/'));
-addRoute('get', '/public/admin/', (_req, res) => res.redirect(301, '/products/'));
-addRoute('get', '/public/admin/login.html', (_req, res) => res.redirect(301, '/login/'));
-addRoute('get', '/public/admin/menu/products.html', (_req, res) => res.redirect(301, '/products/'));
-addRoute('get', '/public/admin/menu/categories.html', (_req, res) => res.redirect(301, '/categories/'));
-addRoute('get', '/public/admin/menu/modifiers/index.html', (_req, res) => res.redirect(301, '/modifiers/'));
-addRoute('get', '/public/admin/menu/modifiers/groups.html', (_req, res) => res.redirect(301, '/modifiers/'));
-addRoute('get', '/public/admin/menu/modifiers/options.html', (_req, res) => res.redirect(301, '/modifiers/'));
-addRoute('get', '/public/admin/org/company.html', (_req, res) => res.redirect(301, '/company/'));
-addRoute('get', '/public/admin/org/users.html', (_req, res) => res.redirect(301, '/users/'));
-addRoute('get', '/public/admin/org/roles.html', (_req, res) => res.redirect(301, '/roles/'));
-addRoute('get', '/public/admin/org/branches.html', (_req, res) => res.redirect(301, '/branches/'));
-addRoute('get', '/public/admin/org/devices.html', (_req, res) => res.redirect(301, '/devices/'));
-addRoute('get', '/public/admin/index.html', (_req, res) => res.redirect(301, '/products/'));
 
 // Root admin pages
 addRoute('get', '/products/', (_req, res) => res.sendFile(path.join(__dirname, 'products', 'index.html')));
@@ -2885,15 +2848,11 @@ addRoute('get', '/login/', (_req, res) => res.sendFile(path.join(__dirname, 'log
 addRoute('get', '/product', (_req, res) => res.redirect(301, '/products/'));
 addRoute('get', '/product/', (_req, res) => res.redirect(301, '/products/'));
 
-// Serve static files at root (so /css/... and /js/... work)
-app.use(express.static(PUB));
-// Also mount at /public to support asset paths like /public/js/... and /public/css/...
-app.use('/public', express.static(PUB));
-// Legacy aliases: if a file is missing under /public, fallback to new root asset directories
-app.use('/public/css', express.static(path.join(__dirname, 'css')));
-app.use('/public/js', express.static(path.join(__dirname, 'js')));
-app.use('/public/images', express.static(path.join(__dirname, 'images')));
-app.use('/public/sidebar', express.static(path.join(__dirname, 'sidebar')));
+// Legacy page redirects (.html -> directory)
+addRoute('get', '/products.html', (_req, res) => res.redirect(301, '/products/'));
+addRoute('get', '/categories.html', (_req, res) => res.redirect(301, '/categories/'));
+addRoute('get', '/modifiers/groups.html', (_req, res) => res.redirect(301, '/modifiers/'));
+
 addRoute('get', '/favicon.ico', (_req, res) => {
   try { return res.sendFile(path.join(__dirname, 'favicon.ico')); } catch { return res.status(404).end(); }
 });
