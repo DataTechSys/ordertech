@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Admin Login</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <main style="max-width:620px;margin:48px auto;padding:0 16px;">
+      <section class="card">
+        <div class="body">
+          <div style="display:grid;place-items:center;margin-bottom:12px;">
+            <img src="/images/avatar.jpg" onerror="this.onerror=null;this.src='/favicon.ico';" alt="Logo" style="height:48px;object-fit:cover;border-radius:12px;" />
+          </div>
+          <h2 class="page-title" style="margin-bottom:8px;">Admin Login</h2>
+          <p class="lead">Sign up or sign in with Email/Password. You must verify your email before signing in.</p>
+          <div class="grid cols-2 mt-3">
+            <label class="grid"><span class="label">Email</span><input id="email" class="input" type="email" autocomplete="username email" /></label>
+            <label class="grid"><span class="label">Password</span><input id="password" class="input" type="password" autocomplete="current-password" /></label>
+          </div>
+          <div class="toolbar" style="flex-wrap:wrap;gap:8px;">
+            <button id="emailSignIn" class="btn primary">Sign in with Email</button>
+            <button id="emailSignUp" class="btn">Create account</button>
+            <button id="resendVerify" class="btn ghost">Resend verification</button>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span id="msg" class="chip" style="display:none"></span>
+            <span id="hint" class="muted">After sign up, check your email for a verification link.</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // Initialize Firebase from /config.js (server-populated)
+      const firebaseConfig = window.firebaseConfig || { apiKey: "", authDomain: "" };
+      let auth = null;
+      function ensureFirebaseInitialized(){
+        if (!window.firebase) return false;
+        const cfg = window.firebaseConfig || {};
+        if (!cfg.apiKey || !cfg.authDomain) return false;
+        try {
+          if (!firebase.apps?.length) firebase.initializeApp(cfg);
+          if (!auth) auth = firebase.auth();
+          return true;
+        } catch (e) {
+          console.error('Firebase init failed:', e);
+          return false;
+        }
+      }
+
+      const msg = document.getElementById('msg');
+      function setMsg(t){ msg.style.display = t ? 'inline-flex' : 'none'; msg.textContent = t; }
+
+      const emailEl = document.getElementById('email');
+      const passEl = document.getElementById('password');
+
+      // Verification link settings
+      const actionCodeSettings = {
+        url: window.location.origin + '/login/?mode=verifyEmail',
+        handleCodeInApp: true
+      };
+
+      async function onSignedIn() {
+        try { const tok = await auth.currentUser.getIdToken(/*forceRefresh*/ true); localStorage.setItem('ID_TOKEN', tok); } catch {}
+        // default landing — products
+        location.href = '/products/';
+      }
+
+      function needFirebaseConfig(){
+        const cfg = window.firebaseConfig || {};
+        return !cfg.apiKey || !cfg.authDomain;
+      }
+
+      async function signInEmail(){
+        if (needFirebaseConfig()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
+        if (!ensureFirebaseInitialized()) return setMsg('Auth not loaded.');
+        const email = emailEl.value.trim();
+        const password = passEl.value;
+        if (!email || !password) return setMsg('Enter email and password.');
+        try {
+          const cred = await auth.signInWithEmailAndPassword(email, password);
+          const user = cred?.user || auth.currentUser;
+          if (user && !user.emailVerified) {
+            try { await user.sendEmailVerification(actionCodeSettings); } catch {}
+            await auth.signOut().catch(()=>{});
+            return setMsg('Verification email sent. Please verify your email, then sign in.');
+          }
+          await onSignedIn();
+        } catch (e) {
+          console.error('Email sign-in error:', e);
+          if (e?.code === 'auth/user-not-found') return setMsg('No account found. Click "Create account" to sign up.');
+          if (e?.code === 'auth/wrong-password') return setMsg('Incorrect password.');
+          if (e?.code === 'auth/too-many-requests') return setMsg('Too many attempts. Try again later.');
+          setMsg(`Email sign-in failed: ${e.code || ''} ${e.message || ''}`.trim());
+        }
+      }
+
+      async function signUpEmail(){
+        if (needFirebaseConfig()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
+        if (!ensureFirebaseInitialized()) return setMsg('Auth not loaded.');
+        const email = emailEl.value.trim();
+        const password = passEl.value;
+        if (!email || !password) return setMsg('Enter email and password.');
+        try {
+          const cred = await auth.createUserWithEmailAndPassword(email, password);
+          const user = cred?.user || auth.currentUser;
+          try { await user.sendEmailVerification(actionCodeSettings); } catch {}
+          await auth.signOut().catch(()=>{});
+          setMsg('Account created. Verification email sent. Please verify, then sign in.');
+        } catch (e) {
+          console.error('Email sign-up error:', e);
+          if (e?.code === 'auth/email-already-in-use') return setMsg('Email already in use. Try signing in.');
+          if (e?.code === 'auth/weak-password') return setMsg('Password is too weak.');
+          setMsg(`Sign-up failed: ${e.code || ''} ${e.message || ''}`.trim());
+        }
+      }
+
+      async function resendVerification(){
+        if (needFirebaseConfig()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
+        if (!ensureFirebaseInitialized()) return setMsg('Auth not loaded.');
+        const cur = auth.currentUser;
+        if (cur) {
+          try { await cur.sendEmailVerification(actionCodeSettings); return setMsg('Verification email resent.'); } catch {}
+        }
+        // If not signed in, try a silent sign-in then send, else ask user to sign in
+        const email = emailEl.value.trim();
+        const password = passEl.value;
+        if (!email || !password) return setMsg('Enter email and password, then click Resend.');
+        try {
+          const cred = await auth.signInWithEmailAndPassword(email, password);
+          const user = cred?.user || auth.currentUser;
+          if (user && user.emailVerified) { await auth.signOut().catch(()=>{}); return setMsg('Your email is already verified. You can sign in.'); }
+          try { await user.sendEmailVerification(actionCodeSettings); } catch {}
+          await auth.signOut().catch(()=>{});
+          setMsg('Verification email resent. Please check your inbox.');
+        } catch (e) {
+          console.error('Resend verification error:', e);
+          setMsg('Could not resend verification. Check your email/password and try again.');
+        }
+      }
+
+      document.getElementById('emailSignIn').onclick = signInEmail;
+      document.getElementById('emailSignUp').onclick = signUpEmail;
+      document.getElementById('resendVerify').onclick = resendVerification;
+
+      // Enter key submits sign in
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ signInEmail(); }});
+
+
+      // Handle email verification deep link (mode=verifyEmail & oobCode)
+      (async () => {
+        try {
+          const u = new URL(window.location.href);
+          const mode = u.searchParams.get('mode');
+          const oobCode = u.searchParams.get('oobCode');
+          if (mode === 'verifyEmail' && oobCode) {
+            if (needFirebaseConfig() || !ensureFirebaseInitialized()) {
+              setMsg('Firebase not configured. Open this link again after configuration.');
+            } else {
+              try {
+                await auth.applyActionCode(oobCode);
+                setMsg('Email verified. You can now sign in.');
+                // Clean URL
+                u.searchParams.delete('mode');
+                u.searchParams.delete('oobCode');
+                history.replaceState({}, '', u.toString());
+              } catch (e) {
+                console.error('applyActionCode error:', e);
+                setMsg('Verification link is invalid or expired. Click Resend verification.');
+              }
+            }
+          }
+        } catch {}
+      })();
+
+      // If already signed-in and verified, forward; if not verified, sign out and prompt
+      try {
+        if (!needFirebaseConfig() && ensureFirebaseInitialized()) {
+          auth.onAuthStateChanged(async (user) => {
+            if (!user) return;
+            try { await user.reload(); } catch {}
+            if (user.emailVerified) return onSignedIn();
+            // Keep them on the page if unverified
+            try { await auth.signOut(); } catch {}
+            setMsg('Please verify your email, then sign in.');
+          });
+        }
+      } catch {}
+    </script>
+  </body>
+</html>
+
