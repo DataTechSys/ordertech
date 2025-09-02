@@ -134,6 +134,28 @@ Recommended roles
 Stop/disable
 - Stop the proxy process (Ctrl+C) and unset DATABASE_URL/REQUIRE_DB to return to local/in-memory mode.
 
+=== 2025-08-30T09:46:21Z — Started local server and proxy ===
+- Created/updated Secret Manager secret: DB_PASSWORD (latest version added from Cloud Run env)
+- Wrote scripts/dev_db.env with DB_USER, DB_NAME, DB_PASSWORD_SECRET=DB_PASSWORD, CONNECTION_NAME, PROXY_PORT=6543
+- cloud-sql-proxy PID: running on 127.0.0.1:5432 for connection smart-order-469705:us-central1:smart-order-pg
+- Local Node server started in background
+  - PID printed in terminal, logs at .server.log
+  - Health: http://localhost:5050/__health → OK-7
+- Pending to fully use Cloud SQL from localhost:
+  - Provide DB password via Secret Manager (recommended): set DB_PASSWORD_SECRET in scripts/dev_db.env and run `. scripts/dev_db.sh start`
+  - Or provide DB_USER/DB_NAME explicitly and a password secret; the helper exports DATABASE_URL and PGPASSWORD safely.
+
+=== 2025-08-30T09:39:56Z — One-time setup automated ===
+- Generated scripts/dev_db.env.localtemplate prefilled with:
+  - PROJECT_ID=smart-order-469705
+  - REGION=europe-west1
+  - CONNECTION_NAME=smart-order-469705:us-central1:smart-order-pg
+  - DB_URL_SECRET=DATABASE_URL (pull full DB URL from Secret Manager; script rewrites host→127.0.0.1)
+- Added scripts/dev_db.env to .gitignore (do not commit local config)
+- Started Cloud SQL Auth Proxy locally on 127.0.0.1:5432 for connection smart-order-469705:us-central1:smart-order-pg
+  - To stop: kill the process or run `. scripts/dev_db.sh stop` after creating your scripts/dev_db.env
+- Note: local PostgreSQL listens on 5432; switched proxy to 6543 in scripts/dev_db.env (PROXY_PORT=6543)
+
 === 2025-08-30T09:35:39Z — Added scripts/dev_db.sh helper for Cloud SQL Proxy ===
 - New helper: scripts/dev_db.sh (source this script to control proxy and env)
   - . scripts/dev_db.sh start    → starts the proxy and exports DATABASE_URL, REQUIRE_DB
@@ -143,3 +165,74 @@ Stop/disable
 - Example config: scripts/dev_db.env.example (copy to scripts/dev_db.env and fill PROJECT_ID/REGION/INSTANCE/DB vars)
 - Requirements: gcloud CLI, cloud-sql-proxy installed, roles/cloudsql.client access
 - Notes: Uses Secret Manager to fetch DB password at runtime; keeps secrets out of files/console
+
+=== 2025-08-30T13:52:28Z — Prod deploy (EU): Admin pages moved to root, UI refresh ===
+- Context: Moved Admin pages from /public/admin to root; added Products, Categories, Modifiers HTML; updated links and UI.
+- Target: Cloud Run service smart-order (region europe-west1); domain via HTTPS LB app.ordertech.me
+- Deploy:
+  gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+- Verify (after deploy):
+  - Health: curl -s https://app.ordertech.me/health
+  - Cloud SQL attachment (names only): gcloud run services describe smart-order --region=europe-west1 --format='value(spec.template.metadata.annotations.run.googleapis.com/cloudsql-instances)'
+  - Env names: gcloud run services describe smart-order --region=europe-west1 --format='value(spec.template.spec.containers[0].env.name)'
+  - Firebase config served: curl -s https://app.ordertech.me/public/admin/config.js | head -n 3
+- Notes: Server sets no-cache headers for /public/admin; root pages should be served by express.static(PUB).
+
+Results:
+- Revision: smart-order-00032-fcn (100% traffic)
+- Service URL: https://smart-order-64v5pfkeba-ew.a.run.app
+- Health (LB): 200 OK
+- Cloud SQL: smart-order-469705:us-central1:smart-order-pg (attached)
+- Env names: PGPASSWORD; PLATFORM_ADMIN_EMAILS; REQUIRE_DB; DATABASE_URL
+- UI routes (LB): /products 200, /categories 200, /modifiers/groups/ 200
+- Firebase config (served): smart-order-469705.firebaseapp.com (apiKey present)
+
+=== 2025-08-30T13:58:50Z — Fix row click to open editors (Products/Categories), redeploy ===
+- Change: Make table rows clickable (not just name link) to open edit modals; ignore clicks on checkboxes/buttons.
+- Files:
+  - public/admin/js/products.js (added tr.row-click handler)
+  - public/admin/js/categories.js (added tr.row-click handler)
+- Deploy:
+  gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+- Verify served JS contains row handlers:
+  - products.js: grep "tr.row-click[data-pid]" → found
+  - categories.js: grep "tr.row-click[data-cid]" → found
+- Outcome: Clicking anywhere on a row (except controls) opens the editor modals.
+
+=== 2025-08-30T14:04:10Z — Preserve modals in shell; shade collapsed menu; redeploy ===
+- admin-shell: preserve .modal-backdrop nodes when rebuilding shell to keep modals functional on standalone pages
+- style.css: add shading for collapsed menu headers (.menu-head[aria-expanded="false"]) for clearer state
+- Deploy:
+  gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+- Verified:
+  - admin-shell.js contains modal preservation code
+  - style.css contains collapsed header shading rule
+
+=== 2025-08-30T14:10:44Z — Modal size + responsive adjustments; redeploy ===
+- style.css: make modal smaller and adaptive (max-width clamp(420px, 70vw, 640px); max-height 90vh; content scroll); tweak padding and preview size on small screens
+- Deploy:
+  gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+- Verified served CSS includes the clamp/max-height rules
+
+=== 2025-08-30T14:17:47Z — Products page size options (20/50/100), default 20, inline label; redeploy ===
+- Updated products.html and products/index.html to render Page size beside dropdown with options 20, 50, 100 (default 20)
+- Updated products.js default productsPageSize to 20
+- Deploy:
+  gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+- Verified live HTML shows the new options and selection
+
+=== 2025-08-30T14:24:03Z — Page size label no-wrap, remove refresh, darker submenu on expand; redeploy ===
+- products.html, products/index.html: remove Refresh button; make label no-wrap; keep options inline
+- style.css: darken expanded submenu background (.menu-head[aria-expanded="true"] + .menu-body)
+- Deploy:
+  gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
+- Verified products page markup (no refresh button, inline label) and CSS change live
+
+=== 2025-09-02T05:46:28Z — Auth: email-only login with verification; remove Google ===
+- Login: Removed Google sign-in; added Create account and Resend verification; lazy Firebase init guards; handle verifyEmail oobCode; Enter key triggers sign-in.
+- Server: Enforce verified emails for Admin API (REQUIRE_VERIFIED_EMAIL=1 by default; set 0 to disable locally).
+- Local config: Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN before starting; verify http://localhost:5050/config.js returns non-empty values.
+- Test: Sign up → open verification email → click link (lands back at /login) → sign in with email/password → redirect to /products/.
+- Files: login/index.html, server.js
+- Commit: 6b86939 on feature/admin-ui-wiring
+- Note: Ensure Email/Password provider is enabled and 'localhost' is in Authorized domains.
