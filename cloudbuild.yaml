@@ -1,25 +1,63 @@
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: ['build','-t','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA','.']
+    args: ['build','-t','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID','.']
 
   - name: gcr.io/cloud-builders/docker
-    args: ['push','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA']
+    args: ['push','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID']
 
+  # Create or update the Cloud Run Job for DB migrations (me-central1, DATABASE_URL)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        set -euo pipefail
+        JOB="smart-order-migrate"
+        IMAGE="${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID"
+        REGION="${_REGION}"
+        INSTANCE="smart-order-469705:me-central1:ordertech-db"
+        if gcloud run jobs describe "$$JOB" --region "$$REGION" >/dev/null 2>&1; then
+          gcloud run jobs update "$$JOB" \
+            --image "$$IMAGE" \
+            --region "$$REGION" \
+            --command node \
+            --args scripts/migrate.js \
+            --set-secrets DATABASE_URL=DATABASE_URL:latest \
+            --set-cloudsql-instances "$$INSTANCE"
+        else
+          gcloud run jobs create "$$JOB" \
+            --image "$$IMAGE" \
+            --region "$$REGION" \
+            --command node \
+            --args scripts/migrate.js \
+            --set-secrets DATABASE_URL=DATABASE_URL:latest \
+            --set-cloudsql-instances "$$INSTANCE"
+        fi
+
+  # Execute the migration job and wait for completion
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args: ['run','jobs','execute','smart-order-migrate','--region','${_REGION}','--wait']
+
+  # Deploy the service with Cloud SQL and DATABASE_URL secret configured (me-central1)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       [
         'run','deploy','${_SERVICE}',
-        '--image','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA',
+        '--image','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID',
         '--region','${_REGION}',
         '--platform','managed',
-        '--port','8080'
+        '--port','8080',
+        '--set-secrets','DATABASE_URL=DATABASE_URL:latest',
+        '--add-cloudsql-instances','smart-order-469705:me-central1:ordertech-db',
+        '--update-env-vars','ASSETS_BUCKET=smart-order-assets-me-central1-715493130630'
       ]
 
 images:
-  - '${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$SHORT_SHA'
+  - '${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID'
 
 substitutions:
   _REGION: me-central1
-  _AR_LOCATION: us-central1
-  _SERVICE: smart-order-api
+  _AR_LOCATION: me-central1
+  _SERVICE: smart-order

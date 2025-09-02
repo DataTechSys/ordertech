@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0; url=/products/" />
+    <link rel="canonical" href="/products/" />
+    <title>Redirecting…</title>
+  </head>
+  <body>
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border);">
+      <div class="breadcrumbs"><a id="tenantNameCrumb" href="#">—</a><span class="sep">›</span><span>Products</span></div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <select id="tenantSelect" class="select"></select>
+        <button id="logoutBtn" class="btn">Logout</button>
+      </div>
+    </header>
+    <main class="main" style="padding:16px;">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <div id="prodBulkBar" class="flex hidden">
+              <select id="prodBulkAction" class="select" style="max-width:220px">
+                <option value="delete">Delete</option>
+                <option value="inactivate">Inactivate</option>
+                <option value="activate">Activate</option>
+              </select>
+              <button id="prodBulkApply" class="btn danger">Apply</button>
+            </div>
+            <div class="spacer"></div>
+            <button id="newProductBtn" class="btn primary">New Product</button>
+            <div class="flex center">
+              <label class="flex center" style="gap:8px;">
+                <span class="label no-wrap">Page size</span>
+                <select id="prodPageSize" class="select">
+                  <option value="20" selected>20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="tabs" id="prodTabs">
+            <button class="tab active" data-tab="active">Active</button>
+            <button class="tab" data-tab="inactive">Inactive</button>
+            <button class="tab" data-tab="deleted">Deleted</button>
+          </div>
+          <div id="productTableWrap"></div>
+          <div class="flex between mt-2">
+            <div id="prodPageInfo" class="chip">—</div>
+            <div class="btn-group">
+              <button id="prodPrev" class="btn">Prev</button>
+              <button id="prodNext" class="btn">Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Product Modal -->
+    <div id="productModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+        <div class="header">
+          <div class="title" id="productModalTitle">Product</div>
+          <button id="productModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid">
+              <span class="label">SKU</span>
+              <input id="prodFormSku" class="input" placeholder="Unique SKU (defaults to generated)"/>
+            </label>
+            <label class="grid">
+              <span class="label">Name</span>
+              <input id="prodFormName" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid">
+              <span class="label">Category</span>
+              <select id="prodFormCategory" class="select"></select>
+            </label>
+            <label class="grid">
+              <span class="label">Price (KWD)</span>
+              <input id="prodFormPrice" type="number" step="0.001" min="0" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <div></div>
+            <div>
+              <span class="label">Preview</span>
+              <img id="prodPreview" class="thumb-md" alt="Preview"/>
+            </div>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Name (Localized)</span>
+              <input id="prodFormNameLocalized" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Tax Group Ref</span>
+              <input id="prodFormTax" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Cost (KWD)</span>
+              <input id="prodFormCost" type="number" step="0.001" min="0" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Barcode</span>
+              <input id="prodFormBarcode" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-3">
+            <label class="grid"><span class="label">Prep Time (min)</span>
+              <input id="prodFormPrepTime" type="number" step="1" min="0" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Calories</span>
+              <input id="prodFormCalories" type="number" step="1" min="0" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Walk Minutes</span>
+              <input id="prodFormWalkMins" type="number" step="1" min="0" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-3">
+            <label class="switch-row"><span class="label">Sold by Weight</span>
+              <input id="prodFormSoldByWeight" type="checkbox" class="switch"/>
+            </label>
+            <label class="switch-row"><span class="label">Stock Product</span>
+              <input id="prodFormStockProduct" type="checkbox" class="switch"/>
+            </label>
+            <label class="switch-row"><span class="label">High Salt</span>
+              <input id="prodFormHighSalt" type="checkbox" class="switch"/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Description</span>
+              <textarea id="prodFormDescription" class="textarea"></textarea>
+            </label>
+            <label class="grid"><span class="label">Description (Localized)</span>
+              <textarea id="prodFormDescriptionLocalized" class="textarea"></textarea>
+            </label>
+          </div>
+          <div class="row">
+            <label class="switch-row">
+              <span class="label">Active</span>
+              <input id="prodFormActive" type="checkbox" class="switch"/>
+            </label>
+          </div>
+        </div>
+        <div class="footer">
+          <button id="productModalDelete" class="btn danger hidden">Delete</button>
+          <button id="productModalActivate" class="btn hidden">Activate</button>
+          <span class="spacer"></span>
+          <button id="productModalCancel" class="btn">Cancel</button>
+          <button id="productModalSave" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/public/admin/js/admin-shell.js"></script>
+    <script src="/public/admin/js/admin-common.js"></script>
+    <script src="/public/admin/js/products.js"></script>
+  </body>
+</html>
+

@@ -74,3 +74,7 @@ Project: smart-order-469705
 - HTTPS LB: https://console.cloud.google.com/net-services/loadbalancing/list?project=smart-order-469705
 - Certificates: https://console.cloud.google.com/net-services/loadbalancing/advanced/sslCertificates/list?project=smart-order-469705
 
+## Secrets (reference)
+
+- See docs/SECRETS.md for creating/rotating DATABASE_URL in Secret Manager, granting Cloud Run access, and local proxy usage. Never commit or echo secrets.
+

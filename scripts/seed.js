@@ -50,9 +50,10 @@ function uuid() { return crypto.randomUUID(); }
         id uuid PRIMARY KEY,
         tenant_id uuid NOT NULL REFERENCES tenants(id),
         category_id uuid NOT NULL REFERENCES categories(id),
+        category_reference text,
         name text NOT NULL,
         description text,
-        price numeric(10,2) NOT NULL,
+        price numeric(10,3) NOT NULL,
         image_url text,
         created_at timestamptz NOT NULL DEFAULT now()
       )`);

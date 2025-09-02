@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Admin • Posters</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border);">
+      <div class="breadcrumbs"><span>Marketing</span><span class="sep">›</span><span>Posters</span></div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <select id="tenantSelect" class="select"></select>
+        <button id="logoutBtn" class="btn">Logout</button>
+      </div>
+    </header>
+    <main class="main" style="padding:16px;">
+      <section class="card">
+        <div class="body">
+          <p class="lead">Upload poster images to show on displays when idle. (Stub)</p>
+          <div class="row">
+            <input id="file" type="file" accept="image/*" />
+            <button id="btnUpload" class="btn">Upload</button>
+          </div>
+          <div id="status" class="muted">—</div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-shell.js?v=20250901"></script>
+    <script src="/js/admin-common.js?v=20250901"></script>
+    <script>
+      async function uploadFile(file){
+        const tid = Admin.STATE.selectedTenantId; if (!tid || !file) return Admin.toast('Choose a file');
+        const ct = file.type || 'application/octet-stream';
+        const { url, publicUrl } = await Admin.api('/admin/upload-url', { method:'POST', body:{ tenant_id: tid, filename: file.name, kind:'poster', contentType: ct }, tenantId: tid });
+        await fetch(url, { method:'PUT', headers:{ 'Content-Type': ct }, body: file });
+        document.getElementById('status').textContent = 'Uploaded: ' + publicUrl;
+      }
+      Admin.bootstrapAuth(function(){});
+      document.getElementById('btnUpload').addEventListener('click', async ()=>{
+        const f = document.getElementById('file').files[0];
+        try { await uploadFile(f); } catch { Admin.toast('Upload failed'); }
+      });
+      document.getElementById('logoutBtn')?.addEventListener('click', async ()=>{ try { if (window.firebase?.auth) await window.firebase.auth().signOut(); } catch {}; try { localStorage.removeItem('ID_TOKEN'); } catch {}; location.href='/login/'; });
+    </script>
+  </body>
+</html>
+

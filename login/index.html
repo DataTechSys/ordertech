@@ -6,7 +6,7 @@
     <title>OrderTech — Admin Login</title>
     <link rel="stylesheet" href="/css/admin.css" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-    <script src="/config.js"></script>
+    <script src="/config.js?v=2"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   </head>
@@ -18,7 +18,12 @@
             <img src="/images/avatar.jpg" onerror="this.onerror=null;this.src='/favicon.ico';" alt="Logo" style="height:48px;object-fit:cover;border-radius:12px;" />
           </div>
           <h2 class="page-title" style="margin-bottom:8px;">Admin Login</h2>
-          <p class="lead">Sign up or sign in with Email/Password. You must verify your email before signing in.</p>
+          <p class="lead">Sign in with Google or Email/Password. For email sign-in, you must verify your email first.</p>
+          <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-top:12px;margin-bottom:8px;">
+            <button id="googleSignIn" class="btn" style="background:#fff;border-color:#d1d5db;display:inline-flex;align-items:center;gap:8px;">
+              <span>Continue with Google</span>
+            </button>
+          </div>
           <div class="grid cols-2 mt-3">
             <label class="grid"><span class="label">Email</span><input id="email" class="input" type="email" autocomplete="username email" /></label>
             <label class="grid"><span class="label">Password</span><input id="password" class="input" type="password" autocomplete="current-password" /></label>
@@ -27,6 +32,7 @@
             <button id="emailSignIn" class="btn primary">Sign in with Email</button>
             <button id="emailSignUp" class="btn">Create account</button>
             <button id="resendVerify" class="btn ghost">Resend verification</button>
+            <button id="continueBtn" class="btn primary" style="display:none">Continue to dashboard</button>
           </div>
           <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <span id="msg" class="chip" style="display:none"></span>
@@ -66,7 +72,15 @@
         handleCodeInApp: true
       };
 
+      // Short-lived suppression of auto-forward (used during sign-up)
+      const NO_AUTO_KEY = 'NO_AUTO_FORWARD_UNTIL';
+      function setNoAutoForward(seconds = 90){ try { sessionStorage.setItem(NO_AUTO_KEY, String(Date.now() + seconds*1000)); } catch {}
+      }
+      function isNoAutoForward(){ try { const t = Number(sessionStorage.getItem(NO_AUTO_KEY) || 0); return t && Date.now() < t; } catch { return false; } }
+      function clearNoAutoForward(){ try { sessionStorage.removeItem(NO_AUTO_KEY); } catch {} }
+
       async function onSignedIn() {
+        clearNoAutoForward();
         try { const tok = await auth.currentUser.getIdToken(/*forceRefresh*/ true); localStorage.setItem('ID_TOKEN', tok); } catch {}
         // default landing — products
         location.href = '/products/';
@@ -77,9 +91,37 @@
         return !cfg.apiKey || !cfg.authDomain;
       }
 
+      async function loadScript(src){
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src; s.async = true; s.onload = () => resolve(true); s.onerror = () => reject(new Error('script_failed'));
+          document.head.appendChild(s);
+        });
+      }
+
+      async function ensureAuthReady(){
+        // Try to fetch JSON config if missing
+        if (needFirebaseConfig()) {
+          try {
+            const r = await fetch('/config.json', { cache: 'no-store', credentials: 'omit' });
+            if (r.ok) {
+              const j = await r.json();
+              if (j && j.apiKey && j.authDomain) {
+                window.firebaseConfig = j;
+              }
+            }
+          } catch {}
+        }
+        // If still missing, force reload of /config.js with a cache buster
+        if (needFirebaseConfig()) {
+          try { await loadScript('/config.js?v=' + Date.now()); } catch {}
+        }
+        if (needFirebaseConfig()) return false;
+        return ensureFirebaseInitialized();
+      }
+
       async function signInEmail(){
-        if (needFirebaseConfig()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
-        if (!ensureFirebaseInitialized()) return setMsg('Auth not loaded.');
+        if (!(await ensureAuthReady())) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
         const email = emailEl.value.trim();
         const password = passEl.value;
         if (!email || !password) return setMsg('Enter email and password.');
@@ -102,8 +144,9 @@
       }
 
       async function signUpEmail(){
-        if (needFirebaseConfig()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
-        if (!ensureFirebaseInitialized()) return setMsg('Auth not loaded.');
+        if (!(await ensureAuthReady())) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
+        // Prevent auto-redirect to dashboard during the sign-up flow
+        setNoAutoForward(90);
         const email = emailEl.value.trim();
         const password = passEl.value;
         if (!email || !password) return setMsg('Enter email and password.');
@@ -122,8 +165,7 @@
       }
 
       async function resendVerification(){
-        if (needFirebaseConfig()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
-        if (!ensureFirebaseInitialized()) return setMsg('Auth not loaded.');
+        if (!(await ensureAuthReady())) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
         const cur = auth.currentUser;
         if (cur) {
           try { await cur.sendEmailVerification(actionCodeSettings); return setMsg('Verification email resent.'); } catch {}
@@ -145,9 +187,35 @@
         }
       }
 
+      // Google sign-in
+      async function signInGoogle(){
+        if (!(await ensureAuthReady())) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          await auth.signInWithPopup(provider);
+          await onSignedIn();
+        } catch (e) {
+          console.warn('Google popup sign-in failed, trying redirect...', e?.code || e);
+          try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            await auth.signInWithRedirect(provider);
+          } catch (e2) {
+            console.error('Google redirect sign-in failed:', e2);
+            setMsg(`Google sign-in failed: ${e2?.code || ''} ${e2?.message || ''}`.trim());
+          }
+        }
+      }
+
+      document.getElementById('googleSignIn').onclick = signInGoogle;
       document.getElementById('emailSignIn').onclick = signInEmail;
       document.getElementById('emailSignUp').onclick = signUpEmail;
       document.getElementById('resendVerify').onclick = resendVerification;
+      document.getElementById('continueBtn').onclick = async () => {
+        if (!ensureFirebaseInitialized()) return setMsg('Firebase config missing. Set FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN.');
+        await onSignedIn();
+      };
 
       // Enter key submits sign in
       document.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ signInEmail(); }});
@@ -160,7 +228,7 @@
           const mode = u.searchParams.get('mode');
           const oobCode = u.searchParams.get('oobCode');
           if (mode === 'verifyEmail' && oobCode) {
-            if (needFirebaseConfig() || !ensureFirebaseInitialized()) {
+            if (!(await ensureAuthReady())) {
               setMsg('Firebase not configured. Open this link again after configuration.');
             } else {
               try {
@@ -179,13 +247,33 @@
         } catch {}
       })();
 
+      // Handle Google redirect result if popup was blocked
+      (async () => {
+        try {
+          if (!(await ensureAuthReady())) return;
+          const result = await auth.getRedirectResult();
+          if (result && result.user) {
+            await onSignedIn();
+            return;
+          }
+        } catch (e) {
+          console.error('Google redirect result error:', e);
+        }
+      })();
+
       // If already signed-in and verified, forward; if not verified, sign out and prompt
       try {
         if (!needFirebaseConfig() && ensureFirebaseInitialized()) {
           auth.onAuthStateChanged(async (user) => {
             if (!user) return;
             try { await user.reload(); } catch {}
-            if (user.emailVerified) return onSignedIn();
+            // Suppress any redirect shortly after a sign-up attempt
+            if (isNoAutoForward()) return;
+            if (user.emailVerified) {
+              setMsg('You are signed in. Click Continue to proceed.');
+              try { document.getElementById('continueBtn').style.display = 'inline-flex'; } catch {}
+              return;
+            }
             // Keep them on the page if unverified
             try { await auth.signOut(); } catch {}
             setMsg('Please verify your email, then sign in.');

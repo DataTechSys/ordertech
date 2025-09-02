@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Company</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><span>Admin</span><span class="sep">›</span><span>Company</span></nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Display Name</span>
+              <input id="brandName" class="input" placeholder="Company display name" />
+            </label>
+            <label class="grid"><span class="label">Logo URL</span>
+              <input id="brandLogo" class="input" placeholder="https://..." />
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Primary Color</span>
+              <input id="brandPrimary" class="input" placeholder="#22c55e" />
+            </label>
+            <label class="grid"><span class="label">Secondary Color</span>
+              <input id="brandSecondary" class="input" placeholder="#0ea5e9" />
+            </label>
+          </div>
+          <div class="row cols-3">
+            <label class="grid"><span class="label">Slug</span>
+              <input id="setSlug" class="input" placeholder="company-slug" />
+            </label>
+            <label class="grid"><span class="label">Default Locale</span>
+              <input id="setLocale" class="input" placeholder="en" />
+            </label>
+            <label class="grid"><span class="label">Currency</span>
+              <input id="setCurrency" class="input" placeholder="KWD" />
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Timezone</span>
+              <input id="setTimezone" class="input" placeholder="Asia/Kuwait" />
+            </label>
+            <div></div>
+          </div>
+          <div class="row">
+            <button id="saveBtn" class="btn primary">Save</button>
+            <span id="status" class="muted" style="margin-left:8px;">—</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script src="/js/company.js"></script>
+  </body>
+</html>
+

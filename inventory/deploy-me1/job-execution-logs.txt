@@ -1,0 +1,100 @@
+
+Container called exit(1).
+}
+  routine: 'RangeVarGetRelidExtended'
+  line: '436',
+  file: 'namespace.c',
+  constraint: undefined,
+  dataType: undefined,
+  column: undefined,
+  table: undefined,
+  schema: undefined,
+  where: undefined,
+  internalQuery: undefined,
+  internalPosition: undefined,
+  position: undefined,
+  hint: undefined,
+  detail: undefined,
+  code: '42P01',
+  severity: 'ERROR',
+  length: 108,
+    at async main (/app/scripts/migrate.js:58:7) {
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at /app/node_modules/pg/lib/client.js:545:17
+Migration failed: error: relation "categories" does not exist
+Applying 20250830_products_enhancements.sql...
+Applied 20250830_appdb_pre.sql
+Applying 20250830_appdb_pre.sql...
+Applied 20250829_add_image_url.sql
+Applying 20250829_add_image_url.sql...
+Applied 003_branches.sql
+Applying 003_branches.sql...
+Applied 002_devices.sql
+Applying 002_devices.sql...
+Applied 001_multi_tenant_core.sql
+Applying 001_multi_tenant_core.sql...
+Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+Container called exit(1).
+}
+  routine: 'RangeVarGetRelidExtended'
+  line: '436',
+  file: 'namespace.c',
+  constraint: undefined,
+  dataType: undefined,
+  column: undefined,
+  table: undefined,
+  schema: undefined,
+  where: undefined,
+  internalQuery: undefined,
+  internalPosition: undefined,
+  position: undefined,
+  hint: undefined,
+  detail: undefined,
+  code: '42P01',
+  severity: 'ERROR',
+  length: 108,
+    at async main (/app/scripts/migrate.js:58:7) {
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at /app/node_modules/pg/lib/client.js:545:17
+Migration failed: error: relation "categories" does not exist
+Applying 20250830_products_enhancements.sql...
+Applied 20250830_appdb_pre.sql
+Applying 20250830_appdb_pre.sql...
+Applied 20250829_add_image_url.sql
+Applying 20250829_add_image_url.sql...
+Applied 003_branches.sql
+Applying 003_branches.sql...
+Applied 002_devices.sql
+Applying 002_devices.sql...
+Applied 001_multi_tenant_core.sql
+Applying 001_multi_tenant_core.sql...
+Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+Container called exit(1).
+}
+  routine: 'RangeVarGetRelidExtended'
+  line: '436',
+  file: 'namespace.c',
+  constraint: undefined,
+  dataType: undefined,
+  column: undefined,
+  table: undefined,
+  schema: undefined,
+  where: undefined,
+  internalQuery: undefined,
+  internalPosition: undefined,
+  position: undefined,
+  hint: undefined,
+  detail: undefined,
+  code: '42P01',
+  severity: 'ERROR',
+  length: 108,
+    at async main (/app/scripts/migrate.js:58:7) {
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at /app/node_modules/pg/lib/client.js:545:17
+Migration failed: error: relation "categories" does not exist
+Applying 20250830_products_enhancements.sql...
+Applied 20250830_appdb_pre.sql
+Applying 20250830_appdb_pre.sql...
+Applied 20250829_add_image_url.sql
+Applying 20250829_add_image_url.sql...
+Applied 003_branches.sql

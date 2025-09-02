@@ -1,0 +1,51 @@
+creationTimestamp: '2025-08-22T06:09:32.783-07:00'
+defaultService: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-koobs-backend
+fingerprint: FvbtI-WfDWU=
+hostRules:
+- hosts:
+  - smartorder.koobs.cafe
+  pathMatcher: smartorder
+- hosts:
+  - '*'
+  pathMatcher: app-ordertech
+- hosts:
+  - app.ordertech.me
+  pathMatcher: app-ordertech
+id: 839287009838486243
+kind: compute#urlMap
+name: smartorder-koobs-map
+pathMatchers:
+- defaultService: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendBuckets/smartorder-static-bucket
+  name: smartorder
+  pathRules:
+  - paths:
+    - /assets/*
+    - /branches
+    - /branches/*
+    - /cashier
+    - /cashier/*
+    - /cashier/sessions
+    - /cashier/sessions/*
+    - /categories
+    - /categories/*
+    - /drive-thru/state
+    - /drive-thru/state/*
+    - /images/*
+    - /images/resolve
+    - /images/resolve/*
+    - /orders
+    - /orders/*
+    - /photos/*
+    - /products
+    - /products/*
+    - /rt/*
+    - /tenants
+    - /tenants/*
+    service: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-koobs-backend
+- defaultService: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-ew1-backend
+  name: app-ordertech
+  pathRules:
+  - paths:
+    - /_canary/*
+    service: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-me1-backend
+selfLink: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/urlMaps/smartorder-koobs-map

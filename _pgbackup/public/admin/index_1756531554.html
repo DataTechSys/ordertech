@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+        <title>OrderTech — Admin</title>
+        <link rel="stylesheet" href="/public/admin/style.css"/>
+        <link rel="icon" href="/public/favico.ico" type="image/x-icon"/>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"/>
+        <script src="/public/admin/config.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    </head>
+    <body>
+        <div class="app">
+            <aside class="sidebar" id="sidebar" aria-label="Main">
+                <div class="brand">
+                    <div class="logo" aria-hidden="true" style="background-image:url('/public/ordertech.jpg'),url('/public/ordertech.ico');background-size:contain;background-position:center;background-repeat:no-repeat;background-color:transparent;"></div>
+                </div>
+                <nav class="menu" role="tree">
+                    <!-- Dashboard -->
+                    <div class="menu-section open">
+                        <a id="navDashboard" class="menu-item" href="#" data-panel="panel-dashboard"> <span class="icon ri ri-dashboard-line"></span> <span class="label">Dashboard</span> </a>
+                    </div>
+                    <!-- Super Admin (platform only) -->
+                    <div class="menu-section open" id="secSuper" data-section>
+                        <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-super">
+                            <span class="chev">▾</span>
+                            <span class="icon ri ri-settings-3-line"></span>
+                            <span class="label">Super Admin</span>
+                        </button>
+                        <div class="menu-body" id="sec-super">
+                            <a id="navTenants" class="menu-item" href="#" data-panel="panel-super"> <span class="icon ri ri-team-line"></span> <span class="label">Tenants</span> </a>
+                            <a id="navBilling" class="menu-item" href="#" data-panel="panel-super-billing"> <span class="icon ri ri-bill-line"></span> <span class="label">Billing</span> </a>
+                        </div>
+                    </div>
+                    <!-- Menu (collapsible) -->
+                    <div class="menu-section open" data-section>
+                        <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-menu">
+                            <span class="chev">▾</span>
+                            <span class="icon ri ri-menu-line"></span>
+                            <span class="label">Menu</span>
+                        </button>
+                        <div class="menu-body" id="sec-menu">
+                            <a id="navCategories" class="menu-item" href="#" data-panel="panel-categories"> <span class="icon ri ri-grid-line"></span> <span class="label">Categories</span> </a>
+                            <a id="navProducts" class="menu-item" href="#" data-panel="panel-products"> <span class="icon ri ri-shopping-bag-3-line"></span> <span class="label">Products</span> </a>
+                            <a id="navModifiers" class="menu-item" href="#" data-panel="panel-modifiers"> <span class="icon ri ri-sliders-line"></span> <span class="label">Modifiers</span> </a>
+                        </div>
+                    </div>
+                    <!-- Manage -->
+                    <div class="menu-section open" data-section>
+                        <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-manage">
+                            <span class="chev">▾</span>
+                            <span class="icon ri ri-settings-4-line"></span>
+                            <span class="label">Manage</span>
+                        </button>
+                        <div class="menu-body" id="sec-manage">
+                            <a id="navCompany" class="menu-item" href="#" data-panel="panel-company"> <span class="icon"><svg viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/>
+                                    </svg></span> <span class="label">Profile</span> </a>
+                        </div>
+                    </div>
+                    <!-- Marketing -->
+                    <div class="menu-section open" data-section>
+                        <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-marketing">
+                            <span class="chev">▾</span>
+                            <span class="icon ri ri-megaphone-line"></span>
+                            <span class="label">Marketing</span>
+                        </button>
+                        <div class="menu-body" id="sec-marketing">
+                            <a id="navPosters" class="menu-item" href="#" data-panel="panel-posters"> <span class="icon ri ri-image-2-line"></span> <span class="label">Posters</span> </a>
+                            <a id="navMessages" class="menu-item" href="#" data-panel="panel-messages"> <span class="icon ri ri-message-3-line"></span> <span class="label">Messages</span> </a>
+                        </div>
+                    </div>
+                </nav>
+                <div class="bottom-bar">
+                    <button class="btn icon ghost sidebar-toggle" id="sidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">☰</button>
+                </div>
+            </aside>
+            <header class="topbar">
+                <nav class="breadcrumbs">
+                    <a id="tenantNameCrumb" href="#">—</a><span class="sep">›</span>
+                    <span>Admin</span>
+                </nav>
+                <div class="searchbar">
+                    <span id="adminUser" class="chip">Signed in</span>
+                    <button id="logoutBtn" class="btn">Logout</button>
+                </div>
+                <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+            </header>
+            <main class="main">
+                <!-- Dashboard Panel (default) -->
+                <section id="panel-dashboard" class="panel show">
+                    <h2 class="page-title">Dashboard</h2>
+                    <section class="card">
+                        <div class="body">
+                            <h3>Quick Status</h3>
+                            <div class="grid cols-3 mt-2">
+                                <div class="chip">Brand <span id="dbBrandName">—</span>
+                                </div>
+                                <div class="chip">Tenant ID <span id="dbTenantId">—</span>
+                                </div>
+                                <div class="chip">Selected Tenant <span id="dbTenantName">—</span>
+                                </div>
+                            </div>
+                            <div class="grid cols-3 mt-3">
+                                <div class="card">
+                                    <div class="body"><strong>Active Machines</strong>
+                                        <div id="dbActiveDevices" class="mt-2">-</div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="body"><strong>Online Displays</strong>
+                                        <div id="dbDisplaysOnline" class="mt-2">-</div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="body"><strong>Active Sessions</strong>
+                                        <div id="dbSessionsActive" class="mt-2">Coming soon</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+                <!-- Super Admin Panel (Tenants) -->
+                <section id="panel-super" class="panel">
+                    <h2 class="page-title">Super Admin</h2>
+                    <section class="card">
+                        <div class="body">
+                            <h3>Tenants</h3>
+                            <div class="toolbar">
+                                <button id="refreshTenants" class="btn">Refresh</button>
+                                <select id="tenantSelect" class="select"></select>
+                            </div>
+                            <div class="grid cols-3">
+                                <input id="newTenantName" class="input" placeholder="New tenant name"/>
+                                <input id="newTenantSlug" class="input" placeholder="Slug (optional)"/>
+                                <button id="createTenant" class="btn primary">Create Tenant</button>
+                            </div>
+                            <ul id="tenantList"></ul>
+                        </div>
+                    </section>
+                    <section class="card mt-4">
+                        <div class="body">
+                            <h3>Devices</h3>
+                            <div class="grid cols-3 mt-2">
+                                <div class="chip">Usage <span id="licenseUsage">-</span>
+                                </div>
+                                <label class="flex center">License limit 
+                                    <input id="licenseLimit" class="input" type="number" min="1" style="max-width:120px; margin-left:8px;"/>
+                                </label>
+                                <button id="saveLicense" class="btn">Save Limit</button>
+                            </div>
+                            <div class="grid cols-4 mt-2">
+                                <input id="claimCode" class="input" placeholder="Activation code"/>
+                                <select id="claimRole" class="select">
+                                    <option value="cashier">Cashier (master)</option>
+                                    <option value="display">Drive-thru (slave)</option>
+                                </select>
+                                <input id="claimName" class="input" placeholder="Device name (optional)"/>
+                                <div class="flex center">
+                                    <select id="claimBranchSel" class="select" style="width:100%">
+                                        <option value="">Select branch (required for display)</option>
+                                    </select>
+                                </div>
+                                <div class="flex">
+                                    <button id="claimDevice" class="btn primary">Claim Device</button>
+                                </div>
+                            </div>
+                            <ul id="deviceList" class="mt-3"></ul>
+                        </div>
+                    </section>
+                    <section class="card mt-4">
+                        <div class="body">
+                            <h3>Branches</h3>
+                            <div class="grid cols-3 mt-2">
+                                <div class="chip">Usage <span id="branchUsage">-</span>
+                                </div>
+                                <label class="flex center">Branch limit 
+                                    <input id="branchLimit" class="input" type="number" min="1" style="max-width:120px; margin-left:8px;"/>
+                                </label>
+                                <button id="saveBranchLimit" class="btn">Save Branch Limit</button>
+                            </div>
+                            <div class="flex mt-2">
+                                <input id="newBranchName" class="input" placeholder="Branch name"/>
+                                <button id="addBranch" class="btn">Add Branch</button>
+                            </div>
+                            <ul id="branchList" class="mt-2"></ul>
+                        </div>
+                    </section>
+                    <section class="card mt-4">
+                        <div class="body">
+                            <h3>Domains</h3>
+                            <div class="flex mt-2">
+                                <input id="domainHost" class="input" placeholder="e.g. cafe.app.ordertech.me"/>
+                                <button id="addDomain" class="btn">Add Domain</button>
+                            </div>
+                            <ul id="domainList" class="mt-2"></ul>
+                        </div>
+                    </section>
+                </section>
+                <!-- Super Admin Billing Panel -->
+                <section id="panel-super-billing" class="panel">
+                    <h2 class="page-title">Billing</h2>
+                    <section class="card">
+                        <div class="body">
+                            <h3>License</h3>
+                            <div class="grid cols-3 mt-2">
+                                <div class="chip">Usage <span id="licenseUsageBilling">-</span>
+                                </div>
+                                <label class="flex center">License limit 
+                                    <input id="licenseLimitBilling" class="input" type="number" min="1" style="max-width:120px; margin-left:8px;"/>
+                                </label>
+                                <button id="saveLicenseBilling" class="btn">Save Limit</button>
+                            </div>
+                            <div class="mt-3">
+                                <span class="badge">Invoices — coming soon</span>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+                <!-- Marketing: Posters -->
+                <section id="panel-posters" class="panel">
+                    <h2 class="page-title">Posters</h2>
+                    <section class="card">
+                        <div class="body">
+                            <h3>Rotating Posters</h3>
+                            <div class="toolbar">
+                                <button id="refreshPosters" class="btn">Refresh Posters</button>
+                                <span class="badge">uploads coming soon</span>
+                            </div>
+                            <div id="posterGrid" class="grid cols-4"></div>
+                        </div>
+                    </section>
+                </section>
+                <!-- Marketing: Messages -->
+                <section id="panel-messages" class="panel">
+                    <h2 class="page-title">Messages</h2>
+                    <section class="card">
+                        <div class="body">
+                            <h3>Display Banner &amp; Featured</h3>
+                            <div class="grid cols-2 mt-2">
+                                <label class="grid"><span class="label">Banner Text</span>
+                                    <input id="dtBanner" class="input"/>
+                                </label>
+                                <label class="grid"><span class="label">Featured Product IDs (comma)</span>
+                                    <input id="dtFeatured" class="input"/>
+                                </label>
+                            </div>
+                            <div class="mt-2">
+                                <button id="saveDisplay" class="btn primary">Save</button>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+                <!-- Categories -->
+                <section id="panel-categories" class="panel">
+                    <h2 class="page-title">Categories</h2>
+                    <section class="card">
+                        <div class="body">
+                            <div class="toolbar">
+                                <button id="refreshCategories" class="btn">Refresh</button>
+                                <button id="deleteSelectedCategories" class="btn danger hidden">Delete selected</button>
+                            </div>
+                            <div id="categoryTableWrap"></div>
+                        </div>
+                    </section>
+                </section>
+                <!-- Modifiers stub -->
+                <section id="panel-modifiers" class="panel">
+                    <h2 class="page-title">Modifiers</h2>
+                    <section class="card">
+                        <div class="body">
+                            <p class="lead">Create options and modifier groups — coming soon.</p>
+                        </div>
+                    </section>
+                </section>
+                <!-- Company Profile Panel -->
+                <section id="panel-company" class="panel">
+                    <h2 class="page-title">Company Profile</h2>
+                    <section class="card">
+                        <div class="body">
+                            <h3>Branding</h3>
+                            <div class="grid cols-3 mt-2">
+                                <label class="grid"><span class="label">Display Name</span>
+                                    <input id="brandName" class="input"/>
+                                </label>
+                                <label class="grid"><span class="label">Logo URL</span>
+                                    <input id="logoUrl" class="input"/>
+                                </label>
+                                <label class="grid"><span class="label">Logo File</span>
+                                    <input id="logoFile" class="input" type="file" accept="image/*"/>
+                                </label>
+                                <div>
+                                    <button id="uploadLogo" class="btn">Upload Logo</button>
+                                </div>
+                                <label class="grid"><span class="label">Primary Color</span>
+                                    <input id="colorPrimary" class="input"/>
+                                </label>
+                                <label class="grid"><span class="label">Secondary Color</span>
+                                    <input id="colorSecondary" class="input"/>
+                                </label>
+                            </div>
+                            <div class="mt-2">
+                                <button id="saveBrand" class="btn primary">Save Branding</button>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+                <!-- Products Panel -->
+                <section id="panel-products" class="panel">
+                    <h2 class="page-title">Products</h2>
+                    <section class="card">
+                        <div class="body">
+                            <div class="toolbar">
+                                <label class="grid" style="max-width:280px;">
+                                    <span class="label">Category</span>
+                                    <select id="prodCategory" class="select">
+                                        <option value="">All</option>
+                                    </select>
+                                </label>
+                                <button id="refreshProducts" class="btn">Refresh</button>
+                                <button id="deleteSelectedProducts" class="btn danger hidden">Delete selected</button>
+                                <button id="newProductBtn" class="btn primary">New Product</button>
+                            </div>
+                            <div id="productTableWrap"></div>
+                        </div>
+                    </section>
+                </section>
+            </main>
+        </div>
+        <!-- Product Modal -->
+        <div id="productModal" class="modal-backdrop" aria-hidden="true">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+                <div class="header">
+                    <div class="title" id="productModalTitle">Product</div>
+                    <button id="productModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+                </div>
+                <div class="content">
+                    <div class="row cols-2">
+                        <label class="grid">
+                            <span class="label">SKU</span>
+                            <input id="prodFormSku" class="input" placeholder="Unique SKU (defaults to generated)"/>
+                        </label>
+                        <label class="grid">
+                            <span class="label">Name</span>
+                            <input id="prodFormName" class="input"/>
+                        </label>
+                    </div>
+                    <div class="row cols-2">
+                        <label class="grid">
+                            <span class="label">Category</span>
+                            <select id="prodFormCategory" class="select"></select>
+                        </label>
+                        <label class="grid">
+                            <span class="label">Price (KWD)</span>
+                            <input id="prodFormPrice" type="number" step="0.001" min="0" class="input"/>
+                        </label>
+                    </div>
+                    <div class="row">
+                        <label class="grid">
+                            <span class="label">Image URL</span>
+                            <input id="prodFormImageUrl" class="input" placeholder="https://... or /public/images/products/..."/>
+                        </label>
+                    </div>
+                    <div class="row">
+                        <label class="switch-row">
+                            <span class="label">Active</span>
+                            <input id="prodFormActive" type="checkbox" class="switch"/>
+                        </label>
+                    </div>
+                </div>
+                <div class="footer">
+                    <button id="productModalCancel" class="btn">Cancel</button>
+                    <button id="productModalSave" class="btn primary">Save</button>
+                </div>
+            </div>
+        </div>
+        <script src="/public/admin/admin.js"></script>
+    </body>
+</html>

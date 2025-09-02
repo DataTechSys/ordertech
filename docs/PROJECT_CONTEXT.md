@@ -8,12 +8,12 @@ This document captures the current deployment, load balancer routing, domains/DN
 
 - Cloud Run (prod)
   - Service: smart-order
-  - Region: europe-west1
-  - URL: https://smart-order-715493130630.europe-west1.run.app
+  - Region: me-central1
+  - URL: https://smart-order-715493130630.me-central1.run.app
 - Cloud Run (legacy/test)
   - Service: smart-order
-  - Region: me-central1 (Cloud Run custom domain mapping not supported in this region)
-  - URL: https://smart-order-715493130630.me-central1.run.app
+  - Region: europe-west1
+  - URL: https://smart-order-715493130630.europe-west1.run.app
 
 ## HTTPS Load Balancer
 
@@ -25,8 +25,8 @@ This document captures the current deployment, load balancer routing, domains/DN
 - URL map: smartorder-koobs-map
 - Host rules:
   - app.ordertech.me → path matcher: app-ordertech
-    - default service: backend smartorder-ew1-backend
-    - backend smartorder-ew1-backend → serverless NEG smartorder-ew1-neg → Cloud Run service smart-order (europe-west1)
+    - default service: backend smartorder-me1-backend
+    - backend smartorder-me1-backend → serverless NEG smartorder-me1-neg → Cloud Run service smart-order (me-central1)
   - smartorder.koobs.cafe → path matcher: smartorder
     - default service: backend bucket smartorder-static-bucket
     - path rules (to backend smartorder-koobs-backend):
@@ -91,7 +91,7 @@ Once DNS updates propagate and the cert is ACTIVE, use:
 
 ## Quick links
 
-- Cloud Run (prod): https://console.cloud.google.com/run/detail/europe-west1/smart-order/metrics?project=smart-order-469705
+- Cloud Run (prod): https://console.cloud.google.com/run/detail/me-central1/smart-order/metrics?project=smart-order-469705
 - HTTPS LB: https://console.cloud.google.com/net-services/loadbalancing/list?project=smart-order-469705
 - Certificates: https://console.cloud.google.com/net-services/loadbalancing/advanced/sslCertificates/list?project=smart-order-469705
 

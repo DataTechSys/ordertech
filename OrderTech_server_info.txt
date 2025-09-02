@@ -1,0 +1,114 @@
+OrderTech — app.ordertech.me and DB information
+
+Overview
+- This document summarizes how app.ordertech.me is configured (DNS, HTTPS Load Balancer), which Cloud Run service/region it targets, how the database is wired (Cloud SQL, secrets, local proxy), and the key app routes and DB schema. All details come from files in this repository; no external commands were executed.
+
+Domain and HTTPS Load Balancer
+- Project: smart-order-469705 [docs/OPERATIONS.md:5]
+- Desired DNS
+  - A record for app.ordertech.me → 34.160.231.88 [docs/OPERATIONS.md:14; docs/PROJECT_CONTEXT.md:49-51]
+  - Remove any CNAME to ghs.googlehosted.com [docs/OPERATIONS.md:15; docs/PROJECT_CONTEXT.md:51]
+- Load balancer (global HTTPS)
+  - Public IP: 34.160.231.88 [docs/PROJECT_CONTEXT.md:21-24]
+  - URL map: smartorder-koobs-map [docs/PROJECT_CONTEXT.md:25]
+  - Host rule:
+    - app.ordertech.me → path matcher app-ordertech → default backend smartorder-ew1-backend → serverless NEG smartorder-ew1-neg → Cloud Run service smart-order (europe-west1) [docs/PROJECT_CONTEXT.md:26-29]
+- Managed SSL certificate
+  - app-ordertech-cert (managed), domains: app.ordertech.me, status noted as PROVISIONING until DNS points to LB IP [docs/PROJECT_CONTEXT.md:40-45]
+- Health/Admin URLs (post-DNS)
+  - https://app.ordertech.me/health [docs/OPERATIONS.md:58-60]
+  - https://app.ordertech.me/public/admin/ [docs/OPERATIONS.md:60-61]
+
+Cloud Run services and regions
+- Production service
+  - Service: smart-order; Region: europe-west1 [docs/PROJECT_CONTEXT.md:9-12]
+  - LB host app.ordertech.me routes to this service via serverless NEG [docs/PROJECT_CONTEXT.md:26-29]
+  - Deployment examples and verification steps captured in dev_log [dev_log:171-178, 181-189]
+- Legacy/test reference
+  - Service: smart-order; Region: me-central1 (legacy/test URL) [docs/PROJECT_CONTEXT.md:13-16]
+- Handy workflow shortcuts (open health/admin, deploy)
+  - .warp/workflows/smart_order.yaml [lines 42-52, 54-60]
+
+Database configuration and connectivity
+- Engine and client
+  - PostgreSQL via node-postgres (pg) [server.js:6]
+- Cloud SQL connection names in use
+  - smart-order-469705:us-central1:smart-order-pg [cloudbuild.yaml:18,54; dev_log:155-156, 185-186]
+  - smart-order-469705:me-central1:smartorder-pg [cloudbuild.yaml:18,54]
+- Runtime env and secrets
+  - DATABASE_URL injected from Secret Manager (service and migrations) [cloudbuild.yaml:25,34,53]
+  - REQUIRE_DB gate enables DB-backed behavior [server.js:33]
+  - /dbz endpoint verifies DB connectivity [server.js:224-235]
+- Local development via Cloud SQL Auth Proxy
+  - Start proxy and export env safely using scripts/dev_db.sh [scripts/dev_db.sh:5-8, 91-119]
+  - Developer env templates:
+    - scripts/dev_db.env.example (PROJECT_ID, REGION, INSTANCE/CONNECTION_NAME, DB_USER, DB_NAME, DB_PASSWORD_SECRET or DB_URL_SECRET) [scripts/dev_db.env.example:1-16]
+    - scripts/dev_db.env.localtemplate (CONNECTION_NAME, DB_URL_SECRET=DATABASE_URL) [scripts/dev_db.env.localtemplate:3-10]
+    - Example values (do not commit secrets): DB_USER=smartorder_user, DB_NAME=smart_order, DB_PASSWORD_SECRET=DB_PASSWORD [scripts/dev_db.env.bak:1-7]
+  - dev_log includes proxy setup and usage steps (operators can follow) [dev_log:97-136, 137-147, 148-168]
+- Migrations and seeding
+  - Custom migration runner: scripts/migrate.js applies SQL files from migrations/ using DATABASE_URL [scripts/migrate.js:7-16,32-47]
+  - Cloud Build creates/updates a Cloud Run Job smart-order-migrate and executes it with secrets and cloudsql attachments [cloudbuild.yaml:8-36, 39-41]
+  - Seed script provides baseline tables/data if missing [scripts/seed.js:16-36, 39-60, 61-81, 83-119]
+
+Tenant-domain mapping and fallback
+- How hostnames map to tenants
+  - Middleware resolves X-Forwarded-Host/Host → SELECT tenant_id FROM tenant_domains WHERE host=$1; else fallback to DEFAULT_TENANT_ID [server.js:166-186, 179-186, 18]
+- Admin endpoints to manage mappings
+  - GET /admin/tenants/:id/domains; POST /admin/tenants/:id/domains; DELETE /admin/domains/:host [server.js:1632-1661]
+- Schema for mapping
+  - tenant_domains(host PRIMARY KEY, tenant_id uuid, verified_at) [migrations/001_multi_tenant_core.sql:35-41]
+
+Key app endpoints tied to infra/DB
+- Health and readiness
+  - /__health, /health, /readyz → 200 OK [server.js:219-223]
+  - /dbz → DB status JSON when DB configured [server.js:224-235]
+- Catalog APIs (respect REQUIRE_DB, HAS_DB)
+  - /categories, /api/categories [server.js:409-442]
+  - /products, /api/products [server.js:455-552]
+- Admin domain and settings APIs [server.js:1632-1683]
+
+DB schema highlights (relevant to app behavior)
+- Multi-tenant core
+  - users (platform), tenant_users (roles with user_role enum), tenant_domains, tenant_settings, tenant_brand [migrations/001_multi_tenant_core.sql:7-15,16-22,24-33,35-41,42-51,52-58]
+- Catalog and orders
+  - categories, products (image_url and active flags added), orders, order_items [scripts/seed.js:39-60, 61-81; migrations/20250829_add_image_url.sql; migrations/20250830_products_enhancements.sql:11-42]
+- Devices/licensing/branches
+  - tenants.license_limit, devices (device_role/device_status enums), device_activation_codes, branches [migrations/002_devices.sql; server.js:968-1006 (devices usage), 1968-2007 (branches CRUD)]
+
+Operator verification commands (not executed here)
+- DNS
+  - dig +short A app.ordertech.me
+- LB and certs
+  - gcloud compute url-maps describe smartorder-koobs-map --format=json
+  - gcloud compute ssl-certificates list --format="table(name,managed.status,managed.domains)"
+- Cloud Run (prod)
+  - gcloud run services describe smart-order --region=europe-west1 --format="value(status.url)"
+- Local DB proxy (dev)
+  - . scripts/dev_db.sh start; echo "$DATABASE_URL"
+
+References (key files/lines)
+- docs/PROJECT_CONTEXT.md: 9-16, 20-37, 38-46, 49-58, 76-85, 94-96
+- docs/OPERATIONS.md: 5, 9-16, 17-35, 36-55, 58-61, 66, 73-75
+- .warp/workflows/smart_order.yaml: 38-60
+- cloudbuild.yaml: 8-36, 39-55
+- dev_log: 27-55, 97-168, 169-189
+- scripts/dev_db.sh: 5-8, 91-119, 144-170
+- scripts/dev_db.env.example: 1-16
+- scripts/dev_db.env.localtemplate: 3-10
+- scripts/dev_db.env.bak: 1-7
+- scripts/migrate.js: 7-16, 32-47
+- scripts/seed.js: 16-36, 39-60, 61-81, 83-119
+- migrations/001_multi_tenant_core.sql: 35-41 (tenant_domains) and related schema above
+- migrations/002_devices.sql: all
+- migrations/20250829_add_image_url.sql: all
+- migrations/20250830_products_enhancements.sql: 11-42
+- server.js: 18, 26-35, 166-186, 219-235, 409-442, 455-552, 1632-1661, 1968-2007
+
+Notes and caveats
+- Region split:
+  - Production traffic for app.ordertech.me routes to Cloud Run smart-order in europe-west1 [docs/PROJECT_CONTEXT.md:9-12, 26-29]
+  - CI/CD and Cloud SQL attachments mention me-central1 and us-central1; these are not on the main data path for the LB host but are relevant to jobs/migrations [cloudbuild.yaml:18,54; dev_log:155-156, 185-186]
+- Secrets
+  - Do not commit or print secret values. Use Secret Manager names only: DATABASE_URL, MIGRATIONS_URL (if present), DB_PASSWORD (local-only example). [cloudbuild.yaml:25,34,53; scripts/dev_db.env.bak:5-7; scripts/dev_db.env.example:14-16]
+

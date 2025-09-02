@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Modifiers</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><a id="tenantNameCrumb" href="#">—</a><span class="sep">›</span><span>Modifiers</span></nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <button id="newGroupBtn" class="btn">New Group</button>
+            <button id="newOptionBtn" class="btn">New Option</button>
+            <div class="spacer"></div>
+            <div class="flex center">
+              <label class="grid" style="max-width:160px;">
+                <span class="label" style="white-space: nowrap;">Page size</span>
+                <select id="modPageSize" class="select">
+                  <option value="20" selected>20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="tabs" id="modTabs">
+            <button class="tab active" data-tab="groups">Groups</button>
+            <button class="tab" data-tab="options">Options</button>
+          </div>
+
+          <div id="groupsTableWrap"></div>
+          <div id="optionsTableWrap" style="display:none;"></div>
+
+          <div class="flex between mt-2">
+            <div id="modPageInfo" class="chip">—</div>
+            <div class="btn-group">
+              <button id="modPrev" class="btn">Prev</button>
+              <button id="modNext" class="btn">Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Group Modal -->
+    <div id="groupModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+        <div class="header">
+          <div class="title" id="groupModalTitle">Modifier Group</div>
+          <button id="groupModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Name</span>
+              <input id="grpFormName" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Reference</span>
+              <input id="grpFormRef" class="input" placeholder="Optional external reference"/>
+            </label>
+          </div>
+          <div class="row cols-3">
+            <label class="grid"><span class="label">Min Select</span>
+              <input id="grpFormMin" type="number" step="1" min="0" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Max Select</span>
+              <input id="grpFormMax" type="number" step="1" min="0" class="input"/>
+            </label>
+            <label class="switch-row"><span class="label">Required</span>
+              <input id="grpFormRequired" type="checkbox" class="switch"/>
+            </label>
+          </div>
+        </div>
+        <div class="footer">
+          <button id="groupModalDelete" class="btn danger hidden">Delete</button>
+          <span class="spacer"></span>
+          <button id="groupModalCancel" class="btn">Cancel</button>
+          <button id="groupModalSave" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Option Modal -->
+    <div id="optionModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="optionModalTitle">
+        <div class="header">
+          <div class="title" id="optionModalTitle">Modifier Option</div>
+          <button id="optionModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Group</span>
+              <select id="optFormGroup" class="select"></select>
+            </label>
+            <label class="grid"><span class="label">Name</span>
+              <input id="optFormName" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-3">
+            <label class="grid"><span class="label">Price (KWD)</span>
+              <input id="optFormPrice" type="number" step="0.001" min="0" class="input"/>
+            </label>
+            <label class="grid"><span class="label">Sort Order</span>
+              <input id="optFormSort" type="number" step="1" class="input"/>
+            </label>
+            <label class="switch-row"><span class="label">Active</span>
+              <input id="optFormActive" type="checkbox" class="switch"/>
+            </label>
+          </div>
+        </div>
+        <div class="footer">
+          <button id="optionModalDelete" class="btn danger hidden">Delete</button>
+          <span class="spacer"></span>
+          <button id="optionModalCancel" class="btn">Cancel</button>
+          <button id="optionModalSave" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script src="/js/modifiers.js"></script>
+  </body>
+</html>
+

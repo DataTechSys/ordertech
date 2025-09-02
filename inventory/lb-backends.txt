@@ -1,0 +1,3 @@
+NAME                      PROTOCOL
+smartorder-ew1-backend    HTTP
+smartorder-koobs-backend  HTTP

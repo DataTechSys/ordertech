@@ -1,0 +1,112 @@
+backendType: SECOND_GEN
+connectionName: smart-order-469705:us-central1:smart-order-pg
+createTime: '2025-08-26T05:35:32.444Z'
+databaseInstalledVersion: POSTGRES_15_13
+databaseVersion: POSTGRES_15
+etag: dc22c519f2ed57ca02db09c003858ea3b92b528eadaff8fc2e1676cf976ad5ce
+failoverReplica:
+  available: true
+gceZone: us-central1-c
+geminiConfig:
+  activeQueryEnabled: false
+  entitled: false
+  googleVacuumMgmtEnabled: false
+  indexAdvisorEnabled: false
+  oomSessionCancelEnabled: true
+includeReplicasForMajorVersionUpgrade: false
+instanceType: CLOUD_SQL_INSTANCE
+ipAddresses:
+- ipAddress: 34.136.176.107
+  type: PRIMARY
+kind: sql#instance
+maintenanceVersion: POSTGRES_15_13.R20250302.00_31
+name: smart-order-pg
+project: smart-order-469705
+region: us-central1
+satisfiesPzi: false
+secondaryGceZone: us-central1-b
+selfLink: https://sqladmin.googleapis.com/sql/v1beta4/projects/smart-order-469705/instances/smart-order-pg
+serverCaCert:
+  cert: |-
+    -----BEGIN CERTIFICATE-----
+    MIIDfzCCAmegAwIBAgIBADANBgkqhkiG9w0BAQsFADB3MS0wKwYDVQQuEyQ4ZmQ0
+    YzNhNS0xMjY4LTRiZGItYWE1Ny0yNjYzNzQ5ZmFmMzAxIzAhBgNVBAMTGkdvb2ds
+    ZSBDbG91ZCBTUUwgU2VydmVyIENBMRQwEgYDVQQKEwtHb29nbGUsIEluYzELMAkG
+    A1UEBhMCVVMwHhcNMjUwODI2MDUzNzI2WhcNMzUwODI0MDUzODI2WjB3MS0wKwYD
+    VQQuEyQ4ZmQ0YzNhNS0xMjY4LTRiZGItYWE1Ny0yNjYzNzQ5ZmFmMzAxIzAhBgNV
+    BAMTGkdvb2dsZSBDbG91ZCBTUUwgU2VydmVyIENBMRQwEgYDVQQKEwtHb29nbGUs
+    IEluYzELMAkGA1UEBhMCVVMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIB
+    AQC/NFF0AeR6v/0Ts9FmAsSCn7XiZtHCfyut6eORaHEZ/aAm5aa5EITvcfUksTye
+    CR10fJCww5ktJKMCbPxHc6Qhj74u7a/HVpD4OAMc0HYzHtIarz/kfoMh6VqUag7S
+    pu1kIj4eFJ27m/Qbunzm1VDitnzkPICyo53JziX8LEtw6TdsJIDEI1s82FCduLto
+    Dz9fRZtCo/nXNupK9scjz+rsZrUlSP6vzrkb4eHON2Ac4DgWYQ4ocKROywKM4bQP
+    Jlo1pp2CJGGDlFN66alTBxu1NaUwQHr1aHNuko1X+G1drI+ba+e7LmIhmMUvtMbH
+    UVhJGmPQlla7W9V4y+IODgxbAgMBAAGjFjAUMBIGA1UdEwEB/wQIMAYBAf8CAQAw
+    DQYJKoZIhvcNAQELBQADggEBALtI0itOBkdr1uJDxrmhySzU0lJT9b1fzrYDS4Qq
+    6P0XEVLHkVZroB4R6Pm1/7cjz7yWRLnPbk2tklfSmBJVgOj9Plpr6qm2EgjJ9Mgm
+    7HOCFXTjxFxbjFrqh3FccpC+YdGrd//zWrkf5PR6Pi7mLxmxb867GnuOn/T4ckCY
+    c7OGhA4YiTdntAUXt8Z6E/FwQqNk3DQsmmeFKLVxC1mYqgt0vtaWkpdL5uixQTXm
+    eeglVtdtCFNBk8EDI6skRx9WVQ/b8ijM4/1Y4nEZZ6e7h2lQFgN3Jbrdu+zAroMW
+    229E5gYIgkKNU1Go4bBIaK1PMmmETbNHCbxwLe5XX7BY0LA=
+    -----END CERTIFICATE-----
+  certSerialNumber: '0'
+  commonName: C=US,O=Google\, Inc,CN=Google Cloud SQL Server CA,dnQualifier=8fd4c3a5-1268-4bdb-aa57-2663749faf30
+  createTime: '2025-08-26T05:37:26.105Z'
+  expirationTime: '2035-08-24T05:38:26.105Z'
+  instance: smart-order-pg
+  kind: sql#sslCert
+  sha1Fingerprint: d236521cd92800e19f7da4330debd596983cc55e
+serviceAccountEmailAddress: p715493130630-nd2sm4@gcp-sa-cloud-sql.iam.gserviceaccount.com
+settings:
+  activationPolicy: ALWAYS
+  availabilityType: REGIONAL
+  backupConfiguration:
+    backupRetentionSettings:
+      retainedBackups: 7
+      retentionUnit: COUNT
+    backupTier: STANDARD
+    enabled: true
+    kind: sql#backupConfiguration
+    pointInTimeRecoveryEnabled: true
+    replicationLogArchivingEnabled: true
+    startTime: 03:00
+    transactionLogRetentionDays: 7
+    transactionalLogStorageState: CLOUD_STORAGE
+  connectorEnforcement: NOT_REQUIRED
+  dataDiskSizeGb: '10'
+  dataDiskType: PD_SSD
+  deletionProtectionEnabled: true
+  ipConfiguration:
+    authorizedNetworks:
+    - kind: sql#aclEntry
+      name: ''
+      value: 37.231.89.91/32
+    ipv4Enabled: true
+    requireSsl: false
+    serverCaMode: GOOGLE_MANAGED_INTERNAL_CA
+    sslMode: ALLOW_UNENCRYPTED_AND_ENCRYPTED
+  kind: sql#settings
+  locationPreference:
+    kind: sql#locationPreference
+    zone: us-central1-c
+  maintenanceWindow:
+    day: 7
+    hour: 3
+    kind: sql#maintenanceWindow
+    updateTrack: stable
+  pricingPlan: PER_USE
+  replicationLagMaxSeconds: 31536000
+  replicationType: SYNCHRONOUS
+  settingsVersion: '54'
+  storageAutoResize: true
+  storageAutoResizeLimit: '0'
+  tier: db-custom-2-4096
+sqlNetworkArchitecture: NEW_NETWORK_ARCHITECTURE
+state: RUNNABLE
+upgradableDatabaseVersions:
+- displayName: PostgreSQL 16
+  majorVersion: POSTGRES_16
+  name: POSTGRES_16
+- displayName: PostgreSQL 17
+  majorVersion: POSTGRES_17
+  name: POSTGRES_17

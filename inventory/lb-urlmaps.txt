@@ -1,0 +1,2 @@
+NAME                  DEFAULT_SERVICE
+smartorder-koobs-map  backendServices/smartorder-koobs-backend

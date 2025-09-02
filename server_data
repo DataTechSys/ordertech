@@ -1,0 +1,121 @@
+--------------------------------------------------------------------------------
+1) Header - Timestamp (UTC), executing user, machine hostname, Project: smart-order-469705, Hostname: app.ordertech.me (Prod)
+--------------------------------------------------------------------------------
+Timestamp (UTC): 2025-08-31T04:28:17Z
+Executing user: mosawi
+Machine hostname: Hussains-iMac.local
+Project: smart-order-469705
+Hostname: app.ordertech.me (Prod)
+--------------------------------------------------------------------------------
+2) DNS for app.ordertech.me
+--------------------------------------------------------------------------------
+Current A records: 34.160.231.88
+Current CNAME records: none
+Desired A: 34.160.231.88
+Status: MATCH (desired IP present in A records)
+--------------------------------------------------------------------------------
+3) HTTPS Load Balancer (Prod path only)
+--------------------------------------------------------------------------------
+Looking for forwarding rules using IP 34.160.231.88 ...
+- FR: smartorder-koobs-http-rule | IP: 34.160.231.88 | Ports: 80-80 | Target: https://www.googleapis.com/compute/v1/projects/smart-order-469705/global/targetHttpProxies/smartorder-koobs-http-proxy
+- FR: smartorder-koobs-https-rule | IP: 34.160.231.88 | Ports: 443-443 | Target: https://www.googleapis.com/compute/v1/projects/smart-order-469705/global/targetHttpsProxies/smartorder-koobs-https-proxy
+Public IP (from forwarding rules): 34.160.231.88
+URL map that matches app.ordertech.me: smartorder-koobs-map (pathMatcher: app-ordertech)
+Backend service (default for host): smartorder-ew1-backend
+Backend service: smartorder-ew1-backend
+- LB scheme: EXTERNAL
+- backend group: https://www.googleapis.com/compute/v1/projects/smart-order-469705/regions/europe-west1/networkEndpointGroups/smartorder-ew1-neg
+NEG smartorder-ew1-neg type: 
+Managed certs attached to target HTTPS proxy:
+- smartorder-koobs-cert: status=ACTIVE; domains=smartorder.koobs.cafe
+- smartorder-dts-cert: status=ACTIVE; domains=smartorder.datatech.systems
+- app-ordertech-cert: status=ACTIVE; domains=app.ordertech.me
+--------------------------------------------------------------------------------
+4) Cloud Run service (Prod)
+--------------------------------------------------------------------------------
+Service name: smart-order (region europe-west1)
+Service URL: https://smart-order-64v5pfkeba-ew.a.run.app
+Image: europe-west1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/smart-order@sha256:cc2e82e900015f811692db629ee0d2fde58ae95534f3b0dee58e33d91d9eb4b4
+Latest revision (created): smart-order-00040-zds
+Latest revision (ready): smart-order-00040-zds
+Port: 8080
+Concurrency: 80
+Min instances: not set
+Max instances: 20
+Cloud SQL attachments (annotation run.googleapis.com/cloudsql-instances): smart-order-469705:us-central1:smart-order-pg,smart-order-469705:me-central1:smartorder-pg
+Environment variables (name -> value):
+PGPASSWORD -> PwEnntOl+xhzAmfdCldbESiJBhDVzOFwJ7H5z3HKPtI=
+PLATFORM_ADMIN_EMAILS -> hussain@mosawi.com
+REQUIRE_DB -> 1
+DATABASE_URL -> postgresql:///?host=/cloudsql/smart-order-469705:us-central1:smart-order-pg&user=postgres&password=PwEnntOl+xhzAmfdCldbESiJBhDVzOFwJ7H5z3HKPtI=&database=smart_order
+--------------------------------------------------------------------------------
+5) Secrets (with values)
+--------------------------------------------------------------------------------
+Secrets referenced by Cloud Run env (Secret Manager current values):
+- DATABASE_URL (version latest): postgresql:///?host=/cloudsql/smart-order-469705:us-central1:smart-order-pg&user=postgres&password=PwEnntOl+xhzAmfdCldbESiJBhDVzOFwJ7H5z3HKPtI=&database=smart_order
+
+DATABASE_URL breakdown:
+- protocol: postgresql
+- user: 
+- password: 
+- host: 
+- port: 
+- database: 
+--------------------------------------------------------------------------------
+6) Database (Cloud SQL Postgres)
+--------------------------------------------------------------------------------
+Instance connection: smart-order-469705:us-central1:smart-order-pg
+- region: us-central1
+- databaseVersion: POSTGRES_15
+- tier: db-custom-2-4096
+- storageAutoResize: true
+- dataDiskSizeGb: 10
+Databases:
+  - postgres
+  - smart_order
+  - smart_order_dev
+Users:
+  - postgres
+  - smartorder_dev
+  - smartorder_user
+Instance connection: smart-order-469705:me-central1:smartorder-pg
+- region: me-central1
+- databaseVersion: POSTGRES_15
+- tier: db-custom-2-7680
+- storageAutoResize: true
+- dataDiskSizeGb: 10
+Databases:
+  - postgres
+  - appdb
+Users:
+  - appuser
+  - postgres
+Connectivity check via psql:
+psql: error: extra key/value separator "=" in URI query parameter: "password"
+psql connectivity check FAILED.
+Schema/migrations:
+Local migration SQL files in /Users/mosawi/datatech/ordertech/migrations:
+  - /Users/mosawi/datatech/ordertech/migrations/20250830_products_enhancements.sql
+  - /Users/mosawi/datatech/ordertech/migrations/20250829_add_image_url.sql
+  - /Users/mosawi/datatech/ordertech/migrations/20250830_appdb_pre.sql
+  - /Users/mosawi/datatech/ordertech/migrations/001_multi_tenant_core.sql
+  - /Users/mosawi/datatech/ordertech/migrations/002_devices.sql
+Applied migrations/tables (best-effort):
+--------------------------------------------------------------------------------
+7) Application endpoints (Prod)
+--------------------------------------------------------------------------------
+https://app.ordertech.me/      -> HTTP 200
+https://app.ordertech.me/health -> HTTP 200
+https://app.ordertech.me/api/health -> HTTP 404
+https://app.ordertech.me/healthz -> HTTP 404
+https://app.ordertech.me/api/healthz -> HTTP 404
+https://app.ordertech.me/admin -> HTTP 301
+
+Tenant resolution by host via tenant_domains (best-effort sample):
+--------------------------------------------------------------------------------
+8) Notes and caveats
+--------------------------------------------------------------------------------
+Prod traffic for app.ordertech.me maps to URL map smartorder-koobs-map and backend smartorder-ew1-backend.
+Cloud Run service URL: https://smart-order-64v5pfkeba-ew.a.run.app (region europe-west1). Ensure LB backend NEG points to this service.
+DNS A record matches desired IP 34.160.231.88.
+This file includes plaintext secret values. File permissions set via umask 077; verify with: ls -l /Users/mosawi/datatech/ordertech/server_data

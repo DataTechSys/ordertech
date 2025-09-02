@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Devices</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><a id="tenantNameCrumb" href="#">—</a><span class="sep">›</span><span>Devices</span></nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <label class="grid" style="max-width:160px;">
+              <span class="label">Page size</span>
+              <select id="devPageSize" class="select">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
+            <span class="spacer"></span>
+            <div class="btn-group">
+              <button id="devPrev" class="btn">Prev</button>
+              <button id="devNext" class="btn">Next</button>
+            </div>
+          </div>
+          <div id="devicesPageInfo" class="chip">—</div>
+          <div id="devicesTableWrap"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="eventsModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventsModalTitle">
+        <div class="header">
+          <div class="title" id="eventsModalTitle">Device Events</div>
+          <button id="eventsModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div style="display:flex; align-items:flex-end; gap:12px; margin-bottom:8px;">
+            <label class="grid" style="max-width:160px;">
+              <span class="label">Page size</span>
+              <select id="evPageSize" class="select">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
+            <div class="btn-group">
+              <button id="evPrev" class="btn">Prev</button>
+              <button id="evNext" class="btn">Next</button>
+            </div>
+            <span class="chip" id="evPageInfo">—</span>
+          </div>
+          <div id="eventsList" class="list"></div>
+        </div>
+        <div class="footer">
+          <span class="spacer"></span>
+          <button id="eventsModalClose2" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script src="/js/devices.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,81 @@
+apiVersion: run.googleapis.com/v1
+kind: Execution
+metadata:
+  annotations:
+    run.googleapis.com/client-name: gcloud
+    run.googleapis.com/client-version: 535.0.0
+    run.googleapis.com/cloudsql-instances: smart-order-469705:me-central1:smart-order-pg-me1
+    run.googleapis.com/creator: hussain@mosawi.com
+    run.googleapis.com/execution-environment: gen2
+    run.googleapis.com/lastModifier: hussain@mosawi.com
+    run.googleapis.com/operation-id: b33133d9-1f57-4158-b975-ec95df9bbfd9
+  creationTimestamp: '2025-09-01T11:24:30.625164Z'
+  generation: 1
+  labels:
+    client.knative.dev/nonce: doc_fun_kof
+    cloud.googleapis.com/location: me-central1
+    run.googleapis.com/job: migrate-smart-order
+    run.googleapis.com/jobGeneration: '2'
+    run.googleapis.com/jobResourceVersion: '1756725867246345'
+    run.googleapis.com/jobUid: 68302ebd-314e-471c-b84e-f78faeae7205
+    run.googleapis.com/satisfiesPzs: 'true'
+  name: migrate-smart-order-pqc4r
+  namespace: '715493130630'
+  ownerReferences:
+  - apiVersion: serving.knative.dev/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Job
+    name: migrate-smart-order
+    uid: 68302ebd-314e-471c-b84e-f78faeae7205
+  resourceVersion: AAY9u6BTwAg
+  selfLink: /apis/run.googleapis.com/v1/namespaces/715493130630/executions/migrate-smart-order-pqc4r
+  uid: 0bdd84df-6841-4726-b5ca-683941e31ac4
+spec:
+  parallelism: 1
+  taskCount: 1
+  template:
+    spec:
+      containers:
+      - args:
+        - -lc
+        - node scripts/seed.js && node scripts/migrate.js
+        command:
+        - sh
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: DATABASE_URL_ME
+        image: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/smart-order@sha256:154001de2f6dc574f6e89533f2f77f7bd396bfbb02bae304fd78a754c07e4886
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+      maxRetries: 3
+      serviceAccountName: 715493130630-compute@developer.gserviceaccount.com
+      timeoutSeconds: '600'
+status:
+  completionTime: '2025-09-01T11:25:18.194729Z'
+  conditions:
+  - lastTransitionTime: '2025-09-01T11:25:18.194729Z'
+    message: 'Task migrate-smart-order-pqc4r-task0 failed with message: The container
+      exited with an error.'
+    reason: NonZeroExitCode
+    status: 'False'
+    type: Completed
+  - lastTransitionTime: '2025-09-01T11:24:32.381717Z'
+    status: 'True'
+    type: ResourcesAvailable
+  - lastTransitionTime: '2025-09-01T11:24:34.751066Z'
+    status: 'True'
+    type: Started
+  - lastTransitionTime: '2025-09-01T11:24:32.095502Z'
+    status: 'True'
+    type: ContainerReady
+  failedCount: 1
+  logUri: https://console.cloud.google.com/logs/viewer?project=smart-order-469705&advancedFilter=resource.type%3D%22cloud_run_job%22%0Aresource.labels.job_name%3D%22migrate-smart-order%22%0Aresource.labels.location%3D%22me-central1%22%0Alabels.%22run.googleapis.com/execution_name%22%3D%22migrate-smart-order-pqc4r%22
+  observedGeneration: 1
+  retriedCount: 1
+  startTime: '2025-09-01T11:24:34.096752Z'

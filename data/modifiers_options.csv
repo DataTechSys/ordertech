@@ -1,0 +1,156 @@
+﻿id,modifier_reference,modifier_name,modifier_name_localized,tax_group_reference,name,sku,price,cost,calories,name_localized,is_active
+9f817eed-6eb6-47e4-9b93-7268488adc7d,,"Pro | Milk",,,"Extra | Sweet Milk",MML-045,0,,,,Yes
+9f817e25-5564-43c4-bac6-b3fafeb4fb61,,"Pro | Milk",,,"Japan Milk",MML-044,0,,,,Yes
+9f817dad-905f-42ef-ac36-f258f70d1ed6,,"Pro | Milk",,,"LF Milk",MML-043,0,,,,Yes
+9f817d47-0ab8-4d70-8456-b98dd4cac9e2,,"Pro | Milk",,,"FF Sweet Milk",MML-042,0,,,,Yes
+9f817ce8-a0ee-46b5-9625-7cb4cfd97ed3,,"Pro | Milk",,,"Barista FF Milk",MML-041,0,,,,Yes
+9f817ca5-84ec-44de-a3dc-1fd4327e411f,,"Pro | Milk",,,"Lactose Free Milk",MML-040,0,,,,Yes
+9f817c28-2278-4de3-b567-b2ce01fab861,,"Pro | Milk",,,"Almond Milk",MML-039,0.2,,,,Yes
+9f817bd9-0e72-4f06-a13a-ceed01908476,,"Pro | Milk",,,"Soya Milk",MML-038,0.2,,,,Yes
+9f817ba1-f702-4063-842f-9401e1cc57ef,,"Pro | Milk",,,"Coconut Milk",MML-037,0.2,,,,Yes
+9f817b2b-5a85-4409-b0df-d4991bd76c6d,,"Pro | Milk",,,"Oat Milk",MML-036,0.2,,,,Yes
+9f817a84-b495-4629-9267-cd00bd0ed203,,"Pro | Milk",,,"LF Milk | Sweet",MML-035,0,,,,Yes
+9f697030-f7c2-4690-beec-b80b4ba142cd,22,Extra,,,"Proteins Collagen",MEX-020,0.5,,,,Yes
+9f657666-3cdf-402e-bb8c-d90f45b3150f,,"Coffee | Shots",,,"Espresso |  Super Colombia",ST-019,0.3,,,,Yes
+9f2f3203-fbe9-414b-88af-669e6fa3a1ce,,Topping,,,"Sesame Seeds",TOP-08,0.15,,,,Yes
+9f2f31c2-6fd9-46f8-ae9c-38f2acf3fa96,,Topping,,,"Coconut Sweet Milk",TOP-07,0.2,,,,No
+9f2f3169-668b-478d-9ce9-f8750c6f345c,,Topping,,,"Chocolate Sauce",TOP-06,0.2,,,,No
+9f2f3060-be12-4e3c-9745-f7923fd05307,,Topping,,,"Passion Puree",TOP-05,0.15,,,,Yes
+9f2f3006-399b-4aa4-9e33-3bf10d2433ee,,Topping,,,"Mango Puree",TOP-04,0.15,,,,Yes
+9eeace85-0b84-4c6e-ad25-027766a62b04,,"Coffee | Shots",,,"3 Espresso | Gwanda",ST-018,0.6,,,,Yes
+9eeace04-f832-40ac-8a26-a4a7d719640d,,"Coffee | Shots",,,"2 Espresso | Gwanda",ST-017,0.3,,,,Yes
+9eeacda2-dd7f-4c19-96aa-3366d2fd16ba,,"Coffee | Shots",,,"1 Espresso | Gwanda",ST-016,0,,,,Yes
+9ee8edd5-5f1d-4db6-8fe5-e7d0df955ca5,,Topping,,,"Salted Caramel | Nuts | Biscuits",TOP-03,0.2,,,,Yes
+9eceb399-e9d9-469d-82c8-e2ec2611a5b7,,"Coffee | Shots",,,"3 Espresso | Decaf",ST-015,0.6,,,,Yes
+9eceb33c-1244-499c-8a50-8e096e0f17ab,,"Coffee | Shots",,,"2 Espresso | Decaf",ST-014,0.3,,,,Yes
+9eceb2b3-e041-4724-8c09-bc24acef61c4,,"Coffee | Shots",,,"1 Espresso | Decaf",ST-013,0,,,,Yes
+9eb85e2c-144e-4ae6-b276-5aa41767ccce,22,Extra,,,"Honey Spoon",MEX-019,0.25,,,,No
+9eb85d21-4d65-46d6-a0f6-f787fb5e6112,22,Extra,,,"Pesto Labneh",MEX-018,0.5,,,,No
+9eb85cb2-4033-427e-8cb5-659a486d299e,22,Extra,,,"Sriracha Labneh",MEX-016,0.5,,,,No
+9eb85c49-3ccf-4741-a299-6412550df006,22,Extra,,,"Sundried Tomato Labneh",MEX-015,0.5,,,,No
+9eb85be1-a4bb-4b88-950e-3149bd0c8b32,22,Extra,,,Geymar,MEX-014,0.5,,,,No
+9eb85b07-51d8-4564-9370-b1b7505a56fb,22,Extra,,,"Caramel Sauce",MEX-008,0.5,,,,No
+9eb85a25-1b68-4318-89b5-3a91cf148df9,22,Extra,,,"Chocolate Sauce",MEX-005,0.5,,,,No
+9eb850dd-039f-4484-8957-c23b0645bf5d,11,Option,,,"Pesto Labneh",MOP-024,0,,,,No
+9eb85093-0de4-4cb7-9e27-f915f6909abc,11,Option,,,"Sriracha Labneh",MOP-023,0,,,,No
+9eb85056-3f27-4130-a4ef-e36844a23ab2,11,Option,,,"Sundried Tomato Labneh",MOP-022,0,,,,No
+9eb84fee-7437-49e8-b7cf-79f393b4992f,11,Option,,,"Geymar & Spoon Honey",MOP-021,0.25,,,,No
+9eb84f75-3f67-4b1c-9ba3-ca6198c5725a,11,Option,,,"Caramel Sauce",MOP-020,0,,,,Yes
+9eb22b17-26ec-43db-b02f-048fc0af4bbf,11,Option,,,"Chocolate Dip",MOP-010,0,,,,No
+9e55cd18-a069-4511-bed7-9438da6eea38,11,Option,,,"Extra Sweet",MOP-009,0.35,,,,Yes
+9d782a66-9934-44b4-9401-6834b5eeb273,,"Coffee | Shots",,,"3 Espresso | Classic Roast",ST-012,0.6,,,,Yes
+9d7829e7-b681-4bf4-a7e7-89907867e41e,,"Coffee | Shots",,,"2 Espresso | Classic Roast",ST-011,0.3,,,,Yes
+9d7829bb-698a-4b79-8e4a-183496fdb178,,"Coffee | Shots",,,"1 Espresso | Classic Roast",ST-010,0,,,,Yes
+9d78290f-8c91-4bd9-aead-11028a9a98af,,"Coffee | Shots",,,"1/2 Espresso| Classic Roast",ST-009,0,,,,No
+9d7828ab-0229-4295-bce3-5d2f84dafe1e,,"Coffee | Shots",,,"3 Espresso | Brazil",ST-008,0.6,,,,No
+9d78284a-af43-466f-b47e-340f9cc466cd,,"Coffee | Shots",,,"2 Espresso | Brazil",ST-007,0.3,,,,No
+9d76dfd2-66f2-4728-8147-5452e25f3f8c,,"Coffee | Shots",,,"1 Espresso | Brazil",ST-006,0,,,,No
+9d76df41-ba87-4c00-9e53-e9d09e02371c,,"Coffee | Shots",,,"1/2 Espresso | Brazil",ST-005,0,,,,No
+9d76dede-d847-4a33-8f0b-b0e089b0446a,,"Coffee | Shots",,,"3 Espresso | Colombia",ST-004,0.6,,,,Yes
+9d76c76f-8ec4-47e0-9eab-1d9e6f15dbe9,,"Coffee | Shots",,,"2 Espresso | Colombia",ST-003,0.3,,,,Yes
+9d76bf93-7806-49f8-90e2-5ca51f116db1,,"Coffee | Shots",,,"1 Espresso | Colombia",ST-002,0,,,,Yes
+9d76bf48-b2a7-4915-9da7-ba0314204c21,,"Coffee | Shots",,,"1/2 Espresso | Colombia",ST-001,0,,,,No
+9cf64655-d246-462d-bad4-9920b9928ae0,,"Milk | Large",,,"Chocolate Sauce",CHO-002,0,,,,No
+9cf6459f-7904-410c-b419-4b09b7d0d7fc,,"Milk | Medium",,,"Chocolate Sauce",CHO-001,0,,,,No
+9cefc65b-0ad0-4860-ade3-9b32bc795e88,,"Milk | Large",,,"Koobs Chocolate Milk",MML-034,0,,,,No
+9cefc619-cc2c-463e-8528-f2ae3c957eee,,"Milk | Medium",,,"Koobs Chocolate Milk",MML-033,0,,,,No
+9ce7d85a-e84d-4f2b-a6a9-8f84f3f6fd60,,"Milk | Large",,,"LF Milk | Sweet",MML-032,0,,,,Yes
+9ce7d64a-f7c0-452d-a842-d15169b4b051,,"Milk | Medium",,,"LF Milk | Sweet",MML-031,0,,,,Yes
+9cdfd961-86bb-4c48-96c3-fa674a31ae89,,"Milk | Medium",,,"Oat Milk","MML - 019",0.2,,,,Yes
+9cdfcfc3-bf93-4a39-9bf0-f3aae36cb947,,"Milk | Medium",,,"Coconut Milk","MML - 018",0.2,,,,Yes
+9cdfcf79-604f-4ff4-9878-4e99731f6a7a,,"Milk | Medium",,,"Soya Milk","MML - 017",0.2,,,,Yes
+9cdfcec8-27f7-4d8b-bcae-69dd9d13f3a1,,"Milk | Medium",,,"Almond Milk","MML - 016",0.2,,,,Yes
+9cdfce56-dc09-405b-a320-8d7af3174d0b,,"Milk | Medium",,,"Lactose Free Milk","MML - 015",0,,,,Yes
+9cdfccfa-42ae-48cf-b47a-86ce9f072783,,"Milk | Medium",,,"Barista FF Milk","MML - 014",0,,,,Yes
+9cdfcc6a-7702-405c-8a47-26727aa56972,,"Milk | Medium",,,"FF Sweet Milk","MML - 013",0,,,,Yes
+9cdfcbee-d4a1-4cea-a304-82f35718c5a9,,"Milk | Medium",,,"LF Milk","MML - 012",0,,,,Yes
+9cdfcb73-0c99-42f8-83c4-c65fdb65a390,,"Milk | Medium",,,"Japan Milk","MML - 011",0,,,,Yes
+9cdfcb02-7a71-4206-999d-989cf2e08c4b,,"Milk | Medium",,,"Extra | Sweet Milk","MML - 010",0,,,,Yes
+9cdfa0c8-2f25-4e0d-8325-bca9604f25f2,,"Milk | Large",,,"Oat Milk",MML-009,0.25,,,,Yes
+9cdfa052-ebd5-470b-bfcc-3fe97ff4f39d,,"Milk | Large",,,"Coconut Milk",MML-008,0.25,,,,Yes
+9cdf986a-c842-40fb-836d-406c4cbe2264,,"Milk | Large",,,"Soya Milk",MML-007,0.25,,,,Yes
+9cdf97c2-cff5-4aad-a1b9-bda6b866dc31,,"Milk | Large",,,"Almond Milk",MML-006,0.25,,,"حليب اللوز",Yes
+9cdf964e-ac3c-4422-84eb-3ba27c8dd2e8,,"Milk | Large",,,"Lactose Free Milk",MML-005,0,,,,Yes
+9cdf92ed-dca5-41ee-8e16-ebe77a261417,,"Milk | Large",,,"Barista FF Milk","MML - 004",0,,,,Yes
+9cdf923d-2352-43c4-99cd-07397b6ed211,,"Milk | Large",,,"FF Sweet Milk",MML-003,0,,,,Yes
+9cdf88ba-db90-449a-85ab-8cc8cc1bc431,,"Milk | Large",,,"LF Milk",MML-002,0,,,,Yes
+9cdf87d4-a8d4-4ffc-aa43-71a2b116b428,,"Milk | Large",,,"Japan Milk",MML-001,0,,,,Yes
+9cdf62d3-7aef-4054-82da-8c988b42a621,,"Milk | Large",,,"Extra | Sweet Milk",MML-000,0,,,,Yes
+9cdf2cb0-1888-4a07-97bc-2ecb7bd951b3,,Delivery,,,"Koobs | Sandwich Wrapper",DEV-005,0,,,,Yes
+9cdde252-bae9-4856-972a-39cca058f927,,Delivery,,,"Koobs | Cup Carrier With Belt",DEV-004,0,,,,Yes
+9cddce78-248e-4877-8e0c-136ba776bac7,,Delivery,,,"Koobs | Paper Bag",DEV-003,0,,,,Yes
+9cddcde9-1645-4d39-84b3-0ecc22ea7e56,,Delivery,,,"Corrugated | 4 Cups",DEV-002,0,,,,Yes
+9cddcd3c-6bf1-4fd4-b38d-b8f056dc8d58,,Delivery,,,"Corrugated | 2 Cups",DEV-001,0,,,,Yes
+9c385502-cb55-43b6-8b85-c3cfb782e1c9,,Topping,,,"Yuzu Puree",TOP-02,0.15,,,,Yes
+9c3854b3-724f-4232-8285-59be5c8622c5,,Topping,,,"Peach Puree",TOP-01,0.15,,,,Yes
+9bf655bd-f4b3-4cf5-8416-da6379c86638,11,Option,,,"Normal Water",MOP-019,0,,,,Yes
+9bf64f87-927d-4fc6-92ec-633395efe553,11,Option,,,"No Water",MOP-018,0,,,,Yes
+9bf64f5e-89cc-4020-ba04-d1a084579640,11,Option,,,"Less Water",MOP-017,0,,,,Yes
+9b799dd0-0f7e-4910-84fd-14ff115af924,,"Hot Milk","حليب ساخن",,"Japan Milk","MML - 020",0,,,,Yes
+9b799d88-8926-4903-8e12-9c06edd56246,,"Hot Milk","حليب ساخن",,"LF Milk | Non Sweet",MML-021,0,,,,Yes
+9b799d43-7f4a-44fd-8649-1d70696a5f0b,,"Hot Milk","حليب ساخن",,"LF Milk | Sweet",MML-022,0,,,,Yes
+9b799cd1-9775-42b9-bb6a-ec377fa85eda,,"Hot Milk","حليب ساخن",,"FF Sweet Milk",MML-023,0,,,,Yes
+9b799c7b-5029-436b-bb91-d3730af5a991,,"Hot Milk","حليب ساخن",,"Barista FF Milk",MML-024,0,,,,Yes
+9b799c35-3ae5-4544-939e-c03f8ae82ecd,,"Hot Milk","حليب ساخن",,"Lactose Free Milk",MML-025,0,,,,Yes
+9b799be5-66ee-4da9-82f9-06cfaa33b1ce,,"Hot Milk","حليب ساخن",,"Almond Milk",MML-026,0.2,,,,Yes
+9b799b93-c5a1-4fc1-842e-0b2909f1828e,,"Hot Milk","حليب ساخن",,"Soya Milk",MML-027,0.2,,,,Yes
+9b799a3f-f430-4196-a891-987fb40cef2c,,"Hot Milk","حليب ساخن",,"Coconut Milk",MML-028,0.2,,,,Yes
+9b7999e3-76c6-434b-bd36-d9efe784a855,,"Hot Milk","حليب ساخن",,"Oat Milk",MML-029,0.2,,,,Yes
+9b79975a-a0ba-496f-991d-48e44f468f45,,"Hot Milk","حليب ساخن",,"Extra | Sweet Milk",MML-030,0,,,,Yes
+9a762e76-7c0f-4cbd-be57-d253c0012fb4,22,Extra,,,"Extra Turkish Coffee",MEX-017,0.25,,,,Yes
+9a49b0fa-92a1-4e2f-aee2-af29c71d5592,11,Option,,,Warm,MOP-016,0,,,,Yes
+9a49b027-ced1-4f79-b88c-311a1b22cf56,11,Option,,,Cold,MOP-015,0,,,,Yes
+9a45d89b-4c98-4b40-bd89-de3398d10f97,11,Option,,,Without,MOP-014,0,,,,Yes
+9a45d5f6-3d5d-447c-96b6-93f198c6c2bd,11,Option,,,"With Cold Foam",MOP-013,0.25,,,,Yes
+9a3b4708-1773-4150-91f4-789677b568be,,Cups,كوب,,"Medium Clear Cup | 12oz",MCP-013,0,,,,No
+9a0b3bcb-4415-4139-92b1-7849e5764852,11,Option,,,"Not Shake",MOP-012,0,,,,Yes
+99f75724-c781-47dc-810a-b9889397ec5e,11,Option,,,Shake,MOP-011,0,,,,Yes
+99f51079-77ca-47aa-95e3-8aa84bf71018,,Cups,كوب,,"Large Clear Cup | 16oz",MCP-012,0,,,,No
+99c4bc5f-685f-44d7-a5d0-003219abc551,35,Flavors,,,"5 pcs | Black Spanish",MFL-018,10,,,,No
+99beb89b-1461-425b-837e-92cd43d81d57,35,Flavors,,,"5 pcs | Cold Brew",MFL-017,5,,,,No
+99beb3f6-1395-4727-8811-ab69539cc30e,35,Flavors,,,"5Pcs | Iced Matcha",MFL-016,6,,,,Yes
+99bea72c-e089-4a95-b92f-acc9ba118359,35,Flavors,,,"5Pcs | Iced Americano",MFL-015,5,,,,Yes
+99b7173d-dd5a-4a52-a142-37707815e1ec,35,Flavors,,,"5Pcs | Iced Salted Caramel",MFL-014,5,,,,Yes
+99b71712-3590-4ca3-843b-fff60943fe59,35,Flavors,,,"5Pcs | Iced Spanish Latte",MFL-013,5,,,,Yes
+995a829b-a5a1-42ac-a7aa-d3cf144f6b73,,Cups,كوب,,"Large Green Cup | 16oz",MCP-011,0,,,,No
+995a4199-0b82-4341-a9df-0a51c119686f,11,Option,,,"Less Sweet",MOP-008,0.1,,,,Yes
+995a15ea-9928-41ca-894b-f8055996121c,15,Color,,,"Yellow | Ceramic Cup",MCO-001,0,,,,Yes
+995a1594-ccb6-4c19-a740-ae7f7420f566,15,Color,,,"Ceramic Cup Pink",MCO-002,0,,,,No
+995a133e-be3e-492d-8fa7-cde5385d71a4,15,Color,,,"Ceramic Cup Green",MCO-003,0,,,,No
+9959f67b-985f-430a-a202-5139d66e0a44,11,Option,,,"Non Sweet",MOP-007,0,,,,Yes
+9959f5f8-5823-4cc8-934b-a9a1ca93a9f4,11,Option,,,Sweet,MOP-006,0.2,,,,Yes
+995883f7-95fe-4b42-83b5-82d4f25c150e,11,Option,,,"No Ice | 12oz",MOP-005,0,,,,Yes
+995883bc-9a49-4a6b-9b8f-c5a325b830d8,11,Option,,,"With Ice | 16oz",MOP-004,0,,,,Yes
+99586b98-2ded-4b40-be29-f58312a4d589,35,Flavors,,,"Earl Grey Tea",MFL-010,0,,,,Yes
+99586af8-453c-47c9-bd26-f4aca0cd9f41,35,Flavors,,,"Green Tea",MFL-009,0,,,,Yes
+99586a8f-e4cb-4939-afb6-8aedf99832b9,35,Flavors,,,"Green Tea & Mint",MFL-008,0,,,,Yes
+995869cc-064c-485c-8225-8d550f44b1a9,35,Flavors,,,"English Breakfast Tea",MFL-007,0,,,,Yes
+99583e22-e939-4b1a-9847-c4f4f4830078,22,Extra,,,"Extra Sweet",MEX-012,0.2,,,,Yes
+99549191-d11f-4cd9-8f56-e5a889159398,,Cups,كوب,,"Large Paper Cup | 12oz",MCP-007,0,,,كبير,No
+99549160-0a7c-4ddb-b62d-a00e4ce05088,,Cups,كوب,,"Medium Paper Cup | 10oz",MCP-008,0,,,صغير,No
+99548809-5b11-48de-8a64-421d2e1bd3dd,,Cups,كوب,,"Paper Cup | 4oz",MCP-003,0,,,,Yes
+995485ef-95f0-47e0-8d7b-d2e72b5b0560,,Cups,كوب,,"Paper Cup | 6oz",MCP-002,0,,,,Yes
+99548519-b58c-428d-987f-1a76ea1f3720,,Cups,كوب,,"PP Green Cup | 16oz",MCP-001,0,,,"حجم وسط",No
+98d1f786-355d-4977-a8ec-6d3f5cb21c7c,35,Flavors,,,"3Pcs | Iced Matcha Shot",MFL-001,0,,,"ايس ماتشا",Yes
+98d1f769-4277-4669-8ddb-cc15da15d049,35,Flavors,,,"3Pcs | Iced Spanish Latte Shot",MFL-002,0,,,,Yes
+98d1f74f-32d6-40af-88f7-449ffaa8807b,35,Flavors,,,"3Pcs | Iced Salted Caramel Shot",MFL-003,0,,,,Yes
+98d1f72f-2f70-4097-8fda-b6ef515abab1,35,Flavors,,,"3Pcs | Iced Americano Shot",MFL-004,0,,,,Yes
+98d1f717-0ed7-4592-94f0-e717ac4f213e,35,Flavors,,,"Cold Brew Shot",MFL-005,0,,,,No
+98d1f701-2b18-42ed-8295-3db25befe40a,35,Flavors,,,"Tower Drip Shot",MFL-006,0,,,,No
+96c654d8-c4c3-421f-aac6-548c6e1abcc2,22,Extra,,,"Chocolate Sauce",MEX-010,0.3,,,,No
+96198bfe-422e-4870-bc59-0b10f9e6d276,22,Extra,,,"Salted Caramel Syrup",MEX-003,0.2,,,,Yes
+96198bdb-da99-4776-9269-428a51998d98,22,Extra,,,"Caramel Syrup",MEX-002,0.2,,,,Yes
+96083d63-379a-47a3-874d-60934e1df985,22,Extra,,,"Vanilla Sugar Free",MEX-007,0.2,,,,Yes
+96083d25-0957-4efb-925d-5f5aa14c2a53,22,Extra,,,"Caramel Sugar Free",MEX-006,0.2,,,,Yes
+95f31582-1bec-4049-b51b-6acf44681452,22,Extra,,,"White Mocha Sauce",MEX-004,0.2,,,,Yes
+958c9601-9169-4b27-9408-bdffdebc11a2,11,Option,,,"More Sugar",MOP-001,0,,,"سكر زيادة",Yes
+958c95c8-6233-40d3-ae9c-f2a825d186ac,11,Option,,,"No Sugar",MOP-002,0,,,"بدون سكر",Yes
+958c958d-3c76-42c1-a1b7-4498deb2c237,11,Option,,,"Medium Sugar",MOP-003,0,,,وسط,Yes
+92a8437b-4406-45c0-91d7-b2aea904ea59,15,Color,,,"Tumbler Yellow",MCO-004,0,,,"تمبلر أصفر",Yes
+92a8434e-fbcd-4a9f-a370-0c36c10ed14d,15,Color,,,"Tumbler Pink",MCO-005,0,,,"تمبلر وردي",No
+92a84326-9283-4537-bfa4-1b9fd13dc7be,15,Color,,,"Tumbler Green",MCO-006,0,,,"تمبلر أخضر",No
+92a84309-18ef-4478-ba54-1d5ab843901d,15,Color,,,"Tumbler Black",MCO-007,0,,,"تمبلر أسود",No
+9292f9bd-fa9d-444d-be5a-a0e49e8f43c5,22,Extra,,,"Black Ice Cubes",MEX-009,0.2,,,"مكعبات ثلج من القهوة",Yes
+9292c24f-8721-42a5-8038-9e8dc011fcde,22,Extra,,,"Whipping Cream",MEX-011,0.25,,,"اضافة نكهة الكاكاو الأبيض",Yes
+9291e235-ecaf-4532-98f9-e7d1297f656f,22,Extra,,,"Extra Matcha",MEX-013,0.5,,,ماتشا,Yes
+9291e1cc-5ced-4ae6-9252-9b642a78f4aa,22,Extra,,,"Vanilla Syrup",MEX-001,0.2,,,فانيلا,Yes

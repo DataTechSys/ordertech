@@ -1,0 +1,3 @@
+NAME             REGION       URL
+smart-order      me-central1  https://smart-order-64v5pfkeba-ww.a.run.app
+smart-order-api  me-central1  https://smart-order-api-64v5pfkeba-ww.a.run.app

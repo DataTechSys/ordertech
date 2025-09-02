@@ -1,0 +1,3 @@
+NAME                         IP_ADDRESS     PORT_RANGE  TARGET
+smartorder-koobs-http-rule   34.160.231.88  80-80       https://www.googleapis.com/compute/v1/projects/smart-order-469705/global/targetHttpProxies/smartorder-koobs-http-proxy
+smartorder-koobs-https-rule  34.160.231.88  443-443     https://www.googleapis.com/compute/v1/projects/smart-order-469705/global/targetHttpsProxies/smartorder-koobs-https-proxy

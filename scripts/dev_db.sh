@@ -20,8 +20,9 @@ elif [ -n "${BASH_SOURCE:-}" ] && [ "${BASH_SOURCE[0]}" != "$0" ]; then
   __DT_SOURCED=1
 fi
 
-# Load optional per-developer config
-ENV_FILE="$(dirname "$0")/dev_db.env"
+# Load optional per-developer config (resolve script dir when sourced)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/dev_db.env"
 [ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a || true
 
 # Defaults (override via env or scripts/dev_db.env)

@@ -1,0 +1,7 @@
+REPOSITORY               FORMAT  LOCATION
+cloud-run-source-deploy  DOCKER
+cloud-run-source-deploy  DOCKER
+smart-order              DOCKER
+gcr.io                   DOCKER
+cloud-run-source-deploy  DOCKER
+smart-order              DOCKER

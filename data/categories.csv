@@ -1,4 +1,4 @@
-id,name,name_localized,reference,image
+﻿id,name,name_localized,reference,image
 92849df1-bda0-4513-b98c-09c2790db2ec,"Iced Coffee | 12oz (M)","القهوة البارده",16,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331924_9a47ce2e-40ab-4514-a824-022dba274466.png
 92849ecc-81b6-4ff7-a730-bfb782680245,"Hot Coffee","القهوة الساخنة",15,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696331910_9a47ce17-dc33-4725-98f9-b03a2c58cd25.png
 92849f13-3b72-4eb3-a666-aa0cecb617df,"Speciality Coffee","القهوة المختصة",14,https://foodics-console-production.s3.eu-west-1.amazonaws.com/images/494675_1696664420_9a4f8c02-0586-4227-b76f-0e35cd76c7c5.png

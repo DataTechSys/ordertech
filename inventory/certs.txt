@@ -1,0 +1,4 @@
+NAME                   MANAGED_STATUS  DOMAINS
+app-ordertech-cert     ACTIVE          ['app.ordertech.me']
+smartorder-dts-cert    ACTIVE          ['smartorder.datatech.systems']
+smartorder-koobs-cert  ACTIVE          ['smartorder.koobs.cafe']

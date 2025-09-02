@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Admin • Categories</title>
+    <link rel="stylesheet" href="/public/admin/style.css" />
+    <link rel="icon" href="/public/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/public/admin/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border);">
+      <div class="breadcrumbs"><a id="tenantNameCrumb" href="#">—</a><span class="sep">›</span><span>Categories</span></div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <select id="tenantSelect" class="select"></select>
+        <button id="logoutBtn" class="btn">Logout</button>
+      </div>
+    </header>
+    <main class="main" style="padding:16px;">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <button id="refreshCategories" class="btn">Refresh</button>
+            <div class="spacer"></div>
+            <div id="catBulkBar" class="flex hidden">
+              <select id="catBulkAction" class="select" style="max-width:220px">
+                <option value="delete">Delete</option>
+                <option value="inactivate">Inactivate</option>
+                <option value="activate">Activate</option>
+              </select>
+              <button id="catBulkApply" class="btn danger">Apply</button>
+            </div>
+          </div>
+          <div class="tabs" id="catTabs">
+            <button class="tab active" data-tab="active">Active</button>
+            <button class="tab" data-tab="inactive">Inactive</button>
+            <button class="tab" data-tab="deleted">Deleted</button>
+          </div>
+          <div id="categoryTableWrap"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Category Modal -->
+    <div id="categoryModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
+        <div class="header">
+          <div class="title" id="categoryModalTitle">Category</div>
+          <button id="categoryModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid">
+              <span class="label">Name</span>
+              <input id="catFormName" class="input"/>
+            </label>
+            <label class="grid">
+              <span class="label">Reference</span>
+              <input id="catFormRef" class="input" readonly/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid">
+              <span class="label">Created</span>
+              <input id="catFormCreated" class="input" readonly/>
+            </label>
+            <label class="grid">
+              <span class="label">Products</span>
+              <input id="catFormProducts" class="input" readonly/>
+            </label>
+          </div>
+        </div>
+        <div class="footer">
+          <button id="categoryModalDelete" class="btn danger hidden">Delete</button>
+          <button id="categoryModalActivate" class="btn hidden">Activate</button>
+          <span class="spacer"></span>
+          <button id="categoryModalCancel" class="btn">Cancel</button>
+          <button id="categoryModalSave" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/public/admin/js/admin-shell.js"></script>
+    <script src="/public/admin/js/admin-common.js"></script>
+    <script src="/public/admin/js/categories.js"></script>
+  </body>
+</html>
+

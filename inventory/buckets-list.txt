@@ -1,0 +1,10 @@
+NAME                                         LOCATION      STORAGE_CLASS  UNIFORM_BUCKET_LEVEL_ACCESS
+run-sources-smart-order-469705-europe-west1  EUROPE-WEST1                 True
+run-sources-smart-order-469705-me-central1   ME-CENTRAL1                  True
+run-sources-smart-order-469705-us-central1   US-CENTRAL1                  True
+smart-order-469705-assets                    US-CENTRAL1                  False
+smart-order-469705-sql-imports-us            US-CENTRAL1                  False
+smart-order-469705-static                    US-CENTRAL1                  False
+smart-order-469705_cloudbuild                US                           False
+smart-order-assets-715493130630              US-CENTRAL1                  True
+smart-order-assets-me-central1-715493130630  ME-CENTRAL1                  True

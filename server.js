@@ -670,6 +670,9 @@ addRoute('get', /^\/categories$/, requireTenant, async (req, res) => {
       'select id, name from categories where tenant_id=$1 order by name asc',
       [req.tenantId]
     );
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.json(JSON_CATALOG.categories);
+    }
     res.json(rows);
   } catch (_e) {
     // DB failed — return JSON catalog for UI to proceed
@@ -688,6 +691,9 @@ addRoute('get', '/api/categories', requireTenant, async (req, res) => {
       'select id, name from categories where tenant_id=$1 order by name asc',
       [req.tenantId]
     );
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.json(JSON_CATALOG.categories);
+    }
     res.json(rows);
   } catch (_e) {
     res.json(JSON_CATALOG.categories);
@@ -743,6 +749,10 @@ reference
       order by c.name, p.name
     `;
     const rows = await db(sql, category_name ? [req.tenantId, category_name] : [req.tenantId]);
+    if (!Array.isArray(rows) || rows.length === 0) {
+      const list = category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]);
+      return res.json(list);
+    }
     // Fallbacks for missing image_url:
     // 1) Try CSV/JSON catalog by name (may provide remote Foodics URL)
     // 2) Try local PHOTO_MAP (served from /public/images/products via /photos)
@@ -804,6 +814,10 @@ addRoute('get', '/api/products', requireTenant, async (req, res) => {
       order by c.name, p.name
     `;
     const rows = await db(sql, category_name ? [req.tenantId, category_name] : [req.tenantId]);
+    if (!Array.isArray(rows) || rows.length === 0) {
+      const list = category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]);
+      return res.json(list);
+    }
     try {
       if (Array.isArray(rows) && rows.length) {
         const byName = new Map((JSON_CATALOG.products||[]).map(p => [p.name, p.image_url]));
@@ -1634,7 +1648,7 @@ addRoute('get', '/public/admin/config.js', (_req, res) => {
     return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};`);
   }
   try {
-    const fp = path.join(__dirname, 'public', 'admin', 'config.js');
+const fp = path.join(__dirname, 'admin', 'config.js');
     const content = fs.readFileSync(fp, 'utf8');
     return res.type('application/javascript').send(content);
   } catch {
@@ -1643,13 +1657,23 @@ addRoute('get', '/public/admin/config.js', (_req, res) => {
 });
 
 // New root config route for admin pages
-addRoute('get', '/config.js', (_req, res) => {
+addRoute('get', '/config.js', (req, res) => {
+  // Simple redirect to the static admin config (which may be env-rendered by /public/admin/config.js route)
+  try {
+    const q = req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(307, '/public/admin/config.js' + q);
+  } catch {
+    return res.redirect(307, '/public/admin/config.js');
+  }
+});
+
+// JSON variant used by clients that need to fetch config programmatically
+addRoute('get', '/config.json', (_req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
-  const cfg = { apiKey, authDomain };
-  return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};`);
+  return res.json({ apiKey, authDomain });
 });
 
 // Super admin: list tenants
@@ -2801,19 +2825,28 @@ app.use((req, res, next) => {
   } catch {}
   next();
 });
-// Serve product images directly from /photos under /public/images/products (place before generic static mounts)
+// Serve product images from public first, then fallback to /photos (place before generic static mounts)
+app.use('/public/images/products', express.static(path.join(__dirname, 'images', 'products')));
 app.use('/public/images/products', express.static(path.join(__dirname, 'photos')));
+// New direct mounts for non-legacy paths
+app.use('/images/products', express.static(path.join(__dirname, 'images', 'products')));
+app.use('/images/products', express.static(path.join(__dirname, 'photos')));
 
 // Static mounts for new root assets
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/images', express.static(path.join(__dirname, 'images')));
 app.use('/sidebar', express.static(path.join(__dirname, 'sidebar')));
+// Expose CSV data (e.g., top_sellers.csv) for frontend consumption
+app.use('/data', express.static(path.join(__dirname, 'data')));
 
 // Legacy page redirects (.html -> directory)
 addRoute('get', '/products.html', (_req, res) => res.redirect(301, '/products/'));
 addRoute('get', '/categories.html', (_req, res) => res.redirect(301, '/categories/'));
 addRoute('get', '/modifiers/groups.html', (_req, res) => res.redirect(301, '/modifiers/'));
+// Legacy page redirects for relocated pages
+addRoute('get', '/public/drive-thru.html', (_req, res) => res.redirect(301, '/drive'));
+addRoute('get', '/public/cashier.html', (_req, res) => res.redirect(301, '/cashier'));
 
 // Legacy admin redirects (public/admin -> new root pages)
 addRoute('get', '/public/admin', (_req, res) => res.redirect(301, '/products/'));
@@ -2841,6 +2874,10 @@ addRoute('get', '/users/',    (_req, res) => res.sendFile(path.join(__dirname, '
 addRoute('get', '/roles/',    (_req, res) => res.sendFile(path.join(__dirname, 'roles',    'index.html')));
 addRoute('get', '/branches/', (_req, res) => res.sendFile(path.join(__dirname, 'branches', 'index.html')));
 addRoute('get', '/devices/',  (_req, res) => res.sendFile(path.join(__dirname, 'devices',  'index.html')));
+// Friendly aliases for cashier/display
+addRoute('get', '/drive',   (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', '/display', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', '/cashier', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 // Login page (root-level)
 addRoute('get', '/login/', (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
 
@@ -2852,7 +2889,17 @@ addRoute('get', '/product/', (_req, res) => res.redirect(301, '/products/'));
 app.use(express.static(PUB));
 // Also mount at /public to support asset paths like /public/js/... and /public/css/...
 app.use('/public', express.static(PUB));
-addRoute('get', '/favicon.ico', (_req, res) => res.sendFile(path.join(PUB, 'favicon.ico')));
+// Legacy aliases: if a file is missing under /public, fallback to new root asset directories
+app.use('/public/css', express.static(path.join(__dirname, 'css')));
+app.use('/public/js', express.static(path.join(__dirname, 'js')));
+app.use('/public/images', express.static(path.join(__dirname, 'images')));
+app.use('/public/sidebar', express.static(path.join(__dirname, 'sidebar')));
+addRoute('get', '/favicon.ico', (_req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'favicon.ico')); } catch { return res.status(404).end(); }
+});
+addRoute('get', '/favico.ico', (_req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'favico.ico')); } catch { return res.status(404).end(); }
+});
 
 // Simple in-memory image cache for proxy (/img)
 const memImageCache = new Map(); // url -> { buf:Buffer, type:string, etag:string, exp:number }
@@ -2870,11 +2917,11 @@ function isPrivateHostOrIp(host){
 // Posters list for rotating display overlay
 addRoute('get', '/posters', (_req, res) => {
   try {
-    const dir = path.join(PUB, 'images', 'poster');
+const dir = path.join(__dirname, 'images', 'poster');
     const files = fs.readdirSync(dir)
       .filter(f => /\.(png|jpe?g|webp|gif|avif)$/i.test(f))
       .sort((a,b) => a.localeCompare(b));
-    const items = files.map(f => `/public/images/poster/${encodeURIComponent(f)}`);
+const items = files.map(f => `/images/poster/${encodeURIComponent(f)}`);
     res.json({ items });
   } catch {
     res.json({ items: [] });
@@ -2953,14 +3000,7 @@ addRoute('get', '/img', async (req, res) => {
   }
 });
 
-addRoute('get', '/drive', (_req, res) => res.sendFile(path.join(PUB, 'drive-thru.html')));
-addRoute('get', '/cashier', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cashier-new.html'));
-});
-addRoute('get', '/cashier-new', (req, res) => {
-  res.redirect(302, '/cashier');
-});
-addRoute('get', '/',           (_req, res) => res.sendFile(path.join(PUB, 'index.html')));
+addRoute('get', '/', (_req, res) => res.redirect(302, '/products/'));
 
 // ---- boot
 const WebSocket = require('ws');
@@ -3305,5 +3345,5 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 addRoute('get', '/cashier-basket', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cashier-basket.html'));
+  res.sendFile(path.join(__dirname, 'cashier', 'basket.html'));
 });
