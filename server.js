@@ -468,10 +468,91 @@ addRoute('post', '/auth/send-verification-email', async (req, res) => {
       return res.json({ ok: true, email_sent: false });
     }
     const mail = await sendPlainEmail(email, 'Verify your email for OrderTech', `Click to verify your email: ${link}`);
-    return res.json({ ok: true, email_sent: !!mail.sent });
+    return res.json({ ok: true, email_sent: !!mail.sent, link });
   } catch (_e) {
     return res.json({ ok: true, email_sent: false });
   }
+});
+
+// Public: send password reset email (email-only)
+addRoute('post', '/auth/send-password-reset', async (req, res) => {
+  try {
+    const email = String(req.body?.email||'').trim().toLowerCase();
+    if (!email || !/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'invalid_email' });
+    if (!admin) return res.status(503).json({ error: 'auth_unavailable' });
+    const proto = getForwardedProto(req);
+    const host = getForwardedHost(req);
+    const base = `${proto}://${host}`;
+    // For password reset, default to Firebase-hosted flow; do not handle in-app
+    let link;
+    try {
+      link = await admin.auth().generatePasswordResetLink(email, { url: `${base}/login/`, handleCodeInApp: false });
+    } catch (_e) {
+      // Do not leak whether user exists
+      return res.json({ ok: true, email_sent: false });
+    }
+    const mail = await sendPlainEmail(email, 'Reset your OrderTech password', `Click to reset your password: ${link}`);
+    return res.json({ ok: true, email_sent: !!mail.sent, link });
+  } catch (_e) {
+    return res.json({ ok: true, email_sent: false });
+  }
+});
+
+// Public: check if email exists (best-effort; requires firebase-admin)
+addRoute('get', '/auth/check-email', async (req, res) => {
+  try {
+    const email = String(req.query?.email||'').trim().toLowerCase();
+    if (!email || !/.+@.+\..+/.test(email)) return res.json({ exists: false });
+    if (!admin) return res.json({ exists: null });
+    try { await admin.auth().getUserByEmail(email); return res.json({ exists: true }); } catch { return res.json({ exists: false }); }
+  } catch { return res.json({ exists: null }); }
+});
+
+// Public: check if company (tenant name) exists
+addRoute('get', '/auth/check-company', async (req, res) => {
+  if (!HAS_DB) return res.json({ exists: false });
+  const name = String(req.query?.name||'').trim();
+  if (!name) return res.json({ exists: false });
+  try {
+    const rows = await db('select id from tenants where lower(name)=lower($1) limit 1', [name]);
+    return res.json({ exists: rows.length > 0 });
+  } catch { return res.json({ exists: false }); }
+});
+
+// Public: send reset to company owner (by company/tenant name); does not reveal owner email
+addRoute('post', '/auth/company-owner-reset', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    if (!admin) return res.status(503).json({ error: 'auth_unavailable' });
+    const name = String(req.body?.company||'').trim();
+    if (!name) return res.status(400).json({ error: 'invalid_company' });
+    const [t] = await db('select id from tenants where lower(name)=lower($1) limit 1', [name]);
+    if (!t) return res.json({ ok: true, email_sent: false });
+    // Find an owner email (first created)
+    const rows = await db(`
+      select lower(u.email) as email
+        from tenant_users tu
+        join users u on u.id=tu.user_id
+       where tu.tenant_id=$1 and tu.role='owner'
+       order by tu.created_at asc
+       limit 1`, [t.id]);
+    if (!rows.length) return res.json({ ok: true, email_sent: false });
+    const ownerEmail = rows[0].email;
+    const proto = getForwardedProto(req);
+    const host = getForwardedHost(req);
+    const base = `${proto}://${host}`;
+    let link;
+    try {
+      link = await admin.auth().generatePasswordResetLink(ownerEmail, { url: `${base}/login/`, handleCodeInApp: false });
+    } catch (_e) {
+      // If user not found, fall back to verification link
+      try {
+        link = await admin.auth().generateEmailVerificationLink(ownerEmail, { url: `${base}/login/?mode=verifyEmail`, handleCodeInApp: true });
+      } catch { return res.json({ ok: true, email_sent: false }); }
+    }
+    const mail = await sendPlainEmail(ownerEmail, 'Reset your OrderTech password', `Click to reset your password: ${link}`);
+    return res.json({ ok: true, email_sent: !!mail.sent });
+  } catch { return res.json({ ok: true, email_sent: false }); }
 });
 
 async function ensureAdminPerfIndexes(){
@@ -3302,6 +3383,44 @@ addRoute('get', '/admin/tenants/:id/posters', verifyAuthOpen, requireTenantAdmin
     return res.json({ items: [] });
   }
 });
+
+// Update an existing integration without rotating token (meta/status/label)
+addRoute('put', '/admin/tenants/:id/integrations/:provider', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const provider = String(req.params.provider||'').trim().toLowerCase();
+  const label = (req.body?.label != null ? String(req.body.label).trim() : null);
+  const meta = (req.body?.meta && typeof req.body.meta === 'object') ? req.body.meta : null;
+  const status = (req.body?.status != null ? String(req.body.status).trim() : null);
+  if (!tenantId || !provider) return res.status(400).json({ error: 'invalid_request' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    const arr = memIntegrationsByTenant.get(tenantId) || [];
+    const key = (provider + '::' + (label||''));
+    const idx = arr.findIndex(x => (x.provider+'::'+(x.label||'')) === key);
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      if (meta) arr[idx].meta = meta;
+      if (status != null) arr[idx].status = status;
+      arr[idx].updated_at = now;
+      memIntegrationsByTenant.set(tenantId, arr);
+      return res.json({ ok: true });
+    }
+    return res.status(404).json({ error: 'not_found' });
+  }
+  try {
+    // Upsert by tenant/provider/label; allow label change only by passing same label value here
+    await db(
+      `insert into tenant_api_integrations (tenant_id, provider, label, meta, status, created_at, updated_at)
+         values ($1,$2,$3,$4::jsonb,$5, now(), now())
+         on conflict (tenant_id, provider, coalesce(label, ''))
+         do update set meta=excluded.meta, status=excluded.status, updated_at=now()`,
+      [tenantId, provider, label, meta||{}, status||null]
+    );
+    return res.json({ ok: true });
+  } catch (_e) {
+    return res.status(500).json({ error: 'integration_update_failed' });
+  }
+});
 addRoute('delete', '/admin/tenants/:id/posters', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   const tenantId = String(req.params.id||'').trim();
   const object = String(req.query.object||'').trim();
@@ -3418,6 +3537,344 @@ addRoute('delete', '/admin/tenants/:id/integrations/:provider', verifyAuthOpen, 
   }
 });
 
+// ---- Foodics Sync Orchestrator and Routes
+async function getTenantFoodicsToken(tenantId){
+  if (!tenantId) return null;
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return null;
+    const arr = memIntegrationsByTenant.get(tenantId) || [];
+    const it = arr.find(x => String(x.provider||'').toLowerCase()==='foodics' && !x.revoked_at);
+    return it?.token_plain || null;
+  }
+  try {
+    const rows = await db(`select token_encrypted from tenant_api_integrations where tenant_id=$1 and provider='foodics' and revoked_at is null limit 1`, [tenantId]);
+    if (!rows.length) return null;
+    const buf = rows[0].token_encrypted;
+    const tok = cryptoUtil.decryptFromBuffer(buf);
+    return tok || null;
+  } catch { return null; }
+}
+
+function hashPair(a, b){
+  // simple 31-bit pair hash for advisory locks
+  function h(s){ let x=0; for (let i=0;i<s.length;i++){ x = (x*31 + s.charCodeAt(i))|0; } return x|0; }
+  const x = h(String(a));
+  const y = h(String(b));
+  return { x, y };
+}
+
+async function runTenantFoodicsSync(tenantId, opts={}){
+  if (!HAS_DB) throw new Error('db_required');
+  await ensureIntegrationTables();
+  const token = await getTenantFoodicsToken(tenantId);
+  if (!token) throw new Error('token_missing');
+  const provider = 'foodics';
+  const { x, y } = hashPair(tenantId, provider);
+  // Try advisory lock
+  try { await db('select pg_try_advisory_lock($1,$2)', [x, y]); } catch {}
+  const [run] = await db('insert into integration_sync_runs (tenant_id, provider, ok, stats) values ($1,$2,null,$3::jsonb) returning id, started_at', [tenantId, provider, JSON.stringify({})]);
+  const runId = run.id;
+  const stats = { categories:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, products:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, modifier_groups:{created:0,updated:0,skipped:0}, modifier_options:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, product_modifier_links:{created:0,updated:0,skipped:0}, pages:{categories:0,products:0,modifier_groups:0,modifier_options:0,assignments:0}, rate_limit_hits:0, duration_ms:0 };
+  const t0 = Date.now();
+  try {
+    const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
+    if (!client) throw new Error('client_unavailable');
+
+    // Fetch all
+    const [cats, groups, options] = await Promise.all([
+      client.listCategories().catch(()=>({items:[],pages:0})),
+      client.listModifierGroups().catch(()=>({items:[],pages:0})),
+      client.listModifierOptions().catch(()=>({items:[],pages:0})),
+    ]);
+    const prods = await client.listProducts().catch(()=>({items:[],pages:0}));
+    const assigns = await client.listProductModifierAssignments().catch(()=>({items:[],pages:0}));
+    stats.pages.categories = cats.pages||0; stats.pages.products = prods.pages||0; stats.pages.modifier_groups = groups.pages||0; stats.pages.modifier_options = options.pages||0; stats.pages.assignments = assigns.pages||0;
+
+    // Upsert helpers
+    await ensureCategoryStatusColumns();
+    await ensureModifiersSchema();
+
+    async function getMapping(entity_type, external_id){
+      const rows = await db('select entity_id from tenant_external_mappings where tenant_id=$1 and provider=$2 and entity_type=$3 and external_id=$4', [tenantId, provider, entity_type, String(external_id)]);
+      return rows.length ? rows[0].entity_id : null;
+    }
+    async function setMapping(entity_type, entity_id, external_id, external_ref){
+      await db(`insert into tenant_external_mappings (tenant_id, provider, entity_type, entity_id, external_id, external_ref)
+                values ($1,$2,$3,$4,$5,$6)
+                on conflict (tenant_id, provider, entity_type, external_id)
+                do update set entity_id=excluded.entity_id, external_ref=excluded.external_ref, updated_at=now()`,
+        [tenantId, provider, entity_type, entity_id, String(external_id), external_ref||null]);
+    }
+
+    // Categories
+    for (const c of (cats.items||[])){
+      const extId = c.id || c.uuid || c.reference || c.code;
+      if (!extId) { stats.categories.skipped++; continue; }
+      const ref = (c.reference || c.code || '').toString() || null;
+      let id = await getMapping('category', extId);
+      if (!id && ref) {
+        const r = await db('select id from categories where tenant_id=$1 and reference=$2', [tenantId, ref]);
+        id = r.length ? r[0].id : null;
+      }
+      const active = (String(c.is_active||c.active||'').toLowerCase() === 'yes') || (c.is_active === true) || (c.active === true);
+      const name = c.name || c.title || '';
+      const name_localized = c.name_localized || c.name_ar || null;
+      const image_url = c.image || c.image_url || null;
+      if (!id) {
+        if (!name) { stats.categories.skipped++; continue; }
+        const newId = require('crypto').randomUUID();
+        await db('insert into categories (id, tenant_id, name, reference, name_localized, image_url, active, deleted) values ($1,$2,$3,$4,$5,$6,$7,false) on conflict do nothing', [newId, tenantId, name, ref||null, name_localized, image_url, active!==false]);
+        await setMapping('category', newId, extId, ref||null);
+        stats.categories.created++;
+      } else {
+        await db('update categories set name=coalesce($1,name), reference=coalesce($2,reference), name_localized=$3, image_url=$4, active=$5 where tenant_id=$6 and id=$7', [name||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+        await setMapping('category', id, extId, ref||null);
+        stats.categories.updated++;
+      }
+    }
+
+    // Build category map name/ref to id for product linkage
+    const catRows = await db('select id, reference from categories where tenant_id=$1', [tenantId]);
+    const catByRef = new Map(catRows.map(r=>[String(r.reference||''), r.id]));
+
+    // Modifier groups
+    for (const g of (groups.items||[])){
+      const extId = g.id || g.uuid || g.reference || g.code;
+      if (!extId) { stats.modifier_groups.skipped++; continue; }
+      const ref = (g.reference || g.code || '').toString() || null;
+      let id = await getMapping('modifier_group', extId);
+      if (!id && ref) {
+        const r = await db('select id from modifier_groups where tenant_id=$1 and reference=$2', [tenantId, ref]);
+        id = r.length ? r[0].id : null;
+      }
+      const name = g.name || g.group_name || '';
+      const min_select = g.min_select != null ? Number(g.min_select) : (g.min != null ? Number(g.min) : null);
+      const max_select = g.max_select != null ? Number(g.max_select) : (g.max != null ? Number(g.max) : null);
+      const required = g.required != null ? !!g.required : !!g.is_required;
+      if (!id) {
+        const newId = require('crypto').randomUUID();
+        await db('insert into modifier_groups (id, tenant_id, name, reference, min_select, max_select, required) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing', [newId, tenantId, name||'Group', ref||null, min_select, max_select, required]);
+        await setMapping('modifier_group', newId, extId, ref||null);
+        stats.modifier_groups.created++;
+      } else {
+        await db('update modifier_groups set name=$1, reference=$2, min_select=$3, max_select=$4, required=$5 where tenant_id=$6 and id=$7', [name||'Group', ref||null, min_select, max_select, required, tenantId, id]);
+        await setMapping('modifier_group', id, extId, ref||null);
+        stats.modifier_groups.updated++;
+      }
+    }
+
+    // Build group mapping ref->id
+    const groupRows = await db('select id, reference from modifier_groups where tenant_id=$1', [tenantId]);
+    const groupByRef = new Map(groupRows.map(r=>[String(r.reference||''), r.id]));
+
+    // Modifier options
+    for (const o of (options.items||[])){
+      const extId = o.id || o.uuid || o.reference || o.code;
+      if (!extId) { stats.modifier_options.skipped++; continue; }
+      const ref = (o.reference || o.code || '').toString() || null;
+      const group_ref = (o.modifier_group_reference || o.group_reference || (o.group?.reference) || '').toString();
+      let group_id = await getMapping('modifier_group', o.group_id || o.modifier_group_id || '') || (group_ref ? groupByRef.get(group_ref) : null);
+      if (!group_id) { stats.modifier_options.skipped++; continue; }
+      let id = await getMapping('modifier_option', extId);
+      if (!id) {
+        // fallback match by name within group
+        const name = o.name || o.option_name || '';
+        const r = await db('select id from modifier_options where tenant_id=$1 and group_id=$2 and name=$3 limit 1', [tenantId, group_id, name]);
+        id = r.length ? r[0].id : null;
+      }
+      const name = o.name || o.option_name || '';
+      const price = (v=>Number.isFinite(v)?v:0)(Number(o.price ?? o.delta_price ?? o.price_kwd));
+      const is_active = o.is_active != null ? !!o.is_active : (o.active != null ? !!o.active : true);
+      const sort_order = (n=>Number.isFinite(n)?n:null)(parseInt(o.sort_order ?? o.position, 10));
+      if (!id) {
+        const newId = require('crypto').randomUUID();
+        await db('insert into modifier_options (id, tenant_id, group_id, name, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing', [newId, tenantId, group_id, name||'Option', price, is_active, sort_order]);
+        await setMapping('modifier_option', newId, extId, ref||null);
+        stats.modifier_options.created++;
+      } else {
+        await db('update modifier_options set group_id=$1, name=$2, price=$3, is_active=$4, sort_order=$5 where tenant_id=$6 and id=$7', [group_id, name||'Option', price, is_active, sort_order, tenantId, id]);
+        await setMapping('modifier_option', id, extId, ref||null);
+        stats.modifier_options.updated++;
+      }
+    }
+
+    // Products
+    for (const p of (prods.items||[])){
+      const extId = p.id || p.uuid || p.reference || p.code;
+      if (!extId) { stats.products.skipped++; continue; }
+      let id = await getMapping('product', extId);
+      // fallback by sku==reference if supplied
+      const ref = (p.reference || p.code || '').toString() || null;
+      if (!id && ref) {
+        const r = await db('select id from products where tenant_id=$1 and sku=$2 limit 1', [tenantId, ref]);
+        id = r.length ? r[0].id : null;
+      }
+      const name = p.name || '';
+      const active = (p.is_active === true) || (String(p.is_active||p.active||'').toLowerCase()==='yes');
+      const price = (v=>Number.isFinite(v)?v:0)(Number(p.price));
+      const image_url = p.image || p.image_url || null;
+      const cost = (v=>Number.isFinite(v)?v:null)(Number(p.cost));
+      const barcode = p.barcode ? String(p.barcode) : null;
+      const preparation_time = (n=>Number.isFinite(n)?n:null)(parseInt(p.preparation_time,10));
+      const calories = (n=>Number.isFinite(n)?n:null)(parseInt(p.calories,10));
+      // category linkage
+      let category_id = null;
+      const catRef = (p.category_reference || p.category_ref || p.category?.reference || '').toString();
+      if (catRef) category_id = catByRef.get(catRef) || null;
+
+      if (!id) {
+        const newId = require('crypto').randomUUID();
+        if (!category_id) { stats.products.skipped++; continue; }
+        await db(
+          `insert into products (
+             id, tenant_id, name, category_id, price, cost,
+             barcode, preparation_time, calories,
+             sku, image_url, active
+           ) values (
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+           ) on conflict do nothing`,
+          [newId, tenantId, name||'Product', category_id, price, cost, barcode, preparation_time, calories, ref||null, image_url||null, active!==false]
+        );
+        await setMapping('product', newId, extId, ref||null);
+        stats.products.created++;
+      } else {
+        await db(
+          `update products set
+             name=$1,
+             category_id=coalesce($2, category_id),
+             price=$3,
+             cost=$4,
+             barcode=$5,
+             preparation_time=$6,
+             calories=$7,
+             sku=coalesce($8, sku),
+             image_url=$9,
+             active=$10
+           where tenant_id=$11 and id=$12`,
+          [name||'Product', category_id, price, cost, barcode, preparation_time, calories, ref||null, image_url||null, active!==false, tenantId, id]
+        );
+        await setMapping('product', id, extId, ref||null);
+        stats.products.updated++;
+      }
+    }
+
+    // Product ↔ Modifier links (assignments)
+    // Each assignment should include product external id and group external id, plus optional settings
+    for (const a of (assigns.items||[])){
+      const prodExt = a.product_id || a.product_external_id || (a.product && (a.product.id||a.product.reference));
+      const groupExt = a.group_id || a.modifier_group_id || a.modifier_group_external_id || (a.group && (a.group.id||a.group.reference));
+      if (!prodExt || !groupExt) { stats.product_modifier_links.skipped++; continue; }
+      const product_id = await getMapping('product', prodExt);
+      const group_id = await getMapping('modifier_group', groupExt);
+      if (!product_id || !group_id) { stats.product_modifier_links.skipped++; continue; }
+      const sort_order = (n=>Number.isFinite(n)?n:null)(parseInt(a.sort_order,10));
+      const required = a.required != null ? !!a.required : null;
+      const min_select = (n=>Number.isFinite(n)?n:null)(parseInt(a.min_select,10));
+      const max_select = (n=>Number.isFinite(n)?n:null)(parseInt(a.max_select,10));
+      await db(
+        `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select)
+           values ($1,$2,$3,$4,$5,$6)
+         on conflict (product_id, group_id)
+           do update set sort_order=excluded.sort_order,
+                         required=coalesce(excluded.required, product_modifier_groups.required),
+                         min_select=coalesce(excluded.min_select, product_modifier_groups.min_select),
+                         max_select=coalesce(excluded.max_select, product_modifier_groups.max_select)`,
+        [product_id, group_id, sort_order, required, min_select, max_select]
+      );
+      stats.product_modifier_links.updated++;
+    }
+
+    stats.duration_ms = Date.now() - t0;
+    await db('update integration_sync_runs set ok=true, finished_at=now(), stats=$1::jsonb where id=$2', [JSON.stringify(stats), runId]);
+    try { await db('select pg_advisory_unlock($1,$2)', [x, y]); } catch {}
+    return { ok: true, run_id: runId, stats };
+  } catch (e) {
+    stats.duration_ms = Date.now() - t0;
+    await db('update integration_sync_runs set ok=false, finished_at=now(), error=$1, stats=$2::jsonb where id=$3', [String(e?.message||e), JSON.stringify(stats), runId]);
+    try { await db('select pg_advisory_unlock($1,$2)', [x, y]); } catch {}
+    throw e;
+  }
+}
+
+// Manual sync per tenant
+addRoute('post', '/admin/tenants/:id/integrations/foodics/sync', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  try {
+    const result = await runTenantFoodicsSync(tenantId, {});
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: 'sync_failed', message: e?.message||String(e) });
+  }
+});
+
+// Sync run history
+addRoute('get', '/admin/tenants/:id/integrations/foodics/sync-runs', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const tenantId = String(req.params.id||'').trim();
+  try {
+    await ensureIntegrationTables();
+    const rows = await db('select id, provider, started_at, finished_at, ok, error, stats from integration_sync_runs where tenant_id=$1 and provider=$2 order by started_at desc limit 50', [tenantId, 'foodics']);
+    return res.json({ items: rows });
+  } catch { return res.json({ items: [] }); }
+});
+
+// Sync-all (cron-triggered). Evaluates per-tenant schedule stored in tenant_api_integrations.meta.sync
+addRoute('post', '/admin/integrations/foodics/sync-all', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const adminTok = String(req.header('x-admin-token')||'');
+  if (ADMIN_TOKEN && adminTok !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  const now = Date.now();
+  const triggered = []; const skipped = [];
+  const MAX = Math.max(1, Number(process.env.SYNC_ALL_MAX_CONCURRENCY || 2));
+  try {
+    const rows = await db(`select tenant_id, coalesce(meta,'{}'::jsonb) as meta
+                             from tenant_api_integrations
+                            where provider='foodics' and revoked_at is null`);
+    // lightweight concurrency
+    let inFlight = 0; const queue = rows.slice();
+    async function maybeNext(){
+      if (!queue.length) return;
+      if (inFlight >= MAX) return;
+      const r = queue.shift();
+      const sync = ((r.meta||{}).sync)||{};
+      const enabled = !!sync.enabled;
+      if (!enabled) { skipped.push({ tenant_id: r.tenant_id, reason: 'disabled' }); return maybeNext(); }
+      const mode = String(sync.mode||'manual').toLowerCase();
+      const last = sync.lastRunAt ? new Date(sync.lastRunAt).getTime() : 0;
+      const at = String(sync.at||'00:00');
+      let due = false;
+      if (mode === 'hourly') due = (!last) || ((now - last) >= 60*60*1000);
+      else if (mode === 'daily') {
+        const [hh,mm] = at.split(':').map(n=>parseInt(n,10));
+        const d = new Date(); d.setUTCHours(Number.isFinite(hh)?hh:0, Number.isFinite(mm)?mm:0, 0, 0);
+        const nextAt = d.getTime();
+        if (now >= nextAt && (!last || (new Date(last)).toDateString() !== (new Date(now)).toDateString())) due = true;
+      }
+      if (!due) { skipped.push({ tenant_id: r.tenant_id, reason: 'not_due' }); return maybeNext(); }
+      inFlight++;
+      triggered.push(r.tenant_id);
+      runTenantFoodicsSync(r.tenant_id, {}).then(async out => {
+        inFlight--; try {
+          // write lastRunAt into meta
+          await db(`update tenant_api_integrations set meta = coalesce(meta,'{}'::jsonb) || jsonb_build_object('sync', (coalesce(meta->'sync','{}'::jsonb) || jsonb_build_object('lastRunAt', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))) where tenant_id=$1 and provider='foodics'`, [r.tenant_id]);
+        } catch {}
+        await maybeNext();
+      }).catch(async _e => {
+        inFlight--; await maybeNext();
+      });
+      await maybeNext();
+    }
+    const starters = Math.min(MAX, queue.length);
+    for (let i=0;i<starters;i++) await maybeNext();
+    // crude wait until all finish or 60s
+    const tStart = Date.now();
+    while (inFlight > 0 && (Date.now()-tStart) < 60000) { await new Promise(r=>setTimeout(r,50)); }
+    return res.json({ ok:true, triggered, skipped });
+  } catch (_e) { return res.status(500).json({ error: 'sync_all_failed' }); }
+});
+
 // Signed upload URL for assets (logos, product images)
 const ASSETS_BUCKET = process.env.ASSETS_BUCKET || '';
 let storage = null, bucket = null;
@@ -3429,6 +3886,45 @@ if (ASSETS_BUCKET) {
   } catch (e) {
     console.error('Storage init failed', e);
   }
+}
+
+// Integrations: Foodics client
+let foodicsClient = null;
+try { foodicsClient = require('./server/integrations/foodics'); } catch {}
+
+// Ensure integration tables exist (idempotent safety when migrations are not pre-run)
+async function ensureIntegrationTables(){
+  if (!HAS_DB) return;
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS integration_sync_runs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        provider text NOT NULL,
+        started_at timestamptz NOT NULL DEFAULT now(),
+        finished_at timestamptz,
+        ok boolean,
+        error text,
+        stats jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+  } catch {}
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS tenant_external_mappings (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        provider text NOT NULL,
+        entity_type text NOT NULL,
+        entity_id uuid NOT NULL,
+        external_id text NOT NULL,
+        external_ref text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+  } catch {}
 }
 
 addRoute('post', '/admin/upload-url', verifyAuthOpen, requireTenantAdminBodyTenantOpen, async (req, res) => {

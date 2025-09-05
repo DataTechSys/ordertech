@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Create Account</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <style>
+      /* Scoped tweaks for /signup/ */
+      body[data-page='signup'] .card > .body { padding: 20px; }
+      body[data-page='signup'] .input { background: #F9FAFB; border-color: #E5E7EB; min-height: 44px; }
+      body[data-page='signup'] .select { background: #F9FAFB; border-color: #E5E7EB; min-height: 44px; }
+      body[data-page='signup'] #signupSubmit.btn.primary { background:#6D28D9; border-color:#6D28D9; }
+      body[data-page='signup'] #signupSubmit.btn.primary:hover { filter: brightness(0.98); }
+      body[data-page='signup'] .page-title { font-size: 18px; line-height: 1.2; }
+    </style>
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  </head>
+  <body data-page="signup">
+    <main style="max-width:460px;margin:120px auto;padding:0 16px;">
+      <div style="display:grid;place-items:center;margin-bottom:28px;">
+        <img src="/images/OrderTech.png" onerror="this.onerror=null;this.src='/favicon.ico';" alt="OrderTech" style="width:100px;height:100px;object-fit:contain;border-radius:8px;" />
+      </div>
+      <div style="text-align:center;margin-bottom:8px;">
+        <h2 class="page-title" style="margin:0;">Create your account</h2>
+      </div>
+      <div id="statusWrap" style="display:flex;justify-content:center;margin:10px 0;">
+        <span id="msg" class="chip" style="display:none"></span>
+      </div>
+      <section class="card" style="width:min(360px,100%);margin:0 auto;">
+        <div class="body">
+          <div class="grid mt-1" style="gap:12px;">
+            <label class="grid"><span class="label">Full Name</span>
+              <input id="fullName" class="input" placeholder="Your name" />
+            </label>
+            <label class="grid"><span class="label">Brand Name (Company)</span>
+              <input id="brandName" class="input" placeholder="e.g., Koobs Café" />
+            </label>
+            <div class="grid">
+              <span class="label">Mobile</span>
+              <div class="flex" style="gap:8px; align-items:center;">
+                <select id="mobileCountryCode" class="select" style="max-width:200px;">
+                  <option value="+965" selected>Kuwait (+965)</option>
+                  <option value="+966">Saudi Arabia (+966)</option>
+                  <option value="+971">United Arab Emirates (+971)</option>
+                  <option value="+973">Bahrain (+973)</option>
+                  <option value="+974">Qatar (+974)</option>
+                  <option value="+968">Oman (+968)</option>
+                </select>
+                <input id="mobileLocal" class="input" inputmode="numeric" pattern="[0-9]*" placeholder="5xxxxxxx" />
+              </div>
+              <small class="muted">Optional. We will save it to your profile.</small>
+            </div>
+            <label class="grid"><span class="label">Email</span>
+              <input id="email" class="input" type="email" autocomplete="username email" placeholder="you@example.com" />
+            </label>
+            <label class="grid"><span class="label">Password</span>
+              <input id="password" class="input" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
+            </label>
+            <button id="signupSubmit" class="btn primary" style="background:#6D28D9;border-color:#6D28D9;width:100%;">Create Account</button>
+          </div>
+        </div>
+      </section>
+      <div class="muted" style="margin-top:6px; text-align:left; width:min(360px,100%); margin-left:auto; margin-right:auto;">
+        Have an account? <a href="/login/" class="link" style="text-decoration:underline;">Log in</a>
+      </div>
+    </main>
+
+    <script>
+      (function(){
+        const msgEl = document.getElementById('msg');
+        function setMsg(t){ if(msgEl){ msgEl.style.display = t ? 'inline-flex' : 'none'; msgEl.textContent = t||''; } }
+        function ensureFirebase(){
+          try {
+            if (!window.firebase) return null;
+            if (!firebase.apps?.length) firebase.initializeApp(window.firebaseConfig||{});
+            return firebase;
+          } catch { return window.firebase||null; }
+        }
+        const fb = ensureFirebase();
+        const el = (id)=>document.getElementById(id);
+        const digitsOnly = (s)=> String(s||'').replace(/\D+/g,'');
+          const actionCodeSettings = { url: window.location.origin + '/login/?mode=verifyEmail', handleCodeInApp: true };
+
+          // Helpers for inline validation UI
+          function setFieldNote(id, text, cls){
+            try {
+              const label = document.querySelector(`#${id}`)?.closest('label');
+              if (!label) return;
+              let note = label.querySelector('small.inline-note');
+              if (!note) { note = document.createElement('small'); note.className = 'inline-note muted'; label.appendChild(note); }
+              note.textContent = text || '';
+              note.style.color = cls === 'err' ? '#b00020' : (cls === 'ok' ? '#137333' : 'var(--subtle, #6b7280)');
+            } catch {}
+          }
+          function addInlineAction(id, text, handler){
+            try {
+              const label = document.querySelector(`#${id}`)?.closest('label');
+              if (!label) return;
+              let a = label.querySelector('button.inline-act');
+              if (!a) { a = document.createElement('button'); a.type='button'; a.className='inline-act link'; a.style.textDecoration='underline'; a.style.background='transparent'; a.style.border='0'; a.style.padding='0'; a.style.marginTop='2px'; label.appendChild(a); }
+              a.textContent = text; a.onclick = handler;
+            } catch {}
+          }
+          function removeInlineAction(id){ try { const label = document.querySelector(`#${id}`)?.closest('label'); const a = label?.querySelector('button.inline-act'); if (a) a.remove(); } catch {} }
+
+          async function checkEmailExists(email){
+            try {
+              if (fb?.auth) {
+                const methods = await fb.auth().fetchSignInMethodsForEmail(email);
+                return Array.isArray(methods) && methods.length > 0;
+              }
+            } catch {}
+            try { const r = await fetch('/auth/check-email?email=' + encodeURIComponent(email)); const j = await r.json(); return !!j.exists; } catch { return false; }
+          }
+          async function checkCompanyExists(name){
+            try { const r = await fetch('/auth/check-company?name=' + encodeURIComponent(name)); const j = await r.json(); return !!j.exists; } catch { return false; }
+          }
+
+          async function sendEmailReset(email){
+            try {
+              const r = await fetch('/auth/send-password-reset', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email }) });
+              if (r.ok) return true; else return false;
+            } catch { return false; }
+          }
+          async function sendCompanyOwnerReset(name){
+            try {
+              const r = await fetch('/auth/company-owner-reset', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ company: name }) });
+              if (r.ok) return true; else return false;
+            } catch { return false; }
+          }
+
+          // Live validation wiring
+          el('email')?.addEventListener('blur', async ()=>{
+            const email = (el('email')?.value||'').trim(); if (!email) { setFieldNote('email','',null); removeInlineAction('email'); return; }
+            const exists = await checkEmailExists(email);
+            if (exists) {
+              setFieldNote('email','Email is already registered. You can reset your password.', 'err');
+              addInlineAction('email','Send reset link', async ()=>{ const ok=await sendEmailReset(email); setFieldNote('email', ok? 'Reset email sent.' : 'Could not send reset email.', ok? 'ok' : 'err'); });
+            } else {
+              setFieldNote('email','Looks good.', 'ok'); removeInlineAction('email');
+            }
+          });
+          el('brandName')?.addEventListener('blur', async ()=>{
+            const name = (el('brandName')?.value||'').trim(); if (!name) { setFieldNote('brandName','',null); removeInlineAction('brandName'); return; }
+            const exists = await checkCompanyExists(name);
+            if (exists) {
+              setFieldNote('brandName','A company with this name already exists. You can contact the owner to reset access.', 'err');
+              addInlineAction('brandName','Notify owner to reset password', async ()=>{ const ok = await sendCompanyOwnerReset(name); setFieldNote('brandName', ok ? 'Owner notified (if on file).' : 'Could not notify owner.', ok ? 'ok' : 'err'); });
+            } else {
+              setFieldNote('brandName','Name is available.', 'ok'); removeInlineAction('brandName');
+            }
+          });
+
+          async function preflightChecks(){
+            const email = (el('email')?.value||'').trim();
+            const name = (el('brandName')?.value||'').trim();
+            if (email && await checkEmailExists(email)) { setFieldNote('email','Email already in use. Use reset password.', 'err'); return false; }
+            if (name && await checkCompanyExists(name)) { setFieldNote('brandName','Company name already in use. Ask owner to invite you.', 'err'); return false; }
+            return true;
+          }
+
+        async function onSubmit(){
+          const full_name = (el('fullName')?.value||'').trim();
+          const brand = (el('brandName')?.value||'').trim();
+          const code = (el('mobileCountryCode')?.value||'+965').trim();
+          const localRaw = (el('mobileLocal')?.value||'').trim();
+          const email = (el('email')?.value||'').trim();
+          const password = (el('password')?.value||'');
+          if (!full_name) { setMsg('Enter your full name'); el('fullName')?.focus(); return; }
+          if (!brand) { setMsg('Enter your brand name (company)'); el('brandName')?.focus(); return; }
+          if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setMsg('Enter a valid email'); el('email')?.focus(); return; }
+          if (!password || password.length < 8) { setMsg('Password must be at least 8 characters'); el('password')?.focus(); return; }
+          const local = digitsOnly(localRaw);
+          const mobile = local ? (code + local) : '';
+          const btn = el('signupSubmit'); if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+          try {
+            if (!fb?.auth) { setMsg('Auth unavailable'); return; }
+            if (!(await preflightChecks())) return;
+            const { user } = await fb.auth().createUserWithEmailAndPassword(email, password);
+            try { await user.sendEmailVerification(actionCodeSettings); } catch {}
+            try { await fb.auth().signOut(); } catch {}
+            try { localStorage.setItem('PREFILL_PROFILE', JSON.stringify({ full_name, mobile })); } catch {}
+            try { localStorage.setItem('PREFILL_BRAND', brand); } catch {}
+            setMsg('Account created. Check your email to verify.');
+            location.href = '/login/?verify_sent=1';
+          } catch (e) {
+            const code = e?.code || '';
+            if (code === 'auth/email-already-in-use') {
+              const q = email ? ('?email=' + encodeURIComponent(email)) : '';
+              location.href = '/verify-email/' + q;
+              return;
+            }
+            if (code === 'auth/weak-password') return setMsg('Password is too weak.');
+            setMsg('Sign up failed. Please try again.');
+          } finally {
+            const btn2 = el('signupSubmit'); if (btn2) { btn2.disabled = false; btn2.textContent = 'Create Account'; }
+          }
+        }
+
+        el('signupSubmit')?.addEventListener('click', (e)=>{ e.preventDefault(); onSubmit(); });
+        document.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ onSubmit(); }});
+      })();
+    </script>
+  </body>
+</html>
+

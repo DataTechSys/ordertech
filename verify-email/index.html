@@ -72,8 +72,15 @@
           const btn = el('verifySend'); if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
           try {
             const r = await fetch('/auth/send-verification-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-            if (r.ok) { setMsg('Verification email sent. Please check your inbox.'); }
-            else { setMsg('Could not send verification. Try again.'); }
+            if (r.ok) {
+              try { const j = await r.json(); if (j && j.link) {
+                setMsg('Email sending not configured here. Use this link to verify:');
+                const a = document.createElement('a'); a.href=j.link; a.textContent='Open verification link'; a.target='_blank';
+                const wrap = document.getElementById('statusWrap'); if (wrap) { wrap.appendChild(document.createElement('br')); wrap.appendChild(a); }
+              } else {
+                setMsg('Verification email sent. Please check your inbox.');
+              } } catch { setMsg('Verification email sent.'); }
+            } else { setMsg('Could not send verification. Try again.'); }
           } catch (e) {
             setMsg('Could not send verification. Try again.');
           } finally {

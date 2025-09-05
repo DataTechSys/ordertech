@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Start your trial</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    /* Page-specific tweaks to mirror /login/ */
+    body[data-page='start-trial'] .card > .body { padding: 20px; }
+    body[data-page='start-trial'] .input { background: #F9FAFB; border-color: #E5E7EB; min-height: 44px; }
+    body[data-page='start-trial'] .btn.primary { background:#1f6feb; border-color:#1f6feb; }
+  </style>
+</head>
+<body data-page="start-trial">
+  <main style="max-width:460px;margin:120px auto;padding:0 16px;">
+    <div style="display:grid;place-items:center;margin-bottom:28px;">
+      <img src="/images/OrderTech.png" onerror="this.onerror=null;this.src='/favicon.ico';" alt="OrderTech" style="width:100px;height:100px;object-fit:contain;border-radius:8px;" />
+    </div>
+    <div id="statusWrap" style="display:flex;justify-content:center;margin:10px 0;">
+      <span id="msg" class="chip" style="display:none"></span>
+    </div>
+    <section class="card" style="width:min(360px,100%);margin:0 auto;">
+      <div class="body">
+        <div class="grid mt-1" style="gap:12px;">
+          <div style="text-align:center;margin-bottom:4px;">
+            <h2 class="page-title" style="margin:0; font-size:18px; line-height:1.2;">Start your trial</h2>
+          </div>
+          <label class="grid"><span class="label">Brand name</span>
+            <input id="brandName" class="input" placeholder="e.g., Koobs Café" />
+          </label>
+          <div class="grid">
+            <span class="label">Mobile</span>
+            <div class="flex" style="gap:8px; align-items:center;">
+              <select id="mobileCountryCode" class="select" style="max-width:160px;">
+                <option value="+965" selected>Kuwait (+965)</option>
+              </select>
+              <input id="mobileLocal" class="input" inputmode="numeric" pattern="[0-9]*" placeholder="5xxxxxxx" />
+            </div>
+            <small class="muted">We will save your mobile to your profile. Kuwait only for now.</small>
+          </div>
+          <button id="startTrialSubmit" class="btn primary" style="width:100%;">Create and continue</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    (function(){
+      const _msgEl = document.getElementById('msg');
+      const setMsg = (t) => { if (_msgEl) { _msgEl.style.display = t ? 'inline-flex' : 'none'; _msgEl.textContent = t || ''; } };
+      function ensureFirebase(){ try { if(!window.firebase) return null; if(!firebase.apps?.length) firebase.initializeApp(window.firebaseConfig||{}); return firebase; } catch { return window.firebase||null; } }
+      const fb = ensureFirebase();
+      // Prefill Brand Name from signup
+      try {
+        const pre = localStorage.getItem('PREFILL_BRAND');
+        if (pre) { const el = document.getElementById('brandName'); if (el && !el.value) el.value = pre; }
+      } catch {}
+      async function idToken(){ try { return fb?.auth && fb.auth().currentUser ? await fb.auth().currentUser.getIdToken(true) : (localStorage.getItem('ID_TOKEN')||''); } catch { return localStorage.getItem('ID_TOKEN')||''; } }
+
+      function digitsOnly(s){ return String(s||'').replace(/\D+/g,''); }
+
+      async function saveMobileProfile(mobile){
+        try {
+          const tok = await idToken();
+          if (!tok) return false;
+          const res = await fetch('/auth/profile', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ mobile }) });
+          return res.ok;
+        } catch { return false; }
+      }
+
+      document.getElementById('startTrialSubmit')?.addEventListener('click', async ()=>{
+        const brandName = (document.getElementById('brandName')?.value||'').trim();
+        const code = (document.getElementById('mobileCountryCode')?.value||'+965').trim();
+        const localRaw = (document.getElementById('mobileLocal')?.value||'').trim();
+        const local = digitsOnly(localRaw);
+        if (!brandName) { setMsg('Enter your brand name'); return; }
+        // Make mobile optional to reduce friction
+        if (local && !/^[0-9]{8}$/.test(local)) { setMsg('Enter an 8-digit Kuwait mobile or leave blank'); return; }
+        try {
+          setMsg('Preparing...');
+          const tok = await idToken();
+          if (!tok) { window.location.href = '/login/?next=' + encodeURIComponent(location.href); return; }
+          const mobile = code + local;
+          // Save profile mobile (best-effort)
+          await saveMobileProfile(mobile);
+          // Create tenant trial
+          setMsg('Creating your demo account...');
+          const res = await fetch('/auth/bootstrap-trial', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ company: brandName }) });
+          const j = await res.json().catch(()=>({}));
+          if (!res.ok || !j.ok) throw new Error('failed');
+          if (j.tenant_id) {
+            setMsg('Done. Redirecting...');
+            try { localStorage.removeItem('PREFILL_BRAND'); } catch {}
+            setTimeout(()=>{ window.location.href = '/products/?tenant=' + encodeURIComponent(j.tenant_id); }, 600);
+          } else {
+            try { localStorage.removeItem('PREFILL_BRAND'); } catch {}
+            window.location.href = '/products/';
+          }
+        } catch {
+          setMsg('Could not start trial');
+        }
+      });
+
+      // Allow Enter key to submit
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ document.getElementById('startTrialSubmit')?.click(); } });
+    })();
+  </script>
+</body>
+</html>
+
