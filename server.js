@@ -514,7 +514,8 @@ function getForwardedProto(req) {
   } catch { return 'https'; }
 }
 
-async function verifyAuth(req, res, next){
+async function requireTenant(req, res, next) {
+  try {
     let t = null;
     if (HAS_DB) {
       const host = getForwardedHost(req);
