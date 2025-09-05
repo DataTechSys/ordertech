@@ -1,5 +1,13 @@
 // api/server.js — clean Express API + static UI for Drive‑Thru & Cashier
 
+// Startup diagnostics
+try {
+  console.log('[boot] Starting OrderTech server... PORT env=', process.env.PORT);
+  process.on('exit', (code) => { try { console.log('[boot] Process exit', code); } catch {} });
+  process.on('uncaughtException', (err) => { try { console.error('[boot] Uncaught exception', err); } catch {} });
+  process.on('unhandledRejection', (reason) => { try { console.error('[boot] Unhandled rejection', reason); } catch {} });
+} catch {}
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -14,9 +22,12 @@ try {
 }
 
 const app = express();
+// Treat "/path" and "/path/" as different, so UI at trailing-slash paths don't get eaten by API JSON routes
+try { app.enable('strict routing'); } catch {}
 const PORT = process.env.PORT || 5050;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae';
 const crypto = require('crypto');
+const cryptoUtil = require('./server/crypto-util');
 
 // Route registry for /__routes
 const routes = [];
@@ -25,11 +36,29 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Force HTTPS for requests that came via HTTP at the load balancer
+app.use((req, res, next) => {
+  try {
+    const xfProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    if (xfProto === 'http') {
+      const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+      const url = `https://${host}${req.originalUrl || '/'}`;
+      return res.redirect(301, url);
+    }
+  } catch {}
+  next();
+});
+
 // ---- State storage (in-memory first; DB when configured)
 const USE_MEM_STATE = !process.env.DATABASE_URL;
 const memDriveThruState = new Map(); // tenant_id -> state
 // In-memory catalog overrides per tenant (when DB not configured)
 const memCatalogByTenant = new Map(); // tenant_id -> { categories:[], products:[] }
+// In-memory tenant settings and brand for dev-open mode (when DB not configured)
+const memTenantSettingsByTenant = new Map(); // tenant_id -> settings
+const memTenantBrandByTenant = new Map();    // tenant_id -> brand
+// In-memory users per tenant for dev-open mode (when DB not configured)
+const memTenantUsersByTenant = new Map();    // tenant_id -> [{id,email,role,created_at}]
 
 // ---- DB
 function buildDbConfig(){
@@ -80,6 +109,8 @@ const REQUIRE_DB = /^(1|true|yes|on)$/i.test(String(process.env.REQUIRE_DB||''))
 const __dbCfg = buildDbConfig();
 const HAS_DB = !!__dbCfg;
 const pool = HAS_DB ? new Pool(__dbCfg) : null;
+// In dev-open mode, do not enforce DB-required gates
+const REQUIRE_DB_EFFECTIVE = REQUIRE_DB && !DEV_OPEN_ADMIN;
 
 async function db(sql, params = []) {
   if (!pool) throw new Error('NO_DB');
@@ -217,6 +248,16 @@ async function ensureProductImageUrlColumn(){
 async function ensureProductActiveColumn(){
   if (!HAS_DB) return;
   try { await db("ALTER TABLE IF EXISTS products ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true"); } catch (_) {}
+}
+
+// Ensure categories have status columns and reference (plus optional localized name and image)
+async function ensureCategoryStatusColumns(){
+  if (!HAS_DB) return;
+  try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true"); } catch (_) {}
+  try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS deleted boolean NOT NULL DEFAULT false"); } catch (_) {}
+  try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS reference text"); } catch (_) {}
+  try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS name_localized text"); } catch (_) {}
+  try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS image_url text"); } catch (_) {}
 }
 
 // Ensure extended product schema (columns and related tables)
@@ -370,6 +411,28 @@ async function sendInviteEmail(toEmail, inviteUrl){
   } catch { return { sent:false }; }
 }
 
+async function sendPlainEmail(toEmail, subject, text){
+  const key = (process.env.SENDGRID_API_KEY||'').trim();
+  const from = (process.env.SENDGRID_FROM||'').trim();
+  if (!key || !from) return { sent:false };
+  try {
+    const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: toEmail }] }],
+        from: { email: from },
+        subject,
+        content: [{ type: 'text/plain', value: text }]
+      })
+    });
+    return { sent: r.status >= 200 && r.status < 300 };
+  } catch { return { sent:false }; }
+}
+
 // Admin users: invite endpoint (optional email)
 addRoute('post', '/admin/tenants/:id/users/invite', verifyAuth, requireTenantPermParamFactory('manage_users'), async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
@@ -385,6 +448,30 @@ addRoute('post', '/admin/tenants/:id/users/invite', verifyAuth, requireTenantPer
   const inviteUrl = `${base.replace(/\/$/, '')}/admin/invite?token=${encodeURIComponent(token)}`;
   const mail = await sendInviteEmail(email, inviteUrl);
   res.json({ ok:true, invite_url: inviteUrl, email_sent: !!mail.sent });
+});
+
+// Public: send verification email (email-only, uses Firebase Admin)
+addRoute('post', '/auth/send-verification-email', async (req, res) => {
+  try {
+    const email = String(req.body?.email||'').trim().toLowerCase();
+    if (!email || !/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'invalid_email' });
+    if (!admin) return res.status(503).json({ error: 'auth_unavailable' });
+    const proto = getForwardedProto(req);
+    const host = getForwardedHost(req);
+    const base = `${proto}://${host}`;
+    const actionCodeSettings = { url: `${base}/login/?mode=verifyEmail`, handleCodeInApp: true };
+    let link;
+    try {
+      link = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
+    } catch (_e) {
+      // Do not leak whether user exists
+      return res.json({ ok: true, email_sent: false });
+    }
+    const mail = await sendPlainEmail(email, 'Verify your email for OrderTech', `Click to verify your email: ${link}`);
+    return res.json({ ok: true, email_sent: !!mail.sent });
+  } catch (_e) {
+    return res.json({ ok: true, email_sent: false });
+  }
 });
 
 async function ensureAdminPerfIndexes(){
@@ -420,8 +507,14 @@ function getForwardedHost(req) {
   const h = String(req.headers.host || '').toLowerCase();
   return h.split(':')[0];
 }
-async function requireTenant(req, res, next) {
+function getForwardedProto(req) {
   try {
+    const xf = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    return xf || 'https';
+  } catch { return 'https'; }
+}
+
+async function verifyAuth(req, res, next){
     let t = null;
     if (HAS_DB) {
       const host = getForwardedHost(req);
@@ -638,7 +731,22 @@ function loadJsonCatalog(){
   }
 }
 
-addRoute('get', '/tenants', async (_req, res) => {
+// Serve Tenants UI for exact trailing-slash path before any JSON handlers
+addRoute('get', /^\/tenants\/$/, (_req, res) => res.sendFile(path.join(__dirname, 'tenants', 'index.html')));
+
+// Tenants list: exact path '/tenants' only. If Accept: text/html -> redirect to UI; else JSON.
+addRoute('get', /^\/tenants$/, (req, res, next) => {
+  try {
+    const accept = String(req.headers.accept || '');
+    if (accept.includes('text/html')) {
+      return res.redirect(302, '/tenants/');
+    }
+  } catch {}
+  return next();
+});
+
+addRoute('get', /^\/tenants$/, async (req, res) => {
+  // Serve JSON list
   if (!HAS_DB) return res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
   try {
     const rows = await db('select id, name from tenants order by name asc');
@@ -660,43 +768,124 @@ addRoute('get', /^\/categories$/, (req, res, next) => {
 });
 
 addRoute('get', /^\/categories$/, requireTenant, async (req, res) => {
-  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
-  // If in-memory catalog overrides exist for this tenant, use them
+if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_required' });
+  // If in-memory catalog overrides exist for this tenant, use them and augment with image from products
   const mem = memCatalogByTenant.get(req.tenantId);
-  if (mem) return res.json(mem.categories || []);
-  if (!HAS_DB) return res.json(JSON_CATALOG.categories);
+  if (!HAS_DB) {
+    // Non-DB mode: use memory override when available, else JSON catalog; compute image per category from products
+    const baseCats = mem?.categories || (JSON_CATALOG.categories || []);
+    const prods = mem?.products || (JSON_CATALOG.products || []);
+    const byCatName = new Map();
+    for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
+const stateMem = memDriveThruState.get(req.tenantId) || {};
+    const hiddenIds = Array.isArray(stateMem.hiddenCategoryIds) ? stateMem.hiddenCategoryIds.map(String) : [];
+    const out = (baseCats || []).map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }))
+      .filter(c => !hiddenIds.includes(String(c.id)));
+    return res.json(out);
+  }
   try {
+    await ensureCategoryStatusColumns();
     const rows = await db(
-      'select id, name from categories where tenant_id=$1 order by name asc',
+      'select id, name, reference, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 order by name asc',
       [req.tenantId]
     );
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.json(JSON_CATALOG.categories);
+      // Only fallback for default tenant; others return empty when DB has no rows
+      if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+        const prods = JSON_CATALOG.products || [];
+        const byCatName = new Map();
+        for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
+        const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }));
+        return res.json(out);
+      }
+      return res.json([]);
     }
-    res.json(rows);
+    // Build image map from DB products (non-null image_url)
+    let imgRows = [];
+    try {
+      imgRows = await db("select category_id, max(image_url) as image_url from products where tenant_id=$1 and coalesce(active,true) and image_url is not null group by category_id", [req.tenantId]);
+    } catch {}
+    const byCatId = new Map((imgRows||[]).map(r => [String(r.category_id), r.image_url]));
+    // Fallback by category name from JSON catalog
+    const byCatName = new Map((JSON_CATALOG.products||[]).filter(p => p.image_url).map(p => [p.category_name, p.image_url]));
+let hiddenIdsDb = [];
+    try {
+      const r2 = await db('select state from drive_thru_state where tenant_id=$1', [req.tenantId]);
+      hiddenIdsDb = Array.isArray(r2?.[0]?.state?.hiddenCategoryIds) ? r2[0].state.hiddenCategoryIds.map(String) : [];
+    } catch {}
+    const out = rows.map(c => ({ ...c, image: byCatId.get(String(c.id)) || byCatName.get(c.name) || null }))
+      .filter(c => !hiddenIdsDb.includes(String(c.id)));
+    res.json(out);
   } catch (_e) {
-    // DB failed — return JSON catalog for UI to proceed
-    res.json(JSON_CATALOG.categories);
+    // DB failed — only default tenant gets JSON fallback
+    if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+      const prods = JSON_CATALOG.products || [];
+      const byCatName = new Map();
+      for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
+      const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }));
+      return res.json(out);
+    }
+    res.json([]);
   }
 });
 
 // New API namespace
 addRoute('get', '/api/categories', requireTenant, async (req, res) => {
-  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
-  const mem = memCatalogByTenant.get(req.tenantId);
-  if (mem) return res.json(mem.categories || []);
-  if (!HAS_DB) return res.json(JSON_CATALOG.categories);
+  // Disable caching to avoid stale categories after mutations (soft delete/inactivate)
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('ETag', 'W/"ts-' + Date.now() + '"');
+  } catch {}
+if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const mem = memCatalogByTenant.get(req.tenantId);
+  if (!HAS_DB) {
+    const baseCats = mem?.categories || (JSON_CATALOG.categories || []);
+    const prods = mem?.products || (JSON_CATALOG.products || []);
+    const byCatName = new Map();
+    for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
+const stateMem = memDriveThruState.get(req.tenantId) || {};
+    const hiddenIds = Array.isArray(stateMem.hiddenCategoryIds) ? stateMem.hiddenCategoryIds.map(String) : [];
+    const out = (baseCats || []).map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }))
+      .filter(c => !hiddenIds.includes(String(c.id)));
+    return res.json(out);
+  }
+  try {
+    await ensureCategoryStatusColumns();
     const rows = await db(
-      'select id, name from categories where tenant_id=$1 order by name asc',
+      'select id, name, reference, name_localized, image_url, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 order by name asc',
       [req.tenantId]
     );
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.json(JSON_CATALOG.categories);
+      if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+        const byCatName = new Map((JSON_CATALOG.products||[]).filter(p => p.image_url).map(p => [p.category_name, p.image_url]));
+        const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }));
+        return res.json(out);
+      }
+      return res.json([]);
     }
-    res.json(rows);
+    let imgRows = [];
+    try {
+      imgRows = await db("select category_id, max(image_url) as image_url from products where tenant_id=$1 and coalesce(active,true) and image_url is not null group by category_id", [req.tenantId]);
+    } catch {}
+    const byCatId = new Map((imgRows||[]).map(r => [String(r.category_id), r.image_url]));
+    const byCatName = new Map((JSON_CATALOG.products||[]).filter(p => p.image_url).map(p => [p.category_name, p.image_url]));
+let hiddenIdsDb = [];
+    try {
+      const r2 = await db('select state from drive_thru_state where tenant_id=$1', [req.tenantId]);
+      hiddenIdsDb = Array.isArray(r2?.[0]?.state?.hiddenCategoryIds) ? r2[0].state.hiddenCategoryIds.map(String) : [];
+    } catch {}
+    const out = rows.map(c => ({ ...c, image: c.image_url || byCatId.get(String(c.id)) || byCatName.get(c.name) || null }))
+      .filter(c => !hiddenIdsDb.includes(String(c.id)));
+    res.json(out);
   } catch (_e) {
-    res.json(JSON_CATALOG.categories);
+    if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+      const byCatName = new Map((JSON_CATALOG.products||[]).filter(p => p.image_url).map(p => [p.category_name, p.image_url]));
+      const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }));
+      return res.json(out);
+    }
+    res.json([]);
   }
 });
 
@@ -712,7 +901,7 @@ addRoute('get', /^\/products$/, (req, res, next) => {
 });
 
 addRoute('get', /^\/products$/, requireTenant, async (req, res) => {
-  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
+if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // In-memory override
   const mem = memCatalogByTenant.get(req.tenantId);
   if (mem) {
@@ -750,8 +939,12 @@ reference
     `;
     const rows = await db(sql, category_name ? [req.tenantId, category_name] : [req.tenantId]);
     if (!Array.isArray(rows) || rows.length === 0) {
-      const list = category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]);
-      return res.json(list);
+      // Only fallback for default tenant; others return empty array when DB has no rows
+      if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+        const list = category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]);
+        return res.json(list);
+      }
+      return res.json([]);
     }
     // Fallbacks for missing image_url:
     // 1) Try CSV/JSON catalog by name (may provide remote Foodics URL)
@@ -773,13 +966,26 @@ reference
     } catch {}
     res.json(rows);
   } catch (_e) {
+    // DB error — only default tenant gets JSON fallback
+    if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+      return res.json(category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]));
+    }
     res.json([]);
   }
 });
 
 // New API namespace
 addRoute('get', '/api/products', requireTenant, async (req, res) => {
-  if (REQUIRE_DB && !HAS_DB) return res.status(503).json({ error: 'db_required' });
+  // Disable caching for dynamic product lists to prevent stale 304 responses after mutations
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    // Set a per-request ETag to avoid If-None-Match collisions that lead to 304
+    res.set('ETag', 'W/"ts-' + Date.now() + '"');
+  } catch {}
+
+if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   const mem = memCatalogByTenant.get(req.tenantId);
   if (mem) {
     const { category_name } = req.query;
@@ -815,8 +1021,11 @@ addRoute('get', '/api/products', requireTenant, async (req, res) => {
     `;
     const rows = await db(sql, category_name ? [req.tenantId, category_name] : [req.tenantId]);
     if (!Array.isArray(rows) || rows.length === 0) {
-      const list = category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]);
-      return res.json(list);
+      if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
+        const list = category_name ? (JSON_CATALOG.products||[]).filter(p => p.category_name === category_name) : (JSON_CATALOG.products||[]);
+        return res.json(list);
+      }
+      return res.json([]);
     }
     try {
       if (Array.isArray(rows) && rows.length) {
@@ -1013,8 +1222,27 @@ addRoute('post', '/session/start', async (req, res) => {
 addRoute('post', '/session/reset', async (req, res) => {
   const id = String(req.query.pairId||req.body?.pairId||'').trim();
   if (!id) return res.status(400).json({ error:'pairId required' });
-  sessions.delete(id);
+  // Clear session state
+  try { sessions.delete(id); } catch {}
+  // Best-effort: clear any lingering WebRTC signaling state
+  try {
+    if (HAS_DB) await db('delete from webrtc_rooms where pair_id=$1', [id]);
+    else webrtcRooms.delete(id);
+  } catch {}
+  // Clear basket fully and notify clients
+  try {
+    const b = ensureBasket(id);
+    b.items.clear();
+    b.ui = { category: null };
+    computeTotals(b);
+    b.version++;
+    broadcast(id, { type:'basket:update', basketId: id, op: { action:'clear' }, basket: toWireBasket(b), serverTs: Date.now() });
+  } catch {}
+  // Notify clients to stop any active RTC
+  try { broadcast(id, { type:'rtc:stopped', basketId: id, reason: 'reset' }); } catch {}
+  // Notify Admin live dashboards
   try { broadcast(id, { type:'session:ended', basketId: id }); } catch {}
+  try { broadcastPeerStatus(id); } catch {}
   try { broadcastAdminLive(); } catch {}
   res.json({ ok:true });
 });
@@ -1026,14 +1254,41 @@ addRoute('post', '/session/pay', async (req, res) => {
   s.status = 'paid';
   try { broadcast(id, { type:'session:paid', basketId: id, osn: s.osn }); } catch {}
   try { broadcastAdminLive(); } catch {}
-  // Clear basket on pay
+  // Clear basket on pay (keep RTC connected to take next order)
   try {
     const b = ensureBasket(id); b.items.clear(); computeTotals(b); b.version++;
     broadcast(id, { type:'basket:update', basketId: id, op: { action: 'clear' }, basket: toWireBasket(b), serverTs: Date.now() });
   } catch {}
-  // Also stop RTC to ensure clean end
-  try { broadcast(id, { type:'rtc:stopped', basketId: id, reason: 'paid' }); } catch {}
   res.json({ ok:true, osn: s.osn });
+});
+
+// Basket-only reset (no RTC stop, no session end)
+addRoute('post', '/basket/reset', async (req, res) => {
+  const id = String(req.query.pairId||req.body?.pairId||'').trim();
+  if (!id) return res.status(400).json({ error:'pairId required' });
+  try {
+    const b = ensureBasket(id);
+    b.items.clear();
+    b.ui = { category: null };
+    computeTotals(b);
+    b.version++;
+    broadcast(id, { type:'basket:update', basketId: id, op: { action:'clear' }, basket: toWireBasket(b), serverTs: Date.now() });
+  } catch {}
+  res.json({ ok:true });
+});
+
+// Poster overlay control for display only
+addRoute('post', '/poster/start', async (req, res) => {
+  const id = String(req.query.pairId||req.body?.pairId||'').trim();
+  if (!id) return res.status(400).json({ error:'pairId required' });
+  try { broadcast(id, { type:'poster:start', basketId: id }); } catch {}
+  res.json({ ok:true });
+});
+addRoute('post', '/poster/stop', async (req, res) => {
+  const id = String(req.query.pairId||req.body?.pairId||'').trim();
+  if (!id) return res.status(400).json({ error:'pairId required' });
+  try { broadcast(id, { type:'poster:stop', basketId: id }); } catch {}
+  res.json({ ok:true });
 });
 
 addRoute('post', '/webrtc/offer', async (req, res) => {
@@ -1441,58 +1696,102 @@ addRoute('get', '/presence/displays', requireTenant, async (req, res) => {
     if (rows[0].role !== 'cashier') return res.status(403).json({ error: 'device_role_invalid' });
     db(`update devices set last_seen=now() where device_token=$1`, [token]).catch(()=>{});
   }
-  const m = getPresenceMap(req.tenantId);
-  prunePresence(m);
-  const now = Date.now();
-  const items = Array.from(m.values())
-    .filter(v => (now - v.last_seen) < PRESENCE_TTL_MS)
-    .sort((a,b) => b.last_seen - a.last_seen);
+  // Include connection status by leveraging computeLiveDevices
+  let list = [];
+  try { list = await computeLiveDevices(req.tenantId); } catch {}
+  const items = (list || [])
+    .filter(it => String(it.role||'').toLowerCase() === 'display' && (it.online || it.connected))
+    .map(it => ({ id: it.id, name: it.name, branch: it.branch, online: !!it.online, connected: !!it.connected, session_id: it.session_id || null }));
   try { broadcastAdminLive(); } catch {}
   res.json({ items });
 });
 
+// Public: per-branch live status (idle, waiting, in-session)
+async function getBranchStatuses(tenantId){
+  // 1) Fetch branch list
+  let branches = [];
+  if (HAS_DB) {
+    try {
+      const rows = await db('select id, name from branches where tenant_id=$1 order by name asc', [tenantId]);
+      branches = rows.map(r => ({ id: r.id, name: r.name }));
+    } catch {}
+  }
+  if (!branches.length) {
+    // Fallback: derive unique branch names from presence
+    try {
+      const m = getPresenceMap(tenantId);
+      prunePresence(m);
+      const set = new Set();
+      for (const v of m.values()) { if (v.branch) set.add(String(v.branch)); }
+      branches = Array.from(set).map(name => ({ id: null, name }));
+    } catch {}
+  }
+  // 2) Live devices and sessions
+  const devices = await computeLiveDevices(tenantId).catch(()=>[]);
+  const sessionsList = await computeLiveSessions(tenantId).catch(()=>[]);
+  const inSessionDisplayNames = new Set(
+    (sessionsList||[])
+      .filter(s => (s.status || 'ready') === 'active' && s.displayName)
+      .map(s => String(s.displayName).trim())
+  );
+  // 3) Map per-branch status
+  const items = [];
+  for (const b of (branches||[])) {
+    const name = String(b.name||'').trim();
+    if (!name) continue;
+    const devs = (devices||[]).filter(d => String(d.role||'')==='display' && String(d.branch||'').trim() === name);
+    let status = 'idle';
+    if (devs.some(d => d.name && inSessionDisplayNames.has(String(d.name).trim()))) status = 'in-session';
+    else if (devs.some(d => d.online)) status = 'waiting';
+    items.push({ branch_id: b.id || null, name, status });
+  }
+  return items;
+}
+addRoute('get', '/branches/status', requireTenant, async (req, res) => {
+  try {
+    const items = await getBranchStatuses(req.tenantId);
+    res.json({ items });
+  } catch (_e) {
+    res.json({ items: [] });
+  }
+});
+
 // ---- Drive‑Thru display state (per tenant)
 addRoute('get', '/drive-thru/state', requireTenant, async (req, res) => {
+  const defaults = {
+    banner: 'Welcome to Koobs Café ☕',
+    cashierCameraUrl: '',
+    customerCameraUrl: '',
+    hotkeys: { '1': 'Coffee', '2': 'Cold Drinks', 'F': 'Featured' },
+    featuredProductIds: [],
+    posterOverlayEnabled: false,
+    // New: rotation settings
+    posterIntervalMs: 8000,
+    posterTransitionType: 'fade', // 'fade' | 'none' | 'slide'
+    // New: default poster URL (used when no posters uploaded)
+    defaultPosterUrl: '',
+    hiddenCategoryIds: [],
+    updated_at: new Date().toISOString()
+  };
   // In-memory mode (no DB configured)
-  if (USE_MEM_STATE) {
+if (USE_MEM_STATE) {
     const s = memDriveThruState.get(req.tenantId);
-    if (!s) {
-      return res.json({
-        banner: 'Welcome to Koobs Café ☕',
-        cashierCameraUrl: '',
-        customerCameraUrl: '',
-        hotkeys: { '1': 'Coffee', '2': 'Cold Drinks', 'F': 'Featured' },
-        featuredProductIds: [],
-        updated_at: new Date().toISOString()
-      });
-    }
-    return res.json(s);
+    const out = { ...defaults, ...(s || {}) };
+    try { const plat = await readPlatformSettings(); if (!out.defaultPosterUrl && plat && plat.defaultPosterUrl) out.defaultPosterUrl = plat.defaultPosterUrl; } catch {}
+    return res.json(out);
   }
   // DB mode
-  try {
+try {
     const rows = await db(`select state, updated_at from drive_thru_state where tenant_id=$1`, [req.tenantId]);
-    if (!rows.length) {
-      return res.json({
-        banner: 'Welcome to Koobs Café ☕',
-        cashierCameraUrl: '',
-        customerCameraUrl: '',
-        hotkeys: { '1': 'Coffee', '2': 'Cold Drinks', 'F': 'Featured' },
-        featuredProductIds: [],
-        updated_at: new Date().toISOString()
-      });
-    }
-    return res.json({ ...rows[0].state, updated_at: rows[0].updated_at });
+    let out = rows && rows.length ? { ...defaults, ...rows[0].state, updated_at: rows[0].updated_at } : { ...defaults };
+    try { const plat = await readPlatformSettings(); if (!out.defaultPosterUrl && plat && plat.defaultPosterUrl) out.defaultPosterUrl = plat.defaultPosterUrl; } catch {}
+    return res.json(out);
   } catch (_e) {
     // fallback to memory if DB fails
-    const s = memDriveThruState.get(req.tenantId) || {
-      banner: 'Welcome to Koobs Café ☕',
-      cashierCameraUrl: '',
-      customerCameraUrl: '',
-      hotkeys: { '1': 'Coffee', '2': 'Cold Drinks', 'F': 'Featured' },
-      featuredProductIds: [],
-      updated_at: new Date().toISOString()
-    };
-    return res.json(s);
+    const s = memDriveThruState.get(req.tenantId) || {};
+    const out = { ...defaults, ...s };
+    try { const plat = await readPlatformSettings(); if (!out.defaultPosterUrl && plat && plat.defaultPosterUrl) out.defaultPosterUrl = plat.defaultPosterUrl; } catch {}
+    return res.json(out);
   }
 });
 
@@ -1502,7 +1801,12 @@ addRoute('post', '/drive-thru/state', requireTenant, verifyAuth, requireTenantAd
     cashierCameraUrl: String(req.body?.cashierCameraUrl || ''),
     customerCameraUrl: String(req.body?.customerCameraUrl || ''),
     hotkeys: req.body?.hotkeys || { '1': 'Coffee', '2': 'Cold Drinks', 'F': 'Featured' },
-    featuredProductIds: Array.isArray(req.body?.featuredProductIds) ? req.body.featuredProductIds : []
+    featuredProductIds: Array.isArray(req.body?.featuredProductIds) ? req.body.featuredProductIds : [],
+    posterOverlayEnabled: !!req.body?.posterOverlayEnabled,
+    posterIntervalMs: (()=>{ const n = Number(req.body?.posterIntervalMs); return Number.isFinite(n) && n>=2000 && n<=600000 ? n : 8000; })(),
+    posterTransitionType: (function(){ const s = String(req.body?.posterTransitionType||'fade').toLowerCase(); return ['fade','none','slide'].includes(s) ? s : 'fade'; })(),
+    defaultPosterUrl: String(req.body?.defaultPosterUrl || '').trim(),
+    hiddenCategoryIds: Array.isArray(req.body?.hiddenCategoryIds) ? req.body.hiddenCategoryIds.map(String) : []
   };
   const enriched = { ...state, updated_at: new Date().toISOString() };
 
@@ -1524,6 +1828,7 @@ addRoute('post', '/drive-thru/state', requireTenant, verifyAuth, requireTenantAd
     return res.json({ ok:true, state: enriched, mode: 'memory' });
   }
 });
+
 
 // ---- Device auth middleware
 async function requireDeviceAuth(req, res, next) {
@@ -1552,6 +1857,48 @@ const ROLE_DESCRIPTIONS = {
   manager: 'Manage catalog and orders; limited settings access.',
   viewer:  'Read-only access to admin pages.'
 };
+// Optional in-memory overrides for role descriptions (dev-open only)
+const ROLE_DESC_OVERRIDES = new Map();
+// Custom roles registry (dev-open, in-memory)
+const CUSTOM_ROLES = new Map(); // id -> {id, name, description}
+
+// Admin pages list (used by Roles permissions matrix)
+const ADMIN_PAGES = [
+  { id: 'company',   label: 'Company' },
+  { id: 'users',     label: 'Users' },
+  { id: 'roles',     label: 'Roles' },
+  { id: 'branches',  label: 'Branches' },
+  { id: 'devices',   label: 'Devices' },
+  { id: 'products',  label: 'Products' },
+  { id: 'categories',label: 'Categories' },
+  { id: 'modifiers', label: 'Modifiers' },
+  { id: 'posters',   label: 'Posters' },
+  { id: 'messages',  label: 'Messages' },
+  { id: 'tenants',   label: 'Tenants' }
+];
+// Role -> page perms overrides: { [pageId]: { view:boolean, edit:boolean, delete:boolean } }
+const ROLE_PAGE_PERMS_OVERRIDES = new Map();
+
+function defaultPagePermsForRole(role){
+  const base = Object.fromEntries(ADMIN_PAGES.map(p => [p.id, { view: true, edit: false, delete: false }]));
+  if (role === 'owner') {
+    for (const k of Object.keys(base)) base[k] = { view: true, edit: true, delete: true };
+  } else if (role === 'admin') {
+    for (const k of ['users','devices','products','categories','modifiers','branches']) base[k] = { view: true, edit: true, delete: true };
+  } else if (role === 'manager') {
+    for (const k of ['products','categories','modifiers']) base[k] = { view: true, edit: true, delete: false };
+  } else if (role === 'viewer') {
+    // keep defaults: view only
+  }
+  return base;
+}
+
+function getRolePagePerms(role){
+  if (ROLE_PAGE_PERMS_OVERRIDES.has(role)) return ROLE_PAGE_PERMS_OVERRIDES.get(role);
+  const def = defaultPagePermsForRole(role);
+  ROLE_PAGE_PERMS_OVERRIDES.set(role, def);
+  return def;
+}
 // Permissions matrix
 const ROLE_PERMS = {
   owner:   ['manage_users','manage_devices','manage_catalog','view_catalog','manage_orders','view_orders'],
@@ -1637,22 +1984,49 @@ async function requireTenantAdminBodyTenant(req, res, next){
 // Backward-compat alias
 const requireAdmin = requirePlatformAdmin;
 
+// Development bypass toggles (for local testing only)
+// Set DEV_OPEN_ADMIN=1 to bypass auth on selected admin routes (Tenants)
+const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || process.env.DEV_OPEN || ''));
+// Wrapper middlewares used by admin routes below
+const verifyAuthOpen = DEV_OPEN_ADMIN ? ((req, res, next) => { req.user = req.user || { uid: 'dev', email: 'dev@local' }; next(); }) : verifyAuth;
+const requirePlatformAdminOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requirePlatformAdmin;
+const requireTenantAdminResolvedOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requireTenantAdminResolved;
+const requireTenantAdminParamOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requireTenantAdminParam;
+const requireTenantAdminBodyTenantOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requireTenantAdminBodyTenant;
+// Open wrapper for permission-checked routes (e.g., manage_users) in dev-open mode
+const requireTenantPermParamOpenFactory = DEV_OPEN_ADMIN ? (_perm => ((_req, _res, next) => next())) : requireTenantPermParamFactory;
+
+// In-memory Tenants store for dev (when DB is not configured)
+const __memTenants = new Map();
+// In-memory owner mapping for dev-open mode
+const __memTenantOwners = new Map(); // tenant_id -> { email, name }
+// In-memory integrations for dev-open mode
+const memIntegrationsByTenant = new Map(); // tenant_id -> [{ provider, label, token_plain, meta, status, created_at, updated_at, last_used_at, revoked_at }]
+function ensureMemTenantsSeed(){
+  try {
+    if (!__memTenants.size) {
+      __memTenants.set(DEFAULT_TENANT_ID, { id: DEFAULT_TENANT_ID, name: 'Koobs Café', code: null, branch_limit: 3, license_limit: 1 });
+    }
+  } catch {}
+}
+
 // Dynamic Firebase config for Admin login (from env) with fallback to static file if env not set
 addRoute('get', '/config.js', (_req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
+  const devOpen = !!DEV_OPEN_ADMIN;
   if (apiKey && authDomain) {
     const cfg = { apiKey, authDomain };
-    return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};`);
+    return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};window.devOpenAdmin=${devOpen};`);
   }
   try {
     const fp = path.join(__dirname, 'admin', 'config.js');
     const content = fs.readFileSync(fp, 'utf8');
-    return res.type('application/javascript').send(content);
+    return res.type('application/javascript').send(`${content}\nwindow.devOpenAdmin=${devOpen};`);
   } catch {
-    return res.type('application/javascript').send('window.firebaseConfig={apiKey:"",authDomain:""};');
+    return res.type('application/javascript').send(`window.firebaseConfig={apiKey:"",authDomain:""};window.devOpenAdmin=${devOpen};`);
   }
 });
 
@@ -1665,23 +2039,284 @@ addRoute('get', '/config.json', (_req, res) => {
   return res.json({ apiKey, authDomain });
 });
 
+// ---- Platform/global settings (for super admins)
+let memPlatformSettings = { defaultPosterUrl: '' };
+async function ensurePlatformSettingsSchema(){
+  if (!HAS_DB) return;
+  await db(`
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      id text PRIMARY KEY,
+      settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await db(`insert into platform_settings (id, settings) values ('main', '{}'::jsonb)
+           on conflict (id) do nothing`);
+}
+async function readPlatformSettings(){
+  if (!HAS_DB) return memPlatformSettings;
+  try {
+    await ensurePlatformSettingsSchema();
+    const rows = await db(`select settings from platform_settings where id='main'`);
+    if (rows && rows[0] && rows[0].settings) {
+      const s = rows[0].settings || {};
+      memPlatformSettings = { ...memPlatformSettings, ...s };
+    }
+  } catch {}
+  return memPlatformSettings;
+}
+async function writePlatformSettings(next){
+  if (!HAS_DB) { memPlatformSettings = { ...memPlatformSettings, ...next }; return memPlatformSettings; }
+  try {
+    await ensurePlatformSettingsSchema();
+    const s = { ...memPlatformSettings, ...next };
+    await db(`insert into platform_settings (id, settings)
+              values ('main', $1)
+              on conflict (id) do update set settings=excluded.settings, updated_at=now()`, [s]);
+    memPlatformSettings = s;
+    return s;
+  } catch { return memPlatformSettings; }
+}
+addRoute('get', '/platform/settings', verifyAuthOpen, requirePlatformAdminOpen, async (_req, res) => {
+  try { const s = await readPlatformSettings(); return res.json({ settings: s }); }
+  catch { return res.json({ settings: {} }); }
+});
+addRoute('put', '/platform/settings', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  try {
+    const upd = (req.body?.settings && typeof req.body.settings === 'object') ? req.body.settings : {};
+    const s = await writePlatformSettings(upd);
+    return res.json({ ok: true, settings: s });
+  } catch { return res.status(500).json({ error: 'save_failed' }); }
+});
+
+// Admin variant: update Drive‑Thru state for a specific tenant (avoids 401 on /drive-thru/state POST)
+addRoute('post', '/admin/tenants/:id/drive-thru/state', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const state = {
+    banner: String(req.body?.banner || 'Welcome to Koobs Café ☕'),
+    cashierCameraUrl: String(req.body?.cashierCameraUrl || ''),
+    customerCameraUrl: String(req.body?.customerCameraUrl || ''),
+    hotkeys: req.body?.hotkeys || { '1': 'Coffee', '2': 'Cold Drinks', 'F': 'Featured' },
+    featuredProductIds: Array.isArray(req.body?.featuredProductIds) ? req.body.featuredProductIds : [],
+    posterOverlayEnabled: !!req.body?.posterOverlayEnabled,
+    posterIntervalMs: (()=>{ const n = Number(req.body?.posterIntervalMs); return Number.isFinite(n) && n>=2000 && n<=600000 ? n : 8000; })(),
+    posterTransitionType: (function(){ const s = String(req.body?.posterTransitionType||'fade').toLowerCase(); return ['fade','none','slide'].includes(s) ? s : 'fade'; })(),
+    defaultPosterUrl: String(req.body?.defaultPosterUrl || '').trim(),
+    hiddenCategoryIds: Array.isArray(req.body?.hiddenCategoryIds) ? req.body.hiddenCategoryIds.map(String) : []
+  };
+  const enriched = { ...state, updated_at: new Date().toISOString() };
+
+  if (USE_MEM_STATE) {
+    memDriveThruState.set(tenantId, enriched);
+    return res.json({ ok:true, state: enriched });
+  }
+  try {
+    await db(
+      `insert into drive_thru_state (tenant_id, state)
+       values ($1, $2)
+       on conflict (tenant_id) do update set state=excluded.state, updated_at=now()`,
+      [tenantId, state]
+    );
+    return res.json({ ok:true, state: enriched });
+  } catch (_e) {
+    // fallback to memory if DB fails
+    memDriveThruState.set(tenantId, enriched);
+    return res.json({ ok:true, state: enriched, mode: 'memory' });
+  }
+});
+
+// Public brand info for current tenant (resolved by host). Cached for 60s.
+addRoute('get', '/brand', requireTenant, async (req, res) => {
+  try {
+    const key = `brand:${req.tenantId}`;
+    const cached = cacheGet(key);
+    if (cached) return res.json(cached);
+    let out = { display_name: '', logo_url: '', color_primary: '', color_secondary: '' };
+    if (HAS_DB) {
+      try {
+        const rows = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
+        if (rows && rows[0]) {
+          out = {
+            display_name: rows[0].display_name || '',
+            logo_url: rows[0].logo_url || '',
+            color_primary: rows[0].color_primary || '',
+            color_secondary: rows[0].color_secondary || ''
+          };
+        }
+      } catch {}
+    } else if (DEV_OPEN_ADMIN) {
+      const b = memTenantBrandByTenant.get(req.tenantId) || {};
+      out = {
+        display_name: b.display_name || '',
+        logo_url: b.logo_url || '',
+        color_primary: b.color_primary || '',
+        color_secondary: b.color_secondary || ''
+      };
+    }
+    cacheSet(key, out, 60000);
+    return res.json(out);
+  } catch { return res.json({ display_name: '', logo_url: '', color_primary: '', color_secondary: '' }); }
+});
+
+// Static: signup and profile pages
+addRoute('get', /^\/signup\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'signup', 'index.html')));
+addRoute('get', /^\/verify-email\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'verify-email', 'index.html')));
+addRoute('get', /^\/profile\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'profile', 'index.html')));
+addRoute('get', /^\/start-trial\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'start-trial', 'index.html')));
+addRoute('get', /^\/admin\/invite\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'admin', 'invite', 'index.html')));
+
 // Super admin: list tenants
 // List built-in roles (no auth required beyond login)
-addRoute('get', '/admin/roles', verifyAuth, async (_req, res) => {
+addRoute('get', '/admin/roles', verifyAuthOpen, async (_req, res) => {
   try {
-    const items = BUILTIN_TENANT_ROLES.map(r => ({ id: r, name: r, description: ROLE_DESCRIPTIONS[r] || '' }));
-    res.json({ items });
+    const builtIns = BUILTIN_TENANT_ROLES.map(r => {
+      const desc = ROLE_DESC_OVERRIDES.has(r) ? ROLE_DESC_OVERRIDES.get(r) : (ROLE_DESCRIPTIONS[r] || '');
+      return { id: r, name: r, description: desc, built_in: true };
+    });
+    const customs = Array.from(CUSTOM_ROLES.values()).map(r => ({ id: r.id, name: r.name, description: (ROLE_DESC_OVERRIDES.get(r.id) || r.description || ''), built_in: false }));
+    res.json({ items: [...builtIns, ...customs] });
   } catch { res.json({ items: [] }); }
 });
 
-addRoute('get', '/admin/tenants', verifyAuth, requirePlatformAdmin, async (_req, res) => {
-  if (!HAS_DB) return res.json([]);
-  const rows = await db('select id, name, short_code as code from tenants order by created_at desc');
+// Create custom role (dev-open)
+addRoute('post', '/admin/roles', verifyAuthOpen, async (req, res) => {
+  if (HAS_DB && !DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+  const name = String(req.body?.name||'').trim();
+  const desc = String(req.body?.description||'').trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const id = slugify(name).toLowerCase();
+  if (!id) return res.status(400).json({ error: 'invalid_name' });
+  if (BUILTIN_TENANT_ROLES.includes(id) || CUSTOM_ROLES.has(id)) return res.status(409).json({ error: 'role_exists' });
+  CUSTOM_ROLES.set(id, { id, name, description: desc });
+  if (desc) ROLE_DESC_OVERRIDES.set(id, desc);
+  // initialize perms as viewer by default
+  ROLE_PAGE_PERMS_OVERRIDES.set(id, defaultPagePermsForRole('viewer'));
+  return res.json({ ok:true, role: { id, name, description: desc, built_in: false } });
+});
+
+// Update role (name/description). Built-ins: description only.
+addRoute('put', '/admin/roles/:id', verifyAuthOpen, async (req, res) => {
+  const id = String(req.params.id||'').toLowerCase();
+  if (!(BUILTIN_TENANT_ROLES.includes(id) || CUSTOM_ROLES.has(id))) return res.status(404).json({ error: 'not_found' });
+  const name = req.body?.name != null ? String(req.body.name).trim() : null;
+  const desc = req.body?.description != null ? String(req.body.description).trim() : null;
+  if (BUILTIN_TENANT_ROLES.includes(id)) {
+    if (desc != null) ROLE_DESC_OVERRIDES.set(id, desc);
+    return res.json({ ok:true });
+  }
+  // custom role
+  const r = CUSTOM_ROLES.get(id);
+  if (name != null && name) r.name = name;
+  if (desc != null) { r.description = desc; ROLE_DESC_OVERRIDES.set(id, desc); }
+  CUSTOM_ROLES.set(id, r);
+  return res.json({ ok:true });
+});
+
+// Delete custom role
+addRoute('delete', '/admin/roles/:id', verifyAuthOpen, async (req, res) => {
+  const id = String(req.params.id||'').toLowerCase();
+  if (BUILTIN_TENANT_ROLES.includes(id)) return res.status(400).json({ error: 'cannot_delete_built_in' });
+  if (!CUSTOM_ROLES.has(id)) return res.status(404).json({ error: 'not_found' });
+  CUSTOM_ROLES.delete(id);
+  ROLE_DESC_OVERRIDES.delete(id);
+  ROLE_PAGE_PERMS_OVERRIDES.delete(id);
+  return res.json({ ok:true });
+});
+
+// Update role description (dev-open in-memory)
+addRoute('put', '/admin/roles/:id', verifyAuthOpen, async (req, res) => {
+  const id = String(req.params.id||'').toLowerCase();
+  const desc = String(req.body?.description||'').trim();
+  if (!BUILTIN_TENANT_ROLES.includes(id)) return res.status(404).json({ error: 'not_found' });
+  if (HAS_DB && !DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+  // in-memory override
+  ROLE_DESC_OVERRIDES.set(id, desc);
+return res.json({ ok:true });
+});
+
+// Get role page permissions (dev-open aware)
+addRoute('get', '/admin/roles/perms', verifyAuthOpen, async (_req, res) => {
+  try {
+    const built = BUILTIN_TENANT_ROLES.map(r => ({ id: r, perms: getRolePagePerms(r) }));
+    const customs = Array.from(CUSTOM_ROLES.keys()).map(id => ({ id, perms: getRolePagePerms(id) }));
+    res.json({ pages: ADMIN_PAGES, roles: [...built, ...customs] });
+  } catch { res.json({ pages: ADMIN_PAGES, roles: [] }); }
+});
+
+// Set role page permissions (dev-open in-memory)
+addRoute('put', '/admin/roles/:id/perms', verifyAuthOpen, async (req, res) => {
+  const id = String(req.params.id||'').toLowerCase();
+  if (!BUILTIN_TENANT_ROLES.includes(id)) return res.status(404).json({ error: 'not_found' });
+  const perms = req.body?.perms && typeof req.body.perms === 'object' ? req.body.perms : null;
+  if (!perms) return res.status(400).json({ error: 'invalid_perms' });
+  // normalize structure, only known pages and keys
+  const next = defaultPagePermsForRole(id);
+  for (const p of ADMIN_PAGES) {
+    const v = perms[p.id];
+    if (v && typeof v === 'object') {
+      next[p.id] = {
+        view: v.view === true,
+        edit: v.edit === true,
+        delete: v.delete === true
+      };
+    }
+  }
+  ROLE_PAGE_PERMS_OVERRIDES.set(id, next);
+  return res.json({ ok: true });
+});
+
+addRoute('get', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, async (_req, res) => {
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      ensureMemTenantsSeed();
+      return res.json(Array.from(__memTenants.values()));
+    }
+    return res.json([]);
+  }
+  const rows = await db('select id, name, short_code as code, branch_limit, license_limit from tenants order by created_at desc');
   res.json(rows);
 });
 
+// Super admin: fetch a single tenant + slug
+addRoute('get', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const id = String(req.params.id||'').trim();
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    ensureMemTenantsSeed();
+    const t = __memTenants.get(id);
+    if (!t) return res.status(404).json({ error: 'not_found' });
+    return res.json({ id: t.id, name: t.name, code: t.code||null, branch_limit: t.branch_limit, license_limit: t.license_limit, slug: t.slug||null });
+  }
+  const rows = await db('select id, name, short_code as code, branch_limit, license_limit from tenants where id=$1', [id]);
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  const [s] = await db('select slug from tenant_settings where tenant_id=$1', [id]);
+  const slug = s && s.slug || null;
+  const r = rows[0];
+  res.json({ id: r.id, name: r.name, code: r.code||null, branch_limit: r.branch_limit, license_limit: r.license_limit, slug });
+});
+
 // Super admin: create tenant (name, optional slug)
-addRoute('post', '/admin/tenants', verifyAuth, requirePlatformAdmin, async (req, res) => {
+addRoute('post', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB && DEV_OPEN_ADMIN) {
+    const name = String(req.body?.name||'').trim();
+    const slug = String(req.body?.slug||'').trim() || null;
+    const rawCode = String(req.body?.code||'').trim();
+    if (!name) return res.status(400).json({ error: 'name required' });
+    ensureMemTenantsSeed();
+    // code uniqueness
+    let code = null;
+    if (rawCode) {
+      if (!/^\d{6}$/.test(rawCode)) return res.status(400).json({ error: 'invalid_code' });
+      for (const t of __memTenants.values()) { if (t.code === rawCode) return res.status(409).json({ error: 'code_exists' }); }
+      code = rawCode;
+    } else {
+      code = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
+    }
+    const id = require('crypto').randomUUID();
+    __memTenants.set(id, { id, name, code, branch_limit: 3, license_limit: 1, slug });
+    return res.json({ id, name, slug, code });
+  }
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const name = String(req.body?.name||'').trim();
   const slug = String(req.body?.slug||'').trim() || null;
@@ -1704,12 +2339,43 @@ addRoute('post', '/admin/tenants', verifyAuth, requirePlatformAdmin, async (req,
 });
 
 // Super admin: update tenant name and/or slug
-addRoute('put', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async (req, res) => {
+addRoute('put', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB && DEV_OPEN_ADMIN) {
+    const id = String(req.params.id||'').trim();
+    const name = req.body?.name != null ? String(req.body.name).trim() : null;
+    const slug = req.body?.slug != null ? String(req.body.slug).trim() : null;
+    const rawCode = req.body?.code;
+    const rawBranchLimit = req.body?.branch_limit;
+    const rawLicenseLimit = req.body?.license_limit;
+    ensureMemTenantsSeed();
+    const t = __memTenants.get(id);
+    if (!t) return res.status(404).json({ error: 'not_found' });
+    if (name != null) t.name = name;
+    if (slug !== undefined) t.slug = slug || null;
+    if (rawCode != null) {
+      const codeStr = String(rawCode).trim();
+      if (codeStr === '') t.code = null;
+      else {
+        if (!/^\d{6}$/.test(codeStr)) return res.status(400).json({ error: 'invalid_code' });
+        for (const [tid, tt] of __memTenants) { if (tid !== id && tt.code === codeStr) return res.status(409).json({ error: 'code_exists' }); }
+        t.code = codeStr;
+      }
+    }
+    if (rawBranchLimit != null) {
+      const n = Number.parseInt(String(rawBranchLimit), 10); if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_branch_limit' }); t.branch_limit = n;
+    }
+    if (rawLicenseLimit != null) {
+      const n = Number.parseInt(String(rawLicenseLimit), 10); if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_license_limit' }); t.license_limit = n;
+    }
+    return res.json({ ok:true });
+  }
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const id = String(req.params.id||'').trim();
   const name = req.body?.name != null ? String(req.body.name).trim() : null;
   const slug = req.body?.slug != null ? String(req.body.slug).trim() : null;
   const rawCode = req.body?.code;
+  const rawBranchLimit = req.body?.branch_limit;
+  const rawLicenseLimit = req.body?.license_limit;
   if (!id) return res.status(400).json({ error: 'invalid_id' });
   if (name) await db('update tenants set name=$1 where id=$2', [name, id]);
   if (slug != null) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug||null]);
@@ -1724,11 +2390,30 @@ addRoute('put', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async (r
       await db('update tenants set short_code=$1 where id=$2', [codeStr, id]);
     }
   }
+  // Optional limits updates
+  if (rawBranchLimit != null) {
+    const n = Number.parseInt(String(rawBranchLimit), 10);
+    if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_branch_limit' });
+    await db('update tenants set branch_limit=$1 where id=$2', [n, id]);
+  }
+  if (rawLicenseLimit != null) {
+    const n = Number.parseInt(String(rawLicenseLimit), 10);
+    if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_license_limit' });
+    await db('update tenants set license_limit=$1 where id=$2', [n, id]);
+  }
   res.json({ ok:true });
 });
 
 // Super admin: delete tenant (safe delete)
-addRoute('delete', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async (req, res) => {
+addRoute('delete', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB && DEV_OPEN_ADMIN) {
+    const id = String(req.params.id||'').trim();
+    if (!id) return res.status(400).json({ error: 'invalid_id' });
+    if (id === DEFAULT_TENANT_ID) return res.status(400).json({ error: 'cannot_delete_default_tenant' });
+    ensureMemTenantsSeed();
+    const ok = __memTenants.delete(id);
+    return res.json({ ok });
+  }
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const id = String(req.params.id||'').trim();
   if (!id) return res.status(400).json({ error: 'invalid_id' });
@@ -1741,6 +2426,117 @@ addRoute('delete', '/admin/tenants/:id', verifyAuth, requirePlatformAdmin, async
     return res.json({ ok:true });
   } catch (e) {
     return res.status(409).json({ error: 'tenant_in_use' });
+  }
+});
+
+// New: Export tenant configuration (config only, no secrets)
+addRoute('get', '/admin/tenants/:id/export', verifyAuthOpen, async (req, res) => {
+  try {
+    const tenantId = String(req.params.id||'').trim();
+    if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+    // Only platform admins or tenant admins may export
+    const platform = isPlatformAdmin(req);
+    if (!platform) {
+      const email = (req.user?.email || '').toLowerCase();
+      if (!email) return res.status(401).json({ error: 'unauthorized' });
+      if (!(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
+    }
+    const payload = { tenant: {}, settings: {}, brand: {}, domains: [], branches: [], categories: [], products: [], product_branch_availability: [], product_meta: [], modifier_groups: [], modifier_options: [], product_modifier_groups: [], drive_thru_state: {}, integrations: [] };
+    if (!HAS_DB) {
+      // Dev-open minimal export
+      try { payload.settings = memTenantSettingsByTenant.get(tenantId) || {}; } catch {}
+      try { payload.brand = memTenantBrandByTenant.get(tenantId) || {}; } catch {}
+      const mem = memCatalogByTenant.get(tenantId) || { categories: [], products: [] };
+      payload.categories = mem.categories || [];
+      payload.products = mem.products || [];
+      return res.json(payload);
+    }
+    // Tenant
+    try {
+      const [t] = await db('select id, name, short_code as code, branch_limit, license_limit from tenants where id=$1', [tenantId]);
+      payload.tenant = t || {};
+    } catch {}
+    // Settings + brand
+    try {
+      const [s] = await db('select slug, default_locale, currency, timezone, features from tenant_settings where tenant_id=$1', [tenantId]);
+      payload.settings = s || {};
+    } catch {}
+    try {
+      const [b] = await db('select display_name, logo_url, color_primary, color_secondary, address, website, contact_phone, contact_email from tenant_brand where tenant_id=$1', [tenantId]);
+      payload.brand = b || {};
+    } catch {}
+    // Domains
+    try { payload.domains = await db('select host, verified_at from tenant_domains where tenant_id=$1', [tenantId]); } catch {}
+    // Branches
+    try { payload.branches = await db('select id, name, created_at from branches where tenant_id=$1 order by name asc', [tenantId]); } catch {}
+    // Categories
+    try { payload.categories = await db('select id, name, reference, created_at from categories where tenant_id=$1 order by name asc', [tenantId]); } catch {}
+    // Products
+    try { payload.products = await db('select id, name, name_localized, description, description_localized, sku, barcode, price, cost, packaging_fee, category_id, image_url, image_white_url, image_beauty_url, preparation_time, calories, fat_g, carbs_g, protein_g, sugar_g, sodium_mg, salt_g, serving_size, spice_level::text as spice_level, ingredients_en, ingredients_ar, allergens, pos_visible, online_visible, delivery_visible, talabat_reference, jahez_reference, vthru_reference, coalesce(active,true) as active from products where tenant_id=$1', [tenantId]); } catch {}
+    // Product branch availability
+    try { payload.product_branch_availability = await db('select product_id, branch_id, available, price_override, packaging_fee_override from product_branch_availability where product_id in (select id from products where tenant_id=$1)', [tenantId]); } catch {}
+    // Product meta (extra images)
+    try { const rows = await db('select id, meta from products where tenant_id=$1 and meta is not null', [tenantId]); payload.product_meta = rows || []; } catch {}
+    // Modifier groups/options
+    try { payload.modifier_groups = await db('select id, name, reference, min_select, max_select, required, created_at from modifier_groups where tenant_id=$1 order by name asc', [tenantId]); } catch {}
+    try { payload.modifier_options = await db('select id, group_id, name, price, is_active, sort_order, created_at from modifier_options where tenant_id=$1 order by name asc', [tenantId]); } catch {}
+    try { payload.product_modifier_groups = await db('select product_id, group_id, sort_order, required, min_select, max_select from product_modifier_groups where product_id in (select id from products where tenant_id=$1)', [tenantId]); } catch {}
+    // Drive-thru state
+    try { const [r] = await db('select state, updated_at from drive_thru_state where tenant_id=$1', [tenantId]); payload.drive_thru_state = (r && r.state) || {}; } catch {}
+    // Integrations (metadata only, no tokens)
+    try { payload.integrations = await db(`select provider, label, status, created_at, updated_at, last_used_at, coalesce(meta,'{}'::jsonb) as meta, (token_encrypted is not null and revoked_at is null) as has_token from tenant_api_integrations where tenant_id=$1 and (revoked_at is null)`, [tenantId]); } catch {}
+
+    res.json(payload);
+  } catch (e) {
+    res.status(500).json({ error: 'export_failed' });
+  }
+});
+
+// Safe delete-cascade for tenant catalog only (keeps brand, settings, domains, users, devices)
+addRoute('post', '/admin/tenants/:id/delete-cascade', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  if (tenantId === DEFAULT_TENANT_ID) return res.status(400).json({ error: 'cannot_delete_default_tenant' });
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('delete from product_modifier_groups where product_id in (select id from products where tenant_id=$1)', [tenantId]);
+    await c.query('delete from product_branch_availability using products p where product_branch_availability.product_id=p.id and p.tenant_id=$1', [tenantId]);
+    await c.query('delete from modifier_options where tenant_id=$1', [tenantId]);
+    await c.query('delete from modifier_groups where tenant_id=$1', [tenantId]);
+    await c.query('delete from products where tenant_id=$1', [tenantId]);
+    await c.query('delete from categories where tenant_id=$1', [tenantId]);
+    await c.query('delete from drive_thru_state where tenant_id=$1', [tenantId]);
+    await c.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    try { await c.query('ROLLBACK'); } catch {}
+    res.status(500).json({ error: 'delete_failed' });
+  } finally {
+    c.release();
+  }
+});
+
+// Platform admin: delete ALL products for a tenant (product-only purge)
+addRoute('post', '/admin/tenants/:id/products/delete-all', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    // Remove product relations first, then products. Keep categories/modifiers intact.
+    await c.query('delete from product_modifier_groups where product_id in (select id from products where tenant_id=$1)', [tenantId]);
+    await c.query('delete from product_branch_availability using products p where product_branch_availability.product_id=p.id and p.tenant_id=$1', [tenantId]);
+    const r = await c.query('delete from products where tenant_id=$1', [tenantId]);
+    await c.query('COMMIT');
+    res.json({ ok: true, deleted: r.rowCount || 0 });
+  } catch (e) {
+    try { await c.query('ROLLBACK'); } catch {}
+    res.status(500).json({ error: 'delete_products_failed' });
+  } finally {
+    c.release();
   }
 });
 
@@ -1763,30 +2559,63 @@ function slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-
 addRoute('post', '/admin/tenants/:id/categories', verifyAuth, requireTenantAdminParam, async (req, res) => {
   const tenantId = req.params.id;
   const name = String(req.body?.name||'').trim();
+  const reference = req.body?.reference != null ? String(req.body.reference).trim() : null;
+  const name_localized = req.body?.name_localized != null ? String(req.body.name_localized).trim() : null;
+  const image_url = req.body?.image_url != null ? String(req.body.image_url).trim() : null;
   if (!name) return res.status(400).json({ error: 'name_required' });
   if (HAS_DB) {
+    await ensureCategoryStatusColumns();
     const exists = await db('select 1 from categories where tenant_id=$1 and lower(name)=lower($2)', [tenantId, name]);
     if (exists.length) return res.status(409).json({ error: 'category_exists' });
     const id = require('crypto').randomUUID();
-    const row = await db('insert into categories (id, tenant_id, name) values ($1,$2,$3) returning id, name', [id, tenantId, name]);
+    const row = await db(
+      'insert into categories (id, tenant_id, name, reference, name_localized, image_url, active, deleted) values ($1,$2,$3,$4,$5,$6,true,false) returning id, name, reference, name_localized, image_url',
+      [id, tenantId, name, (reference||null), (name_localized||null), (image_url||null)]
+    );
     return res.json({ ok:true, category: row[0] });
   } else {
     const mem = ensureMemCatalog(tenantId);
     const id = 'c-' + slugify(name);
     if (mem.categories.some(c => c.id === id || (c.name||'').toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: 'category_exists' });
-    mem.categories.push({ id, name });
-    return res.json({ ok:true, category: { id, name } });
+    const cat = { id, name, reference: reference||null, active: true, deleted: false };
+    mem.categories.push(cat);
+    return res.json({ ok:true, category: { id: cat.id, name: cat.name, reference: cat.reference } });
   }
 });
 addRoute('put', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTenantAdminParam, async (req, res) => {
   const tenantId = req.params.id;
   const cid = req.params.cid;
-  const name = String(req.body?.name||'').trim();
-  if (!name) return res.status(400).json({ error: 'name_required' });
+  const name = req.body?.name != null ? String(req.body.name||'').trim() : null;
+  const status = req.body?.status != null ? String(req.body.status||'').toLowerCase() : null;
+  const activeBody = req.body?.active;
+  const reference = req.body?.reference != null ? String(req.body.reference).trim() : null;
+  const name_localized = req.body?.name_localized != null ? String(req.body.name_localized).trim() : null;
+  const image_url = req.body?.image_url != null ? String(req.body.image_url).trim() : null;
   if (HAS_DB) {
-    const exists = await db('select 1 from categories where tenant_id=$1 and lower(name)=lower($2) and id<>$3', [tenantId, name, cid]);
-    if (exists.length) return res.status(409).json({ error: 'category_exists' });
-    await db('update categories set name=$1 where tenant_id=$2 and id=$3', [name, tenantId, cid]);
+    await ensureCategoryStatusColumns();
+    if (name != null) {
+      if (!name) return res.status(400).json({ error: 'name_required' });
+      const exists = await db('select 1 from categories where tenant_id=$1 and lower(name)=lower($2) and id<>$3', [tenantId, name, cid]);
+      if (exists.length) return res.status(409).json({ error: 'category_exists' });
+      await db('update categories set name=$1 where tenant_id=$2 and id=$3', [name, tenantId, cid]);
+    }
+    if (reference != null) {
+      await db('update categories set reference=$1 where tenant_id=$2 and id=$3', [reference || null, tenantId, cid]);
+    }
+    if (name_localized != null) {
+      await db('update categories set name_localized=$1 where tenant_id=$2 and id=$3', [name_localized || null, tenantId, cid]);
+    }
+    if (image_url != null) {
+      await db('update categories set image_url=$1 where tenant_id=$2 and id=$3', [image_url || null, tenantId, cid]);
+    }
+    if (status === 'deleted') {
+      await db('update categories set deleted=true, active=false where tenant_id=$1 and id=$2', [tenantId, cid]);
+    } else if (status === 'active') {
+      await db('update categories set deleted=false, active=true where tenant_id=$1 and id=$2', [tenantId, cid]);
+    }
+    if (activeBody != null) {
+      await db('update categories set active=$1 where tenant_id=$2 and id=$3', [Boolean(activeBody), tenantId, cid]);
+    }
     return res.json({ ok:true });
   } else {
     const mem = ensureMemCatalog(tenantId);
@@ -1801,10 +2630,11 @@ addRoute('delete', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTena
   const tenantId = req.params.id;
   const cid = req.params.cid;
   if (HAS_DB) {
-    const rows = await db('select count(*)::int as cnt from products where tenant_id=$1 and category_id=$2', [tenantId, cid]);
+    await ensureCategoryStatusColumns();
+    const rows = await db("select count(*)::int as cnt from products where tenant_id=$1 and category_id=$2 and coalesce(active, true)", [tenantId, cid]);
     const cnt = rows && rows[0] ? rows[0].cnt : 0;
     if (cnt > 0) return res.status(409).json({ error: 'category_in_use' });
-    await db('delete from categories where tenant_id=$1 and id=$2', [tenantId, cid]);
+    await db('update categories set deleted=true, active=false where tenant_id=$1 and id=$2', [tenantId, cid]);
     return res.json({ ok:true });
   } else {
     const mem = ensureMemCatalog(tenantId);
@@ -1813,6 +2643,32 @@ addRoute('delete', '/admin/tenants/:id/categories/:cid', verifyAuth, requireTena
     const before = mem.categories.length;
     mem.categories = mem.categories.filter(c => c.id !== cid);
     return res.json({ ok: mem.categories.length < before });
+  }
+});
+
+// Bulk soft-delete categories that have no active products
+addRoute('post', '/admin/tenants/:id/categories/soft-delete-noactive', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = String(req.params.id||'').trim();
+  await ensureCategoryStatusColumns();
+  try {
+    const rows = await db(
+      `update categories c
+         set deleted=true, active=false
+       where c.tenant_id=$1
+         and coalesce(c.deleted,false) = false
+         and not exists (
+               select 1 from products p
+                where p.tenant_id=c.tenant_id
+                  and p.category_id=c.id
+                  and coalesce(p.active,true)
+             )
+       returning id`,
+      [tenantId]
+    );
+    return res.json({ ok:true, updated: (rows||[]).length, ids: (rows||[]).map(r=>r.id) });
+  } catch (e) {
+    return res.status(500).json({ error: 'bulk_soft_delete_failed' });
   }
 });
 
@@ -2086,6 +2942,52 @@ addRoute('put', '/admin/tenants/:id/products/:pid/availability', verifyAuth, req
   return res.json({ ok: true });
 });
 
+// Public: Product modifiers for ordering (groups + options)
+addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  await ensureModifiersSchema();
+  const tenantId = req.tenantId; const pid = req.params.pid;
+  try {
+    // Get linked groups for this product, falling back to all groups when none linked
+    let rows = await db(
+      `select mg.id as group_id, mg.name, mg.reference,
+              coalesce(pmg.sort_order, 0) as sort_order,
+              coalesce(pmg.required, mg.required) as required,
+              coalesce(pmg.min_select, mg.min_select) as min_select,
+              coalesce(pmg.max_select, mg.max_select) as max_select,
+              (pmg.product_id is not null) as linked
+         from modifier_groups mg
+    left join product_modifier_groups pmg
+           on pmg.group_id=mg.id and pmg.product_id=$2
+        where mg.tenant_id=$1
+        order by (pmg.product_id is null) asc, coalesce(pmg.sort_order, 999999) asc, mg.name asc`,
+      [tenantId, pid]
+    );
+    // If none linked, return empty to signal no modifiers
+    const linked = (rows||[]).filter(r => r.linked);
+    if (!linked.length) return res.json({ items: [] });
+    const groupIds = linked.map(r => r.group_id);
+    let opts = [];
+    try {
+      opts = await db(
+        `select id, group_id, name, price, is_active, sort_order
+           from modifier_options
+          where tenant_id=$1
+            and group_id = any($2::uuid[])
+            and coalesce(is_active,true)
+          order by coalesce(sort_order,999999) asc, name asc`,
+        [tenantId, groupIds]
+      );
+    } catch {}
+    const byGroup = new Map(linked.map(g => [String(g.group_id), { group: g, options: [] }]));
+    for (const o of (opts||[])){
+      const key = String(o.group_id);
+      if (byGroup.has(key)) byGroup.get(key).options.push({ id:o.id, name:o.name, price: Number(o.price)||0, sort_order: o.sort_order });
+    }
+    return res.json({ items: Array.from(byGroup.values()) });
+  } catch (_e) { return res.json({ items: [] }); }
+});
+
 // ---- Product ↔ Modifier group linking
 addRoute('get', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
@@ -2289,30 +3191,230 @@ addRoute('delete', '/admin/domains/:host', verifyAuth, async (req, res) => {
 });
 
 // Tenant settings + brand
-addRoute('get', '/admin/tenants/:id/settings', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (!HAS_DB) return res.json({ settings: {}, brand: {} });
+addRoute('get', '/admin/tenants/:id/settings', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      const settings = memTenantSettingsByTenant.get(req.params.id) || {};
+      const brand = memTenantBrandByTenant.get(req.params.id) || {};
+      return res.json({ settings, brand });
+    }
+    return res.json({ settings: {}, brand: {} });
+  }
   const key = `adm:settings:${req.params.id}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
   const [settings] = await db('select tenant_id, slug, default_locale, currency, timezone, features from tenant_settings where tenant_id=$1', [req.params.id]);
-  const [brand] = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.params.id]);
+  let brand = null;
+  try {
+    const rows = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary, address, website, contact_phone, contact_email from tenant_brand where tenant_id=$1', [req.params.id]);
+    brand = rows && rows[0] || null;
+  } catch (_e) {
+    const rows = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.params.id]);
+    brand = rows && rows[0] || null;
+  }
   const payload = { settings: settings||{}, brand: brand||{} };
   cacheSet(key, payload, 60000); // 60s TTL
   res.json(payload);
 });
-addRoute('put', '/admin/tenants/:id/settings', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+addRoute('put', '/admin/tenants/:id/settings', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      const s = req.body?.settings || {};
+      const b = req.body?.brand || {};
+      // Trial gating for brand/logo and posters in dev-open mode
+      try {
+        const cur = memTenantSettingsByTenant.get(req.params.id) || {};
+        const curTier = ((cur.features||{}).subscription||{}).tier || '';
+        const isTrial = String(curTier||'').toLowerCase() === 'trial';
+        const platform = isPlatformAdmin(req);
+        if (isTrial && !platform) {
+          if (b && (b.logo_url != null || b.display_name != null || b.color_primary != null || b.color_secondary != null)) {
+            return res.status(403).json({ error: 'trial_brand_locked' });
+          }
+        }
+      } catch {}
+      memTenantSettingsByTenant.set(req.params.id, JSON.parse(JSON.stringify(s)));
+      memTenantBrandByTenant.set(req.params.id, JSON.parse(JSON.stringify(b)));
+      return res.json({ ok: true });
+    }
+    return res.status(503).json({ error: 'DB not configured' });
+  }
   const s = req.body?.settings || {};
   const b = req.body?.brand || {};
+
+  // Trial gating: if current tier is trial and caller is not platform admin, block brand/logo updates
+  try {
+    const curRows = await db('select features from tenant_settings where tenant_id=$1', [req.params.id]);
+    const curFeatures = (curRows && curRows[0] && curRows[0].features) || {};
+    const curTier = ((curFeatures||{}).subscription||{}).tier || '';
+    const isTrial = String(curTier||'').toLowerCase() === 'trial';
+    const platform = isPlatformAdmin(req);
+    if (isTrial && !platform) {
+      if (b && (b.logo_url != null || b.display_name != null || b.color_primary != null || b.color_secondary != null)) {
+        return res.status(403).json({ error: 'trial_brand_locked' });
+      }
+    }
+  } catch {}
+
   await db(`insert into tenant_settings (tenant_id, slug, default_locale, currency, timezone, features)
             values ($1,$2,$3,$4,$5,$6)
             on conflict (tenant_id) do update set slug=excluded.slug, default_locale=excluded.default_locale, currency=excluded.currency, timezone=excluded.timezone, features=excluded.features`,
           [req.params.id, s.slug||null, s.default_locale||null, s.currency||null, s.timezone||null, s.features||{}]);
-  await db(`insert into tenant_brand (tenant_id, display_name, logo_url, color_primary, color_secondary)
-            values ($1,$2,$3,$4,$5)
-            on conflict (tenant_id) do update set display_name=excluded.display_name, logo_url=excluded.logo_url, color_primary=excluded.color_primary, color_secondary=excluded.color_secondary`,
-          [req.params.id, b.display_name||null, b.logo_url||null, b.color_primary||null, b.color_secondary||null]);
+  try {
+    await db(`insert into tenant_brand (tenant_id, display_name, logo_url, color_primary, color_secondary, address, website, contact_phone, contact_email)
+              values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+              on conflict (tenant_id) do update set display_name=excluded.display_name, logo_url=excluded.logo_url, color_primary=excluded.color_primary, color_secondary=excluded.color_secondary, address=excluded.address, website=excluded.website, contact_phone=excluded.contact_phone, contact_email=excluded.contact_email`,
+            [req.params.id, b.display_name||null, b.logo_url||null, b.color_primary||null, b.color_secondary||null, b.address||null, b.website||null, b.contact_phone||null, b.contact_email||null]);
+  } catch (_e) {
+    await db(`insert into tenant_brand (tenant_id, display_name, logo_url, color_primary, color_secondary)
+              values ($1,$2,$3,$4,$5)
+              on conflict (tenant_id) do update set display_name=excluded.display_name, logo_url=excluded.logo_url, color_primary=excluded.color_primary, color_secondary=excluded.color_secondary`,
+            [req.params.id, b.display_name||null, b.logo_url||null, b.color_primary||null, b.color_secondary||null]);
+  }
   res.json({ ok: true });
+});
+
+// Admin: posters list/delete per tenant
+addRoute('get', '/admin/tenants/:id/posters', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.json({ items: [] });
+  // Trial gating: listing posters is allowed
+  if (bucket) {
+    try {
+      const [files] = await bucket.getFiles({ prefix: `tenants/${tenantId}/posters/` });
+      const items = (files || [])
+        .filter(f => f && f.name && !f.name.endsWith('/'))
+        .map(f => ({ object: f.name, url: `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(f.name)}` }));
+      return res.json({ items });
+    } catch {
+      return res.json({ items: [] });
+    }
+  }
+  try {
+    const dir = path.join(__dirname, 'images', 'uploads', 'tenants', tenantId, 'posters');
+    const files = fs.readdirSync(dir)
+      .filter(f => /\.(png|jpe?g|webp|gif|avif)$/i.test(f))
+      .sort((a,b) => a.localeCompare(b));
+    const items = files.map(f => ({ object: path.posix.join('tenants', tenantId, 'posters', f), url: `/images/uploads/tenants/${encodeURIComponent(tenantId)}/posters/${encodeURIComponent(f)}` }));
+    return res.json({ items });
+  } catch {
+    return res.json({ items: [] });
+  }
+});
+addRoute('delete', '/admin/tenants/:id/posters', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const object = String(req.query.object||'').trim();
+  if (!tenantId || !object || !object.startsWith(`tenants/${tenantId}/posters/`)) {
+    return res.status(400).json({ error: 'invalid_object' });
+  }
+  // Trial gating: block poster deletes for trial tenants (non-platform admins)
+  try {
+    const platform = isPlatformAdmin(req);
+    const rows = await db('select features from tenant_settings where tenant_id=$1', [tenantId]).catch(()=>[]);
+    const features = (rows && rows[0] && rows[0].features) || {};
+    const tier = ((features||{}).subscription||{}).tier || '';
+    const isTrial = String(tier||'').toLowerCase() === 'trial';
+    if (!platform && isTrial) return res.status(403).json({ error: 'trial_posters_locked' });
+  } catch {}
+  if (bucket) {
+    try { await bucket.file(object).delete(); return res.json({ ok: true }); } catch { return res.status(404).json({ error: 'not_found' }); }
+  }
+  try {
+    const p = path.join(__dirname, 'images', 'uploads', object);
+    fs.unlinkSync(p);
+    return res.json({ ok: true });
+  } catch {
+    return res.status(404).json({ error: 'not_found' });
+  }
+});
+
+// Super admin: Integrations (e.g., Foodics)
+addRoute('get', '/admin/tenants/:id/integrations', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.json({ items: [] });
+    const arr = memIntegrationsByTenant.get(tenantId) || [];
+    const items = arr.filter(x => !x.revoked_at).map(x => ({
+      provider: x.provider, label: x.label||null, status: x.status||null,
+      created_at: x.created_at||null, updated_at: x.updated_at||null, last_used_at: x.last_used_at||null,
+      has_token: !!x.token_plain && !x.revoked_at, meta: x.meta||{}
+    }));
+    return res.json({ items });
+  }
+  const rows = await db(`select provider, label, created_at, updated_at, last_used_at, status,
+                                (token_encrypted is not null and revoked_at is null) as has_token,
+                                coalesce(meta,'{}'::jsonb) as meta
+                           from tenant_api_integrations
+                          where tenant_id=$1 and (revoked_at is null)
+                          order by provider asc, label asc nulls first`, [tenantId]);
+  return res.json({ items: rows });
+});
+
+addRoute('post', '/admin/tenants/:id/integrations', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const provider = String(req.body?.provider||'').trim().toLowerCase();
+  const label = (req.body?.label != null ? String(req.body.label).trim() : null) || null;
+  const token = String(req.body?.token||'').trim();
+  const meta = (req.body?.meta && typeof req.body.meta === 'object') ? req.body.meta : {};
+  const status = (req.body?.status != null ? String(req.body.status).trim() : null) || null;
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  if (!provider) return res.status(400).json({ error: 'provider_required' });
+  if (!token) return res.status(400).json({ error: 'token_required' });
+  // For now, restrict to known providers
+  const allowed = ['foodics'];
+  if (!allowed.includes(provider)) return res.status(400).json({ error: 'provider_not_supported' });
+
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    const arr = memIntegrationsByTenant.get(tenantId) || [];
+    const now = new Date().toISOString();
+    const key = (provider + '::' + (label||''));
+    const idx = arr.findIndex(x => (x.provider+'::'+(x.label||'')) === key);
+    const next = { provider, label, token_plain: token, meta: meta||{}, status: status||null, created_at: now, updated_at: now, revoked_at: null };
+    if (idx >= 0) arr[idx] = { ...arr[idx], ...next }; else arr.push(next);
+    memIntegrationsByTenant.set(tenantId, arr);
+    return res.json({ ok: true, item: { provider, label, status: next.status, has_token: true, updated_at: now, meta: meta||{} } });
+  }
+
+  // DB mode with encryption
+  try {
+    const keyPresent = cryptoUtil.hasKey();
+    if (!keyPresent) return res.status(503).json({ error: 'encryption_unavailable' });
+    const enc = cryptoUtil.encryptToBuffer(token);
+    await db(`insert into tenant_api_integrations (tenant_id, provider, label, token_encrypted, meta, status, created_at, updated_at, revoked_at)
+               values ($1,$2,$3,$4,$5::jsonb,$6, now(), now(), null)
+               on conflict (tenant_id, provider, coalesce(label, ''))
+               do update set token_encrypted=excluded.token_encrypted, meta=excluded.meta, status=excluded.status, updated_at=now(), revoked_at=null`,
+             [tenantId, provider, label, enc, meta||{}, status||null]);
+    return res.json({ ok: true, item: { provider, label, status: status||null, has_token: true } });
+  } catch (e) {
+    return res.status(500).json({ error: 'integration_save_failed' });
+  }
+});
+
+addRoute('delete', '/admin/tenants/:id/integrations/:provider', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const provider = String(req.params.provider||'').trim().toLowerCase();
+  const label = (req.query?.label != null ? String(req.query.label).trim() : null) || null;
+  if (!tenantId || !provider) return res.status(400).json({ error: 'invalid_request' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    const arr = memIntegrationsByTenant.get(tenantId) || [];
+    const key = (provider + '::' + (label||''));
+    const idx = arr.findIndex(x => (x.provider+'::'+(x.label||'')) === key);
+    if (idx >= 0) { arr[idx].revoked_at = new Date().toISOString(); arr[idx].token_plain = null; arr[idx].updated_at = new Date().toISOString(); }
+    memIntegrationsByTenant.set(tenantId, arr);
+    return res.json({ ok: true });
+  }
+  try {
+    await db(`update tenant_api_integrations
+                 set revoked_at=now(), token_encrypted=null, updated_at=now()
+               where tenant_id=$1 and provider=$2 and coalesce(label,'')=coalesce($3,'')`, [tenantId, provider, label]);
+    return res.json({ ok: true });
+  } catch (_e) {
+    return res.status(500).json({ error: 'integration_revoke_failed' });
+  }
 });
 
 // Signed upload URL for assets (logos, product images)
@@ -2328,22 +3430,87 @@ if (ASSETS_BUCKET) {
   }
 }
 
-addRoute('post', '/admin/upload-url', verifyAuth, requireTenantAdminBodyTenant, async (req, res) => {
+addRoute('post', '/admin/upload-url', verifyAuthOpen, requireTenantAdminBodyTenantOpen, async (req, res) => {
   try {
-    if (!bucket) return res.status(503).json({ error: 'assets not configured' });
     const tenantId = String(req.body?.tenant_id || req.body?.tenantId || '').trim() || req.header('x-tenant-id');
     const filename = String(req.body?.filename || '').trim();
     const kind = String(req.body?.kind || 'logo');
     const contentType = String(req.body?.contentType || 'application/octet-stream');
     if (!tenantId || !filename) return res.status(400).json({ error: 'tenant_id and filename required' });
+
+    // Trial gating: block poster uploads for trial tenants (non-platform admins)
+    try {
+      const platform = isPlatformAdmin(req);
+      const rows = await db('select features from tenant_settings where tenant_id=$1', [tenantId]).catch(()=>[]);
+      const features = (rows && rows[0] && rows[0].features) || {};
+      const tier = ((features||{}).subscription||{}).tier || '';
+      const isTrial = String(tier||'').toLowerCase() === 'trial';
+      const isPoster = kind && String(kind).toLowerCase().startsWith('poster');
+      if (!platform && isTrial && isPoster) {
+        return res.status(403).json({ error: 'trial_posters_locked' });
+      }
+    } catch {}
     const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
     const objectName = `tenants/${tenantId}/${kind}s/${Date.now()}-${safeName}`;
+
+    // Local dev fallback when bucket not configured
+    if (!bucket && DEV_OPEN_ADMIN) {
+      try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads', path.dirname(objectName)), { recursive: true }); } catch {}
+      const url = `/admin/upload-local/${encodeURIComponent(objectName)}`;
+      const publicUrl = `/images/uploads/${encodeURIComponent(objectName)}`;
+      return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+    }
+
+    if (!bucket) return res.status(503).json({ error: 'assets not configured' });
     const file = bucket.file(objectName);
     const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
     const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
     res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
   } catch (e) {
     res.status(500).json({ error: 'sign_failed' });
+  }
+});
+
+// New: Global upload URL for platform assets (e.g., default poster)
+addRoute('post', '/admin/upload-url-global', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  try {
+    const filename = String(req.body?.filename || '').trim();
+    const kind = (String(req.body?.kind || 'poster').replace(/[^a-z0-9_-]/gi,'').toLowerCase()) || 'poster';
+    const contentType = String(req.body?.contentType || 'application/octet-stream');
+    if (!filename) return res.status(400).json({ error: 'filename required' });
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
+    const objectName = `platform/${kind}s/${Date.now()}-${safeName}`;
+
+    if (!bucket && DEV_OPEN_ADMIN) {
+      try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads', path.dirname(objectName)), { recursive: true }); } catch {}
+      const url = `/admin/upload-local/${encodeURIComponent(objectName)}`;
+      const publicUrl = `/images/uploads/${encodeURIComponent(objectName)}`;
+      return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+    }
+    if (!bucket) return res.status(503).json({ error: 'assets not configured' });
+    const file = bucket.file(objectName);
+    const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
+    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
+    return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+  } catch (e) {
+    return res.status(500).json({ error: 'sign_failed' });
+  }
+});
+
+// Local dev: accept PUT uploads and write to /images/uploads/<objectName>
+addRoute('put', /^\/admin\/upload-local\/(.+)$/, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+  try {
+    if (!DEV_OPEN_ADMIN) return res.status(403).json({ error: 'forbidden' });
+    const m = req.path.match(/^\/admin\/upload-local\/(.+)$/);
+    const objectName = decodeURIComponent((m && m[1]) ? m[1] : '').replace(/^\/+/, '');
+    if (!objectName) return res.status(400).json({ error: 'object_required' });
+    const outPath = path.join(__dirname, 'images', 'uploads', objectName);
+    const dir = path.dirname(outPath);
+    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+    fs.writeFileSync(outPath, req.body);
+    return res.status(200).end();
+  } catch (e) {
+    return res.status(500).json({ error: 'upload_failed' });
   }
 });
 
@@ -2650,6 +3817,79 @@ addRoute('delete', '/admin/tenants/:id/devices/:deviceId', verifyAuth, requireTe
 res.json({ ok:true });
 });
 
+// Super admin: get tenant owner (email/name)
+addRoute('get', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const id = String(req.params.id||'').trim();
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    const o = __memTenantOwners.get(id) || null;
+    return res.json({ owner: o ? { email: o.email||'', name: o.name||'' } : null });
+  }
+  try {
+    const rows = await db(`select lower(u.email) as email, coalesce(u.full_name,'') as name
+                             from tenant_users tu
+                             join users u on u.id = tu.user_id
+                            where tu.tenant_id=$1 and tu.role::text='owner'
+                            limit 1`, [id]);
+    const o = rows && rows[0] ? { email: rows[0].email||'', name: rows[0].name||'' } : null;
+    return res.json({ owner: o });
+  } catch (_e) {
+    try {
+      const rows = await db(`select lower(u.email) as email, coalesce(u.full_name,'') as name
+                               from tenant_users tu
+                               join users u on u.id = tu.user_id
+                              where tu.tenant_id=$1 and tu.role::text='owner'
+                              limit 1`, [id]);
+      const o = rows && rows[0] ? { email: rows[0].email||'', name: rows[0].name||'' } : null;
+      return res.json({ owner: o });
+    } catch { return res.json({ owner: null }); }
+  }
+});
+
+// Super admin: set/replace tenant owner
+addRoute('put', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const id = String(req.params.id||'').trim();
+  const email = String(req.body?.email||'').trim().toLowerCase();
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (!email || !/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'invalid_email' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    __memTenantOwners.set(id, { email, name: '' });
+    return res.json({ ok: true });
+  }
+  // Transactional upsert: demote existing owner(s) to admin; set new owner
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const u = await client.query(`insert into users (email) values ($1)
+                                  on conflict (email) do update set email=excluded.email
+                                  returning id`, [email]);
+    const userId = u.rows[0].id;
+    try {
+      await client.query(`update tenant_users set role='admin'::tenant_role where tenant_id=$1 and role='owner'::tenant_role`, [id]);
+    } catch (_e) {
+      await client.query(`update tenant_users set role='admin'::user_role where tenant_id=$1 and role='owner'::user_role`, [id]);
+    }
+    try {
+      await client.query(`insert into tenant_users (tenant_id, user_id, role)
+                           values ($1,$2,'owner'::tenant_role)
+                           on conflict (tenant_id, user_id) do update set role='owner'::tenant_role`, [id, userId]);
+    } catch (_e) {
+      await client.query(`insert into tenant_users (tenant_id, user_id, role)
+                           values ($1,$2,'owner'::user_role)
+                           on conflict (tenant_id, user_id) do update set role='owner'::user_role`, [id, userId]);
+    }
+    await client.query('COMMIT');
+    return res.json({ ok: true });
+  } catch (_e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    return res.status(500).json({ error: 'owner_update_failed' });
+  } finally {
+    client.release();
+  }
+});
+
 // List device events (recent first)
 addRoute('get', '/admin/tenants/:id/devices/:deviceId/events', verifyAuth, requireTenantAdminParam, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
@@ -2692,15 +3932,28 @@ function isValidEmail(email){ return /.+@.+\..+/.test(email); }
 function normalizeEmail(email){ return String(email||'').trim().toLowerCase(); }
 
 // List users in a tenant
-addRoute('get', '/admin/tenants/:id/users', verifyAuth, requireTenantPermParamFactory('manage_users'), async (req, res) => {
-  if (!HAS_DB) return res.json({ items: [] });
+addRoute('get', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      const limit = Math.max(1, Math.min(500, Number(req.query.limit || 50)));
+      const offset = Math.max(0, Number(req.query.offset || 0));
+      const arr = memTenantUsersByTenant.get(req.params.id) || [];
+      const items = arr
+        .slice()
+        .sort((a,b)=>String(a.email||'').localeCompare(String(b.email||'')))
+        .slice(offset, offset+limit)
+        .map(u => ({ id: u.id, email: u.email, role: u.role, created_at: u.created_at }));
+      return res.json({ items });
+    }
+    return res.json({ items: [] });
+  }
   const limit = Math.max(1, Math.min(500, Number(req.query.limit || 50)));
   const offset = Math.max(0, Number(req.query.offset || 0));
   const key = `adm:users:${req.params.id}:l=${limit}:o=${offset}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
   const rows = await db(
-    `select tu.user_id as id, lower(u.email) as email, tu.role::text as role, tu.created_at
+    `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
        from tenant_users tu
        join users u on u.id = tu.user_id
       where tu.tenant_id=$1
@@ -2714,43 +3967,287 @@ addRoute('get', '/admin/tenants/:id/users', verifyAuth, requireTenantPermParamFa
 });
 
 // Add or invite user to tenant
-addRoute('post', '/admin/tenants/:id/users', verifyAuth, requireTenantPermParamFactory('manage_users'), async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+addRoute('post', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
   const tenantId = req.params.id;
   const email = normalizeEmail(req.body?.email);
   const role  = String(req.body?.role||'viewer').toLowerCase();
   if (!email || !isValidEmail(email)) return res.status(400).json({ error: 'invalid_email' });
   if (!BUILTIN_TENANT_ROLES.includes(role)) return res.status(400).json({ error: 'invalid_role' });
+  if (!HAS_DB && DEV_OPEN_ADMIN) {
+    const arr = memTenantUsersByTenant.get(tenantId) || [];
+    // upsert by email
+    let u = arr.find(x => (x.email||'').toLowerCase() === email);
+    if (u) { u.role = role; } else {
+      u = { id: require('crypto').randomUUID(), email, role, created_at: new Date().toISOString() };
+      arr.push(u);
+      memTenantUsersByTenant.set(tenantId, arr);
+    }
+    return res.json({ ok:true, user: { id: u.id, email: u.email, role: u.role } });
+  }
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   // upsert user by email
   const [u] = await db(`insert into users (email) values ($1)
                         on conflict (email) do update set email=excluded.email
                         returning id, lower(email) as email, created_at`, [email]);
-  // upsert tenant_users mapping
-  await db(`insert into tenant_users (tenant_id, user_id, role)
-            values ($1,$2,$3::tenant_role)
-            on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
+  // upsert tenant_users mapping — prefer tenant_role; fallback to user_role if schema is legacy
+  try {
+    await db(`insert into tenant_users (tenant_id, user_id, role)
+              values ($1,$2,$3::tenant_role)
+              on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
+  } catch (_e) {
+    await db(`insert into tenant_users (tenant_id, user_id, role)
+              values ($1,$2,$3::user_role)
+              on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
+  }
   cacheDelByPrefix(`adm:users:${tenantId}`);
   res.json({ ok:true, user: { id: u.id, email: u.email, role } });
 });
 
 // Update user role in tenant
-addRoute('put', '/admin/tenants/:id/users/:userId', verifyAuth, requireTenantPermParamFactory('manage_users'), async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+addRoute('put', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
   const tenantId = req.params.id; const userId = req.params.userId;
   const role  = String(req.body?.role||'').toLowerCase();
   if (!BUILTIN_TENANT_ROLES.includes(role)) return res.status(400).json({ error: 'invalid_role' });
-  await db(`update tenant_users set role=$1::tenant_role where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
+  if (!HAS_DB && DEV_OPEN_ADMIN) {
+    const arr = memTenantUsersByTenant.get(tenantId) || [];
+    const u = arr.find(x => x.id === userId);
+    if (!u) return res.status(404).json({ error: 'not_found' });
+    u.role = role;
+    return res.json({ ok:true });
+  }
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try {
+    await db(`update tenant_users set role=$1::tenant_role where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
+  } catch (_e) {
+    await db(`update tenant_users set role=$1::user_role where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
+  }
   cacheDelByPrefix(`adm:users:${tenantId}`);
   res.json({ ok:true });
 });
 
 // Remove user from tenant
-addRoute('delete', '/admin/tenants/:id/users/:userId', verifyAuth, requireTenantPermParamFactory('manage_users'), async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+addRoute('delete', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
   const tenantId = req.params.id; const userId = req.params.userId;
+  if (!HAS_DB && DEV_OPEN_ADMIN) {
+    const arr = memTenantUsersByTenant.get(tenantId) || [];
+    const before = arr.length;
+    const next = arr.filter(x => x.id !== userId);
+    memTenantUsersByTenant.set(tenantId, next);
+    return res.json({ ok: next.length < before });
+  }
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   await db('delete from tenant_users where tenant_id=$1 and user_id=$2', [tenantId, userId]);
   cacheDelByPrefix(`adm:users:${tenantId}`);
   res.json({ ok:true });
+});
+
+// My tenants (for the logged-in user)
+addRoute('get', '/admin/my/tenants', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.json([]);
+  try {
+    const email = (req.user?.email||'').toLowerCase();
+    if (!email) return res.status(401).json([]);
+    const rows = await db(`
+      select t.id, t.name
+        from tenant_users tu
+        join users u on u.id=tu.user_id
+        join tenants t on t.id=tu.tenant_id
+       where lower(u.email)=$1
+       order by t.created_at desc
+    `, [email]);
+    return res.json(rows);
+  } catch (_e) { return res.json([]); }
+});
+
+// Accept an invite token: upsert user and mapping, mark redeemed
+addRoute('post', '/admin/invite/accept', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const token = String(req.body?.token||'').trim();
+  const full_name = req.body?.full_name != null ? String(req.body.full_name).trim() : null;
+  const mobile = req.body?.mobile != null ? String(req.body.mobile).trim() : null;
+  if (!token) return res.status(400).json({ error: 'invalid_token' });
+  const email = (req.user?.email||'').toLowerCase();
+  if (!email) return res.status(401).json({ error: 'unauthorized' });
+  await ensureInvitesSchema();
+  const rows = await db('select tenant_id, email, role::text as role, expires_at, redeemed_at from invites where token=$1', [token]);
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  const inv = rows[0];
+  if (inv.redeemed_at) return res.status(409).json({ error: 'already_redeemed' });
+  if (new Date(inv.expires_at).getTime() < Date.now()) return res.status(409).json({ error: 'expired' });
+  if (inv.email && String(inv.email).toLowerCase() !== email) return res.status(403).json({ error: 'email_mismatch' });
+  // Upsert user and mapping
+  const [u] = await db(`insert into users (email) values ($1)
+                        on conflict (email) do update set email=excluded.email
+                        returning id, lower(email) as email`, [email]);
+  if (full_name != null) { try { await db('update users set full_name=$1 where id=$2', [full_name, u.id]); } catch {} }
+  if (mobile != null) { try { await db('update users set mobile=$1 where id=$2', [mobile, u.id]); } catch {} }
+  try {
+    await db(`insert into tenant_users (tenant_id, user_id, role)
+              values ($1,$2,$3::tenant_role)
+              on conflict (tenant_id, user_id) do update set role=excluded.role`, [inv.tenant_id, u.id, inv.role||'viewer']);
+  } catch (_e) {
+    await db(`insert into tenant_users (tenant_id, user_id, role)
+              values ($1,$2,$3::user_role)
+              on conflict (tenant_id, user_id) do update set role=excluded.role`, [inv.tenant_id, u.id, inv.role||'viewer']);
+  }
+  try { await db('update invites set redeemed_at=now() where token=$1', [token]); } catch {}
+  return res.json({ ok:true, tenant_id: inv.tenant_id, role: inv.role||'viewer' });
+});
+
+// Profile: set full_name and mobile for current user
+addRoute('post', '/auth/profile', verifyAuth, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const email = (req.user?.email||'').toLowerCase();
+  if (!email) return res.status(401).json({ error: 'unauthorized' });
+  const full_name = req.body?.full_name != null ? String(req.body.full_name).trim() : null;
+  const mobile = req.body?.mobile != null ? String(req.body.mobile).trim() : null;
+  const photo_url = req.body?.photo_url != null ? String(req.body.photo_url).trim() : null;
+  try {
+    const rows = await db('select id from users where lower(email)=$1 limit 1', [email]);
+    if (!rows.length) return res.status(404).json({ error: 'user_not_found' });
+    const id = rows[0].id;
+    // Add photo_url column if missing (idempotent)
+    try { await db("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS photo_url text"); } catch {}
+    if (full_name != null) { try { await db('update users set full_name=$1 where id=$2', [full_name, id]); } catch {} }
+    if (mobile != null) { try { await db('update users set mobile=$1 where id=$2', [mobile, id]); } catch {} }
+    if (photo_url != null) { try { await db('update users set photo_url=$1 where id=$2', [photo_url, id]); } catch {} }
+    return res.json({ ok:true });
+  } catch (_e) { return res.status(500).json({ error: 'profile_failed' }); }
+});
+
+// User avatar upload URL (signed URL; user authenticated)
+addRoute('post', '/auth/avatar/upload-url', verifyAuth, async (req, res) => {
+  try {
+    const email = (req.user?.email||'').toLowerCase();
+    const uid = (req.user?.uid||'') || email.replace(/[^a-z0-9]+/gi,'_');
+    const filename = String(req.body?.filename || 'avatar.jpg').trim();
+    const contentType = String(req.body?.contentType || 'image/jpeg').trim();
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
+    const objectName = `users/${uid}/` + (Date.now()) + '-' + safeName;
+    if (!bucket) {
+      if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'assets not configured' });
+      try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads', path.dirname(objectName)), { recursive: true }); } catch {}
+      const url = `/admin/upload-local/${encodeURIComponent(objectName)}`;
+      const publicUrl = `/images/uploads/${encodeURIComponent(objectName)}`;
+      return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+    }
+    const file = bucket.file(objectName);
+    const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
+    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
+    return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+  } catch (e) {
+    return res.status(500).json({ error: 'sign_failed' });
+  }
+});
+
+// Bootstrap a trial tenant if the user has none
+addRoute('post', '/auth/bootstrap-trial', verifyAuth, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const email = (req.user?.email||'').toLowerCase();
+  if (!email) return res.status(401).json({ error: 'unauthorized' });
+  try {
+    // If user already mapped to any tenant, return that list
+    const rows = await db(`select tu.tenant_id from tenant_users tu join users u on u.id=tu.user_id where lower(u.email)=$1 limit 1`, [email]);
+    if (rows.length) return res.json({ ok:true, existing:true });
+
+    // Create tenant
+    const id = require('crypto').randomUUID();
+    const name = String(req.body?.company||'My Company');
+    await db('insert into tenants (id, name) values ($1,$2) on conflict (id) do nothing', [id, name]);
+    // Initialize subscription trial (14 days)
+    try {
+      const trialEndsAt = new Date(Date.now() + 14*24*60*60*1000).toISOString();
+      const features = { subscription: { tier: 'trial', trial_ends_at: trialEndsAt } };
+      await db(`insert into tenant_settings (tenant_id, features)
+                values ($1, $2)
+                on conflict (tenant_id) do update set features = $2`, [id, features]);
+    } catch {}
+    try { await db('alter table tenants add column if not exists branch_limit integer not null default 3'); } catch {}
+    try { await db('alter table tenants add column if not exists license_limit integer not null default 1'); } catch {}
+    await db('update tenants set branch_limit=$1, license_limit=$2 where id=$3', [1, 2, id]);
+
+    // Default branch
+    try { await db('insert into branches (tenant_id, name) values ($1,$2) on conflict do nothing', [id, 'Main']); } catch {}
+
+    // Brand: set display name from company
+    try {
+      await db(`insert into tenant_brand (tenant_id, display_name)
+                values ($1,$2)
+                on conflict (tenant_id) do update set display_name=excluded.display_name`, [id, name]);
+    } catch {}
+
+    // Map user as owner
+    const [u] = await db(`insert into users (email) values ($1)
+                           on conflict (email) do update set email=excluded.email
+                           returning id`, [email]);
+    try {
+      await db(`insert into tenant_users (tenant_id, user_id, role) values ($1,$2,$3::tenant_role) on conflict (tenant_id, user_id) do update set role=excluded.role`, [id, u.id, 'owner']);
+    } catch (_e) {
+      await db(`insert into tenant_users (tenant_id, user_id, role) values ($1,$2,$3::user_role) on conflict (tenant_id, user_id) do update set role=excluded.role`, [id, u.id, 'owner']);
+    }
+
+    // Optional: seed demo catalog for trial tenants only when enabled via env
+    const shouldSeed = /^(1|true|yes|on)$/i.test(String(process.env.SEED_TRIAL_CATALOG||''));
+    if (shouldSeed) {
+      let seeded = false;
+      try {
+        const cats = (JSON_CATALOG.categories||[]);
+        for (const c of cats) {
+          const cid = c.id || require('crypto').randomUUID();
+          await db('insert into categories (id, tenant_id, name) values ($1,$2,$3) on conflict do nothing', [cid, id, c.name||'Category']);
+          seeded = true;
+        }
+        const prods = (JSON_CATALOG.products||[]).slice(0, 50);
+        for (const p of prods) {
+          const pid = p.id || require('crypto').randomUUID();
+          // try to find category by name
+          let catId = null;
+          try {
+            const r = await db('select id from categories where tenant_id=$1 and name=$2 limit 1', [id, p.category_name||'']);
+            catId = r.length ? r[0].id : null;
+          } catch {}
+          if (!catId) continue;
+          await db('insert into products (id, tenant_id, category_id, name, price, image_url) values ($1,$2,$3,$4,$5,$6) on conflict do nothing', [pid, id, catId, p.name||'Product', Number(p.price||0)||0, p.image_url||null]);
+          seeded = true;
+        }
+      } catch {}
+      if (!seeded) {
+        // Minimal demo data
+        try {
+          const coffee = require('crypto').randomUUID();
+          const drinks = require('crypto').randomUUID();
+          const bakery = require('crypto').randomUUID();
+          await db('insert into categories (id, tenant_id, name) values ($1,$2,$3), ($4,$2,$5), ($6,$2,$7) on conflict do nothing', [coffee, id, 'Coffee', drinks, 'Drinks', bakery, 'Bakery']);
+          // Products
+          const p1 = require('crypto').randomUUID();
+          const p2 = require('crypto').randomUUID();
+          const p3 = require('crypto').randomUUID();
+          await db('insert into products (id, tenant_id, category_id, name, price, image_url) values ($1,$2,$3,$4,$5,$6), ($7,$2,$8,$9,$10,$11), ($12,$2,$13,$14,$15,$16) on conflict do nothing', [
+            p1, id, coffee, 'Americano', 1.500, '/images/products/placeholder.jpg',
+            p2, id, coffee, 'Latte', 1.950, '/images/products/placeholder.jpg',
+            p3, id, bakery, 'Plain Croissant', 0.800, '/images/products/placeholder.jpg'
+          ]);
+          // Modifiers (Milk options)
+          try { await ensureModifiersSchema(); } catch {}
+          const mg = require('crypto').randomUUID();
+          await db('insert into modifier_groups (id, tenant_id, name, reference, min_select, max_select, required) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing', [mg, id, 'Milk', 'milk', 0, 1, false]);
+          const m1 = require('crypto').randomUUID();
+          const m2 = require('crypto').randomUUID();
+          await db('insert into modifier_options (id, tenant_id, group_id, name, price, is_active, sort_order) values ($1,$2,$3,$4,$5,true,1), ($6,$2,$3,$7,$8,true,2) on conflict do nothing', [m1, id, mg, 'Full Fat', 0, m2, 'Skim', 0]);
+        } catch {}
+      }
+    }
+
+    // Default Drive-Thru state for posters
+    try {
+      const state = { posterOverlayEnabled: true, posterIntervalMs: 10000, posterTransitionType: 'fade', hiddenCategoryIds: [] };
+      await db(`insert into drive_thru_state (tenant_id, state)
+                values ($1,$2)
+                on conflict (tenant_id) do update set state=excluded.state, updated_at=now()`, [id, state]);
+    } catch {}
+
+    return res.json({ ok:true, tenant_id: id });
+  } catch (_e) { return res.status(500).json({ error: 'bootstrap_failed' }); }
 });
 
 // Branch CRUD (tenant admin)
@@ -2815,12 +4312,31 @@ app.use((req, res, next) => {
 });
 // New direct mounts for non-legacy paths
 app.use('/images/products', express.static(path.join(__dirname, 'images', 'products')));
+
+// Public: brand info for current tenant (logo, name, colors)
+addRoute('get', '/brand', requireTenant, async (req, res) => {
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      const b = memTenantBrandByTenant.get(req.tenantId) || {};
+      return res.json({ display_name: b.display_name || 'Company', logo_url: b.logo_url || '', color_primary: b.color_primary || null, color_secondary: b.color_secondary || null });
+    }
+    return res.json({ tenant_id: req.tenantId, display_name: 'Company', logo_url: '', color_primary: null, color_secondary: null });
+  }
+  try {
+    const [row] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
+    return res.json(row || { tenant_id: req.tenantId, display_name: 'Company', logo_url: '', color_primary: null, color_secondary: null });
+  } catch (_e) {
+    return res.json({ tenant_id: req.tenantId, display_name: 'Company', logo_url: '', color_primary: null, color_secondary: null });
+  }
+});
 app.use('/images/products', express.static(path.join(__dirname, 'photos')));
 
 // Static mounts for new root assets
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/images', express.static(path.join(__dirname, 'images')));
+// Ensure uploads are served (e.g., /images/uploads/tenants/<id>/logos/...)
+try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads'), { recursive: true }); } catch {}
 app.use('/sidebar', express.static(path.join(__dirname, 'sidebar')));
 // Expose CSV data (e.g., top_sellers.csv) for frontend consumption
 app.use('/data', express.static(path.join(__dirname, 'data')));
@@ -2837,9 +4353,20 @@ addRoute('get', '/users/',    (_req, res) => res.sendFile(path.join(__dirname, '
 addRoute('get', '/roles/',    (_req, res) => res.sendFile(path.join(__dirname, 'roles',    'index.html')));
 addRoute('get', '/branches/', (_req, res) => res.sendFile(path.join(__dirname, 'branches', 'index.html')));
 addRoute('get', '/devices/',  (_req, res) => res.sendFile(path.join(__dirname, 'devices',  'index.html')));
+// New: Platform and Marketing pages
+addRoute('get', '/tenants/', (_req, res) => res.sendFile(path.join(__dirname, 'tenants', 'index.html')));
+addRoute('get', '/tenants/:id', (_req, res) => res.sendFile(path.join(__dirname, 'tenants', 'edit', 'index.html')));
+addRoute('get', '/billing/', (_req, res) => res.sendFile(path.join(__dirname, 'billing', 'index.html')));
+addRoute('get', '/poster/', (_req, res) => res.sendFile(path.join(__dirname, 'poster', 'index.html')));
+addRoute('get', '/posters/', (_req, res) => res.redirect(301, '/poster/'));
+addRoute('get', '/messages/', (_req, res) => res.sendFile(path.join(__dirname, 'messages', 'index.html')));
 // Friendly aliases for cashier/display
-addRoute('get', '/drive',   (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', /^\/drive\/?$/,  (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', '/drive/', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', '/drive',  (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
 addRoute('get', '/display', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', /^\/cashier\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
+addRoute('get', '/cashier/', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 // Login page (root-level)
 addRoute('get', '/login/', (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
@@ -2852,12 +4379,47 @@ addRoute('get', '/product/', (_req, res) => res.redirect(301, '/products/'));
 addRoute('get', '/products.html', (_req, res) => res.redirect(301, '/products/'));
 addRoute('get', '/categories.html', (_req, res) => res.redirect(301, '/categories/'));
 addRoute('get', '/modifiers/groups.html', (_req, res) => res.redirect(301, '/modifiers/'));
+addRoute('get', '/posters.html', (_req, res) => res.redirect(301, '/poster/'));
+addRoute('get', '/messages.html', (_req, res) => res.redirect(301, '/messages/'));
+// Legacy admin path redirects
+addRoute('get', /^\/public\/admin\/?$/, (_req, res) => res.redirect(301, '/products/'));
+addRoute('get', '/public/admin/login.html', (_req, res) => res.redirect(301, '/login/'));
 
 addRoute('get', '/favicon.ico', (_req, res) => {
   try { return res.sendFile(path.join(__dirname, 'favicon.ico')); } catch { return res.status(404).end(); }
 });
 addRoute('get', '/favico.ico', (_req, res) => {
   try { return res.sendFile(path.join(__dirname, 'favico.ico')); } catch { return res.status(404).end(); }
+});
+// Root logo used by UI headers
+addRoute('get', '/ordertech.png', (_req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'ordertech.png')); } catch { return res.status(404).end(); }
+});
+// Default poster asset mapping
+addRoute('get', '/poster.png', (_req, res) => {
+  // Redirect legacy path to the canonical default poster
+  try { return res.redirect(302, '/poster-default.png'); } catch {}
+  return res.status(404).end();
+});
+// Explicit default poster aliases (support both spellings)
+addRoute('get', '/poster-default.png', (_req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'images', 'poster', 'Koobs Main Screen.png')); } catch {}
+  try { return res.sendFile(path.join(__dirname, 'ordertech.png')); } catch {}
+  return res.status(404).end();
+});
+addRoute('get', '/poster-defualt.png', (_req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'images', 'poster', 'Koobs Main Screen.png')); } catch {}
+  try { return res.sendFile(path.join(__dirname, 'ordertech.png')); } catch {}
+  return res.status(404).end();
+});
+
+// Service Worker at site root (no-cache to ensure updates take effect)
+addRoute('get', '/sw.js', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.type('application/javascript');
+    return res.sendFile(path.join(__dirname, 'sw.js'));
+  } catch { return res.status(404).end(); }
 });
 
 // Simple in-memory image cache for proxy (/img)
@@ -2873,18 +4435,33 @@ function isPrivateHostOrIp(host){
   return false;
 }
 
-// Posters list for rotating display overlay
-addRoute('get', '/posters', (_req, res) => {
+// Posters list for rotating display overlay (tenant‑aware; cloud bucket when configured)
+async function listTenantPosters(tenantId) {
   try {
-const dir = path.join(__dirname, 'images', 'poster');
+    if (bucket) {
+      const [files] = await bucket.getFiles({ prefix: `tenants/${tenantId}/posters/` });
+      const urls = [];
+      for (const f of (files || [])) {
+        if (f && f.name && !f.name.endsWith('/')) {
+          urls.push(`https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(f.name)}`);
+        }
+      }
+      return urls;
+    }
+    // Local dev fallback: files uploaded via /admin/upload-local
+    const dir = path.join(__dirname, 'images', 'uploads', 'tenants', tenantId, 'posters');
     const files = fs.readdirSync(dir)
       .filter(f => /\.(png|jpe?g|webp|gif|avif)$/i.test(f))
       .sort((a,b) => a.localeCompare(b));
-const items = files.map(f => `/images/poster/${encodeURIComponent(f)}`);
-    res.json({ items });
+    return files.map(f => `/images/uploads/tenants/${encodeURIComponent(tenantId)}/posters/${encodeURIComponent(f)}`);
   } catch {
-    res.json({ items: [] });
+    return [];
   }
+}
+
+addRoute('get', '/posters', requireTenant, async (req, res) => {
+  const items = await listTenantPosters(req.tenantId);
+  res.json({ items });
 });
 
 // Image proxy: fetch remote HTTP(S) images and serve them with caching to avoid mixed-content and CORS issues.
@@ -2903,7 +4480,7 @@ addRoute('get', '/img', async (req, res) => {
     // - exact domain or subdomain (e.g., foodics.com)
     // - wildcard prefix (e.g., *.foodics.com)
     // - substring tokens if prefixed with '~' (e.g., ~foodics) to accommodate vendor images hosted on S3/CDN
-    const allowEnv = (process.env.IMG_PROXY_ALLOW_HOSTS || 'foodics.com,~foodics')
+    const allowEnv = (process.env.IMG_PROXY_ALLOW_HOSTS || 'storage.googleapis.com,googleusercontent.com,foodics.com,~foodics')
       .split(',')
       .map(s => s.trim().toLowerCase())
       .filter(Boolean);
@@ -2959,7 +4536,7 @@ addRoute('get', '/img', async (req, res) => {
   }
 });
 
-addRoute('get', '/', (_req, res) => res.redirect(302, '/products/'));
+addRoute('get', '/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ---- boot
 const WebSocket = require('ws');
@@ -3221,6 +4798,9 @@ if (msg.type === 'subscribe') return handleSubscribe(ws, msg);
     if (msg.type === 'ui:optionsClose') return handleUiOptionsClose(ws, msg);
     if (msg.type === 'ui:selectProduct') return handleUiSelectProduct(ws, msg);
     if (msg.type === 'ui:clearSelection') return handleUiClearSelection(ws, msg);
+    // Poster status pass-through: cashier <-> display
+    if (msg.type === 'poster:query') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:query', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId) }); } catch {}; return; }
+    if (msg.type === 'poster:status') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:status', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId), active: !!msg.active }); } catch {}; return; }
     return send(ws, { type: 'error', error: 'unknown_type' });
   });
 
