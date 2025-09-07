@@ -1,6 +1,6 @@
 {
   "name": "ordertech-kiosk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OrderTech Drive — Windows kiosk shell (Electron)",
   "private": true,
   "main": "src/main.js",
@@ -50,7 +50,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://storage.googleapis.com/ordertech-kiosk-feed/win/"
+        "url": "https://app.ordertech.me/kiosk/win/"
       }
     ]
   }

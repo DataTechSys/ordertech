@@ -3,6 +3,8 @@ name: Kiosk Windows build and publish artifacts
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - 'kiosk-shell/**'
       - '.github/workflows/kiosk-build.yml'
