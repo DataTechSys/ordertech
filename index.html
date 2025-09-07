@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Dashboard</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <style>
+      .dash-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+      .branch-card { border: 2px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); padding: 12px; }
+      .shade-linked { background: rgba(34, 197, 94, 0.08); }
+      .shade-unlinked { background: rgba(239, 68, 68, 0.08); }
+      .frame-connected { border-color: #22c55e; }
+      .frame-disconnected { border-color: #ef4444; }
+      .stat { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; }
+      .pill { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; font-weight:700; }
+      .ok { color: #16a34a; background: rgba(22,163,74,.12); }
+      .bad { color: #dc2626; background: rgba(220,38,38,.12); }
+      .muted-sm { color: var(--subtle); font-size: 12px; }
+      .brand { display:flex; align-items:center; gap:10px; }
+      .brand img { width:36px; height:36px; border-radius:8px; object-fit:cover; border:1px solid var(--border); }
+      .kv { display:grid; grid-template-columns: 180px 1fr; gap:8px; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><span>Dashboard</span></nav>
+      <div class="searchbar"></div>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div id="tenantHeader" class="brand">
+            <img id="tenantLogo" alt="Logo" onerror="this.style.display='none'"/>
+            <div>
+              <div id="tenantName" style="font-weight:800; font-size:18px;">—</div>
+              <div class="muted-sm" id="tenantSlug">—</div>
+            </div>
+            <span class="spacer"></span>
+            <div class="grid" style="grid-auto-flow:column; grid-auto-columns:max-content; gap:10px; align-items:center;">
+              <span id="licInfo" class="chip">Licenses: —</span>
+              <span id="branchInfo" class="chip">Branches: —</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Active Branches</div>
+            <span class="spacer"></span>
+            <button id="btnRefresh" class="btn"><span class="icon ri ri-refresh-line"></span><span>Refresh</span></button>
+          </div>
+          <div id="branchesGrid" class="dash-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script>
+      const $ = (s, el=document)=>el.querySelector(s);
+      const $$ = (s, el=document)=>Array.from(el.querySelectorAll(s));
+
+      function groupBy(arr, key) { const m=new Map(); for(const it of (arr||[])){ const k=String(it[key]||'').trim(); if(!m.has(k)) m.set(k, []); m.get(k).push(it);} return m; }
+
+      async function fetchTenantDetails(tid){
+        const out = { branch_limit: null, branch_count: null, license_limit: null, active_count: null, settings:{}, brand:{} };
+        try { const b = await Admin.api(`/admin/tenants/${tid}/branch-limit`, { tenantId: tid }); out.branch_limit=b.branch_limit; out.branch_count=b.branch_count; } catch {}
+        try { const l = await Admin.api(`/admin/tenants/${tid}/license`, { tenantId: tid }); out.license_limit=l.license_limit; out.active_count=l.active_count; } catch {}
+        try { const s = await Admin.api(`/admin/tenants/${tid}/settings`, { tenantId: tid }); out.settings=s.settings||{}; out.brand=s.brand||{}; } catch {}
+        return out;
+      }
+
+      async function fetchBranches(tid){
+        try { const r = await Admin.api(`/admin/tenants/${tid}/branches`, { tenantId: tid, query:{ limit:500 } }); return Array.isArray(r.items)?r.items:[]; } catch { return []; }
+      }
+
+      async function fetchLiveDevices(tid){
+        try { const r = await Admin.api(`/admin/tenants/${tid}/live/devices`, { tenantId: tid }); return Array.isArray(r.items)?r.items:[]; } catch { return []; }
+      }
+
+      function renderTenantHeader(name, details){
+        $('#tenantName').textContent = name || '—';
+        const slug = details?.settings?.slug ? details.settings.slug : '';
+        $('#tenantSlug').textContent = slug ? `slug: ${slug}` : '';
+        const logoUrl = (details?.brand?.logo_url || '').trim();
+        const logoEl = $('#tenantLogo');
+        if (logoEl) {
+          logoEl.src = logoUrl ? logoUrl : '/images/OrderTech.png';
+          logoEl.style.display = 'block';
+          logoEl.onerror = function(){ if (this.src !== '/images/OrderTech.png') this.src = '/images/OrderTech.png'; };
+        }
+        const lic = (details?.active_count ?? null) + ' / ' + (details?.license_limit ?? '—');
+        $('#licInfo').textContent = `Licenses: ${lic}`;
+        const br = (details?.branch_count ?? null) + ' / ' + (details?.branch_limit ?? '—');
+        $('#branchInfo').textContent = `Branches: ${br}`;
+      }
+
+      function renderBranches(branches, devices){
+        const wrap = $('#branchesGrid');
+        if (!branches.length && !devices.length) { wrap.innerHTML = '<div class="muted">No data</div>'; return; }
+        const byBranch = groupBy(devices, 'branch');
+        const allBranchNames = new Set(branches.map(b=>b.name));
+        for (const k of byBranch.keys()) { if (k) allBranchNames.add(k); }
+        const ordered = Array.from(allBranchNames.values()).sort((a,b)=>a.localeCompare(b));
+        const cards = ordered.map(name => {
+          const devs = byBranch.get(name) || [];
+          const displays = devs.filter(d=>d.role==='display');
+          const cashiers = devs.filter(d=>d.role==='cashier');
+          const dispOnline = displays.filter(d=>d.online).length;
+          const cashOnline = cashiers.filter(d=>d.online).length;
+          const linked = (displays.length + cashiers.length) > 0;
+          const connected = devs.some(d=>d.connected);
+          const shade = linked ? 'shade-linked' : 'shade-unlinked';
+          const frame = connected ? 'frame-connected' : 'frame-disconnected';
+          const dispClass = dispOnline>0 ? 'ok' : 'bad';
+          const cashClass = cashOnline>0 ? 'ok' : 'bad';
+          return `
+            <div class="branch-card ${shade} ${frame}">
+              <div style="font-weight:800; font-size:16px;">${name||'(unassigned)'}</div>
+              <div class="muted-sm">Devices assigned: ${displays.length + cashiers.length}</div>
+              <div class="stat"><span>Displays</span><span class="pill ${dispClass}"><b>${dispOnline}</b> / ${displays.length}</span></div>
+              <div class="stat"><span>Cashiers</span><span class="pill ${cashClass}"><b>${cashOnline}</b> / ${cashiers.length}</span></div>
+            </div>
+          `;
+        }).join('');
+        wrap.innerHTML = cards || '<div class="muted">No branches</div>';
+      }
+
+      async function load(){
+        const tid = Admin.STATE.selectedTenantId;
+        const tname = Admin.STATE.selectedTenantName || '—';
+        let details = await fetchTenantDetails(tid);
+        renderTenantHeader(tname, details);
+
+        // Fetch branches and live devices (graceful fallbacks)
+        const [branches, devices] = await Promise.all([
+          fetchBranches(tid).catch(()=>[]),
+          fetchLiveDevices(tid).catch(()=>[])
+        ]);
+
+        // If no branches returned, build a synthetic list from device branches
+        let list = branches;
+        if (!list || !list.length) {
+          const names = Array.from(new Set((devices||[]).map(d => String(d.branch||'').trim()).filter(Boolean)));
+          list = names.map(n => ({ id: n, name: n }));
+        }
+        renderBranches(list, devices||[]);
+      }
+
+      Admin.bootstrapAuth(async function(){
+        $('#btnRefresh').addEventListener('click', load);
+        await load();
+      });
+    </script>
+  </body>
+</html>
+

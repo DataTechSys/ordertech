@@ -3,7 +3,19 @@ import { setDisplayId, renderBillList, renderTotals } from '/js/ui-common.js';
 import { computeTotals } from '/js/data.js';
 
 const { tenant, remote } = getParams();
+
+// Load tenant brand for header logo
+(async () => {
+  try {
+    const j = await api('/brand', { tenant });
+    const logo = (j && j.logo_url) ? proxiedImageSrc(j.logo_url) : '';
+    const img = document.querySelector('.logo-overlay, .topbar .logo');
+    if (img && logo) img.src = logo;
+  } catch {}
+})();
+
 const catsEl = qs('#cats');
+try { catsEl.classList.add('tabs-grid'); } catch {}
 const gridEl = qs('#grid');
 const remoteEl = qs('#remoteVideo');
 const localEl = qs('#localVideo');
@@ -12,17 +24,77 @@ const posterA = posterEl ? document.getElementById('posterImgA') : null;
 const posterB = posterEl ? document.getElementById('posterImgB') : null;
 const posterNotice = posterEl ? document.getElementById('posterNotice') : null;
 let posterEnabled = false; // gated by Drive-Thru state (posterOverlayEnabled)
+let posterForce = false; // cashier override to force poster on/off regardless of setting
 let posterList = [];
 let posterIdx = 0;
 let posterTimer = null;
+// Popular list seed (shared via OSN)
+let __popularSeed = null;
 let posterResumeTimer = null;
 let posterStopped = false;
-const POSTER_INTERVAL_MS = 8000;
+let POSTER_INTERVAL_MS = 8000;
 const cart = createCart();
 
 // selection highlight (read-only mirror)
 let selProductId = '';
 let selBtn = null;
+
+// Deterministic popular computation when a seed (e.g., OSN) is provided
+function hashString(s){ let h = 2166136261>>>0; for (let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = (h * 16777619)>>>0; } return h>>>0; }
+function seededRandom(seed){ let x = seed>>>0; return () => { x = (x * 1664525 + 1013904223)>>>0; return (x>>>0) / 4294967296; }; }
+function seededShuffle(arr, seed){ const rnd = seededRandom(seed>>>0); const a = arr.slice(); for (let i=a.length-1;i>0;i--){ const j = Math.floor(rnd() * (i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; }
+function computePopular(all, seed){ const base=(all||[]).slice().sort((a,b)=> String(a.id).localeCompare(String(b.id))); if (seed){ const s=(typeof seed==='string')?hashString(seed):(seed>>>0); return seededShuffle(base, s).slice(0,12);} const a = base.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a.slice(0,12);}
+// Prefer direct HTTPS first; fall back to proxy on error; HTTP -> proxy immediately
+function imageDisplaySrcForUrl(u){
+  const raw = String(u || '').trim();
+  if (!raw) return '';
+  if (/^http:\/\//i.test(raw)) return proxiedImageSrc(raw); // avoid mixed content
+  if (/^https:\/\//i.test(raw)) return raw;                 // try direct first
+  return raw; // local/relative path
+}
+function attachImageFallback(imgEl, originalUrl){
+  try {
+    const raw = String(originalUrl || '').trim();
+    if (!imgEl || !raw) return;
+    const isHttps = /^https:\/\//i.test(raw);
+    const proxy = proxiedImageSrc(raw) || '/images/products/placeholder.jpg';
+    let triedProxy = false;
+    imgEl.addEventListener('error', () => {
+      if (isHttps && !triedProxy) { triedProxy = true; imgEl.src = proxy; }
+      else { imgEl.src = '/images/products/placeholder.jpg'; }
+    });
+  } catch {}
+}
+
+const DEMO_TOP = [
+  { sku: 'PIC-106', kw: ['americano'] },
+  { sku: 'PIC-111', kw: ['spanish','latte'] },
+  { sku: 'PHT-107', kw: ['espresso'] },
+  { sku: 'PWJ-101', kw: ['water','eva'] },
+  { sku: 'PSC-107', kw: ['v60'] },
+  { sku: 'PSD-104', kw: ['halloumi'] },
+  { sku: 'PIC-110', kw: ['spanish','latte'] },
+  { sku: 'PBR-102', kw: ['matcha'] },
+  { sku: 'PHT-101', kw: ['americano'] },
+  { sku: 'PHT-115', kw: ['spanish','latte'] },
+  { sku: 'PSD-115', kw: ['brioche','egg'] },
+  { sku: 'PIC-105', kw: ['americano'] }
+];
+function buildDemoPopular(all){
+  const out = [];
+  const used = new Set();
+  // Prefer keyword matches (SKU may be missing in dev-open mode)
+  for (const it of DEMO_TOP){
+    const kw = (it.kw||[]).map(s=>String(s).toLowerCase());
+    const cand = (all||[]).find(p => !used.has(p.id) && kw.every(k => String(p.name||'').toLowerCase().includes(k)));
+    if (cand) { out.push(cand); used.add(cand.id); }
+    if (out.length >= 12) break;
+  }
+  if (out.length < 12){
+    for (const p of (all||[])){ if (!used.has(p.id)) { out.push(p); used.add(p.id); if (out.length>=12) break; } }
+  }
+  return out.slice(0,12);
+}
 const escapeAttr = (s) => {
   const v = String(s);
   try { if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(v); } catch {}
@@ -64,13 +136,122 @@ let peersConnected = false;
 let statusFreezeUntil = 0; // gate READY flicker shortly after offers/restarts
 let lastCashierName = 'Cashier';
 
-function setPosterVisible(show){ try { if (!posterEnabled) return; if (posterEl) posterEl.style.display = show ? 'flex' : 'none'; if (show) document.body.classList.add('poster-active'); else document.body.classList.remove('poster-active'); } catch {} }
-function setPosterNotice(text, show){ try { if (!posterEnabled) return; if (posterNotice) { if (text != null) posterNotice.textContent = text; posterNotice.style.display = show ? 'block' : 'none'; } } catch {} }
+// Session/idle tracking and auto-refresh scheduler
+let sessionActive = false; // true between session:started and session:ended
+let idleSince = null;      // timestamp when we entered idle (no RTC and no session)
+let lastReloadAt = 0;
+
+function parseBusyWindows() {
+  // Override via localStorage key DRIVE_BUSY_WINDOWS = JSON array of "HH:MM-HH:MM" strings
+  try {
+    const raw = localStorage.getItem('DRIVE_BUSY_WINDOWS');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr;
+    }
+  } catch {}
+  return ["09:00-23:00"]; // default busy window
+}
+function isWithinBusyWindows(d = new Date()){
+  try {
+    const minutes = d.getHours()*60 + d.getMinutes();
+    const wins = parseBusyWindows();
+    for (const w of wins) {
+      const m = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(String(w));
+      if (!m) continue;
+      const s = parseInt(m[1],10)*60 + parseInt(m[2],10);
+      const e = parseInt(m[3],10)*60 + parseInt(m[4],10);
+      if (s <= e) { if (minutes >= s && minutes < e) return true; }
+      else { if (minutes >= s || minutes < e) return true; }
+    }
+  } catch {}
+  return false;
+}
+function isRtcConnected(){
+  try {
+    if (peersConnected) return true;
+    const pc = window.__pcDisplay;
+    if (!pc) return false;
+    const ice = pc.iceConnectionState;
+    const cs = pc.connectionState;
+    return (ice === 'connected' || ice === 'completed' || cs === 'connected');
+  } catch { return false; }
+}
+function isActive(){ return isRtcConnected() || sessionActive; }
+function updateIdleState(){
+  try {
+    if (isActive()) idleSince = null; else if (idleSince == null) idleSince = Date.now();
+  } catch {}
+}
+const IDLE_THRESHOLD_MS = (() => { try { const v = Number(localStorage.getItem('DRIVE_IDLE_MS')||''); if (Number.isFinite(v) && v>0) return v; } catch {} return 3*60*60*1000; })();
+const IDLE_DISABLED = () => { try { return String(localStorage.getItem('DRIVE_IDLE_DISABLED')||'') === '1'; } catch { return false; } };
+function maybeReloadIfIdle(){
+  try {
+    if (IDLE_DISABLED()) return;
+    const now = Date.now();
+    if (statusFreezeUntil && now < statusFreezeUntil) return;
+    if (idleSince == null) return;
+    if (isActive()) { idleSince = null; return; }
+    if (isWithinBusyWindows(new Date())) return;
+    if ((now - idleSince) < IDLE_THRESHOLD_MS) return;
+    if (lastReloadAt && (now - lastReloadAt) < 10*60*1000) return; // do not thrash
+    lastReloadAt = now;
+    location.reload();
+  } catch {}
+}
+try { setInterval(maybeReloadIfIdle, 5*60*1000); } catch {}
+
+function renderLiveFlag(){
+  try {
+    const wrap = document.getElementById('liveFlag');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!peersConnected) return; // only show when connected
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'flag in-session';
+    btn.textContent = `Live: ${String(lastCashierName||'').split(/\s+/)[0] || 'Cashier'}`;
+    wrap.appendChild(btn);
+  } catch {}
+}
+
+let __posterLastActive = null;
+function sendPosterStatus(active){
+  try {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type:'poster:status', basketId, active: !!active }));
+    }
+  } catch {}
+}
+function isPosterVisible(){ try { return !!(posterEl && posterEl.style && posterEl.style.display !== 'none'); } catch { return false; } }
+function setPosterVisible(show){
+  try {
+    // Allow hiding regardless of gating; only gate showing
+    if (show && !(posterEnabled || posterForce)) return;
+    if (!posterEl) return;
+    posterEl.style.display = show ? 'flex' : 'none';
+    if (show) document.body.classList.add('poster-active'); else document.body.classList.remove('poster-active');
+    const active = isPosterVisible();
+    if (__posterLastActive === null || __posterLastActive !== active) { __posterLastActive = active; sendPosterStatus(active); }
+  } catch {}
+}
+function setPosterNotice(text, show){
+  try {
+    // Allow hiding regardless of gating; only gate showing
+    if (show && !(posterEnabled || posterForce)) return;
+    if (posterNotice) {
+      if (text != null) posterNotice.textContent = text;
+      posterNotice.style.display = show ? 'block' : 'none';
+    }
+  } catch {}
+}
 // Poster overlay default OFF; can be enabled via admin toggle in drive-thru state
 function startPosterRotation(){
-  if (!posterEnabled || !posterEl) return;
+  if ((!posterEnabled && !posterForce) || !posterEl) return;
   // Try to fetch tenant posters
-  fetch('/posters', { cache: 'no-store' })
+  const headers = {};
+  try { if (tenant) headers['x-tenant-id'] = tenant; } catch {}
+  fetch('/posters', { headers, cache: 'no-store' })
     .then(r => r.json())
     .then(j => {
       const items = Array.isArray(j?.items) ? j.items.filter(u => typeof u === 'string' && u) : [];
@@ -79,11 +260,13 @@ function startPosterRotation(){
         initPosterCycle();
         return;
       }
-      // Fallback single poster (brand)
-      if (posterA) { posterA.src = '/images/koobs-bg.png'; posterA.classList.add('visible'); }
+      // Fallback single poster: tenant default or global
+const fb = (window.__DEFAULT_POSTER_URL || '').trim() || '/poster-default.png';
+      if (posterA) { posterA.src = fb; posterA.classList.add('visible'); }
     })
     .catch(() => {
-      if (posterA) { posterA.src = '/images/koobs-bg.png'; posterA.classList.add('visible'); }
+const fb = (window.__DEFAULT_POSTER_URL || '').trim() || '/poster-default.png';
+      if (posterA) { posterA.src = fb; posterA.classList.add('visible'); }
     });
 }
 
@@ -115,7 +298,8 @@ function initPosterCycle(){
     posterIdx = 1;
   }
   if (posterTimer) { try { clearInterval(posterTimer); } catch {} posterTimer = null; }
-  if (!posterStopped) posterTimer = setInterval(swapPoster, POSTER_INTERVAL_MS);
+  posterStopped = false;
+  posterTimer = setInterval(swapPoster, POSTER_INTERVAL_MS);
 }
 
 function isDisplayConnected(){
@@ -144,18 +328,21 @@ function resumePosterIfNoSession(){
   }, 120000); // 2 minutes
 }
 function stopPoster(){
-  if (!posterEnabled) return;
+  if (!posterEnabled && !posterForce) {
+    // Even if overlay was shown via force previously, proceed to hide
+  }
   try { if (posterTimer) { clearInterval(posterTimer); posterTimer = null; } } catch {}
   posterStopped = true;
+  // Ensure both images are hidden immediately
+  try { if (posterA) posterA.classList.remove('visible'); } catch {}
+  try { if (posterB) posterB.classList.remove('visible'); } catch {}
   setPosterVisible(false);
+  setPosterNotice('', false);
   // If user dismissed poster but no session starts within 2 minutes, resume poster
   resumePosterIfNoSession();
 }
 
-  // Begin poster rotation only if enabled by admin
-await loadDriveThruState();
-startPosterRotation();
-  if (posterEl) { try { posterEl.addEventListener('click', () => { stopPoster(); }); } catch {} }
+// Poster rotation is initialized after drive-thru state is loaded (see below)
 
 // Load Drive‑Thru state to get posterOverlayEnabled and hiddenCategoryIds
 let __hiddenCategoryIds = [];
@@ -166,9 +353,27 @@ async function loadDriveThruState(){
     const r = await fetch('/drive-thru/state', { headers, cache: 'no-store' });
     const j = await r.json();
     posterEnabled = !!j.posterOverlayEnabled;
+    POSTER_INTERVAL_MS = (function(){ const n=Number(j.posterIntervalMs); return Number.isFinite(n) && n>0 ? n : 8000; })();
+    // Transition class on overlay
+    try {
+      const ov = document.getElementById('posterOverlay');
+      if (ov) {
+        ov.classList.remove('transition-none');
+        const t = String(j.posterTransitionType||'fade').toLowerCase();
+        if (t === 'none') ov.classList.add('transition-none');
+      }
+    } catch {}
+    try { window.__DEFAULT_POSTER_URL = String(j.defaultPosterUrl||'').trim(); } catch { window.__DEFAULT_POSTER_URL = ''; }
     __hiddenCategoryIds = Array.isArray(j.hiddenCategoryIds) ? j.hiddenCategoryIds.map(String) : [];
   } catch { posterEnabled = false; __hiddenCategoryIds = []; }
 }
+
+// Initialize poster and state after declarations to avoid TDZ issues
+(async () => {
+  try { await loadDriveThruState(); } catch {}
+  try { startPosterRotation(); } catch {}
+  if (posterEl) { try { posterEl.addEventListener('click', () => { stopPoster(); }); } catch {} }
+})();
 
 // Require activation for display role: if no device token, keep INACTIVE and do not start WS/RTC
 try {
@@ -239,10 +444,14 @@ function scheduleRtcRestart(reason){
   }, 2500);
 }
 function setLinkStatusLabel(){
+  try { renderLiveFlag(); } catch {}
   const pill = document.getElementById('linkPill');
   const label = document.getElementById('linkStatus');
   const dot = pill ? pill.querySelector('.dot') : null;
-  const connected = (audioInHealthy || videoInHealthy) && peersConnected;
+  // Consider actual PC connectivity in addition to media health
+  const pcConnected = isDisplayConnected();
+  const mediaHealthy = (audioInHealthy || videoInHealthy);
+  const connected = (mediaHealthy || pcConnected) && peersConnected;
   if (connected) {
     if (label) label.textContent = `CONNECTED — ${lastCashierName}${(!videoInHealthy && audioInHealthy) ? ' (AUDIO ONLY)' : ''}`;
     if (dot) dot.style.background = '#22c55e';
@@ -253,16 +462,30 @@ function setLinkStatusLabel(){
     if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
   }
 }
+let __posterApplyTimer = null;
+function setPosterDesired(show){
+  try { if (__posterApplyTimer) { clearTimeout(__posterApplyTimer); __posterApplyTimer = null; } } catch {}
+  __posterApplyTimer = setTimeout(() => {
+    try { setPosterVisible(show); } catch {}
+    __posterApplyTimer = null;
+  }, 600); // debounce to avoid flicker on transient health changes
+}
 function updatePosterFromHealth(){
+  try { updateIdleState(); } catch {}
+  // When forced by cashier, keep overlay visible regardless of media health
+  if (posterForce) { setPosterVisible(true); setPosterNotice('', false); return; }
   if (!posterEnabled) return;
-  if (videoInHealthy) {
-    setPosterVisible(false);
+  // Hide poster as soon as the PC is connected OR we detect healthy inbound media
+  const pcConnected = isDisplayConnected();
+  if (pcConnected || videoInHealthy || audioInHealthy) {
+    setPosterDesired(false);
     setPosterNotice('', false);
   } else {
-    setPosterVisible(true);
-    if (audioInHealthy) setPosterNotice('Audio connected — waiting for video', true);
-    else setPosterNotice('Waiting for session…', true);
+    setPosterDesired(true);
+    setPosterNotice('Waiting for session…', true);
   }
+  // Push status whenever health changes might toggle visibility
+  try { const active = isPosterVisible(); if (__posterLastActive === null || __posterLastActive !== active) { __posterLastActive = active; sendPosterStatus(active); } } catch {}
 }
 function beginRtcStats(pc){
   if (hbTimer) { try { clearInterval(hbTimer); } catch {} hbTimer = null; }
@@ -312,6 +535,7 @@ function beginRtcStats(pc){
   }, 2000);
 }
 function stopRTC(reason){
+  try { updateIdleState(); } catch {}
   try { console.log('RTC(display) stop', { reason }); } catch {}
   clearRtcTimers();
   try {
@@ -351,16 +575,71 @@ async function startRTC(){
 }
 
 async function init() {
-  const cats = await loadCategories(tenant);
-  allProds = await loadProducts(tenant);
-  imgMap = new Map(allProds.map(p => [p.id, proxiedImageSrc(p.image_url)]));
-  // Compute "Populer" purely from the current catalog (no CSV override)
-  popular = computePopular(allProds);
+  // Register service worker for offline caching (no-op if unsupported)
+  try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{}); } catch {}
+
+  // Fallback loader from static JSON catalog when API fails
+  async function loadFallbackCatalog(){
+    try {
+      const r = await fetch('/data/product.json', { cache: 'no-store' });
+      const arr = await r.json();
+      const catsSet = new Set();
+      const cats = [];
+      const prods = [];
+      const slug = (s) => String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+      for (const grp of (arr||[])){
+        const cname = String(grp.category||'').trim(); if (!cname) continue;
+        if (!catsSet.has(cname)) { catsSet.add(cname); cats.push({ id: 'c-'+slug(cname), name: cname }); }
+        for (const it of (grp.items||[])){
+          const id = String(it.id||'p-'+slug(it.name_en||it.name||''));
+          const name = String(it.name_en||it.name||'').trim();
+          const name_localized = String(it.name_ar||'').trim();
+          const price = Number(it.price_kwd ?? it.price ?? 0) || 0;
+          const image_url = it.image ? `/images/products/${encodeURIComponent(it.image)}` : '';
+          prods.push({ id, name, name_localized, price, category_name: cname, image_url });
+        }
+      }
+      return { cats, prods };
+    } catch { return { cats: [], prods: [] }; }
+  }
+
+  let cats = [];
+  try {
+    cats = await loadCategories(tenant);
+  } catch {
+    // categories load failed; only fallback when no tenant is specified
+    if (!tenant) {
+      const fb = await loadFallbackCatalog();
+      cats = fb.cats;
+    } else {
+      cats = [];
+    }
+  }
+  try {
+    allProds = await loadProducts(tenant);
+  } catch {
+    // products load failed; only fallback when no tenant is specified
+    if (!tenant) {
+      const fb = await loadFallbackCatalog();
+      if (!cats || !cats.length) cats = fb.cats;
+      allProds = fb.prods;
+    } else {
+      allProds = [];
+    }
+  }
+
+  imgMap = new Map((allProds||[]).map(p => [p.id, imageDisplaySrcForUrl(p.image_url)]));
+  try { prefetchImages(allProds).catch(()=>{}); } catch {}
+  // Compute "Populer" deterministically when a session seed is available
+  {
+    const curated = buildDemoPopular(allProds||[]);
+    popular = __popularSeed ? seededShuffle(curated, hashString(String(__popularSeed))).slice(0,12) : curated;
+  }
   // Filter hidden categories if present
   const visibleCats = Array.isArray(cats) && __hiddenCategoryIds.length
     ? cats.filter(c => !__hiddenCategoryIds.includes(String(c.id)))
     : cats;
-  renderCategories(visibleCats);
+  renderCategories(visibleCats||[]);
   catsReady = true;
   if (pendingCategory) {
     await setActiveAndShow(pendingCategory);
@@ -371,31 +650,16 @@ async function init() {
 }
 
 function renderCategories(cats) {
-  // Two-row layout with equal-width buttons; include POPULER at the start
+  // Responsive grid (auto-fit). Include POPULER at the start.
   catsEl.innerHTML = '';
-  catsEl.classList.add('two-rows');
+  catsEl.classList.remove('two-rows');
   const list = [{ name: POPULER }, ...cats];
-  const total = list.length;
-  const firstRowCount = Math.ceil(total / 2);
-  const secondRowCount = total - firstRowCount;
-
-  const row1 = document.createElement('div');
-  row1.className = 'tab-row';
-  row1.style.display = 'grid';
-  row1.style.gridTemplateColumns = `repeat(${Math.max(1, firstRowCount)}, 1fr)`;
-  row1.style.gap = 'var(--space-2)';
-
-  const row2 = document.createElement('div');
-  row2.className = 'tab-row';
-  row2.style.display = 'grid';
-  row2.style.gridTemplateColumns = `repeat(${Math.max(1, secondRowCount)}, 1fr)`;
-  row2.style.gap = 'var(--space-2)';
 
   const makeBtn = (c, i, isActive) => {
     const b = document.createElement('button');
     b.className = 'tab' + (isActive ? ' active' : '');
     b.textContent = c.name;
-    b.style.width = '100%';
+    b.style.minWidth = '0';
     b.onclick = async () => {
       await setActiveAndShow(c.name, b);
       try {
@@ -410,11 +674,8 @@ function renderCategories(cats) {
   list.forEach((c, idx) => {
     const isActive = (idx === 0);
     const btn = makeBtn(c, idx, isActive);
-    if (idx < firstRowCount) row1.appendChild(btn); else row2.appendChild(btn);
+    catsEl.appendChild(btn);
   });
-
-  catsEl.appendChild(row1);
-  if (secondRowCount > 0) catsEl.appendChild(row2);
   // after rendering, reapply highlight if any
   applySelection();
 }
@@ -429,12 +690,22 @@ async function setActiveAndShow(name, btnEl) {
 }
 
 async function showCategory(name) {
+  // Ensure idle tracking reacts to user/category activity
+  try { updateIdleState(); } catch {}
   if (name === POPULER) {
     renderProducts(popular);
     return;
   }
-  const prods = await loadProducts(tenant, name);
-  renderProducts(prods);
+try {
+    const prods = await loadProducts(tenant, name);
+    renderProducts(prods);
+  } catch {
+    // Offline or fetch failed: derive from full list loaded at startup
+    try {
+      const prods = (allProds||[]).filter(p => String(p.category_name||'') === String(name||''));
+      renderProducts(prods);
+    } catch {}
+  }
 }
 
 
@@ -443,30 +714,40 @@ function renderProducts(list) {
   list.forEach(p => {
     const card = document.createElement('button');
     card.className = 'tile';
-    card.dataset.id = p.id;
 card.onclick = () => onProductTileClick(p, card);
 
     const img = document.createElement('img');
-    const src = proxiedImageSrc(p.image_url) || '/images/products/placeholder.jpg';
-    img.src = src;
-    img.addEventListener('load', () => {
-      console.log(`Image loaded: ${src}`);
-    });
-    img.onerror = () => {
-      console.log(`Error loading image: ${src}`);
-      img.src = '/images/products/placeholder.jpg';
-    };
+    const initial = imageDisplaySrcForUrl(p.image_url) || '/images/products/placeholder.jpg';
+    img.src = initial;
+    attachImageFallback(img, p.image_url);
 
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = p.name;
+    // Names wrapper: Arabic first (RTL), then English
+    const names = document.createElement('div');
+    names.className = 'names';
+    try { names.style.textAlign = 'center'; names.style.width = '100%'; } catch {}
+
+    const nameAr = document.createElement('div');
+    nameAr.className = 'name-ar';
+    nameAr.dir = 'rtl';
+    try { nameAr.style.textAlign = 'center'; } catch {}
+
+    const nameEn = document.createElement('div');
+    nameEn.className = 'name-en';
+    nameEn.textContent = p.name;
+    try { nameEn.style.textAlign = 'center'; } catch {}
+
+    const ar = (p.name_localized && String(p.name_localized).trim()) ? String(p.name_localized).trim() : '';
+    nameAr.textContent = ar || '\u00A0';
+    names.appendChild(nameAr);
+    names.appendChild(nameEn);
 
     const price = document.createElement('div');
     price.className = 'price';
     price.textContent = `${fmt(p.price)} KWD`;
+    try { price.style.textAlign = 'center'; width='100%'; } catch {}
 
     card.appendChild(img);
-    card.appendChild(name);
+    card.appendChild(names);
     card.appendChild(price);
     gridEl.appendChild(card);
   });
@@ -475,11 +756,13 @@ card.onclick = () => onProductTileClick(p, card);
 }
 
 function connect(){
+  try { updateIdleState(); } catch {}
   try {
     // Clear any pending reconnect to avoid duplicated sockets
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     ws = new WebSocket(proto + '://' + location.host);
 ws.addEventListener('open', () => {
+      try { updateIdleState(); } catch {}
       reconnectDelay = 500;
       try { ws.send(JSON.stringify({ type: 'subscribe', basketId })); } catch {}
       // Identify as display with name for peer-status
@@ -521,6 +804,10 @@ ws.addEventListener('open', () => {
             scheduleRtcRestart('preclear');
           } else {
             stopRTC('remote');
+            // If cashier requested a hard reset, reload to pick up latest config/state
+            if (msg.reason === 'reset') {
+              try { location.reload(); } catch {}
+            }
           }
           return;
         }
@@ -528,9 +815,11 @@ ws.addEventListener('open', () => {
           const pill = document.getElementById('linkPill');
           const label = document.getElementById('linkStatus');
           const dot = pill ? pill.querySelector('.dot') : null;
-          if (msg.status === 'connected') { cancelPosterResume();
-            peersConnected = true;
+if (msg.status === 'connected') { cancelPosterResume();
+            peersConnected = true; updateIdleState();
             lastCashierName = String(msg.cashierName||'Cashier').split(/\s+/)[0];
+            // Update drive live flag
+            try { renderLiveFlag(); } catch {}
             // Do not set pill here; let RTCPeerConnection events drive the UI to avoid flicker
             startRTC();
           } else {
@@ -541,22 +830,61 @@ ws.addEventListener('open', () => {
               pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'connected'
             ));
             if (midHandshake) return;
-            peersConnected = false;
+peersConnected = false; updateIdleState();
+            try { renderLiveFlag(); } catch {}
             if (label) label.textContent = 'READY';
             if (dot) dot.style.background = '#f59e0b';
             if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
           }
         }
-        if (msg.type === 'session:started' && msg.basketId === basketId) {
+if (msg.type === 'session:started' && msg.basketId === basketId) {
+          sessionActive = true; updateIdleState();
           const h = document.getElementById('osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
+          // Use OSN as popular seed so cashier and display show identical Populer list
+          __popularSeed = msg.osn || null;
+          // Reset product highlight on new session
+          try { clearSelection(); } catch {}
+          try {
+            const curated = buildDemoPopular(allProds);
+            popular = __popularSeed ? seededShuffle(curated, hashString(String(__popularSeed))).slice(0,12) : curated;
+            await showCategory(POPULER);
+          } catch {}
         }
         if (msg.type === 'session:paid' && msg.basketId === basketId) {
           const h = document.getElementById('osnHeader'); if (h) { h.textContent = msg.osn || ''; h.style.display = msg.osn ? '' : 'none'; }
         }
-if (msg.type === 'session:ended' && msg.basketId === basketId) {
+if (msg.type === 'poster:start' && msg.basketId === basketId) {
+          posterForce = true;
+          setPosterVisible(true);
+          try { startPosterRotation(); } catch {}
+          // Acknowledge status back to peers
+          try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'poster:status', basketId, active: true })); } catch {}
+        }
+        if (msg.type === 'poster:stop' && msg.basketId === basketId) {
+          posterForce = false;
+          stopPoster();
+          // Acknowledge status back to peers
+          try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'poster:status', basketId, active: false })); } catch {}
+        }
+        if (msg.type === 'session:ended' && msg.basketId === basketId) {
+          sessionActive = false; updateIdleState();
           const h = document.getElementById('osnHeader'); if (h) { h.textContent = ''; h.style.display = 'none'; }
           // Back to poster when session ends
           setPosterVisible(true);
+        }
+        if (msg.type === 'poster:query' && msg.basketId === basketId) {
+          try {
+            const active = !!(posterForce || (posterEl && posterEl.style && posterEl.style.display !== 'none'));
+            if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'poster:status', basketId, active }));
+          } catch {}
+          return;
+        }
+        if (msg.type === 'preflight:begin' && msg.basketId === basketId) {
+          try {
+            const list = Array.isArray(msg.scenarios) ? msg.scenarios : [];
+            for (const sc of list) { try { runPreflightAnswer(msg.requestId, sc); } catch {} }
+          } catch {}
+          return;
         }
         if (msg.type === 'rtc:offer') {
           // A fresh offer is available; force-reset and (re)start RTC to fetch it
@@ -565,7 +893,8 @@ if (msg.type === 'session:ended' && msg.basketId === basketId) {
           setTimeout(() => { try { startRTC(); } catch {} }, 150);
           return;
         }
-        if (!peersConnected) return; // ignore UI mirroring when not connected
+        // Allow UI mirroring regardless of RTC media connection; rely on WS
+        // (do not return early here)
         if (msg.type === 'ui:selectCategory') {
           const name = String(msg.name||'');
           if (!name) return;
@@ -575,7 +904,22 @@ if (msg.type === 'session:ended' && msg.basketId === basketId) {
           updateBillFromBasket(msg.basket || { items: [], total: 0, version: 0 });
         } else if (msg.type === 'ui:showOptions') {
           const p = msg.product||{}; const opts = msg.options||{}; const sel = msg.selection||{};
-          showOptionsUI(true, p, opts, sel);
+          if (Array.isArray(msg.groups) && msg.groups.length) { showProductPopupWithOptions(p, msg.groups); }
+          else {
+            // Fallback: fetch modifiers locally
+            try {
+              const groups = await fetchProductModifiers(p);
+              if (Array.isArray(groups) && groups.length) { showProductPopupWithOptions(p, groups); }
+              else { showOptionsUI(true, p, opts, sel); }
+            } catch { showOptionsUI(true, p, opts, sel); }
+          }
+        } else if (msg.type === 'ui:showPreview') {
+          const p = msg.product||{}; showProductPreviewUIDisplay(p);
+          // Attempt to auto-upgrade to options if modifiers exist
+          try {
+            const groups = await fetchProductModifiers(p);
+            if (Array.isArray(groups) && groups.length) { showProductPopupWithOptions(p, groups); }
+          } catch {}
         } else if (msg.type === 'ui:optionsUpdate') {
           updateOptionsSelection(msg.selection||{});
         } else if (msg.type === 'ui:optionsClose') {
@@ -590,6 +934,8 @@ if (msg.type === 'session:ended' && msg.basketId === basketId) {
       } catch {}
     });
 ws.addEventListener('close', () => {
+      try { updateIdleState(); } catch {}
+      peersConnected = false; try { renderLiveFlag(); } catch {}
       const pill = document.getElementById('linkPill');
       const label = document.getElementById('linkStatus');
       const dot = pill ? pill.querySelector('.dot') : null;
@@ -620,10 +966,10 @@ function addToBill(p) {
 
 function setupPresenceHeartbeat(){
   const token = localStorage.getItem('DEVICE_TOKEN_DISPLAY') || localStorage.getItem('DEVICE_TOKEN') || '';
-  if (!token) return; // not activated yet
   setInterval(async () => {
     try {
-      const headers = { 'content-type':'application/json', 'x-device-token': token };
+      const headers = { 'content-type':'application/json' };
+      if (token) headers['x-device-token'] = token;
       if (tenant) headers['x-tenant-id'] = tenant;
       const name = localStorage.getItem('DEVICE_NAME_DISPLAY') || localStorage.getItem('DEVICE_NAME') || 'Drive‑Thru';
       const branch = localStorage.getItem('DEVICE_BRANCH') || '';
@@ -633,14 +979,11 @@ function setupPresenceHeartbeat(){
 }
 
 function onProductTileClick(p, btn){
-  if (selProductId === p.id) {
-    clearSelection();
-    addToBill(p);
-  } else {
-    selProductId = p.id;
-    applySelection();
-    try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:selectProduct', basketId, productId: p.id })); } catch {}
-  }
+  try { updateIdleState(); } catch {}
+  // New behavior: open overlay immediately and mirror preview to cashier
+  clearSelection();
+  try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showPreview', basketId, product: p })); } catch {}
+  onDisplayProductClick(p);
 }
 
 function updateBillFromBasket(basket) {
@@ -667,31 +1010,240 @@ function showOptionsUI(readOnly, p, opts, sel){
   function render(){
     const grp = [];
     if (opts.size && opts.size.length){
-      grp.push(`<fieldset><legend>Size</legend>${opts.size.map(o=>`<label style="display:block;margin:4px 0;"><input type=radio name=opt_size value="${o.id}" ${sel.sizeId===o.id?'checked':''} disabled> ${o.label}${o.delta?` (+${fmt(o.delta)} KWD)`:''}</label>`).join('')}</fieldset>`);
+      const items = opts.size.map(o => renderOptionButton({ id:o.id, name:o.label, delta:o.delta }, sel.sizeId===o.id)).join('');
+      grp.push(`<fieldset><legend>Size</legend><div class=\"optrow\">${items}</div></fieldset>`);
     }
     if (opts.milk && opts.milk.length){
-      grp.push(`<fieldset><legend>Milk</legend>${opts.milk.map(o=>`<label style="display:block;margin:4px 0;"><input type=radio name=opt_milk value="${o.id}" ${sel.milkId===o.id?'checked':''} disabled> ${o.label}${o.delta?` (+${fmt(o.delta)} KWD)`:''}</label>`).join('')}</fieldset>`);
+      const items = opts.milk.map(o => renderOptionButton({ id:o.id, name:o.label, delta:o.delta }, sel.milkId===o.id)).join('');
+      grp.push(`<fieldset><legend>Milk</legend><div class=\"optrow\">${items}</div></fieldset>`);
     }
     body.innerHTML = grp.join('');
+    applyOptionButtonStyles(body);
+    if (!readOnly){
+      body.querySelectorAll('fieldset').forEach(fs => {
+        const legend = (fs.querySelector('legend')||{}).textContent||'';
+        const isSize = /size/i.test(legend);
+        const isMilk = /milk/i.test(legend);
+        fs.querySelectorAll('button.optbtn').forEach(btn => {
+          btn.addEventListener('click', ()=>{
+            const id = btn.getAttribute('data-opt');
+            if (isSize) sel.sizeId = id; else if (isMilk) sel.milkId = id;
+            // Toggle selected state within group (single-select)
+            fs.querySelectorAll('button.optbtn').forEach(b => b.classList.toggle('selected', b===btn));
+            applyOptionButtonStyles(fs);
+            try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection: sel })); } catch {}
+          });
+        });
+      });
+    }
   }
   render();
   modal.style.display = 'flex';
 }
 function updateOptionsSelection(sel){
   const body = document.getElementById('optBody'); if (!body || document.getElementById('optionsModal').style.display==='none') return;
-  const sizeEl = body.querySelector(`input[name=opt_size][value="${sel.sizeId}"]`);
-  const milkEl = body.querySelector(`input[name=opt_milk][value="${sel.milkId}"]`);
-  if (sizeEl) sizeEl.checked = true; if (milkEl) milkEl.checked = true;
+  try {
+    const sizeFs = Array.from(body.querySelectorAll('fieldset')).find(fs => /size/i.test((fs.querySelector('legend')||{}).textContent||''));
+    if (sizeFs) {
+      sizeFs.querySelectorAll('button.optbtn').forEach(b => b.classList.toggle('selected', b.getAttribute('data-opt')===String(sel.sizeId||'')));
+      applyOptionButtonStyles(sizeFs);
+    }
+    const milkFs = Array.from(body.querySelectorAll('fieldset')).find(fs => /milk/i.test((fs.querySelector('legend')||{}).textContent||''));
+    if (milkFs) {
+      milkFs.querySelectorAll('button.optbtn').forEach(b => b.classList.toggle('selected', b.getAttribute('data-opt')===String(sel.milkId||'')));
+      applyOptionButtonStyles(milkFs);
+    }
+  } catch {}
 }
-function hideOptionsUI(){ const m = document.getElementById('optionsModal'); if (m) m.style.display='none'; }
+function hideOptionsUI(){ const m = document.getElementById('optionsModal'); if (m) m.style.display='none'; try { const card=document.getElementById('optionsCard'); if (card) card.classList.remove('compact'); } catch {} }
+
+// Fetch real modifiers for display page
+async function fetchProductModifiers(p){
+  try {
+    const headers = { 'accept':'application/json' };
+    try { if (tenant) headers['x-tenant-id'] = tenant; } catch {}
+    const r = await fetch(`/products/${encodeURIComponent(p.id)}/modifiers`, { cache: 'no-store', headers });
+    const j = await r.json();
+    const items = Array.isArray(j?.items) ? j.items : [];
+    const groups = items
+      .map(it => ({ id: it.group?.group_id, name: it.group?.name, required: !!it.group?.required, min: (it.group?.min_select ?? 0), max: (it.group?.max_select ?? 0), options: (it.options||[]).map(o => ({ id:o.id, name:o.name, delta:Number(o.price)||0 })) }))
+      .filter(g => g.id && (g.options||[]).length);
+    return groups;
+  } catch { return []; }
+}
+
+// Interactive options UI (buttons) for both simple options and real modifier groups
+function renderOptionButton(o, selected){
+  const extra = o.delta ? ` (+${fmt(o.delta)} KWD)` : '';
+  const cls = 'optbtn' + (selected ? ' selected' : '');
+  return `<button type=\"button\" class=\"${cls}\" data-opt=\"${String(o.id)}\">${o.name || o.label || ''}${extra}</button>`;
+}
+function applyOptionButtonStyles(scope){
+  try {
+    const root = scope || document;
+    root.querySelectorAll('.optbtn').forEach(btn => {
+      btn.style.display = 'inline-block';
+      btn.style.margin = '4px';
+      btn.style.padding = '10px 12px';
+      btn.style.border = '1px solid #e5e7eb';
+      btn.style.borderRadius = '10px';
+      btn.style.background = btn.classList.contains('selected') ? '#0b1220' : '#fff';
+      btn.style.color = btn.classList.contains('selected') ? '#fff' : '#111827';
+      btn.style.cursor = 'pointer';
+      btn.style.minWidth = '84px';
+    });
+  } catch {}
+}
+
+function showProductPreviewUIDisplay(p){
+  const modal = document.getElementById('optionsModal');
+  const body = document.getElementById('optBody');
+  const title = document.getElementById('optTitle');
+  const btnCancel = document.getElementById('optCancel');
+  const btnConfirm = document.getElementById('optConfirm');
+  const btnsRow = document.getElementById('optBtnsRow');
+  const card = document.getElementById('optionsCard');
+  if (!modal||!body||!title||!btnCancel||!btnConfirm||!btnsRow) return;
+  title.textContent = 'Add Item';
+  try { if (card) card.classList.add('compact'); } catch {}
+  const ar = (p.name_localized && String(p.name_localized).trim()) ? String(p.name_localized).trim() : '';
+  const imgUrl = imageDisplaySrcForUrl(p.image_url) || '/images/products/placeholder.jpg';
+  const price = fmt(p.price) + ' KWD';
+  body.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+      <img class="product-img" src="${imgUrl}" alt="${p.name}"/>
+      <div class="names" style="text-align:center; width:100%;">
+        <div class="name-ar" style="font-family: 'Almarai', Inter, system-ui; font-weight:700; font-size:1.1em; direction:rtl;">${ar||'\u00A0'}</div>
+        <div class="name-en" style="font-family: 'Almarai', Inter, system-ui; font-weight:600;">${p.name}</div>
+        <div class="price" style="margin-top:6px; color:#6b7280; font-weight:700;">${price}</div>
+      </div>
+    </div>
+  `;
+  try { const el = body.querySelector('img.product-img'); if (el) attachImageFallback(el, p.image_url); } catch {}
+  // Buttons full-width equal columns
+  btnsRow.style.display = 'flex';
+  btnsRow.style.gap = '12px';
+  btnConfirm.style.flex = '1';
+  btnCancel.style.flex = '1';
+
+  btnCancel.style.display = '';
+  btnConfirm.style.display = '';
+  btnCancel.disabled = false; btnConfirm.disabled = false;
+  btnCancel.textContent = 'Close';
+  btnConfirm.textContent = 'Add';
+  btnCancel.onclick = () => { hideOptionsUI(); };
+  btnConfirm.onclick = async () => {
+    try {
+      const groups = await fetchProductModifiers(p);
+      if (Array.isArray(groups) && groups.length) {
+        // Drive: open full interactive modifiers UI and mirror to cashier
+        showProductPopupWithOptions(p, groups);
+        try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups })); } catch {}
+      } else {
+        // Fallback to simple options if defined
+        const opts = { };
+        // No dynamic simple opts for drive yet; add directly
+        addToBill(p);
+        hideOptionsUI();
+      }
+    } catch {
+      addToBill(p);
+      hideOptionsUI();
+    }
+  };
+  modal.style.display = 'flex';
+}
+
+async function onDisplayProductClick(p){
+  // Show preview locally and remotely; then, if modifiers exist, open options and mirror to cashier
+  try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showPreview', basketId, product: p })); } catch {}
+  showProductPreviewUIDisplay(p);
+  try {
+    const groups = await fetchProductModifiers(p);
+    if (Array.isArray(groups) && groups.length) {
+      showProductPopupWithOptions(p, groups);
+      try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups })); } catch {}
+    }
+  } catch {}
+}
+
+// Detailed ICE config helper
+async function getIceConfigDetailed(){
+  try { const r = await fetch('/webrtc/config', { cache:'no-store' }); return await r.json(); } catch { return { iceServers:[{ urls: ['stun:stun.l.google.com:19302'] }] }; }
+}
+
+async function runPreflightAnswer(requestId, scenario){
+  try {
+    const pairId = `pf_${requestId}_${scenario.id}`;
+    const cfg = await getIceConfigDetailed();
+    let iceServers = cfg.iceServers || [];
+    let iceTransportPolicy = scenario.policy || 'all';
+    if (scenario.provider === 'twilio' && Array.isArray(cfg.twilioServers) && cfg.twilioServers.length) iceServers = cfg.twilioServers;
+    else if (scenario.provider === 'self' && Array.isArray(cfg.selfServers) && cfg.selfServers.length) iceServers = [...cfg.selfServers, { urls:['stun:stun.l.google.com:19302'] }];
+
+    const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy });
+    pc.ondatachannel = (ev) => {
+      try {
+        const dc = ev.channel;
+        dc.onmessage = (m) => {
+          try { const mm = JSON.parse(m.data); if (mm && mm.type==='pf-ping') { dc.send(JSON.stringify({ type:'pf-pong', t: mm.t })); } } catch {}
+        };
+      } catch {}
+    };
+    pc.onicecandidate = async (ev) => {
+      if (!ev.candidate) return;
+      try { await fetch('/webrtc/candidate', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId, role:'display', candidate: ev.candidate }) }); } catch {}
+    };
+
+    const deadline = Date.now() + (scenario.timeoutMs || 2500);
+    // poll for offer
+    let offered = false;
+    while (Date.now() < deadline && !offered) {
+      try {
+        const r = await fetch(`/webrtc/offer?pairId=${encodeURIComponent(pairId)}`);
+        const j = await r.json();
+        if (j && j.sdp) {
+          await pc.setRemoteDescription({ type:'offer', sdp: j.sdp });
+          offered = true; break;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 150));
+    }
+    if (!offered) { try { pc.close(); } catch {}; return; }
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await fetch('/webrtc/answer', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pairId, sdp: answer.sdp }) });
+
+    // short candidate poll loop
+    const candTimer = setInterval(async () => {
+      try {
+        const r = await fetch(`/webrtc/candidates?pairId=${encodeURIComponent(pairId)}&role=display`);
+        const j = await r.json();
+        const items = Array.isArray(j.items)?j.items:[];
+        for (const c of items) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} }
+      } catch {}
+    }, 180);
+
+    setTimeout(() => { try { clearInterval(candTimer); } catch {}; try { pc.close(); } catch {}; fetch(`/webrtc/session/${encodeURIComponent(pairId)}?reason=preflight`, { method:'DELETE' }).catch(()=>{}); }, (scenario.timeoutMs||2500));
+  } catch {}
+}
 
 async function initRTC(localStream){
   try {
     clearRtcTimers();
-    const ice = await getIceServers();
-    const params = new URLSearchParams(location.search);
-    const icePolicy = params.get('ice') === 'relay' ? 'relay' : 'all';
-    const pc = new RTCPeerConnection({ iceServers: ice, iceTransportPolicy: icePolicy });
+    const cfg = await getIceConfigDetailed();
+    let iceServers = cfg.iceServers || [];
+    let icePolicy = 'all';
+    try {
+      const apply = window.applyRtcConfig || null; // { provider, policy }
+      if (apply && apply.policy) icePolicy = apply.policy;
+      if (apply && apply.provider === 'twilio' && Array.isArray(cfg.twilioServers) && cfg.twilioServers.length) {
+        iceServers = cfg.twilioServers;
+      } else if (apply && apply.provider === 'self' && Array.isArray(cfg.selfServers) && cfg.selfServers.length) {
+        iceServers = [...cfg.selfServers, { urls: ['stun:stun.l.google.com:19302'] }];
+      }
+    } catch {}
+    const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: icePolicy });
     window.__pcDisplay = pc;
     const pendingRemote = [];
     const addRemoteCandidate = async (cand) => {
@@ -704,19 +1256,26 @@ async function initRTC(localStream){
     };
 console.log('RTC(display) init', { pairId: basketId, icePolicy, servers: Array.isArray(ice) ? ice.length : 0 });
     if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    try { tuneQoS(pc); } catch {}
     const remoteStream = new MediaStream();
     if (remoteEl) { remoteEl.srcObject = remoteStream; remoteEl.play && remoteEl.play().catch(()=>{}); }
-    pc.ontrack = (ev) => { ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
+    pc.ontrack = (ev) => {
+      ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr));
+      // As soon as any remote track arrives, hide the poster immediately (unless forced)
+      try { if (!posterForce) { setPosterVisible(false); setPosterNotice('', false); } } catch {}
+    };
 pc.addEventListener('iceconnectionstatechange', () => {
+      try { updateIdleState(); } catch {}
       console.log('RTC(display) iceConnectionState:', pc.iceConnectionState);
       const isConnected = (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed');
       if (isConnected) { cancelPosterResume();
         rtcBackoff = 1000;
-        // Don't hide poster purely on connection; rely on media health
+        // Hide poster early on successful ICE connection
+        try { if (!posterForce) { setPosterVisible(false); setPosterNotice('', false); } } catch {}
         setLinkStatusLabel();
         updatePosterFromHealth();
         statusFreezeUntil = Date.now() + 2000;
-      } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'new' || pc.iceConnectionState === 'checking') {
+      } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
         // Show poster when not connected
         audioInHealthy = audioOutHealthy = videoInHealthy = videoOutHealthy = false;
         setPosterVisible(true);
@@ -725,13 +1284,16 @@ pc.addEventListener('iceconnectionstatechange', () => {
       }
     });
 pc.addEventListener('connectionstatechange', () => {
+      try { updateIdleState(); } catch {}
       console.log('RTC(display) connectionState:', pc.connectionState);
       if (pc.connectionState === 'connected') { cancelPosterResume();
         rtcBackoff = 1000;
+        // Hide poster early on successful connection
+        try { if (!posterForce) { setPosterVisible(false); setPosterNotice('', false); } } catch {}
         setLinkStatusLabel();
         updatePosterFromHealth();
         statusFreezeUntil = Date.now() + 2000;
-      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'connecting' || pc.connectionState === 'new') {
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         audioInHealthy = audioOutHealthy = videoInHealthy = videoOutHealthy = false;
         setPosterVisible(true);
         if (Date.now() >= statusFreezeUntil) setLinkStatusLabel();
@@ -749,6 +1311,30 @@ await fetch('/webrtc/candidate', { method:'POST', headers:{'content-type':'appli
       }
     };
     beginRtcStats(pc);
+
+    // QoS tuning: prioritize audio, enable simulcast
+    function tuneQoS(pc){
+      try {
+        const senders = pc.getSenders ? pc.getSenders() : [];
+        for (const s of senders){
+          const p = s.getParameters ? s.getParameters() : null; if (!p) continue;
+          if (s.track && s.track.kind === 'audio'){
+            p.encodings = p.encodings && p.encodings.length ? p.encodings : [{}];
+            p.encodings[0].maxBitrate = 64000;
+            p.degradationPreference = 'maintain-framerate';
+            try { s.setParameters(p); } catch {}
+          }
+          if (s.track && s.track.kind === 'video'){
+            p.encodings = p.encodings && p.encodings.length ? p.encodings : [{},{},{}];
+            if (p.encodings[0]) p.encodings[0].maxBitrate = 250000;
+            if (p.encodings[1]) p.encodings[1].maxBitrate = 600000;
+            if (p.encodings[2]) p.encodings[2].maxBitrate = 1200000;
+            p.degradationPreference = 'balanced';
+            try { s.setParameters(p); } catch {}
+          }
+        }
+      } catch {}
+    }
     // Wait/poll for offer, then answer
 const pollOfferTimer = setInterval(async () => {
       try {
@@ -801,6 +1387,107 @@ const candidatesInterval = setInterval(async () => {
   } catch (e) { console.warn('RTC init failed', e); }
 }
 
+// Full modifiers popup (interactive) with button options
+function showProductPopupWithOptions(p, groups){
+  const modal = document.getElementById('optionsModal');
+  const body = document.getElementById('optBody');
+  const title = document.getElementById('optTitle');
+  const btnCancel = document.getElementById('optCancel');
+  const btnConfirm = document.getElementById('optConfirm');
+  const card = document.getElementById('optionsCard');
+  if (!modal||!body||!title||!btnCancel||!btnConfirm) return;
+  title.textContent = 'Add Item';
+  try { if (card) card.classList.add('compact'); } catch {}
+  const sel = new Map();
+  for (const g of (groups||[])) { sel.set(g.id, new Set()); if (g.required && (g.min||0)===1 && (g.max||1)===1 && g.options && g.options[0]) sel.get(g.id).add(g.options[0].id); }
+  function computePrice(){ let price = Number(p.price)||0; for (const g of groups){ const set = sel.get(g.id)||new Set(); for (const oid of set){ const opt=(g.options||[]).find(o=>String(o.id)===String(oid)); if (opt) price += Number(opt.delta)||0; } } return Math.round(price*1000)/1000; }
+  function selectionLabel(){ const parts=[]; for (const g of groups){ const set=sel.get(g.id)||new Set(); const names=(g.options||[]).filter(o=>set.has(o.id)).map(o=>o.name); if (names.length) parts.push(`${g.name}: ${names.join('/')}`); } return parts.join(', '); }
+  function render(){
+    const ar = (p.name_localized && String(p.name_localized).trim()) ? String(p.name_localized).trim() : '';
+    const img = imageDisplaySrcForUrl(p.image_url) || '/images/products/placeholder.jpg';
+    const price = computePrice();
+    function section(g){
+      const set = sel.get(g.id)||new Set();
+      const multi = (g.max||0) !== 1;
+      const items = (g.options||[]).map(o => renderOptionButton({ id:o.id, name:o.name, delta:o.delta }, set.has(o.id))).join('');
+      const note = (g.required || g.min || g.max) ? `<small class=\"muted\">${g.required?'Required. ':''}${g.min?`Min ${g.min}. `:''}${g.max?`Max ${g.max}.`:''}</small>` : '';
+      return `<fieldset data-gid=\"${g.id}\"><legend>${g.name}</legend><div class=\"optrow\">${items}</div>${note}</fieldset>`;
+    }
+    body.innerHTML = `
+      <div style=\"display:flex; flex-direction:column; gap:12px;\">\n        <img class=\"product-img\" src=\"${img}\" alt=\"${p.name}\" onerror=\"this.src='/images/products/placeholder.jpg'\"/>\n        <div class=\"names\" style=\"text-align:center; width:100%;\">\n          <div class=\"name-ar\" style=\"font-family: 'Almarai', Inter, system-ui; font-weight:700; font-size:1.1em; direction:rtl;\">${ar||'\\u00A0'}</div>\n          <div class=\"name-en\" style=\"font-family: 'Almarai', Inter, system-ui; font-weight:600;\">${p.name}</div>\n          <div class=\"price\" id=\"optPriceKwd\" style=\"margin-top:6px; color:#6b7280; font-weight:700;\">${fmt(price)} KWD</div>\n        </div>\n        ${groups.map(section).join('')}\n      </div>`;
+    applyOptionButtonStyles(body);
+    body.querySelectorAll('fieldset').forEach(fs => {
+      const gid = fs.getAttribute('data-gid');
+      const g = (groups||[]).find(x => String(x.id)===String(gid));
+      const set = sel.get(gid)||new Set();
+      const multi = (g.max||0) !== 1;
+      fs.querySelectorAll('button.optbtn').forEach(btn => {
+        btn.addEventListener('click', ()=>{
+          const oid = btn.getAttribute('data-opt');
+          if (multi){
+            if (btn.classList.contains('selected')) { set.delete(oid); btn.classList.remove('selected'); }
+            else { if (!g.max || set.size < g.max) { set.add(oid); btn.classList.add('selected'); } }
+          } else {
+            set.clear(); set.add(oid);
+            fs.querySelectorAll('button.optbtn').forEach(b => b.classList.toggle('selected', b===btn));
+          }
+          sel.set(gid, set);
+          applyOptionButtonStyles(fs);
+          try {
+            if (ws && ws.readyState===WebSocket.OPEN) {
+              const selection = {}; for (const [k,v] of sel.entries()) selection[k] = Array.from(v.values());
+              ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection }));
+            }
+          } catch {}
+          // update price
+          try { const pk = document.getElementById('optPriceKwd'); if (pk) pk.textContent = `${fmt(computePrice())} KWD`; } catch {}
+        });
+      });
+    });
+  }
+  render();
+  btnCancel.style.display = '';
+  btnConfirm.style.display = '';
+  btnCancel.onclick = () => { hideOptionsUI(); try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
+  btnConfirm.onclick = () => {
+    // validate required
+    for (const g of (groups||[])){
+      const set = sel.get(g.id)||new Set();
+      if (g.required && set.size === 0) { alert(`Please choose for ${g.name}`); return; }
+      if (g.min && set.size < g.min) { alert(`${g.name}: choose at least ${g.min}`); return; }
+      if (g.max && set.size > g.max) { alert(`${g.name}: choose up to ${g.max}`); return; }
+    }
+    const parts=[]; for (const g of (groups||[])) { const set = Array.from(sel.get(g.id)||[]); if (set.length) parts.push(`${g.id}:${set.join('+')}`); }
+    const variantKey = `${p.id}#mods=${encodeURIComponent(parts.join(','))}`;
+    addToBill({ ...p, id: p.id, price: computePrice() });
+    hideOptionsUI();
+    try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
+  };
+  modal.style.display = 'flex';
+}
+
+// Prefetch product images into Cache Storage for offline resilience
+async function prefetchImages(list){
+  try {
+    if (!('caches' in window)) return;
+    const cache = await caches.open('ot-drive-v1');
+    const urls = Array.from(new Set((list||[])
+      .map(p => imageDisplaySrcForUrl(p.image_url))
+      .filter(u => typeof u === 'string' && !!u)));
+    let idx = 0;
+    const limit = 6;
+    async function worker(){
+      while (idx < urls.length){
+        const i = idx++;
+        const u = urls[i];
+        try { const hit = await cache.match(u); if (!hit) await cache.add(u); } catch {}
+      }
+    }
+    const runners = Array.from({ length: limit }, () => worker());
+    await Promise.all(runners);
+  } catch {}
+}
+
 async function getIceServers(){
   if (window.__ICE_SERVERS) return window.__ICE_SERVERS;
   try {
@@ -814,12 +1501,3 @@ const r = await fetch('/webrtc/config', { cache: 'no-store' });
   }
 }
 
-function computePopular(all) {
-  const withPhotos = (all || []).filter(p => p.image_url);
-  const shuffled = withPhotos.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled.slice(0, 12);
-}

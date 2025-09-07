@@ -1,0 +1,55 @@
+name: Deploy on kiosk feed changes
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'kiosk/win/**'
+      - '.github/workflows/deploy-on-kiosk-feed.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & Deploy Cloud Run
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      CLOUD_RUN_SERVICE: ordertech
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Configure gcloud
+        run: |
+          gcloud config set project "$GCP_PROJECT"
+          gcloud config set run/region "$GCP_REGION"
+
+      - name: Build & push image
+        run: |
+          TAG="gcr.io/${GCP_PROJECT}/${CLOUD_RUN_SERVICE}:kiosk-feed-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          gcloud builds submit --tag "$TAG"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --image "$TAG" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT" \
+            --allow-unauthenticated
+
+      - name: Health check
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}\n" https://app.ordertech.me/health)
+          if [ "$code" != "200" ]; then
+            echo "Health check failed: $code"; exit 1; fi

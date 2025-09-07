@@ -4,6 +4,13 @@
 -- Ensure required extension
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Ensure base tenants table exists (idempotent for fresh DBs)
+CREATE TABLE IF NOT EXISTS tenants (
+  id uuid PRIMARY KEY,
+  name text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- Users table (platform users)
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

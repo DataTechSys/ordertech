@@ -32,6 +32,7 @@
               </select>
             </label>
             <span class="spacer"></span>
+            <button id="addDeviceBtn" class="btn">Add Device</button>
             <div class="btn-group">
               <button id="devPrev" class="btn">Prev</button>
               <button id="devNext" class="btn">Next</button>
@@ -70,6 +71,42 @@
         <div class="footer">
           <span class="spacer"></span>
           <button id="eventsModalClose2" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="addDeviceModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addDeviceModalTitle">
+        <div class="header">
+          <div class="title" id="addDeviceModalTitle">Add Device</div>
+          <button id="addDeviceModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid"><span class="label">6-digit Code</span>
+              <input id="devCode" class="input" placeholder="123456" />
+            </label>
+            <label class="grid"><span class="label">Role</span>
+              <select id="devRole" class="select">
+                <option value="cashier">Cashier</option>
+                <option value="display">Display</option>
+              </select>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Name</span>
+              <input id="devName" class="input" placeholder="Front Counter iPad" />
+            </label>
+            <label class="grid"><span class="label">Branch</span>
+              <select id="devBranch" class="select"></select>
+              <small id="devBranchHelp" class="muted" style="display:none;">Create a branch first in Organization → Branches</small>
+            </label>
+          </div>
+        </div>
+        <div class="footer">
+          <span class="spacer"></span>
+          <button id="addDeviceModalCancel" class="btn">Cancel</button>
+          <button id="addDeviceModalSave" class="btn primary">Save</button>
         </div>
       </div>
     </div>

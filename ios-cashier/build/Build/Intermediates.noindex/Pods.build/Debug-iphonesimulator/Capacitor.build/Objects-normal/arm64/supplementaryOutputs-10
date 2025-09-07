@@ -1,0 +1,24 @@
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/WKWebView+Capacitor.swift":
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WKWebView+Capacitor-af9b9c5c66beaf11ebd8ea523847846f.d"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WKWebView+Capacitor-af9b9c5c66beaf11ebd8ea523847846f.o"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WKWebView+Capacitor-af9b9c5c66beaf11ebd8ea523847846f.swiftdeps"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WKWebView+Capacitor-af9b9c5c66beaf11ebd8ea523847846f.swiftconstvalues"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WKWebView+Capacitor-af9b9c5c66beaf11ebd8ea523847846f.dia"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/Plugins/WebView.swift":
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebView.swiftdeps"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebView.o"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebView.dia"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebView.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebView.d"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/WebViewAssetHandler.swift":
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewAssetHandler.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewAssetHandler.dia"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewAssetHandler.d"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewAssetHandler.o"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewAssetHandler.swiftconstvalues"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/WebViewDelegationHandler.swift":
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewDelegationHandler.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewDelegationHandler.dia"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewDelegationHandler.swiftconstvalues"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewDelegationHandler.o"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/WebViewDelegationHandler.d"

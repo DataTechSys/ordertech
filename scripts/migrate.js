@@ -64,6 +64,20 @@ async function main(){
       )
     `);
 
+    // Preflight: ensure required extension and base tables exist for early foreign keys
+    await c.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+    await c.query(`
+      CREATE TABLE IF NOT EXISTS tenants (
+        id uuid PRIMARY KEY,
+        name text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+
+    // Commit preflight separately to guarantee visibility to subsequent migration statements
+    await c.query('COMMIT');
+    await c.query('BEGIN');
+
     const dir = path.join(process.cwd(), 'migrations');
     if (!fs.existsSync(dir)) {
       console.log('No migrations directory, nothing to do.');

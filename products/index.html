@@ -25,6 +25,13 @@
       /* Section boxes */
       #productModal .box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 12px 0; background: #fff; }
       #productModal .box .box-title { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; color: var(--subtle, #6b7280); margin-bottom: 8px; }
+      #productModal .box .box-title-row { display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; }
+      /* Compact table for controls */
+      #productModal .grid-table.compact { width: 100%; border-collapse: collapse; }
+      #productModal .grid-table.compact th, #productModal .grid-table.compact td { border: 1px solid var(--divider, #eef2f7); }
+      #productModal .grid-table.compact td { padding: 6px; vertical-align: top; }
+      #productModal .grid-table.compact .label { font-size: 11px; color: var(--subtle, #6b7280); }
+      #productModal .grid-table.compact .input.sm, #productModal .grid-table.compact .select.sm { padding: 4px 8px; min-height: 28px; font-size: 13px; }
     </style>
     <script src="/config.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -103,6 +110,15 @@
               <small class="muted">If a product’s category name/reference is not found, use this category. If blank, a category named “Unassigned” will be created.</small>
             </label>
           </div>
+          <div class="row">
+            <label class="grid"><span class="label">Image source</span>
+              <div class="grid" style="gap:6px;">
+                <label class="checkbox-row" style="gap:8px"><input type="radio" name="prodImportImageSource" value="pos" checked /> <span>Use POS image (CSV URL)</span></label>
+                <label class="checkbox-row" style="gap:8px"><input type="radio" name="prodImportImageSource" value="local" /> <span>Use Local image</span></label>
+              </div>
+              <small class="muted">If Local is selected, new products will use a placeholder image by default.</small>
+            </label>
+          </div>
           <div class="stack" style="gap:8px;">
             <div class="muted">Preview (first 20 rows)</div>
             <div id="prodImportPreview"></div>
@@ -126,7 +142,12 @@
         </div>
         <div class="content">
           <div class="box">
-            <div class="box-title">Master</div>
+            <div class="box-title-row">
+              <div class="box-title">Master</div>
+              <label class="switch-row"><span class="label">Active</span>
+                <input id="prodFormActive" type="checkbox" class="switch"/>
+              </label>
+            </div>
           <div class="row cols-2">
             <label class="grid">
               <span class="label">Name (EN)</span>
@@ -137,42 +158,66 @@
               <input id="prodFormNameLocalized" class="input"/>
             </label>
           </div>
-          <div class="row cols-2">
-            <label class="grid">
-              <span class="label">Category</span>
-              <select id="prodFormCategory" class="select"></select>
-            </label>
-            <label class="grid">
-              <span class="label">Price (KWD)</span>
-              <input id="prodFormPrice" type="number" step="0.001" min="0" class="input"/>
-              <small class="muted">Enter price in Kuwaiti Dinar</small>
-            </label>
-          </div>
-          <div class="row cols-2">
-            <label class="grid">
-              <span class="label">SKU</span>
-              <input id="prodFormSku" class="input" placeholder="Unique SKU (defaults to generated)"/>
-              <small class="muted">Optional — auto-generated if left blank</small>
-            </label>
-            <label class="grid">
-              <span class="label">Barcode</span>
-              <input id="prodFormBarcode" class="input"/>
-            </label>
-          </div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Cost (KWD)</span>
-              <input id="prodFormCost" type="number" step="0.001" min="0" class="input"/>
-            </label>
-            <div></div>
-          </div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Tax Group Ref</span>
-              <input id="prodFormTax" class="input"/>
-            </label>
-            <label class="switch-row"><span class="label">Active</span>
-              <input id="prodFormActive" type="checkbox" class="switch"/>
-            </label>
-          </div>
+          <table class="grid-table compact">
+            <tr>
+              <td>
+                <span class="label">Category</span>
+                <select id="prodFormCategory" class="select sm"></select>
+              </td>
+              <td>
+                <span class="label">Price (KWD)</span>
+                <input id="prodFormPrice" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+              <td>
+                <span class="label">Cost (KWD)</span>
+                <input id="prodFormCost" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+              <td>
+                <span class="label">Tax Group Ref</span>
+                <input id="prodFormTax" class="input sm"/>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span class="label">SKU</span>
+                <input id="prodFormSku" class="input sm" placeholder="Unique SKU (defaults to generated)"/>
+              </td>
+              <td>
+                <span class="label">Barcode</span>
+                <input id="prodFormBarcode" class="input sm"/>
+              </td>
+              <td>
+                <span class="label">Packaging Fee (KWD)</span>
+                <input id="prodFormPackagingFee" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+              <td>
+                <span class="label">Prep Time (min)</span>
+                <input id="prodFormPrepTime" type="number" step="1" min="0" class="input sm"/>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span class="label">Spice Level</span>
+                <select id="prodFormSpiceLevel" class="select sm">
+                  <option value="">(none)</option>
+                  <option value="none">None</option>
+                  <option value="mild">Mild</option>
+                  <option value="medium">Medium</option>
+                  <option value="hot">Hot</option>
+                  <option value="extra_hot">Extra Hot</option>
+                </select>
+              </td>
+              <td>
+                <span class="label">—</span>
+              </td>
+              <td>
+                <span class="label">—</span>
+              </td>
+              <td>
+                <span class="label">—</span>
+              </td>
+            </tr>
+          </table>
 
           <!-- Descriptions -->
           <div class="muted" style="font-weight:600; text-transform:uppercase; font-size:12px; letter-spacing:.02em; margin:12px 0 6px;">Descriptions</div>
@@ -188,40 +233,64 @@
           </div>
           <div class="box">
             <div class="box-title">Media</div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Image (URL)</span>
-              <div class="flex" style="gap:8px; align-items:center;">
-                <input id="prodFormImageUrl" class="input" placeholder="https://..." />
-                <input id="prodFormImageFile" type="file" accept="image/*" style="display:none" />
-                <button id="prodFormImageUpload" class="btn">Upload</button>
-              </div>
-              <small class="muted">Paste a URL or upload to store and reference automatically</small>
-            </label>
-            <div>
-              <span class="label">Preview</span>
-              <img id="prodPreview" class="thumb-md" alt="Preview"/>
-            </div>
-          </div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Image — White BG (URL)</span>
-              <input id="prodFormImageWhite" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Image — Beauty (URL)</span>
-              <input id="prodFormImageBeauty" class="input"/>
-            </label>
-          </div>
-          <div class="row">
-            <label class="grid"><span class="label">Additional Images (URLs)</span>
-              <div id="prodFormExtraImages" class="grid">
-                <div id="prodFormExtraImagesTags" class="tags"></div>
-                <div class="flex" style="gap:8px; align-items:center;">
-                  <input id="prodFormExtraImagesInput" class="input" placeholder="Paste URL and click Add"/>
-                  <button id="prodFormExtraImagesAdd" class="btn">Add</button>
+            <style>
+              #productModal .media-trio { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+              #productModal .media-card { border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+              #productModal .media-card .title { font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--subtle, #6b7280); }
+              #productModal .media-card .preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; background: var(--chip, #f1f5f9); border: 1px solid var(--border, #e5e7eb); border-radius: 10px; overflow: hidden; }
+              #productModal .media-card .preview img, #productModal .media-card .preview video { width: 100%; height: 100%; object-fit: cover; }
+            </style>
+            <div class="media-trio">
+              <div class="media-card">
+                <div class="title">Menu</div>
+                <div class="preview"><img id="prodMenuPreview" alt="Menu"/></div>
+                <div class="flex center">
+                  <input id="prodMenuFile" type="file" accept="image/*" style="display:none" />
+                  <button id="prodMenuUpload" class="btn">Upload</button>
+                  <input id="prodMenuCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
+                  <button id="prodMenuFromCsv" class="btn ghost">From CSV</button>
                 </div>
-                <small class="muted">Use complete URLs (https://...). Add multiple images as needed.</small>
               </div>
-            </label>
-          </div>
+              <div class="media-card">
+                <div class="title">Beauty</div>
+                <div class="preview"><img id="prodBeautyPreview" alt="Beauty"/></div>
+                <div class="flex center">
+                  <input id="prodBeautyFile" type="file" accept="image/*" style="display:none" />
+                  <button id="prodBeautyUpload" class="btn">Upload</button>
+                  <input id="prodBeautyCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
+                  <button id="prodBeautyFromCsv" class="btn ghost">From CSV</button>
+                </div>
+              </div>
+              <div class="media-card">
+                <div class="title">Video</div>
+                <div class="preview">
+                  <video id="prodVideoPreview" controls playsinline preload="metadata" poster="/placeholder.jpg"></video>
+                </div>
+                <div class="flex center">
+                  <input id="prodVideoFile" type="file" accept="video/*" style="display:none" />
+                  <button id="prodVideoUpload" class="btn">Upload</button>
+                </div>
+                <small class="muted">Recommended ≤ 20 MB, up to ~10 seconds.</small>
+              </div>
+            </div>
+            <!-- Hidden fields for persistence -->
+            <input id="prodFormImageUrl" type="hidden" />
+            <input id="prodFormImageBeauty" type="hidden" />
+            <input id="prodFormImageWhite" type="hidden" />
+            <input id="prodFormVideoUrl" type="hidden" />
+
+            <div class="row">
+              <label class="grid"><span class="label">Additional Images (URLs)</span>
+                <div id="prodFormExtraImages" class="grid">
+                  <div id="prodFormExtraImagesTags" class="tags"></div>
+                  <div class="flex" style="gap:8px; align-items:center;">
+                    <input id="prodFormExtraImagesInput" class="input" placeholder="Paste URL and click Add"/>
+                    <button id="prodFormExtraImagesAdd" class="btn">Add</button>
+                  </div>
+                  <small class="muted">Use complete URLs (https://...). Add multiple images as needed.</small>
+                </div>
+              </label>
+            </div>
 
           </div>
           <div class="box">
@@ -247,62 +316,43 @@
           </div>
           <div class="box">
             <div class="box-title">Nutrition</div>
-          <div class="row cols-3">
-            <label class="grid"><span class="label">Calories</span>
-              <input id="prodFormCalories" type="number" step="1" min="0" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Fat (g)</span>
-              <input id="prodFormFat" type="number" step="0.001" min="0" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Carbs (g)</span>
-              <input id="prodFormCarbs" type="number" step="0.001" min="0" class="input"/>
-            </label>
-          </div>
-          <div class="row cols-3">
-            <label class="grid"><span class="label">Protein (g)</span>
-              <input id="prodFormProtein" type="number" step="0.001" min="0" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Sugar (g)</span>
-              <input id="prodFormSugar" type="number" step="0.001" min="0" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Sodium (mg)</span>
-              <input id="prodFormSodium" type="number" step="1" min="0" class="input"/>
-            </label>
-          </div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Salt (g)</span>
-              <input id="prodFormSalt" type="number" step="0.001" min="0" class="input" placeholder="auto" />
-              <small class="muted">Auto-calculated from sodium unless overridden</small>
-            </label>
-            <label class="grid"><span class="label">Packaging Fee (KWD)</span>
-              <input id="prodFormPackagingFee" type="number" step="0.001" min="0" class="input"/>
-            </label>
-          </div>
-          <div class="row cols-3">
-            <label class="grid"><span class="label">Prep Time (min)</span>
-              <input id="prodFormPrepTime" type="number" step="1" min="0" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Walk Minutes</span>
-              <input id="prodFormWalkMins" type="number" step="1" min="0" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Spice Level</span>
-              <select id="prodFormSpiceLevel" class="select">
-                <option value="">(none)</option>
-                <option value="none">None</option>
-                <option value="mild">Mild</option>
-                <option value="medium">Medium</option>
-                <option value="hot">Hot</option>
-                <option value="extra_hot">Extra Hot</option>
-              </select>
-            </label>
-          </div>
+          <table class="grid-table compact" id="prodNutritionTable">
+            <tr>
+              <td><span class="label">Calories</span>
+                <input id="prodFormCalories" type="number" step="1" min="0" class="input sm"/>
+              </td>
+              <td><span class="label">Fat (g)</span>
+                <input id="prodFormFat" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+              <td><span class="label">Carbs (g)</span>
+                <input id="prodFormCarbs" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+              <td><span class="label">Protein (g)</span>
+                <input id="prodFormProtein" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="label">Sugar (g)</span>
+                <input id="prodFormSugar" type="number" step="0.001" min="0" class="input sm"/>
+              </td>
+              <td><span class="label">Sodium (mg)</span>
+                <input id="prodFormSodium" type="number" step="1" min="0" class="input sm"/>
+              </td>
+              <td><span class="label">Salt (g)</span>
+                <input id="prodFormSalt" type="number" step="0.001" min="0" class="input sm" placeholder="auto" />
+              </td>
+              <td><span class="label">Walk Minutes</span>
+                <input id="prodFormWalkMins" type="number" step="1" min="0" class="input sm"/>
+              </td>
+            </tr>
+          </table>
           <div class="row">
             <div class="grid">
               <span class="label">Nutrition per Serving</span>
               <div id="prodNutritionSummary" class="muted" style="padding:8px 0;">—</div>
             </div>
           </div>
-
+          </div>
 
           </div>
           <div class="box">

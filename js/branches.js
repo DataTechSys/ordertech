@@ -23,17 +23,24 @@
     try {
       const j = await api(`/admin/tenants/${encodeURIComponent(tid)}/branches?limit=${branchPageSize}&offset=${branchPage*branchPageSize}`, { tenantId: tid });
       const items = Array.isArray(j.items) ? j.items : [];
-      const list = $('#branchList'); if (!list) return; list.innerHTML = '';
+      const wrap = $('#branchTableWrap'); if (!wrap) return; wrap.innerHTML = '';
+      const table = document.createElement('table'); table.className='table';
+      table.innerHTML = `<thead><tr>
+        <th>Name</th><th>Created</th><th>Actions</th>
+      </tr></thead><tbody></tbody>`;
+      const tbody = table.querySelector('tbody');
       for (const b of items){
-        const row = document.createElement('div'); row.className='row between';
-        const left = document.createElement('div'); left.textContent = `${b.name}`; left.className = 'label';
-        const right = document.createElement('div');
-        const edit = document.createElement('button'); edit.className='btn'; edit.textContent='Edit'; edit.onclick = ()=>{ editingId = b.id; $('#branchName').value=b.name; $('#branchModalDelete').classList.remove('hidden'); openModal(); };
-        const del = document.createElement('button'); del.className='btn danger'; del.textContent='Delete'; del.onclick = async ()=>{ if (!confirm('Delete branch?')) return; try { await api(`/admin/tenants/${encodeURIComponent(tid)}/branches/${encodeURIComponent(b.id)}`, { method:'DELETE', tenantId: tid }); refresh(); } catch { toast('Delete failed'); } };
-        right.appendChild(edit); right.appendChild(del);
-        row.appendChild(left); row.appendChild(right);
-        list.appendChild(row);
+        const tr = document.createElement('tr');
+        const created = b.created_at ? new Date(b.created_at).toLocaleString() : '—';
+        tr.innerHTML = `<td>${b.name||'—'}</td><td>${created}</td><td></td>`;
+        const actions = document.createElement('div'); actions.className='btn-group';
+        const edit = document.createElement('button'); edit.className='btn sm'; edit.textContent='Edit'; edit.onclick = ()=>{ editingId = b.id; $('#branchName').value=b.name; $('#branchModalDelete').classList.remove('hidden'); openModal(); };
+        const del = document.createElement('button'); del.className='btn sm danger'; del.textContent='Delete'; del.onclick = async ()=>{ if (!confirm('Delete branch?')) return; try { await api(`/admin/tenants/${encodeURIComponent(tid)}/branches/${encodeURIComponent(b.id)}`, { method:'DELETE', tenantId: tid }); refresh(); } catch { toast('Delete failed'); } };
+        actions.appendChild(edit); actions.appendChild(del);
+        tr.lastElementChild.appendChild(actions);
+        tbody.appendChild(tr);
       }
+      wrap.appendChild(table);
       setPageInfo(items.length);
     } catch(e){ toast('Failed to load'); }
   }

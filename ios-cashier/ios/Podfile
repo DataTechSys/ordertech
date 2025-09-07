@@ -1,0 +1,32 @@
+platform :ios, '14.0'
+project 'App/App.xcodeproj'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+# Disable if you want or leave it enabled. It has no functional impact on your app.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+# Uncomment to use frameworks (dynamic or static) if needed by your pods
+# use_frameworks! :linkage => :static
+
+# Uncomment to integrate Swift Package Manager with CocoaPods if needed
+# use_modular_headers!
+
+# Define your app targets and pods here
+
+target 'App' do
+  # Pods for App
+
+  # Example:
+  # pod 'Alamofire'
+end
+
+# Post-install hooks (optional)
+# post_install do |installer|
+#   installer.pods_project.targets.each do |target|
+#     target.build_configurations.each do |config|
+#       # Example: ensure deployment target aligns with project
+#       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+#     end
+#   end
+# end
+

@@ -8,7 +8,7 @@ RUN npm install --omit=dev
 COPY . .
 
 ENV NODE_ENV=production
-ENV PORT=5050
-EXPOSE 5050
+EXPOSE 8080
 
-CMD ["npm", "start"]
+# Run Node directly to avoid npm exiting unexpectedly in some environments
+CMD ["node", "server.js"]

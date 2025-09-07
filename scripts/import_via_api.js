@@ -68,17 +68,25 @@ async function main(){
     return json ?? {};
   }
 
-  // 1) Ensure categories by name
+  // 1) Ensure categories by name (+ optional reference, name_localized, image_url)
   console.log(`Creating categories (${cats.length})...`);
   let createdCats = 0; let skippedCats = 0;
   for (const c of cats) {
     const name = c.name || c.category_name || '';
     if (!name) continue;
+    const reference = (c.reference ?? '').toString().trim();
+    const name_localized = (c.name_localized ?? '').toString().trim();
+    const image_url = (c.image || c.image_url || '').toString().trim();
+    const payload = { name };
+    if (reference) payload.reference = reference;
+    if (name_localized) payload.name_localized = name_localized;
+    if (image_url) payload.image_url = image_url;
     try {
-      await call('POST', `${BASE}/admin/tenants/${TENANT}/categories`, { name });
+      await call('POST', `${BASE}/admin/tenants/${TENANT}/categories`, payload);
       createdCats++;
     } catch (e) {
-      if (/409/.test(String(e))) { skippedCats++; }
+      // Treat conflicts (by name or reference unique index) as already-existing
+      if (/409/.test(String(e)) || /duplicate|unique/i.test(String(e?.message||''))) { skippedCats++; }
       else throw e;
     }
   }
@@ -108,7 +116,7 @@ async function main(){
       // Build product payload
       const body = {
         name,
-        name_localized: p.name_localized || null,
+        name_localized: (p.name_localized || p.name_ar || null),
         category_id,
         price: toNum(p.price) || 0,
         cost: toNum(p.cost),

@@ -1,0 +1,24 @@
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/Router.swift":
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/Router.o"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/Router.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/Router.dia"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/Router.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/Router.d"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/PluginConfig.swift":
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/PluginConfig.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/PluginConfig.dia"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/PluginConfig.swiftconstvalues"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/PluginConfig.o"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/PluginConfig.d"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/UIColor.swift":
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/UIColor.swiftdeps"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/UIColor.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/UIColor.d"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/UIColor.o"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/UIColor.dia"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/TmpViewController.swift":
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/TmpViewController.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/TmpViewController.dia"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/TmpViewController.o"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/TmpViewController.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/TmpViewController.d"

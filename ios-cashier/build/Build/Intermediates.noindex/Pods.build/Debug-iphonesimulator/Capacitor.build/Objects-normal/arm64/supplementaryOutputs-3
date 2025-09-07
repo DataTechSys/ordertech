@@ -1,0 +1,30 @@
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPBridgeDelegate.swift":
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeDelegate.o"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeDelegate.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeDelegate.dia"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeDelegate.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeDelegate.d"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPBridgeProtocol.swift":
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeProtocol.dia"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeProtocol.d"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeProtocol.swiftdeps"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeProtocol.swiftconstvalues"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeProtocol.o"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPBridgedPlugin+getMethod.swift":
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgedPlugin+getMethod.swiftconstvalues"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgedPlugin+getMethod.dia"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgedPlugin+getMethod.o"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgedPlugin+getMethod.swiftdeps"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgedPlugin+getMethod.d"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPBridgeViewController.swift":
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeViewController.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeViewController.d"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeViewController.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeViewController.dia"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPBridgeViewController.o"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPFile.swift":
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPFile.swiftconstvalues"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPFile.o"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPFile.d"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPFile.swiftdeps"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPFile.dia"

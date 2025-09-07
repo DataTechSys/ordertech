@@ -1,0 +1,5 @@
+id,name,sku,category_reference,category_name,price,image,is_active,description
+p-espresso,Espresso,ESP-001,COF,Coffee,1.000,,yes,
+p-latte,Latte,ESP-002,COF,Coffee,1.500,,yes,
+p-iced-tea,Iced Tea,ICE-001,COLD,Cold Drinks,1.250,,yes,
+

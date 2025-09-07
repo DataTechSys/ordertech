@@ -1,0 +1,30 @@
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPLog.swift":
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPLog.d"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPLog.swiftconstvalues"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPLog.dia"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPLog.o"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPLog.swiftdeps"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPInstanceDescriptor.swift":
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceDescriptor-3117f611c7ef5313eb5d0c03b465a354.dia"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceDescriptor-3117f611c7ef5313eb5d0c03b465a354.swiftdeps"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceDescriptor-3117f611c7ef5313eb5d0c03b465a354.swiftconstvalues"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceDescriptor-3117f611c7ef5313eb5d0c03b465a354.d"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceDescriptor-3117f611c7ef5313eb5d0c03b465a354.o"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPNotifications.swift":
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPNotifications.swiftconstvalues"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPNotifications.dia"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPNotifications.swiftdeps"
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPNotifications.d"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPNotifications.o"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPInstanceConfiguration.swift":
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceConfiguration-608d67e4521f61677d93d48b640fb769.d"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceConfiguration-608d67e4521f61677d93d48b640fb769.dia"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceConfiguration-608d67e4521f61677d93d48b640fb769.swiftconstvalues"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceConfiguration-608d67e4521f61677d93d48b640fb769.swiftdeps"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstanceConfiguration-608d67e4521f61677d93d48b640fb769.o"
+"/Users/mosawi/DATATECH/OrderTech/ios-cashier/node_modules/@capacitor/ios/Capacitor/Capacitor/CAPInstancePlugin.swift":
+  dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstancePlugin.d"
+  const-values: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstancePlugin.swiftconstvalues"
+  swift-dependencies: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstancePlugin.swiftdeps"
+  object: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstancePlugin.o"
+  diagnostics: "/Users/mosawi/DATATECH/OrderTech/ios-cashier/build/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/Capacitor.build/Objects-normal/arm64/CAPInstancePlugin.dia"

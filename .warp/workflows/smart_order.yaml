@@ -39,22 +39,22 @@ workflows:
     command: dig +short app.ordertech.me A AAAA
     tags: [smart_order, dns]
 
-  - name: Describe Cloud Run (prod europe-west1)
-    command: gcloud run services describe smart-order --region=europe-west1 --format="value(status.url)"
+  - name: Describe Cloud Run (prod me-central1)
+    command: gcloud run services describe ordertech --region=me-central1 --format="value(status.url)"
     tags: [smart_order, cloud_run]
 
-  - name: Deploy Cloud Run (prod europe-west1)
-    command: gcloud run deploy smart-order --source . --project=smart-order-469705 --region=europe-west1 --allow-unauthenticated
-    tags: [smart_order, cloud_run]
-
-  - name: Deploy Cloud Run (test me-central1)
-    command: gcloud run deploy smart-order --source . --project=smart-order-469705 --region=me-central1 --allow-unauthenticated
+  - name: Deploy Cloud Run (prod me-central1)
+    command: gcloud run deploy ordertech --source . --project=smart-order-469705 --region=me-central1 --allow-unauthenticated
     tags: [smart_order, cloud_run]
 
   - name: Open Admin (prod)
-    command: open https://app.ordertech.me/public/admin/
+    command: open https://app.ordertech.me/products/
     tags: [smart_order, urls]
 
   - name: Open Health (prod)
     command: open https://app.ordertech.me/health
     tags: [smart_order, urls]
+
+  - name: Operational Check (LB + Service + DB)
+    command: bash scripts/op_check.sh
+    tags: [smart_order, ops, health]

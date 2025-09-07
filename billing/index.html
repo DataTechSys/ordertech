@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Admin • Billing</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><span>Platform</span><span class="sep">›</span><span>Billing</span></nav>
+      <div class="searchbar"></div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="lead" style="font-weight:600;">Billing</div>
+          <p class="muted mt-2">Coming soon.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script>
+      Admin.bootstrapAuth(function(){});
+    </script>
+  </body>
+</html>
+

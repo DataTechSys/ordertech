@@ -75,7 +75,7 @@
   function renderOptionsTable(){
     const wrap = $('#optionsTableWrap'); if (!wrap) return;
     let html = '<table class="table"><thead><tr>'+
-      '<th>Name</th><th>Group</th><th class="col-price">Price</th><th>Active</th><th class="col-num">Sort</th><th class="col-date">Created</th>'+
+      '<th>Name</th><th>Ref</th><th>Group</th><th>Group Ref</th><th class="col-price">Price</th><th>Active</th><th class="col-num">Sort</th><th class="col-date">Created</th>'+
       '</tr></thead><tbody>';
     const page = Math.max(1, Number(MST.optionsPage||1));
     const rows = MST.options||[];
@@ -89,7 +89,9 @@
       const created = o.created_at ? new Date(o.created_at).toLocaleString() : '—';
       html += `<tr class="row-click" data-oid="${o.id}">`+
               `<td class="col-name"><a href="#" class="row-link" data-oid="${o.id}">${o.name||''}</a></td>`+
+              `<td>${o.reference||''}</td>`+
               `<td>${o.group_name||''}</td>`+
+              `<td>${o.group_reference||''}</td>`+
               `<td class="col-price">${fmtKWD(o.price)}</td>`+
               `<td>${act}</td>`+
               `<td class="col-num">${o.sort_order==null?'—':o.sort_order}</td>`+
@@ -108,8 +110,11 @@
     const info = $('#modPageInfo'); if (info) info.textContent = total ? `Showing ${total?(start+1):0}–${end} of ${total}` : 'No results';
     const prevBtn = $('#modPrev'); const nextBtn = $('#modNext');
     const page = currentPage(); const size = pageSize(); const maxPage = Math.max(1, Math.ceil(total/size));
-    if (prevBtn) prevBtn.disabled = (page<=1);
-    if (nextBtn) nextBtn.disabled = (page>=maxPage);
+    const needPager = maxPage > 1;
+    if (prevBtn) { prevBtn.disabled = (page<=1); prevBtn.style.display = needPager ? '' : 'none'; }
+    if (nextBtn) { nextBtn.disabled = (page>=maxPage); nextBtn.style.display = needPager ? '' : 'none'; }
+    // Hide pager group when not needed (only one page)
+    try { const group = prevBtn ? prevBtn.closest('.btn-group') : null; if (group) group.style.display = needPager ? '' : 'none'; } catch {}
   }
 
   function fillGroupSelect(){
@@ -120,6 +125,79 @@
       const o = document.createElement('option'); o.value = g.id; o.textContent = g.name || g.id; sel.appendChild(o);
     }
     if (keep) sel.value = keep;
+  }
+
+  async function importModifiers(groupsFile, optionsFile){
+    const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+    let createdGroups=0, createdOptions=0, skipped=0, failed=0;
+    let refToId = new Map();
+    try {
+      if (groupsFile){
+        const { headers, rows } = await window.Importer.parseFile(groupsFile);
+        const nameKey = headers.find(h=>/^name$/i.test(h)) || 'name';
+        const refKey = headers.find(h=>/^reference|ref$/i.test(h)) || 'reference';
+        const minKey = headers.find(h=>/min/i.test(h)) || 'min_select';
+        const maxKey = headers.find(h=>/max/i.test(h)) || 'max_select';
+        const reqKey = headers.find(h=>/required/i.test(h)) || 'required';
+        // Load existing groups
+        const ex = await api(`/admin/tenants/${encodeURIComponent(id)}/modifiers/groups`);
+        const existingByName = new Map((ex.items||[]).map(g=>[String((g.name||'').toLowerCase()), true]));
+        for (const r of rows){
+          const name = String(r[nameKey]||'').trim(); if (!name) { skipped++; continue; }
+          if (existingByName.has(name.toLowerCase())) { skipped++; continue; }
+          const payload = {
+            name,
+            reference: (r[refKey]!=null? String(r[refKey]).trim() : null) || null,
+            min_select: (v=>{ const n=parseInt(v,10); return Number.isFinite(n)?n:null; })(r[minKey]),
+            max_select: (v=>{ const n=parseInt(v,10); return Number.isFinite(n)?n:null; })(r[maxKey]),
+            required: /^\s*(yes|true|1)\s*$/i.test(String(r[reqKey]||''))
+          };
+          try {
+            const resp = await api(`/admin/tenants/${encodeURIComponent(id)}/modifiers/groups`, { method:'POST', body: payload });
+            createdGroups++; if (payload.reference && resp?.group?.id) refToId.set(String(payload.reference), resp.group.id);
+          } catch { failed++; }
+        }
+      }
+      if (optionsFile){
+        const { headers, rows } = await window.Importer.parseFile(optionsFile);
+        const nameKey = headers.find(h=>/^name|option_name$/i.test(h)) || 'name';
+        const groupIdKey = headers.find(h=>/^group_id$/i.test(h)) || null;
+        const groupRefKey = headers.find(h=>/^(modifier_)?group_?reference$/i.test(h)) || null;
+        const optionRefKey = headers.find(h=>/^(option_)?reference$/i.test(h)) || null;
+        const priceKey = headers.find(h=>/^price|delta_price|price_kwd$/i.test(h)) || 'price';
+        const actKey = headers.find(h=>/^(is_)?active$/i.test(h)) || 'is_active';
+        // Refresh groups
+        const ex = await api(`/admin/tenants/${encodeURIComponent(id)}/modifiers/groups`);
+        const groups = ex.items||[];
+        const byRef = new Map(groups.filter(g=>g.reference).map(g=>[String(g.reference), g]));
+        const byName = new Map(groups.map(g=>[String((g.name||'').toLowerCase()), g]));
+        for (const r of rows){
+          const name = String(r[nameKey]||'').trim(); if (!name) { skipped++; continue; }
+          let group_id = null;
+          // Prefer explicit group_id, otherwise use group reference mapping
+          const gIdVal = groupIdKey ? String(r[groupIdKey]||'').trim() : '';
+          const gRefVal = groupRefKey ? String(r[groupRefKey]||'').trim() : '';
+          if (gIdVal) group_id = gIdVal;
+          if (!group_id && gRefVal && byRef.has(gRefVal)) group_id = byRef.get(gRefVal).id;
+          if (!group_id && gRefVal && refToId.has(gRefVal)) group_id = refToId.get(gRefVal);
+          if (!group_id) { skipped++; continue; }
+          const payload = {
+            group_id,
+            name,
+            reference: optionRefKey ? ((v=>{ v=String(v||'').trim(); return v||null; })(r[optionRefKey])) : null,
+            price: (v=>{ const n=parseFloat(v); return Number.isFinite(n)?n:0; })(r[priceKey]),
+            is_active: /^\s*(yes|true|1)\s*$/i.test(String(r[actKey]||'yes'))
+          };
+          try {
+            await api(`/admin/tenants/${encodeURIComponent(id)}/modifiers/options`, { method:'POST', body: payload });
+            createdOptions++;
+          } catch { failed++; }
+        }
+      }
+      const st = document.getElementById('modImportStatus'); if (st) st.textContent = `Groups: +${createdGroups}, Options: +${createdOptions}, skipped ${skipped}, failed ${failed}`;
+      toast(`Imported modifiers — groups ${createdGroups}, options ${createdOptions}`);
+      await loadGroups(); await loadOptions();
+    } catch { toast('Import failed'); }
   }
 
   // Group modal
@@ -180,6 +258,34 @@
     });
   }
 
+  // Import/Export buttons
+  (function wireImportExport(){
+    document.getElementById('btnModImport')?.addEventListener('click', ()=>{ const md=document.getElementById('modImportModal'); if(md){ md.classList.add('open'); md.setAttribute('aria-hidden','false'); }});
+    document.getElementById('modImportClose')?.addEventListener('click', ()=>{ document.getElementById('modImportModal')?.classList.remove('open'); });
+    document.getElementById('modImportCancel')?.addEventListener('click', ()=>{ document.getElementById('modImportModal')?.classList.remove('open'); });
+    document.getElementById('modImportGroups')?.addEventListener('change', async (e)=>{ try{ const f=e.target.files&&e.target.files[0]; if(!f)return; const {headers,rows}=await window.Importer.parseFile(f); window.Importer.renderPreview(document.getElementById('modImportPreviewGroups'), headers, rows);}catch{}});
+    document.getElementById('modImportOptions')?.addEventListener('change', async (e)=>{ try{ const f=e.target.files&&e.target.files[0]; if(!f)return; const {headers,rows}=await window.Importer.parseFile(f); window.Importer.renderPreview(document.getElementById('modImportPreviewOptions'), headers, rows);}catch{}});
+    document.getElementById('modImportConfirm')?.addEventListener('click', async ()=>{
+      const g = document.getElementById('modImportGroups')?.files?.[0] || null;
+      const o = document.getElementById('modImportOptions')?.files?.[0] || null;
+      if (!g && !o) { toast('Choose a groups and/or options CSV'); return; }
+      await importModifiers(g, o);
+      document.getElementById('modImportModal')?.classList.remove('open');
+    });
+    document.getElementById('btnModExport')?.addEventListener('click', async ()=>{
+      try {
+        const id = window.Admin.STATE.selectedTenantId || '';
+        if (!id) { toast('Select a tenant'); return; }
+        const gs = await window.Admin.api(`/admin/tenants/${encodeURIComponent(id)}/modifiers/groups`);
+        const os = await window.Admin.api(`/admin/tenants/${encodeURIComponent(id)}/modifiers/options`);
+        const gRows = (gs.items||[]).map(g=>({ id:g.id, reference:g.reference||'', name:g.name||'', min_select:g.min_select||'', max_select:g.max_select||'', required:g.required? 'yes':'no' }));
+        const oRows = (os.items||[]).map(o=>({ id:o.id, group_id:o.group_id, group_name:o.group_name||'', group_reference:o.group_reference||'', name:o.name||'', reference:o.reference||'', price:o.price||0, is_active:o.is_active?'yes':'no', sort_order:o.sort_order||'' }));
+        window.Importer.downloadCsv('modifier_groups.csv', ['id','reference','name','min_select','max_select','required'], gRows);
+        window.Importer.downloadCsv('modifier_options.csv', ['id','group_id','group_name','group_reference','name','reference','price','is_active','sort_order'], oRows);
+      } catch { toast('Export failed'); }
+    });
+  })();
+
   // Option modal
   function openOptionEditor(o){
     MST.currentOption = o || null;
@@ -191,6 +297,7 @@
     $('#optFormPrice').value = o?.price != null ? String(o.price) : '';
     $('#optFormActive').checked = (o?.is_active == null) ? true : !!o.is_active;
     $('#optFormSort').value = o?.sort_order != null ? String(o.sort_order) : '';
+    $('#optFormRef').value = o?.reference || '';
     const del = $('#optionModalDelete'); if (del) del.classList.toggle('hidden', !o || !o.id);
     md.classList.add('open'); md.setAttribute('aria-hidden','false');
   }
@@ -206,6 +313,7 @@
         const body = {
           group_id: $('#optFormGroup')?.value || '',
           name: $('#optFormName')?.value?.trim() || '',
+          reference: $('#optFormRef')?.value?.trim() || null,
           price: (n=>isNaN(n)?0:n)(parseFloat($('#optFormPrice')?.value||'')),
           is_active: $('#optFormActive')?.checked || false,
           sort_order: (n=>Number.isFinite(n)?n:null)(parseInt($('#optFormSort')?.value||'',10))
@@ -217,6 +325,7 @@
           const patch = {};
           if (String(body.group_id)!==String(MST.currentOption.group_id||'')) patch.group_id = body.group_id;
           if (body.name !== (MST.currentOption.name||'')) patch.name = body.name;
+          if ((body.reference||'') !== (MST.currentOption.reference||'')) patch.reference = body.reference;
           if (Number(body.price) !== Number(MST.currentOption.price||0)) patch.price = body.price;
           if (Boolean(body.is_active) !== Boolean(MST.currentOption.is_active)) patch.is_active = body.is_active;
           if (body.sort_order !== MST.currentOption.sort_order) patch.sort_order = body.sort_order;

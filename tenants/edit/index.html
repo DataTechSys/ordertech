@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Tenant Details</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><span>Platform</span><span class="sep">›</span><a href="/tenants/">Tenants</a><span class="sep">›</span><span>Tenant Details</span></nav>
+      <div class="searchbar"></div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section id="notAllowed" class="card hidden">
+        <div class="body"><div class="muted">You are not a platform admin.</div></div>
+      </section>
+
+      <section id="editor" class="card hidden">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Basics</div>
+            <span class="spacer"></span>
+            <span id="basicsStatus" class="muted">—</span>
+          </div>
+          <div class="row cols-3">
+            <label class="grid"><span class="label">Name</span>
+              <input id="tName" class="input" placeholder="Tenant name" />
+            </label>
+            <label class="grid"><span class="label">Slug</span>
+              <input id="tSlug" class="input" placeholder="tenant-slug" />
+            </label>
+            <label class="grid"><span class="label">Short Code (6 digits)</span>
+              <input id="tCode" class="input" maxlength="6" placeholder="123456" />
+            </label>
+          </div>
+          <div class="row"><button id="saveBasics" class="btn primary">Save Basics</button></div>
+        </div>
+      </section>
+
+      <section id="limitsCard" class="card hidden mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Limits</div>
+            <span class="spacer"></span>
+            <span id="limitsStatus" class="muted">—</span>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Branch limit</span>
+              <input id="tBranchLimit" class="input" type="number" min="0" />
+            </label>
+            <label class="grid"><span class="label">Device licenses</span>
+              <input id="tLicLimit" class="input" type="number" min="0" />
+            </label>
+          </div>
+          <div class="row"><button id="saveLimits" class="btn primary">Save Limits</button></div>
+        </div>
+      </section>
+
+      <section id="ownerCard" class="card hidden mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Owner</div>
+            <span class="spacer"></span>
+            <span id="ownerStatus" class="muted">—</span>
+          </div>
+          <div class="row cols-2">
+            <div>
+              <div class="label">Current Owner</div>
+              <div id="ownerCurrent" class="chip">—</div>
+            </div>
+            <label class="grid"><span class="label">Set Owner (email)</span>
+              <input id="ownerEmail" class="input" placeholder="owner@example.com" />
+            </label>
+          </div>
+          <div class="row"><button id="saveOwner" class="btn">Save Owner</button></div>
+        </div>
+      </section>
+
+      <section id="integrationsCard" class="card hidden mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Integrations</div>
+            <span class="spacer"></span>
+            <span id="intStatus" class="muted">—</span>
+          </div>
+          <div class="stack" style="gap:16px;">
+            <div class="stack" style="gap:8px; border:1px solid #eee; border-radius:8px; padding:12px;">
+              <div class="flex center" style="gap:8px;">
+                <div class="chip">Foodics</div>
+                <span id="foodicsBadge" class="chip">—</span>
+              </div>
+              <div class="row cols-2">
+                <label class="grid"><span class="label">API Token</span>
+                  <input id="foodicsToken" class="input" type="password" placeholder="paste token" />
+                </label>
+                <label class="grid"><span class="label">Label (optional)</span>
+                  <input id="foodicsLabel" class="input" placeholder="e.g. HQ Account" />
+                </label>
+              </div>
+              <div class="row">
+                <button id="saveFoodics" class="btn primary">Save/Rotate</button>
+                <button id="revokeFoodics" class="btn danger">Revoke</button>
+                <span class="muted" style="margin-left:8px;">Token is stored securely and never shown after saving.</span>
+              </div>
+              <div class="stack" style="gap:12px; border-top:1px solid #eee; padding-top:12px;">
+                <div class="row cols-3">
+                  <label class="grid"><span class="label">Catalog Source</span>
+                    <select id="catalogSource" class="select">
+                      <option value="foodics">Foodics API</option>
+                      <option value="csv">CSV</option>
+                    </select>
+                  </label>
+                  <label class="grid"><span class="label">Sync Mode</span>
+                    <select id="foodicsSyncMode" class="select">
+                      <option value="manual">Manual</option>
+                      <option value="hourly">Hourly</option>
+                      <option value="daily">Daily</option>
+                    </select>
+                  </label>
+                  <label class="grid"><span class="label">Daily time (UTC)</span>
+                    <input id="foodicsSyncTime" class="input" type="time" value="00:00" />
+                  </label>
+                </div>
+                <div class="row" style="gap:8px; align-items:center;">
+                  <label style="display:flex; align-items:center; gap:6px;">
+                    <input id="foodicsSyncEnabled" type="checkbox" /> Enable scheduled sync
+                  </label>
+                  <button id="saveFoodicsSchedule" class="btn">Save Schedule</button>
+                  <button id="runFoodicsSyncNow" class="btn primary">Run Sync Now</button>
+                </div>
+                <div>
+                  <div class="label">Recent syncs</div>
+                  <div id="foodicsRuns" class="muted" style="max-height:160px; overflow:auto; border:1px solid #eee; border-radius:8px; padding:8px;">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="subscriptionCard" class="card hidden mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Subscription</div>
+            <span class="spacer"></span>
+            <span id="subStatus" class="muted">—</span>
+          </div>
+          <div class="row cols-3">
+            <label class="grid"><span class="label">Tier</span>
+              <select id="subTier" class="select">
+                <option value="trial">Trial</option>
+                <option value="basic" selected>Basic</option>
+                <option value="professional">Professional</option>
+              </select>
+            </label>
+            <label class="grid"><span class="label">Trial ends at</span>
+              <input id="trialEndsAt" class="input" readonly />
+            </label>
+            <div class="grid">
+              <span class="label">Extend trial (days)</span>
+              <div class="flex" style="gap:8px; align-items:center;">
+                <input id="extendDays" class="input" type="number" min="1" placeholder="7" style="max-width:120px;" />
+                <button id="applyExtend" class="btn">Apply</button>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="justify-content:flex-end;">
+            <button id="saveSub" class="btn primary">Save Subscription</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="dangerCard" class="card hidden mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700; color:#b91c1c;">Danger zone</div>
+            <span class="spacer"></span>
+            <span id="dangerStatus" class="muted">—</span>
+          </div>
+          <div class="stack" style="gap:12px;">
+            <div class="row" style="gap:8px; align-items:center;">
+              <button id="btnExportTenant" class="btn">Export configuration (JSON)</button>
+              <small class="muted">Downloads tenant configuration without secrets.</small>
+            </div>
+            <div class="row" style="gap:8px; align-items:center;">
+              <label class="grid" style="max-width:320px;">
+                <span class="label">Type DELETE to confirm</span>
+                <input id="dangerConfirm" class="input" placeholder="DELETE" />
+              </label>
+              <button id="btnExportAndDelete" class="btn danger">Export & Delete Catalog</button>
+              <button id="btnDeleteTenant" class="btn danger outline">Delete Tenant</button>
+            </div>
+            <small class="muted">Deletes categories, products, modifier groups/options, drive-thru state. Keeps settings, brand, domains, users, devices.</small>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script src="/js/tenant-edit.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Admin • Tenants</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><span>Platform</span><span class="sep">›</span><span>Tenants</span></nav>
+      <div class="searchbar"></div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Create Tenant</div>
+            <span class="spacer"></span>
+          </div>
+          <div class="row cols-3">
+            <label class="grid">
+              <span class="label">Name</span>
+              <input id="newTenantName" class="input" placeholder="Tenant name" />
+            </label>
+            <label class="grid">
+              <span class="label">Slug (optional)</span>
+              <input id="newTenantSlug" class="input" placeholder="e.g., koobs-cafe" />
+            </label>
+            <label class="grid">
+              <span class="label">Short Code (optional, 6 digits)</span>
+              <input id="newTenantCode" class="input" placeholder="e.g., 123456" maxlength="6" />
+            </label>
+          </div>
+          <div class="toolbar">
+            <button id="btnCreateTenant" class="btn primary"><span class="icon ri ri-add-line"></span><span>Create Tenant</span></button>
+            <span id="createStatus" class="muted"></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="platformDefaultsCard" class="card mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Tenants Default Poster</div>
+            <span class="spacer"></span>
+            <span id="platformPosterStatus" class="muted">—</span>
+          </div>
+          <div class="row" style="align-items:flex-start; gap:16px;">
+            <img id="platformPosterPreview" alt="Default Poster" style="width:180px; height:320px; object-fit:cover; border:1px dashed var(--border); border-radius:8px; background:#fafafa;" />
+            <div class="stack" style="gap:8px;">
+              <input id="platformPosterFile" type="file" accept="image/*" />
+              <div class="row" style="gap:8px;">
+                <button id="uploadPlatformPoster" class="btn">Upload & Set</button>
+                <button id="clearPlatformPoster" class="btn danger">Clear</button>
+              </div>
+              <small class="muted">Used when a tenant has no posters uploaded.</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Tenants</div>
+            <span class="spacer"></span>
+            <button id="btnRefresh" class="btn"><span class="icon ri ri-refresh-line"></span><span>Refresh</span></button>
+          </div>
+          <div id="tenantsTableWrap"></div>
+        </div>
+      </section>
+
+      <section id="notAllowed" class="card hidden mt-2">
+        <div class="body">
+          <div class="muted">You are not a platform admin. If you should have access, contact your administrator.</div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script>
+      const el = (id) => document.getElementById(id);
+
+      function renderTenantsTable(items) {
+        const wrap = el('tenantsTableWrap');
+        if (!items || !items.length) { wrap.innerHTML = '<div class="muted">No tenants</div>'; return; }
+        const rows = items.map(t => {
+          const branch = Number.isFinite(Number(t.branch_limit)) ? Number(t.branch_limit) : '';
+          const lic = Number.isFinite(Number(t.license_limit)) ? Number(t.license_limit) : '';
+          return `
+            <tr class="row-click" data-id="${t.id}">
+              <td><div class="row-link" style="font-weight:700; color:var(--link); text-decoration:underline; cursor:pointer;">${t.name||''}</div><div class="muted" style="font-size:12px">${t.id}</div></td>
+              <td>${t.code||''}</td>
+              <td>${branch}</td>
+              <td>${lic}</td>
+            </tr>
+          `;
+        }).join('');
+        wrap.innerHTML = `
+          <div class="table" role="region" aria-label="Tenants">
+            <table style="width:100%">
+              <thead>
+                <tr><th style="text-align:left">Tenant</th><th>Code</th><th>Branch limit</th><th>Device licenses</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+        // Make rows clickable
+        wrap.querySelectorAll('tr.row-click[data-id]').forEach(tr => {
+          tr.addEventListener('click', () => {
+            const id = tr.getAttribute('data-id');
+            if (id) window.location.href = '/tenants/' + encodeURIComponent(id);
+          });
+        });
+        wrap.querySelectorAll('td .row-link').forEach(a => {
+          const tr = a.closest('tr.row-click');
+          if (tr) a.addEventListener('click', (e) => { e.stopPropagation(); const id = tr.getAttribute('data-id'); if (id) window.location.href = '/tenants/' + encodeURIComponent(id); });
+        });
+      }
+
+      async function loadTenants() {
+        try {
+          const list = await Admin.api('/admin/tenants', { tenantId: null });
+          renderTenantsTable(Array.isArray(list) ? list : []);
+        } catch (e) {
+          renderTenantsTable([]);
+        }
+      }
+
+      function wireCreateTenant() {
+        el('btnCreateTenant').addEventListener('click', async () => {
+          const name = String(el('newTenantName').value || '').trim();
+          const slug = String(el('newTenantSlug').value || '').trim();
+          const code = String(el('newTenantCode').value || '').trim();
+          if (!name) { Admin.toast('Name is required'); return; }
+          try {
+            const body = { name }; if (slug) body.slug = slug; if (code) body.code = code;
+            await Admin.api('/admin/tenants', { method:'POST', body, tenantId: null });
+            el('newTenantName').value = ''; el('newTenantSlug').value = ''; el('newTenantCode').value = '';
+            Admin.toast('Tenant created');
+            await loadTenants();
+          } catch (e) {
+            Admin.toast('Create failed');
+          }
+        });
+        el('btnRefresh').addEventListener('click', loadTenants);
+      }
+
+      // Platform default poster helpers
+      async function loadPlatformDefaults(){
+        try {
+          const r = await Admin.api('/platform/settings', { tenantId: null });
+          const url = (r && r.settings && r.settings.defaultPosterUrl) ? String(r.settings.defaultPosterUrl) : '';
+          const img = document.getElementById('platformPosterPreview');
+          if (img) img.src = url || '/poster-default.png';
+        } catch {
+          const img = document.getElementById('platformPosterPreview'); if (img) img.src = '/poster-default.png';
+        }
+      }
+      async function uploadPlatformPoster(){
+        const input = document.getElementById('platformPosterFile');
+        const f = input && input.files && input.files[0];
+        if (!f) { Admin.toast('Choose an image'); return; }
+        try {
+          const ct = f.type || 'image/jpeg';
+          const name = f.name || 'poster.jpg';
+          const sig = await Admin.api('/admin/upload-url-global', { method:'POST', body:{ filename: name, kind: 'poster', contentType: ct }, tenantId: null });
+          await fetch(sig.url, { method: sig.method || 'PUT', headers: { 'Content-Type': ct }, body: f });
+          const publicUrl = sig.publicUrl || '';
+          if (!publicUrl) throw new Error('upload_failed');
+          await Admin.api('/platform/settings', { method:'PUT', body:{ settings:{ defaultPosterUrl: publicUrl } }, tenantId: null });
+          document.getElementById('platformPosterStatus').textContent = 'Saved'; Admin.toast('Saved');
+          await loadPlatformDefaults();
+        } catch { document.getElementById('platformPosterStatus').textContent = 'Failed'; Admin.toast('Save failed'); }
+      }
+      async function clearPlatformPoster(){
+        try {
+          await Admin.api('/platform/settings', { method:'PUT', body:{ settings:{ defaultPosterUrl: '' } }, tenantId: null });
+          document.getElementById('platformPosterStatus').textContent = 'Cleared'; Admin.toast('Cleared');
+          await loadPlatformDefaults();
+        } catch { document.getElementById('platformPosterStatus').textContent = 'Failed'; Admin.toast('Clear failed'); }
+      }
+      function wirePlatformDefaults(){
+        document.getElementById('uploadPlatformPoster')?.addEventListener('click', ()=>{ uploadPlatformPoster().catch(()=>{}); });
+        document.getElementById('clearPlatformPoster')?.addEventListener('click', ()=>{ clearPlatformPoster().catch(()=>{}); });
+      }
+
+      Admin.bootstrapAuth(async function(){
+        if (!Admin.STATE.isSuperAdmin) {
+          document.querySelector('section#notAllowed').classList.remove('hidden');
+          return;
+        }
+        wireCreateTenant();
+        wirePlatformDefaults();
+        await loadPlatformDefaults();
+        await loadTenants();
+      });
+    </script>
+  </body>
+</html>
+

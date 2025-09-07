@@ -4,11 +4,12 @@
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <title>Koobs · Car</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Almarai:wght@400;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="/css/base.css?v=1.0.0">
         <link rel="stylesheet" href="/css/design-tokens.css?v=1.0.0">
-        <link rel="stylesheet" href="/css/style.css?v=1.0.2">
+<link rel="stylesheet" href="/css/style.css?v=1.0.4">
         <style>
     .osn-header{ margin-right:8px; padding:2px 6px; border-radius:6px; background:#111827; color:#fff; font-size:12px; border:1px solid #334155; display:inline-block; }
     /* Ensure full-screen poster with no page scrolling while active */
@@ -17,18 +18,12 @@
     #posterOverlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
     #posterOverlay img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 600ms ease; }
     #posterOverlay img.visible { opacity: 1; }
+    .transition-none #posterOverlay img { transition: none !important; }
     #posterOverlay .notice { position:absolute; top:12px; left:12px; background: rgba(0,0,0,0.6); color:#fff; padding:6px 10px; border-radius:8px; font-size:14px; letter-spacing:0.3px; z-index: 10000; display: none; }
   </style>
-        <script src="/js/device-activation.js?v=1.0.21" data-role="display" defer></script>
+        <script src="/js/device-activation.js?v=1.0.26" data-role="display" defer></script>
     </head>
     <body>
-        <header class="topbar">
-            <img class="logo" src="/ordertech.png" alt="OrderTech"/>
-            <div class="live-pill" id="linkPill">
-                <span class="dot" aria-hidden="true"></span>
-                <span class="label" id="linkStatus">READY</span>
-            </div>
-        </header>
         <!-- Poster overlay disabled for now -->
         <div id="posterOverlay" aria-hidden="true" style="display:none">
             <div id="posterNotice" class="notice" aria-live="polite">No Active Key</div>
@@ -39,16 +34,17 @@
             <!-- UPPER STRIP -->
             <section class="upper">
                 <!-- LEFT: VIDEO with PiP -->
-                <div class="video-panel">
+<div class="video-panel">
+                    <img class="logo-overlay" id="brandLogo" src="/images/OrderTech.png" alt="OrderTech"/>
                     <video id="remoteVideo" autoplay playsinline></video>
                     <video id="localVideo" class="pip" autoplay muted playsinline></video>
                 </div>
                 <!-- RIGHT: ORDER SUMMARY -->
                 <div class="order-panel">
                     <div class="billCard">
-                        <header class="billHead" style="align-items:flex-start;">
+<header class="billHead" style="align-items:flex-start;">
                             <h3 style="margin:0;"><span id="osnHeader" class="osn-header" style="display:none;"></span> Order Summary</h3>
-                            <div class="billStatus" id="billStatus">—</div>
+                            <div class="billMeta"><div id="liveFlag" class="branch-flags"></div></div>
                         </header>
                         <ul id="billItems" class="billItems"></ul>
                         <footer class="billFoot">
@@ -65,15 +61,39 @@
             </section>
         </main>
         <div id="optionsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-            <div id="optionsCard" style="background:#fff; border-radius:12px; padding:16px; width:min(520px,90vw); max-height:90vh; overflow:auto;">
+            <div id="optionsCard" style="background:#fff; border-radius:12px; padding:20px; width:min(720px,92vw); max-height:90vh; overflow:auto;">
                 <h3 id="optTitle" style="margin-top:0;">Choose Options</h3>
                 <div id="optBody"></div>
-                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
-                    <button id="optCancel" disabled>Cancel</button>
-                    <button id="optConfirm" disabled>Add</button>
+                <div id="optBtnsRow" style="display:flex; gap:12px; margin-top:16px;">
+                    <button id="optCancel" class="btn" disabled>Cancel</button>
+                    <button id="optConfirm" class="btn" disabled>Add</button>
                 </div>
             </div>
         </div>
-<script type="module" src="/js/drive-thru.js?v=1.0.26" defer></script>
-    </body>
+<script type="module" src="/js/drive-thru.js?v=1.0.36" defer></script>
+<script>
+  (async function(){
+    try {
+      // Include tenant header so brand resolves correctly on shared hosts
+      let tenantId = '';
+      try { const u = new URL(location.href); tenantId = u.searchParams.get('tenant') || ''; } catch {}
+      if (!tenantId) { try { tenantId = localStorage.getItem('DEVICE_TENANT_ID') || ''; } catch {} }
+      const headers = {};
+      if (tenantId) headers['x-tenant-id'] = tenantId;
+      const r = await fetch('/brand', { headers, cache:'no-store' });
+      if (r.ok) {
+        const b = await r.json();
+        if (b && b.logo_url) {
+          const el = document.getElementById('brandLogo');
+          if (el) {
+            const url = String(b.logo_url||'');
+            el.src = /^https?:\/\//i.test(url) ? ('/img?u=' + encodeURIComponent(url)) : url;
+          }
+        }
+        if (b && b.display_name) { try { document.title = b.display_name + ' · Display'; } catch {} }
+      }
+    } catch {}
+  })();
+</script>
+</body>
 </html>

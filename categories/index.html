@@ -23,6 +23,11 @@
       <section class="card">
         <div class="body">
           <div class="toolbar">
+            <div class="flex" style="gap:8px;">
+              <button id="btnCatNew" class="btn primary"><span class="icon ri ri-add-line"></span><span>New Category</span></button>
+              <button id="btnCatImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import</span></button>
+              <button id="btnCatExport" class="btn"><span class="icon ri ri-upload-2-line"></span><span>Export CSV</span></button>
+            </div>
             <div class="spacer"></div>
             <div id="catBulkBar" class="flex hidden">
               <select id="catBulkAction" class="select" style="max-width:220px">
@@ -41,7 +46,54 @@
           <div id="categoryTableWrap"></div>
         </div>
       </section>
+
+      <!-- Visibility Control -->
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title">Visibility (Drive/Cashier)</div>
+            <div class="spacer"></div>
+            <button id="refreshDriveState" class="btn ghost">Refresh</button>
+            <button id="saveHideCats" class="btn primary">Save</button>
+          </div>
+          <p class="muted">Select categories to show in the Drive and Cashier UIs. Uncheck any category to hide it.</p>
+          <div id="hideCatsWrap" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;"></div>
+        </div>
+      </section>
     </main>
+
+    <!-- Import Categories Modal -->
+    <div id="catImportModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="catImportTitle">
+        <div class="header">
+          <div class="title" id="catImportTitle">Import Categories</div>
+          <button id="catImportClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid"><span class="label">CSV file</span>
+              <input id="catImportFile" type="file" accept=".csv,text/csv" />
+              <small class="muted">Template: <a href="/data/templates/categories.csv" target="_blank" rel="noopener">categories.csv</a></small>
+            </label>
+            <label class="grid"><span class="label">Mode</span>
+              <select id="catImportMode" class="select">
+                <option value="create-missing" selected>Create missing</option>
+              </select>
+            </label>
+          </div>
+          <div class="stack" style="gap:8px;">
+            <div class="muted">Preview (first 20 rows)</div>
+            <div id="catImportPreview"></div>
+          </div>
+        </div>
+        <div class="footer">
+          <span id="catImportStatus" class="muted">—</span>
+          <span class="spacer"></span>
+          <button id="catImportCancel" class="btn">Cancel</button>
+          <button id="catImportConfirm" class="btn primary">Import</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Category Modal -->
     <div id="categoryModal" class="modal-backdrop" aria-hidden="true">
@@ -58,7 +110,32 @@
             </label>
             <label class="grid">
               <span class="label">Reference</span>
-              <input id="catFormRef" class="input" readonly/>
+              <input id="catFormRef" class="input"/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid">
+              <span class="label">Name (localized)</span>
+              <input id="catFormNameLocalized" class="input"/>
+            </label>
+            <label class="grid">
+              <span class="label">Image</span>
+              <style>
+                #categoryModal .media-card { border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+                #categoryModal .media-card .preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; background: var(--chip, #f1f5f9); border: 1px solid var(--border, #e5e7eb); border-radius: 10px; overflow: hidden; }
+                #categoryModal .media-card .preview img { width: 100%; height: 100%; object-fit: cover; }
+              </style>
+              <div class="media-card">
+                <div class="preview"><img id="catPreview" alt="Preview"/></div>
+                <div class="flex center">
+                  <input id="catImageFile" type="file" accept="image/*" style="display:none" />
+                  <button id="catImageUpload" class="btn">Upload</button>
+                  <input id="catImageCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
+                  <button id="catImageFromCsv" class="btn ghost">From CSV</button>
+                </div>
+                <small class="muted">Default is the CSV image URL. Placeholder used when missing.</small>
+              </div>
+              <input id="catFormImageUrl" type="hidden" />
             </label>
           </div>
           <div class="row cols-2">
@@ -69,6 +146,11 @@
             <label class="grid">
               <span class="label">Products</span>
               <input id="catFormProducts" class="input" readonly/>
+            </label>
+          </div>
+          <div class="row">
+            <label class="switch-row"><span class="label">Active (visible in Drive & Cashier)</span>
+              <input id="catFormActive" type="checkbox" class="switch"/>
             </label>
           </div>
         </div>
@@ -82,9 +164,10 @@
       </div>
     </div>
 
-    <script src="/js/admin-common.js"></script>
-    <script src="/js/admin-shell.js"></script>
-    <script src="/js/categories.js"></script>
+    <script src="/js/admin-common.js?v=20250905-2"></script>
+    <script src="/js/admin-shell.js?v=20250905-2"></script>
+    <script src="/js/importer.js?v=20250905-2"></script>
+    <script src="/js/categories.js?v=20250905-2"></script>
   </body>
 </html>
 

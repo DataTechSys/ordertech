@@ -129,22 +129,30 @@
           const my = await fetch('/admin/my/tenants', { headers: { Authorization: 'Bearer ' + tok } }).then(r => r.ok ? r.json() : []);
           const arr = Array.isArray(my) ? my : [];
           if (arr.length === 0) {
-            // If we have prefilled profile, save it quickly, then go to profile for edits and onward
+            // If we have prefilled profile, save it quickly
             try {
               const p = JSON.parse(localStorage.getItem('PREFILL_PROFILE')||'{}');
               if (p && (p.full_name || p.mobile)) {
                 await fetch('/auth/profile', { method:'POST', headers: { 'Content-Type':'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(p) });
               }
             } catch {}
-            location.href = '/profile/?next=' + encodeURIComponent('/start-trial/');
+            // If platform admin, go straight to admin shell (no trial redirect)
+            try {
+              const r = await fetch('/admin/tenants', { headers: { Authorization: 'Bearer ' + tok } });
+              if (r && r.ok) { location.href = '/'; return; }
+            } catch {}
+            // In localhost/dev-open, do not force start-trial; go to root
+            if (window.devOpenAdmin === true) { location.href = '/'; return; }
+            // Default: go to start-trial
+            location.href = '/start-trial/';
             return;
           }
           if (arr.length === 1) {
             const t = arr[0];
-            location.href = '/products/?tenant=' + encodeURIComponent(t.id);
+            location.href = '/?tenant=' + encodeURIComponent(t.id);
             return;
           }
-          location.href = '/products/';
+          location.href = '/';
         } catch {
           // Fallback
           location.href = '/products/';
@@ -360,7 +368,7 @@
         }
       })();
 
-      // If already signed-in and verified, forward; if not verified, sign out and prompt
+      // If already signed-in and verified, proceed into the app; if unverified, inform and optionally sign out
       try {
         if (!needFirebaseConfig() && ensureFirebaseInitialized()) {
           auth.onAuthStateChanged(async (user) => {
@@ -368,14 +376,16 @@
             try { await user.reload(); } catch {}
             // Suppress any redirect shortly after a sign-up attempt
             if (isNoAutoForward()) return;
+
             if (user.emailVerified) {
-              // Do not auto-redirect from the login page; keep user here
-              try { await auth.signOut(); } catch {}
+              // Reuse the standard post-login routing
+              try { await onSignedIn(); } catch { window.location.replace('/products/'); }
               return;
             }
-            // Keep them on the page if unverified
-            try { await auth.signOut(); } catch {}
+
+            // Unverified: keep them on login with guidance (optionally clear session)
             setMsg('Please verify your email, then sign in.');
+            try { await auth.signOut(); } catch {}
           });
         }
       } catch {}

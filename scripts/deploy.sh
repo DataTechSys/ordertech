@@ -9,6 +9,8 @@ PROJECT_ID="$(gcloud config get-value project)"
 REGION="${REGION:-us-central1}"
 AR_LOCATION="${AR_LOCATION:-us-central1}"
 REPO="smart-order"
+# Ensure assets bucket is set; allow override via env
+ASSETS_BUCKET="${ASSETS_BUCKET:-smart-order-assets-me-central1-715493130630}"
 
 if [[ "$ENVIRONMENT" == "staging" ]]; then
   SERVICE="smart-order-staging"
@@ -27,7 +29,8 @@ gcloud run deploy "${SERVICE}" \
   --image="${IMAGE}" \
   --region="${REGION}" \
   --platform=managed \
-  --port=8080
+  --port=8080 \
+  --update-env-vars "ASSETS_BUCKET=${ASSETS_BUCKET}"
 
 echo "Deployment complete. Service URL:" >&2
 gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'

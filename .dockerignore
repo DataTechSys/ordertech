@@ -1,16 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="">
+# Exclude files not needed in the container build context
+.git
+.gitignore
+node_modules
+npm-debug.log
+**/.DS_Store
 
-    <title>New page</title>
+# Exclude local artifacts
+kiosk-shell/node_modules
+kiosk-shell/dist
+kiosk-shell/.cache
 
-    <link href="css/style.css" rel="stylesheet">
-  </head>
-
-  <body></body>
-</html>
+# Editor/project files
+.vscode
+.idea

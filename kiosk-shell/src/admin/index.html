@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OrderTech Kiosk — Admin</title>
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>OrderTech Kiosk — Admin</h1>
+        <button id="btnClose" title="Close">×</button>
+      </header>
+
+      <section id="gate">
+        <p>Enter PIN to unlock</p>
+        <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="PIN" maxlength="8" />
+        <button id="btnUnlock">Unlock</button>
+        <div id="gateMsg" class="muted"></div>
+      </section>
+
+      <section id="panel" style="display:none;">
+        <div class="grid">
+          <div class="card">
+            <h2>Status</h2>
+            <div id="status">
+              <div>Version: <span id="appVersion">—</span></div>
+              <div>Target: <span id="targetURL">—</span></div>
+              <div>Tenant: <span id="tenantId">—</span></div>
+              <div>Device ID: <span id="deviceId">—</span></div>
+              <div>Branch: <span id="branch">—</span></div>
+            </div>
+            <div class="row">
+              <button id="btnReload">Reload App</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Activation</h2>
+            <div class="muted">Use this 6‑digit code in Admin → Devices to activate.</div>
+            <div class="code" id="actCode">······</div>
+            <div id="actMsg" class="muted"></div>
+            <div class="row">
+              <button id="btnCode">Show/Generate Code</button>
+              <button id="btnRegen">Regenerate Code</button>
+              <button id="btnPoll">Start Polling</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Wi‑Fi</h2>
+            <div class="row">
+              <button id="btnScan">Scan</button>
+              <span id="wifiMsg" class="muted"></span>
+            </div>
+            <ul id="nets"></ul>
+            <div class="row">
+              <input id="ssid" placeholder="SSID" />
+              <input id="pass" placeholder="Password" type="password" />
+              <button id="btnConnect">Connect</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Updates</h2>
+            <div id="updMsg" class="muted">Check server for updates. If available, download in background.</div>
+            <div class="row">
+              <button id="btnCheck">Check for updates</button>
+              <button id="btnInstall">Install downloaded update</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Controls</h2>
+            <div class="row">
+              <button id="btnRestart">Restart App</button>
+              <button id="btnReboot">Reboot Device</button>
+              <button id="btnLogoff">Log off Kiosk User</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Security</h2>
+            <div class="muted">Change the admin unlock PIN (4–8 digits).</div>
+            <div class="row">
+              <input id="newPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="New PIN" />
+              <button id="btnSavePin">Save PIN</button>
+              <span id="pinMsg" class="muted"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <script src="./admin.js"></script>
+  </body>
+</html>
+

@@ -7,6 +7,7 @@
   const PEXT = {
     currentProductId: null,
     extraImages: [],
+    videoUrl: '',
     availability: [],
     modGroups: [], // full list with linked flag
     selectedGroups: new Set()
@@ -128,8 +129,10 @@
     if (prod && prod.id){
       PEXT.currentProductId = prod.id;
       // Load meta
-      try { const r = await api(`/admin/tenants/${encodeURIComponent(tenantId)}/products/${encodeURIComponent(prod.id)}/meta`); const meta = r?.meta || {}; PEXT.extraImages = Array.isArray(meta.extra_images) ? meta.extra_images : []; } catch {}
+      try { const r = await api(`/admin/tenants/${encodeURIComponent(tenantId)}/products/${encodeURIComponent(prod.id)}/meta`); const meta = r?.meta || {}; PEXT.extraImages = Array.isArray(meta.extra_images) ? meta.extra_images : []; PEXT.videoUrl = meta.video_url || ''; } catch {}
       renderExtraImages();
+      // Update video preview + hidden input if present
+      try { const vid = document.getElementById('prodVideoPreview'); const hid = document.getElementById('prodFormVideoUrl'); if (hid) hid.value = PEXT.videoUrl || ''; if (vid && PEXT.videoUrl) { vid.src = PEXT.videoUrl; } } catch {}
       // Load availability and modifiers
       await Promise.all([ loadAvailability(tenantId, prod.id), loadModifierGroups(tenantId, prod.id) ]);
     } else {
@@ -151,6 +154,12 @@
       try {
         const items = (PEXT.availability||[]).map(r => ({ branch_id: r.branch_id, available: !!r.available, price_override: (v=>isNaN(v)?null:v)(Number(r.price_override)), packaging_fee_override: (v=>isNaN(v)?null:v)(Number(r.packaging_fee_override)) }));
         await api(`/admin/tenants/${encodeURIComponent(tenantId)}/products/${encodeURIComponent(productId)}/availability`, { method:'PUT', body: { items } });
+      } catch {}
+      // Save video URL (meta)
+      try {
+        const hid = document.getElementById('prodFormVideoUrl');
+        const vurl = (PEXT.videoUrl || (hid && hid.value) || '').trim();
+        if (vurl) { await api(`/admin/tenants/${encodeURIComponent(tenantId)}/products/${encodeURIComponent(productId)}/meta`, { method:'PUT', body: { video_url: vurl } }); }
       } catch {}
       // Save modifier groups
       try {

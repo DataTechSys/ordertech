@@ -5,24 +5,26 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args: ['push','${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID']
 
-  # Create or update the Cloud Run Job for DB migrations (me-central1, DATABASE_URL)
+  # Create or update the Cloud Run Job for DB migrations (parameterized)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
       - -lc
       - |
         set -euo pipefail
-        JOB="smart-order-migrate"
+        JOB="${_MIGRATION_JOB}"
         IMAGE="${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/smart-order/${_SERVICE}:$BUILD_ID"
         REGION="${_REGION}"
-        INSTANCE="smart-order-469705:me-central1:ordertech-db"
+        INSTANCE="${_DB_INSTANCE}"
+        SECRET="${_DB_SECRET}"
         if gcloud run jobs describe "$$JOB" --region "$$REGION" >/dev/null 2>&1; then
           gcloud run jobs update "$$JOB" \
             --image "$$IMAGE" \
             --region "$$REGION" \
             --command node \
             --args scripts/migrate.js \
-            --set-secrets DATABASE_URL=DATABASE_URL:latest \
+            --set-secrets "DATABASE_URL=$${SECRET}:latest" \
+            --set-env-vars "PGHOST=/cloudsql/$$INSTANCE,PGPORT=5432" \
             --set-cloudsql-instances "$$INSTANCE"
         else
           gcloud run jobs create "$$JOB" \
@@ -30,16 +32,17 @@ steps:
             --region "$$REGION" \
             --command node \
             --args scripts/migrate.js \
-            --set-secrets DATABASE_URL=DATABASE_URL:latest \
+            --set-secrets "DATABASE_URL=$${SECRET}:latest" \
+            --set-env-vars "PGHOST=/cloudsql/$$INSTANCE,PGPORT=5432" \
             --set-cloudsql-instances "$$INSTANCE"
         fi
 
   # Execute the migration job and wait for completion
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
-    args: ['run','jobs','execute','smart-order-migrate','--region','${_REGION}','--wait']
+    args: ['run','jobs','execute','${_MIGRATION_JOB}','--region','${_REGION}','--wait']
 
-  # Deploy the service with Cloud SQL and DATABASE_URL secret configured (me-central1)
+  # Deploy the service with Cloud SQL and DATABASE_URL secret configured
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -49,9 +52,9 @@ steps:
         '--region','${_REGION}',
         '--platform','managed',
         '--port','8080',
-        '--set-secrets','DATABASE_URL=DATABASE_URL:latest',
-        '--add-cloudsql-instances','smart-order-469705:me-central1:ordertech-db',
-        '--update-env-vars','ASSETS_BUCKET=smart-order-assets-me-central1-715493130630'
+        '--set-secrets','DATABASE_URL=${_DB_SECRET}:latest',
+        '--add-cloudsql-instances','${_DB_INSTANCE}',
+        '--update-env-vars','ASSETS_BUCKET=${_ASSETS_BUCKET}'
       ]
 
 images:
@@ -60,4 +63,8 @@ images:
 substitutions:
   _REGION: me-central1
   _AR_LOCATION: me-central1
-  _SERVICE: smart-order
+  _SERVICE: ordertech
+  _MIGRATION_JOB: migrate-smart-order
+  _DB_SECRET: DATABASE_URL
+  _DB_INSTANCE: smart-order-469705:me-central1:ordertech-db
+  _ASSETS_BUCKET: smart-order-assets-me-central1-715493130630

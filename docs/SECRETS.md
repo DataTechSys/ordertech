@@ -12,7 +12,7 @@ Key principles
 Source-of-truth secret names
 - DATABASE_URL (recommended; used by Cloud Run and migration job)
   - Contains: Postgres connection URL with user, password, db name, and Cloud SQL host path (e.g., host=/cloudsql/PROJECT:REGION:INSTANCE)
-  - Consumers: Cloud Run service smart-order (europe-west1), Cloud Run Job migrate-db, scripts/migrate.js, scripts/run_sql.js
+  - Consumers: Cloud Run service ordertech (me-central1), Cloud Run Job migrate-smart-order, scripts/migrate.js, scripts/run_sql.js
 - DB_PASSWORD (optional; local development convenience)
   - Contains: Database password only (use with scripts/dev_db.sh and DB_USER/DB_NAME)
 
@@ -24,16 +24,16 @@ Create/rotate DATABASE_URL (no values printed)
 3) Build URL safely and add a new version (paste password only at the hidden prompt)
    read -p "DB user: " DB_USER
    read -s -p "DB password (hidden): " DB_PASS; echo
-   DB_NAME="smart_order"
-   INSTANCE="smart-order-469705:us-central1:smart-order-pg"
-   DATABASE_URL=$(node -e 'const e=encodeURIComponent; const u=process.env; const url=`postgres://${e(u.DB_USER)}:${e(u.DB_PASS)}@/${e(u.DB_NAME)}?host=/cloudsql/${u.INSTANCE}`; process.stdout.write(url);' \
-     DB_USER="$DB_USER" DB_PASS="$DB_PASS" DB_NAME="$DB_NAME" INSTANCE="$INSTANCE")
+  DB_NAME="smart_order"
+  INSTANCE="smart-order-469705:me-central1:ordertech-db"
+  DATABASE_URL=$(node -e 'const e=encodeURIComponent; const u=process.env; const url=`postgres://${e(u.DB_USER)}:${e(u.DB_PASS)}@/${e(u.DB_NAME)}?host=/cloudsql/${u.INSTANCE}`; process.stdout.write(url);' \
+    DB_USER="$DB_USER" DB_PASS="$DB_PASS" DB_NAME="$DB_NAME" INSTANCE="$INSTANCE")
    printf "%s" "$DATABASE_URL" | gcloud secrets versions add DATABASE_URL --data-file=-
    unset DB_USER DB_PASS DATABASE_URL
 
 Grant Cloud Run runtime access
-- Determine the service account (SA) used by the smart-order service:
-  RUNTIME_SA="$(gcloud run services describe smart-order --region=europe-west1 \
+- Determine the service account (SA) used by the ordertech service:
+  RUNTIME_SA="$(gcloud run services describe ordertech --region=me-central1 \
     --format='value(spec.template.spec.serviceAccountName)')"
 - Grant access:
   gcloud secrets add-iam-policy-binding DATABASE_URL \
@@ -42,22 +42,22 @@ Grant Cloud Run runtime access
 
 Wire DATABASE_URL into Cloud Run (service)
 - Ensure the secret is mapped and Cloud SQL instance is attached:
-  gcloud run services update smart-order \
-    --region=europe-west1 \
+  gcloud run services update ordertech \
+    --region=me-central1 \
     --set-secrets=DATABASE_URL=DATABASE_URL:latest \
-    --add-cloudsql-instances=smart-order-469705:us-central1:smart-order-pg
+    --add-cloudsql-instances=smart-order-469705:me-central1:ordertech-db
 
 Cloud Run Job for migrations
-- The CI pipeline (cloudbuild.yaml) updates/creates a migrate-db job that runs scripts/migrate.js with:
+- The CI pipeline (cloudbuild.yaml) updates/creates a migrate-smart-order job that runs scripts/migrate.js with:
   --set-secrets DATABASE_URL=DATABASE_URL:latest
-  --add-cloudsql-instances smart-order-469705:us-central1:smart-order-pg
+  --add-cloudsql-instances smart-order-469705:me-central1:ordertech-db
 
 Local development (Cloud SQL Auth Proxy)
 Option A — Use full DATABASE_URL from GSM (simplest)
 - Create scripts/dev_db.env (not committed) with:
   PROJECT_ID=smart-order-469705
-  REGION=europe-west1
-  CONNECTION_NAME=smart-order-469705:us-central1:smart-order-pg
+  REGION=me-central1
+  CONNECTION_NAME=smart-order-469705:me-central1:ordertech-db
   DB_URL_SECRET=DATABASE_URL
 - Usage:
   . scripts/dev_db.sh
@@ -72,8 +72,8 @@ Option A — Use full DATABASE_URL from GSM (simplest)
 Option B — Use DB_PASSWORD for a constructed local URL
 - Create scripts/dev_db.env (not committed) with:
   PROJECT_ID=smart-order-469705
-  REGION=europe-west1
-  CONNECTION_NAME=smart-order-469705:us-central1:smart-order-pg
+  REGION=me-central1
+  CONNECTION_NAME=smart-order-469705:me-central1:ordertech-db
   DB_USER=ordertech
   DB_NAME=smart_order
   DB_PASSWORD_SECRET=DB_PASSWORD

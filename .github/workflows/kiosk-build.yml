@@ -1,0 +1,66 @@
+name: Kiosk Windows build and publish artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'kiosk-shell/**'
+      - '.github/workflows/kiosk-build.yml'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: kiosk-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: kiosk-shell/package-lock.json
+
+      - name: Install deps
+        working-directory: kiosk-shell
+        run: npm ci
+
+      - name: Build Windows (NSIS)
+        working-directory: kiosk-shell
+        run: npm run dist
+
+      - name: Copy artifacts into server feed
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path kiosk/win | Out-Null
+          Copy-Item kiosk-shell/dist/latest.yml kiosk/win/latest.yml -Force
+          Get-ChildItem kiosk-shell/dist -Filter '*.exe' | ForEach-Object { Copy-Item $_.FullName kiosk/win/ -Force }
+          Get-ChildItem kiosk-shell/dist -Filter '*.blockmap' | ForEach-Object { Copy-Item $_.FullName kiosk/win/ -Force }
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(kiosk): publish Windows artifacts to kiosk/win"
+          title: "Publish kiosk Windows artifacts"
+          body: |
+            This PR adds the latest kiosk Windows installer and feed metadata.
+
+            Files added under `kiosk/win/` will be served at:
+            https://app.ordertech.me/kiosk/win/
+
+            After merge, a separate deploy workflow (if configured) can redeploy Cloud Run to publish the feed.
+          branch: ci/kiosk-artifacts-${{ github.run_number }}
+          base: ${{ github.ref_name }}
+          add-paths: |
+            kiosk/win/**

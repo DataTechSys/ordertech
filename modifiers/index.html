@@ -25,16 +25,18 @@
           <div class="toolbar">
             <button id="newGroupBtn" class="btn">New Group</button>
             <button id="newOptionBtn" class="btn">New Option</button>
+            <div class="flex" style="gap:8px; margin-left:8px;">
+              <button id="btnModImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import</span></button>
+              <button id="btnModExport" class="btn"><span class="icon ri ri-upload-2-line"></span><span>Export CSV</span></button>
+            </div>
             <div class="spacer"></div>
-            <div class="flex center">
-              <label class="grid" style="max-width:160px;">
-                <span class="label" style="white-space: nowrap;">Page size</span>
-                <select id="modPageSize" class="select">
-                  <option value="20" selected>20</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-              </label>
+            <div class="flex center" style="gap:8px; align-items:center;">
+              <span class="label" style="white-space: nowrap;">Page size</span>
+              <select id="modPageSize" class="select">
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
             </div>
           </div>
           <div class="tabs" id="modTabs">
@@ -55,6 +57,40 @@
         </div>
       </section>
     </main>
+
+    <!-- Import Modifiers Modal -->
+    <div id="modImportModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modImportTitle">
+        <div class="header">
+          <div class="title" id="modImportTitle">Import Modifiers</div>
+          <button id="modImportClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Groups CSV</span>
+              <input id="modImportGroups" type="file" accept=".csv,text/csv" />
+              <small class="muted">Template: <a href="/data/templates/modifiers.csv" target="_blank" rel="noopener">modifiers.csv</a></small>
+            </label>
+            <label class="grid"><span class="label">Options CSV</span>
+              <input id="modImportOptions" type="file" accept=".csv,text/csv" />
+              <small class="muted">Template: <a href="/data/templates/modifiers_options.csv" target="_blank" rel="noopener">modifiers_options.csv</a></small>
+            </label>
+          </div>
+          <div class="stack" style="gap:8px;">
+            <div class="muted">Groups Preview</div>
+            <div id="modImportPreviewGroups"></div>
+            <div class="muted">Options Preview</div>
+            <div id="modImportPreviewOptions"></div>
+          </div>
+        </div>
+        <div class="footer">
+          <span id="modImportStatus" class="muted">—</span>
+          <span class="spacer"></span>
+          <button id="modImportCancel" class="btn">Cancel</button>
+          <button id="modImportConfirm" class="btn primary">Import</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Group Modal -->
     <div id="groupModal" class="modal-backdrop" aria-hidden="true">
@@ -109,6 +145,11 @@
               <input id="optFormName" class="input"/>
             </label>
           </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Reference</span>
+              <input id="optFormRef" class="input" placeholder="Optional external reference" />
+            </label>
+          </div>
           <div class="row cols-3">
             <label class="grid"><span class="label">Price (KWD)</span>
               <input id="optFormPrice" type="number" step="0.001" min="0" class="input"/>
@@ -132,6 +173,7 @@
 
     <script src="/js/admin-common.js"></script>
     <script src="/js/admin-shell.js"></script>
+    <script src="/js/importer.js"></script>
     <script src="/js/modifiers.js"></script>
   </body>
 </html>

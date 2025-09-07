@@ -1,0 +1,7 @@
+name: smartorder-http-redirect
+description: HTTP to HTTPS redirect URL map for app.ordertech.me and related hosts
+defaultUrlRedirect:
+  httpsRedirect: true
+  stripQuery: false
+  redirectResponseCode: MOVED_PERMANENTLY_DEFAULT
+

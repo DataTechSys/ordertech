@@ -1,20 +1,12 @@
 <!-- /sidebar/sidebar.html -->
 <nav class="menu" role="tree">
+  <div class="brand">
+    <div class="logo" aria-label="OrderTech"></div>
+  </div>
   <div class="menu-section" data-section>
     <a class="menu-item" href="/"><span class="icon ri ri-dashboard-line"></span><span class="label">Dashboard</span></a>
   </div>
 
-  <div class="menu-section" data-section>
-    <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-platform">
-      <span class="chev">▾</span>
-      <span class="icon ri ri-shield-user-line"></span>
-      <span class="label">Platform</span>
-    </button>
-    <div class="menu-body" id="sec-platform">
-      <a class="menu-item" href="/tenants/"><span class="icon ri ri-team-line"></span><span class="label">Tenants</span></a>
-      <a class="menu-item" href="/billing/"><span class="icon ri ri-bill-line"></span><span class="label">Billing</span></a>
-    </div>
-  </div>
 
   <div class="menu-section" data-section>
     <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-menu">
@@ -25,9 +17,9 @@
     <div class="menu-body" id="sec-menu">
       <a class="menu-item" href="/products/"><span class="icon ri ri-shopping-bag-3-line"></span><span class="label">Products</span></a>
       <a class="menu-item" href="/categories/"><span class="icon ri ri-grid-line"></span><span class="label">Categories</span></a>
-      <a class="menu-item" href="/modifiers/"><span class="icon ri ri-sliders-line"></span><span class="label">Modifiers</span></a>
+      <a class="menu-item" href="/modifiers/"><span class="icon ri ri-equalizer-line"></span><span class="label">Modifiers</span></a>
     </div>
-  </div>
+</div>
 
   <div class="menu-section" data-section>
     <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-org">
@@ -45,19 +37,29 @@
   </div>
 
   <div class="menu-section" data-section>
+    <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-platform">
+      <span class="chev">▾</span>
+      <span class="icon ri ri-shield-star-line"></span>
+      <span class="label">Platform</span>
+    </button>
+    <div class="menu-body" id="sec-platform">
+      <a class="menu-item" href="/tenants/"><span class="icon ri ri-building-4-line"></span><span class="label">Tenants</span></a>
+      <a class="menu-item" href="/platform/admins/"><span class="icon ri ri-user-settings-line"></span><span class="label">Platform Admins</span></a>
+      <a class="menu-item" href="/logs/"><span class="icon ri ri-file-list-3-line"></span><span class="label">Logs</span></a>
+    </div>
+  </div>
+
+  <div class="menu-section" data-section>
     <button class="menu-head" role="treeitem" aria-expanded="true" aria-controls="sec-marketing">
       <span class="chev">▾</span>
       <span class="icon ri ri-megaphone-line"></span>
       <span class="label">Marketing</span>
     </button>
     <div class="menu-body" id="sec-marketing">
-      <a class="menu-item" href="/posters/"><span class="icon ri ri-image-2-line"></span><span class="label">Posters</span></a>
+      <a class="menu-item" href="/poster/"><span class="icon ri ri-image-2-line"></span><span class="label">Posters</span></a>
       <a class="menu-item" href="/messages/"><span class="icon ri ri-message-3-line"></span><span class="label">Messages</span></a>
     </div>
   </div>
 
-  <div class="bottom-bar">
-    <button class="btn icon ghost sidebar-toggle" id="sidebarCollapse" aria-label="Collapse sidebar" title="Collapse sidebar">☰</button>
-  </div>
 </nav>
 

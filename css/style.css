@@ -12,6 +12,7 @@
   --muted: #A3B1A4;
   --acc: #718472;
   --live: #718472;
+  --line: #e5e7eb;
 
   /* Typography */
   --font-family: 'Inter', sans-serif;
@@ -83,6 +84,7 @@ body {
   gap: var(--space-2);
   padding: var(--space-2);
   min-height: 0;
+  margin-top: 8px; /* bring page down slightly */
 }
 
 .upper {
@@ -113,6 +115,17 @@ body {
 .video-panel {
   position: relative;
 }
+/* Logo overlay on video panel */
+.video-panel .logo-overlay{
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  height: 28px;
+  z-index: 15;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.0);
+  padding: 0;
+}
 
 #remoteVideo {
   width: 100%;
@@ -121,18 +134,33 @@ body {
   border-radius: var(--radius);
 }
 
+/* Picture-in-Picture (local video) — keep small and maintain aspect on mobile */
 .pip {
   position: absolute;
-  bottom: var(--space-2);
-  left: var(--space-2);
-  width: 90px;
-  height: 120px;
+  bottom: max(var(--space-2), env(safe-area-inset-bottom));
+  right: var(--space-2);
+  /* Size relative to panel; keep it small on phones */
+  width: clamp(72px, 18vw, 128px);
+  aspect-ratio: 9 / 16; /* portrait */
+  height: auto;
+  max-height: 32%;
   border: 2px solid white;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   z-index: 10;
   transform: scaleX(-1);
   object-fit: cover;
+  object-position: center;
+  pointer-events: auto; /* enable drag */
+  touch-action: none; /* prevent scroll during drag */
+}
+
+/* iPhone portrait: shrink further */
+@media (max-width: 480px), (orientation: portrait) {
+  .pip {
+    width: clamp(64px, 22vw, 112px);
+    max-height: 28%;
+  }
 }
 
 .order-panel .billCard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--space-2);display:flex;flex-direction:column;flex:1;min-height:0}
@@ -143,6 +171,18 @@ body {
 .order-panel .billFoot{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .order-panel .billFoot .row{display:flex;justify-content:space-between}
 .order-panel .billFoot .row.total{font-weight:700}
+/* Branch flags at top right of order summary */
+.billHead .billMeta{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+/* Connection status chip */
+.chip.status{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;border-radius:999px;border:1px solid; font-size:12px; font-weight:700;}
+.chip.status.ready{background:#f8fafc;border-color:#e5e7eb;color:#111827}
+.chip.status.connected{background:#ecfdf5;border-color:#10b981;color:#065f46}
+.chip.status.offline{background:#fef2f2;border-color:#ef4444;color:#991b1b}
+.branch-flags{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.branch-flags .flag{display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:20px;height:22px;padding:2px 8px;border-radius:10px;border:1px solid transparent;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.branch-flags .flag.idle{background:#22c55e;border-color:#16a34a;color:#0b1220}
+.branch-flags .flag.waiting{background:#f59e0b;border-color:#d97706;color:#0b1220}
+.branch-flags .flag.in-session{background:#ef4444;border-color:#dc2626;color:#fff}
 
 .menu {
   flex: 2;
@@ -158,10 +198,20 @@ body {
 .tabs {
   flex-shrink: 0;
   display: flex;
-  gap: var(--space-2);
+  gap: 10px;
   flex-wrap: wrap;
-  row-gap: var(--space-2);
+  row-gap: 4px;
   border-bottom: none;
+}
+/* Grid variant for equal-width distribution */
+ .tabs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  row-gap: 4px;
+  max-height: calc((var(--tab-height, 42px) + 4px) * 3);
+  overflow-y: auto; /* allow scroll when >3 rows */
+  overscroll-behavior: contain;
 }
 
 /* Support explicit two-row layout constructed in JS */
@@ -169,26 +219,56 @@ body {
 .tab-row { display: grid; gap: var(--space-2); }
 .tab-row .tab { width: 100%; }
 
-/* Category buttons */
+/* Category tabs */
+/* Action buttons layout inside Order Summary */
+.order-panel .actions{ display:grid; grid-template-columns: 1fr 1fr 1fr 1.2fr; gap: 8px; margin-top: 8px; align-items: stretch; }
+.order-panel .actions .btn{ height: 56px; border-radius: 12px; font-size: 16px; font-weight: 600; border: 1px solid #d1d5db; background:#ffffff; color:#0b1220; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.04); width: 100%; }
+.order-panel .actions .btn:hover{ background:#f8fafc; }
+.order-panel .actions .btn:active{ transform: translateY(0.5px); box-shadow: 0 0 0 rgba(0,0,0,0); }
+/* Emphasize Pay button slightly larger border and green accent */
+.order-panel .actions #payBtn{ border: 2px solid #16a34a; }
+
+/* Modal action buttons: match Pay/Poster style */
+#optBtnsRow .btn{ height: 56px; border-radius: 12px; font-size: 16px; font-weight: 600; border: 1px solid #d1d5db; background:#ffffff; color:#0b1220; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.04); width: 100%; }
+#optBtnsRow .btn:hover{ background:#f8fafc; }
+#optBtnsRow .btn:active{ transform: translateY(0.5px); box-shadow: 0 0 0 rgba(0,0,0,0); }
+
+/* Compact modal layout (fit image width, center image) when modifiers are shown */
+#optionsCard.compact{ width: min(560px, 92vw) !important; padding: 12px !important; }
+#optionsCard.compact .product-img{ display:block; width:100%; aspect-ratio:1/1; height:auto; object-fit:cover; margin:0 auto; border-radius:12px; border:1px solid #e5e7eb; }
+#optionsCard.compact #optTitle{ margin-left: 4px; }
+/* Keep one-row layout on small screens as well */
+@media (max-width: 768px){
+  .order-panel .actions{ grid-template-columns: 1fr 1fr 1fr 1.2fr; }
+}
+
 .tab {
   appearance: none;
-  border: 1px solid #e5e7eb;
-  background: #f3f4f6;
+  background: #ffffff;
   color: var(--ink);
   padding: 8px 12px;
-  border-radius: 12px;
+  height: var(--tab-height, 42px);
+  line-height: calc(var(--tab-height, 42px) - 16px);
+  border-radius: 10px 10px 0 0;
   font-size: 15px;
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: background .12s ease, border-color .12s ease, transform .12s ease, box-shadow .12s ease;
+  border: 1px solid var(--line);
+  border-bottom: 3px solid transparent;
+  transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.tab:hover { background: #eef2f7; border-color: #d1d5db; transform: translateY(-1px); }
+.tab:hover { background: #f8fafc; border-color: #dbe0e5; }
 .tab:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .tab.active {
-  background: var(--acc);
   border-color: var(--acc);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-bottom-color: var(--acc);
+  background: #ffffff;
+  color: var(--ink);
 }
 
 .grid {
@@ -197,7 +277,7 @@ body {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);
   gap: var(--space-2);
-  padding-top: var(--space-2);
+  padding-top: 6px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -234,6 +314,34 @@ body {
   color: var(--muted);
   font-weight: var(--font-weight-bold);
 }
+
+/* Arabic/English name stack in tiles (Almarai), Arabic first */
+.tile .names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-1);
+  flex-grow: 1;
+  align-items: center; /* center horizontally */
+}
+/* Apply Almarai to visible name lines and price */
+.tile .names .name-ar,
+.tile .names .name-en,
+.tile .price {
+  font-family: 'Almarai', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+  .tile .names .name-ar {
+  direction: rtl;
+  text-align: center !important; /* enforce center */
+  font-weight: 700; /* bold */
+  font-size: 1.1em; /* slightly larger */
+}
+.tile .names .name-en {
+  text-align: center !important; /* enforce center */
+  font-weight: 600; /* semibold */
+}
+/* Ensure price in tiles is centered */
+.grid .tile .price { text-align: center !important; width: 100%; }
 
 @media (max-width: 768px) {
   .canvas {
@@ -272,8 +380,11 @@ body {
 
   .tab {
     font-size: 14px;
-    padding: 6px 0;
+    padding: 4px 10px;
+    height: var(--tab-height, 36px);
+    line-height: calc(var(--tab-height, 36px) - 8px);
   }
+  .tabs { gap: 8px; row-gap: 4px; max-height: calc((var(--tab-height, 36px) + 4px) * 3); }
 
   .tile {
     padding: 4px;

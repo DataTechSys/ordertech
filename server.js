@@ -14,6 +14,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const fs = require('fs');
 let admin = null; // firebase-admin
+// GCS client not needed for redirect approach
 try {
   admin = require('firebase-admin');
   if (!admin.apps?.length) admin.initializeApp();
@@ -35,6 +36,94 @@ const routes = [];
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// ---- Activity logging (platform + per-tenant)
+const memActivityLogs = [];
+const MAX_MEM_LOGS = 5000;
+function pushMemLog(entry){ try { memActivityLogs.push(entry); if (memActivityLogs.length > MAX_MEM_LOGS) memActivityLogs.shift(); } catch {} }
+
+async function ensureLoggingSchema(){
+  if (!HAS_DB) return;
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS admin_activity_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        ts timestamptz NOT NULL DEFAULT now(),
+        level text NOT NULL DEFAULT 'info',
+        scope text NOT NULL, -- 'platform' | 'tenant'
+        tenant_id uuid,
+        actor text,
+        action text,
+        path text,
+        method text,
+        status integer,
+        duration_ms integer,
+        ip text,
+        user_agent text,
+        meta jsonb
+      )
+    `);
+    await db('CREATE INDEX IF NOT EXISTS ix_aal_ts ON admin_activity_logs(ts DESC)');
+    await db('CREATE INDEX IF NOT EXISTS ix_aal_tenant_ts ON admin_activity_logs(tenant_id, ts DESC)');
+    await db("CREATE INDEX IF NOT EXISTS ix_aal_action ON admin_activity_logs(action) ");
+  } catch(_) {}
+}
+
+function sanitizeMeta(req){
+  try {
+    const keys = (obj)=> Object.keys(obj||{});
+    const body = req.body && typeof req.body === 'object' ? { keys: keys(req.body).slice(0,50) } : undefined;
+    const query = req.query && typeof req.query === 'object' ? { ...req.query } : {};
+    // Redact
+    for (const k of Object.keys(query)) {
+      if (/token|password|secret|key/i.test(k)) query[k] = '***'; else if (String(query[k]).length > 200) query[k] = String(query[k]).slice(0,200)+'…';
+    }
+    return { params: req.params||{}, query, body };
+  } catch { return {}; }
+}
+
+async function writeActivityLog(entry){
+  const safe = { ...entry };
+  if (!HAS_DB) { pushMemLog(safe); return; }
+  try {
+    await ensureLoggingSchema();
+    await db(`insert into admin_activity_logs (ts, level, scope, tenant_id, actor, action, path, method, status, duration_ms, ip, user_agent, meta)
+              values (now(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
+      [ safe.level||'info', safe.scope||'platform', safe.tenant_id||null, safe.actor||null, safe.action||null,
+        safe.path||null, safe.method||null, (safe.status||null), (safe.duration_ms||null), safe.ip||null,
+        safe.user_agent||null, JSON.stringify(safe.meta||{}) ]);
+  } catch { pushMemLog(safe); }
+}
+
+// Middleware: log admin requests
+app.use(async (req, res, next) => {
+  try {
+    const pathStr = String(req.path||'');
+    // Only log admin namespace; skip noisy health/static
+    const should = /^\/admin\//.test(pathStr) && !/^\/admin\/upload-local\//.test(pathStr);
+    if (!should) return next();
+    const t0 = Date.now();
+    const ua = String(req.headers['user-agent']||'');
+    const ip = String(req.headers['x-forwarded-for']||req.socket?.remoteAddress||'');
+    const actor = (req.user?.email||'').toLowerCase() || null;
+    const method = req.method;
+    const origEnd = res.end;
+    res.end = function(chunk, encoding, cb){
+      try {
+        const status = res.statusCode;
+        // Tenant detection for /admin/tenants/:id/*
+        let tid = null;
+        try { const m = pathStr.match(/^\/admin\/tenants\/([^\/]+)/); if (m) tid = m[1]; } catch {}
+        const scope = tid ? 'tenant' : 'platform';
+        const action = `${method} ${pathStr}`;
+        const meta = sanitizeMeta(req);
+        writeActivityLog({ level: 'info', scope, tenant_id: tid||null, actor, action, path: pathStr, method, status, duration_ms: (Date.now()-t0), ip, user_agent: ua, meta }).catch(()=>{});
+      } catch {}
+      return origEnd.call(this, chunk, encoding, cb);
+    };
+    return next();
+  } catch { return next(); }
+});
 
 // Force HTTPS for requests that came via HTTP at the load balancer
 app.use((req, res, next) => {
@@ -59,6 +148,8 @@ const memTenantSettingsByTenant = new Map(); // tenant_id -> settings
 const memTenantBrandByTenant = new Map();    // tenant_id -> brand
 // In-memory users per tenant for dev-open mode (when DB not configured)
 const memTenantUsersByTenant = new Map();    // tenant_id -> [{id,email,role,created_at}]
+// In-memory deleted users tombstones per tenant (dev-open mode)
+const memTenantUsersDeletedByTenant = new Map(); // tenant_id -> [{id,email,role,deleted_at}]
 
 // ---- DB
 function buildDbConfig(){
@@ -563,6 +654,24 @@ async function ensureAdminPerfIndexes(){
   try { await db("CREATE INDEX IF NOT EXISTS idx_products_tenant_active ON products(tenant_id, active)"); } catch (_) {}
 }
 
+// Ensure schema for user deletion tracking (soft-delete and tombstones)
+async function ensureUsersDeletionSchema(){
+  if (!HAS_DB) return;
+  // Add deleted_at to users (soft delete marker)
+  try { await db("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS deleted_at timestamptz"); } catch {}
+  // Create tenant_users_deleted tombstone table
+  await db(`
+    CREATE TABLE IF NOT EXISTS tenant_users_deleted (
+      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      user_id uuid NOT NULL,
+      email text,
+      role text,
+      deleted_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (tenant_id, user_id, deleted_at)
+    )`);
+  try { await db("CREATE INDEX IF NOT EXISTS idx_tud_tenant_deleted ON tenant_users_deleted(tenant_id, deleted_at DESC)"); } catch {}
+}
+
 // ---- helpers
 function addRoute(method, route, ...handlers) {
   app[method](route, ...handlers);
@@ -595,10 +704,20 @@ function getForwardedProto(req) {
   } catch { return 'https'; }
 }
 
+function isLocalRequest(req) {
+  try {
+    const host = getForwardedHost(req);
+    return /^localhost$|^127\.0\.0\.1$|^::1$|\.local$/i.test(String(host||''));
+  } catch { return false; }
+}
+
 async function requireTenant(req, res, next) {
   try {
     let t = null;
-    if (HAS_DB) {
+    // Prefer explicit header provided by clients/devices
+    try { const hdr = String(req.header('x-tenant-id') || '').trim(); if (hdr) t = hdr; } catch {}
+    // Fallback to host mapping if header is absent
+    if (!t && HAS_DB) {
       const host = getForwardedHost(req);
       if (host) {
         try {
@@ -607,7 +726,7 @@ async function requireTenant(req, res, next) {
         } catch {}
       }
     }
-    if (!t) t = req.header('x-tenant-id') || DEFAULT_TENANT_ID;
+    if (!t) t = DEFAULT_TENANT_ID;
     req.tenantId = t;
     next();
   } catch (_e) {
@@ -731,6 +850,7 @@ function loadJsonCatalog(){
       for (const p of prodRows) {
         const id = String(p.id || '').trim();
         const name = String(p.name || '').trim();
+        const name_localized = String(p.name_localized || '').trim();
         const price = Number(p.price || 0) || 0;
         const image_url = String(p.image || '').trim();
         const active = String(p.is_active || '').toLowerCase() === 'yes';
@@ -739,7 +859,7 @@ function loadJsonCatalog(){
         const category_id = cat ? cat.id : '';
         const category_name = cat ? cat.name : '';
         if (!id || !name) continue;
-        products.push({ id, name, price, image_url, active, category_id, category_name });
+        products.push({ id, name, name_localized, price, image_url, active, category_id, category_name });
       }
       return { categories, products };
     }
@@ -803,7 +923,7 @@ function loadJsonCatalog(){
           file = findImage(name_en, name_ar);
         }
         const image_url = file ? `/images/products/${encodeURIComponent(file)}` : undefined;
-        products.push({ id, name: name_en, name_ar, price, category_id: cid, category_name: cname, image_url });
+        products.push({ id, name: name_en, name_ar, name_localized: name_ar, price, category_id: cid, category_name: cname, image_url });
       }
     }
     return { categories, products };
@@ -1130,6 +1250,94 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
   }
 });
 
+// Admin: list products with status filtering (active/inactive/all). Returns both active and inactive by default (status=all).
+addRoute('get', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  // No-store to avoid stale admin lists
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('ETag', 'W/"ts-' + Date.now() + '"');
+  } catch {}
+
+  const tenantId = String(req.params.id||'').trim();
+  const statusRaw = String(req.query.status||'all').toLowerCase();
+  const status = ['active','inactive','all'].includes(statusRaw) ? statusRaw : 'all';
+  const category_name = String(req.query.category_name||'');
+
+  // In-memory override takes precedence in dev-open mode
+  const mem = memCatalogByTenant.get(tenantId);
+  if (mem && !HAS_DB) {
+    let list = Array.isArray(mem.products) ? mem.products.slice() : [];
+    if (status === 'active') list = list.filter(p => p.active !== false);
+    else if (status === 'inactive') list = list.filter(p => p.active === false);
+    if (category_name) list = list.filter(p => String(p.category_name||'') === category_name);
+    return res.json(list);
+  }
+  if (!HAS_DB) {
+    // Fall back to JSON catalog when DB is not configured and no mem override — best-effort
+    let list = (JSON_CATALOG.products || []).slice();
+    if (status === 'active') list = list.filter(p => p.active !== false);
+    else if (status === 'inactive') list = list.filter(p => p.active === false);
+    if (category_name) list = list.filter(p => String(p.category_name||'') === category_name);
+    return res.json(list);
+  }
+
+  try {
+    // Build WHERE fragments
+    const where = ['p.tenant_id=$1'];
+    const params = [tenantId];
+    if (status === 'active') where.push('coalesce(p.active, true)');
+    else if (status === 'inactive') where.push('coalesce(p.active, true) = false');
+    if (category_name) { where.push('c.name=$' + (params.length+1+ (status==='all'?1:0))); /* placeholder calc not used here */ }
+
+    // We will not use dynamic placeholder calc above; construct parametrized query carefully
+    const sql = `
+      select 
+        p.id, p.name, p.name_localized, p.description, p.description_localized,
+        p.sku, p.barcode,
+        p.price, p.cost, p.packaging_fee,
+        p.category_id, c.name as category_name,
+        p.image_url, p.image_white_url, p.image_beauty_url,
+        p.preparation_time, p.calories, p.fat_g, p.carbs_g, p.protein_g, p.sugar_g, p.sodium_mg, p.salt_g, p.serving_size,
+        p.spice_level::text as spice_level,
+        p.ingredients_en, p.ingredients_ar, p.allergens,
+        p.pos_visible, p.online_visible, p.delivery_visible,
+        p.talabat_reference, p.jahez_reference, p.vthru_reference,
+        coalesce(p.active, true) as active
+      from products p
+      join categories c on c.id=p.category_id
+      where ${status==='active' ? 'p.tenant_id=$1 and coalesce(p.active,true)'
+             : status==='inactive' ? 'p.tenant_id=$1 and coalesce(p.active,true) = false'
+             : 'p.tenant_id=$1'}
+      ${category_name ? 'and c.name=$2' : ''}
+      order by c.name, p.name
+    `;
+    const rows = await db(sql, category_name ? [tenantId, category_name] : [tenantId]);
+
+    // Fill image_url from JSON catalog or PHOTO_MAP as in /api/products
+    try {
+      if (Array.isArray(rows) && rows.length) {
+        const byName = new Map((JSON_CATALOG.products||[]).map(p => [p.name, p.image_url]));
+        for (const r of rows) {
+          if (!r.image_url) {
+            let u = byName.get(r.name);
+            if (!u) {
+              const f = PHOTO_MAP[r.name];
+              if (f) u = `/images/products/${encodeURIComponent(f)}`;
+            }
+            if (u) r.image_url = u;
+          }
+        }
+      }
+    } catch {}
+
+    return res.json(rows);
+  } catch (_e) {
+    return res.json([]);
+  }
+});
+
 addRoute('post', '/orders', requireTenant, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ ok:false, error:'DB not configured' });
   try {
@@ -1443,6 +1651,17 @@ addRoute('delete', '/webrtc/session/:pairId', async (req, res) => {
   try { broadcastAdminLive(); } catch {}
   res.json({ ok:true });
 });
+addRoute('post', '/preflight/begin', async (req, res) => {
+  try {
+    const targetId = String(req.body?.targetId||'').trim();
+    const requestId = String(req.body?.requestId||'').trim();
+    const scenarios = Array.isArray(req.body?.scenarios) ? req.body.scenarios : [];
+    if (!targetId || !requestId || !scenarios.length) return res.status(400).json({ ok:false, error:'bad_request' });
+    try { broadcast(targetId, { type:'preflight:begin', basketId: targetId, requestId, scenarios }); } catch {}
+    return res.json({ ok:true });
+  } catch { return res.status(500).json({ ok:false, error:'server_error' }); }
+});
+
 addRoute('get', '/webrtc/answer', async (req, res) => {
   const id = String(req.query.pairId||'').trim(); if(!id) return res.status(400).json({ error:'pairId required' });
   if (HAS_DB) {
@@ -1548,16 +1767,31 @@ async function fetchTwilioIceServers(){
   }
 }
 
-addRoute('get', '/webrtc/config', async (_req, res) => {
-  const base = buildIceServers(); // STUN + self-hosted TURN from env, if any
+function getSelfTurnServersFromEnv(){
   try {
-    const tw = await fetchTwilioIceServers();
-    if (tw && tw.length) {
-      // Prefer P2P and self TURN first; append Twilio as fallback
-      return res.json({ iceServers: [...base, ...tw] });
-    }
-  } catch (_e) {}
-  return res.json({ iceServers: base });
+    const urls = String(process.env.TURN_URLS||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const username = (process.env.TURN_USERNAME||'').trim();
+    const credential = (process.env.TURN_PASSWORD||'').trim();
+    if (!urls.length || !username || !credential) return [];
+    return [{ urls, username, credential }];
+  } catch { return []; }
+}
+
+addRoute('get', '/webrtc/config', async (_req, res) => {
+  // Base config (STUN + any self-hosted TURN from env or ICE_SERVERS_JSON)
+  const base = buildIceServers();
+  const selfServers = getSelfTurnServersFromEnv();
+  let twilioServers = [];
+  try {
+    twilioServers = await fetchTwilioIceServers();
+  } catch (_e) { twilioServers = []; }
+  // Compose final list; keep backward-compatible iceServers key
+  const merged = [...(Array.isArray(base)?base:[{ urls: ['stun:stun.l.google.com:19302'] }]), ...(Array.isArray(twilioServers)?twilioServers:[])];
+  try {
+    return res.json({ iceServers: merged, selfServers, twilioServers });
+  } catch {
+    return res.json({ iceServers: merged });
+  }
 });
 
 // ---- Presence (lightweight discovery for Drive‑Thru displays)
@@ -2016,7 +2250,9 @@ function isPlatformAdmin(req){
   const tok = req.header('x-admin-token') || '';
   if (ADMIN_TOKEN && tok === ADMIN_TOKEN) return true;
   const email = (req.user?.email || '').toLowerCase();
-  return Boolean(email && PLATFORM_ADMIN_EMAILS.includes(email));
+  const envList = PLATFORM_ADMIN_EMAILS || [];
+  const dbList = Array.isArray(memPlatformSettings?.platform_admins) ? memPlatformSettings.platform_admins.map(e => String(e||'').toLowerCase()) : [];
+  return Boolean(email && (envList.includes(email) || dbList.includes(email)));
 }
 function requirePlatformAdmin(req, res, next){
   if (isPlatformAdmin(req)) return next();
@@ -2068,15 +2304,38 @@ const requireAdmin = requirePlatformAdmin;
 
 // Development bypass toggles (for local testing only)
 // Set DEV_OPEN_ADMIN=1 to bypass auth on selected admin routes (Tenants)
-const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || process.env.DEV_OPEN || ''));
+const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || process.env.DEV_OPEN || ''))
+  && String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 // Wrapper middlewares used by admin routes below
-const verifyAuthOpen = DEV_OPEN_ADMIN ? ((req, res, next) => { req.user = req.user || { uid: 'dev', email: 'dev@local' }; next(); }) : verifyAuth;
-const requirePlatformAdminOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requirePlatformAdmin;
-const requireTenantAdminResolvedOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requireTenantAdminResolved;
-const requireTenantAdminParamOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requireTenantAdminParam;
-const requireTenantAdminBodyTenantOpen = DEV_OPEN_ADMIN ? ((_req, _res, next) => next()) : requireTenantAdminBodyTenant;
-// Open wrapper for permission-checked routes (e.g., manage_users) in dev-open mode
-const requireTenantPermParamOpenFactory = DEV_OPEN_ADMIN ? (_perm => ((_req, _res, next) => next())) : requireTenantPermParamFactory;
+const verifyAuthOpen = (req, res, next) => {
+  if (DEV_OPEN_ADMIN || isLocalRequest(req)) { req.user = req.user || { uid: 'dev', email: 'dev@local' }; return next(); }
+  return verifyAuth(req, res, next);
+};
+const requirePlatformAdminOpen = (req, res, next) => {
+  if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
+  return requirePlatformAdmin(req, res, next);
+};
+const requireTenantAdminResolvedOpen = (req, res, next) => {
+  if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
+  return requireTenantAdminResolved(req, res, next);
+};
+const requireTenantAdminParamOpen = (req, res, next) => {
+  if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
+  return requireTenantAdminParam(req, res, next);
+};
+const requireTenantAdminBodyTenantOpen = (req, res, next) => {
+  if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
+  return requireTenantAdminBodyTenant(req, res, next);
+};
+// Open wrapper for permission-checked routes (e.g., manage_users) in dev-open or localhost
+const requireTenantPermParamOpenFactory = (perm) => {
+  if (DEV_OPEN_ADMIN) return (_req, _res, next) => next();
+  const inner = requireTenantPermParamFactory(perm);
+  return (req, res, next) => {
+    if (isLocalRequest(req)) return next();
+    return inner(req, res, next);
+  };
+};
 
 // In-memory Tenants store for dev (when DB is not configured)
 const __memTenants = new Map();
@@ -2093,12 +2352,19 @@ function ensureMemTenantsSeed(){
 }
 
 // Dynamic Firebase config for Admin login (from env) with fallback to static file if env not set
-addRoute('get', '/config.js', (_req, res) => {
+addRoute('get', '/config.js', (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
-  const devOpen = !!DEV_OPEN_ADMIN;
+// Auto-enable devOpenAdmin on localhost; otherwise honor env in non-production
+  let devOpen = false;
+  try {
+    const isLocal = isLocalRequest(req);
+    const isProd = /^production$/i.test(String(process.env.NODE_ENV || ''));
+    const allow = !!DEV_OPEN_ADMIN;
+    devOpen = isLocal || (allow && !isProd);
+  } catch { devOpen = false; }
   if (apiKey && authDomain) {
     const cfg = { apiKey, authDomain };
     return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};window.devOpenAdmin=${devOpen};`);
@@ -2122,7 +2388,7 @@ addRoute('get', '/config.json', (_req, res) => {
 });
 
 // ---- Platform/global settings (for super admins)
-let memPlatformSettings = { defaultPosterUrl: '' };
+let memPlatformSettings = { defaultPosterUrl: '', platform_admins: [] };
 async function ensurePlatformSettingsSchema(){
   if (!HAS_DB) return;
   await db(`
@@ -2136,13 +2402,22 @@ async function ensurePlatformSettingsSchema(){
            on conflict (id) do nothing`);
 }
 async function readPlatformSettings(){
+  // Always include env-based platform admins in the in-memory view
+  try {
+    memPlatformSettings.platform_admins = Array.isArray(memPlatformSettings.platform_admins) ? memPlatformSettings.platform_admins : [];
+    memPlatformSettings.platform_admins_env = PLATFORM_ADMIN_EMAILS || [];
+  } catch {}
   if (!HAS_DB) return memPlatformSettings;
   try {
     await ensurePlatformSettingsSchema();
     const rows = await db(`select settings from platform_settings where id='main'`);
     if (rows && rows[0] && rows[0].settings) {
       const s = rows[0].settings || {};
-      memPlatformSettings = { ...memPlatformSettings, ...s };
+      const next = { ...memPlatformSettings, ...s };
+      // Preserve env overlay
+      next.platform_admins = Array.isArray(next.platform_admins) ? next.platform_admins : [];
+      next.platform_admins_env = PLATFORM_ADMIN_EMAILS || [];
+      memPlatformSettings = next;
     }
   } catch {}
   return memPlatformSettings;
@@ -2161,7 +2436,7 @@ async function writePlatformSettings(next){
 }
 addRoute('get', '/platform/settings', verifyAuthOpen, requirePlatformAdminOpen, async (_req, res) => {
   try { const s = await readPlatformSettings(); return res.json({ settings: s }); }
-  catch { return res.json({ settings: {} }); }
+  catch { return res.json({ settings: { platform_admins: [], platform_admins_env: PLATFORM_ADMIN_EMAILS || [] } }); }
 });
 addRoute('put', '/platform/settings', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
   try {
@@ -2961,11 +3236,14 @@ addRoute('put', '/admin/tenants/:id/products/:pid/meta', verifyAuth, requireTena
     : (req.body?.extra_images != null
         ? String(req.body.extra_images).split(',').map(s => s.trim()).filter(Boolean)
         : []);
+  const video_url = req.body?.video_url != null ? String(req.body.video_url).trim() : null;
   await db(
     `update products
-       set meta = coalesce(meta,'{}'::jsonb) || jsonb_build_object('extra_images', $1::jsonb)
-     where tenant_id=$2 and id=$3`,
-    [JSON.stringify(extra_images), tenantId, pid]
+       set meta = coalesce(meta,'{}'::jsonb)
+                 || ($1::jsonb is not null ? jsonb_build_object('extra_images', $1::jsonb) : '{}'::jsonb)
+                 || (case when $2::text is not null and length($2::text) > 0 then jsonb_build_object('video_url', $2::text) else '{}'::jsonb end)
+     where tenant_id=$3 and id=$4`,
+    [JSON.stringify(extra_images), video_url, tenantId, pid]
   );
   return res.json({ ok: true });
 });
@@ -3045,23 +3323,40 @@ addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
         order by (pmg.product_id is null) asc, coalesce(pmg.sort_order, 999999) asc, mg.name asc`,
       [tenantId, pid]
     );
-    // If none linked, return empty to signal no modifiers
+    // If none linked, fall back to all groups for this tenant to avoid empty popups
     const linked = (rows||[]).filter(r => r.linked);
-    if (!linked.length) return res.json({ items: [] });
-    const groupIds = linked.map(r => r.group_id);
+    let effective = linked;
+    if (!effective.length) {
+      try {
+        effective = await db(
+          `select mg.id as group_id, mg.name, mg.reference,
+                  coalesce(mg.required,false) as required,
+                  coalesce(mg.min_select,0) as min_select,
+                  coalesce(mg.max_select,0) as max_select,
+                  false as linked
+             from modifier_groups mg
+            where mg.tenant_id=$1
+            order by mg.name asc`,
+          [tenantId]
+        );
+      } catch { effective = []; }
+    }
+    const groupIds = effective.map(r => r.group_id);
     let opts = [];
     try {
-      opts = await db(
-        `select id, group_id, name, price, is_active, sort_order
-           from modifier_options
-          where tenant_id=$1
-            and group_id = any($2::uuid[])
-            and coalesce(is_active,true)
-          order by coalesce(sort_order,999999) asc, name asc`,
-        [tenantId, groupIds]
-      );
+      if (groupIds.length) {
+        opts = await db(
+          `select id, group_id, name, price, is_active, sort_order
+             from modifier_options
+            where tenant_id=$1
+              and group_id = any($2::uuid[])
+              and coalesce(is_active,true)
+            order by coalesce(sort_order,999999) asc, name asc`,
+          [tenantId, groupIds]
+        );
+      }
     } catch {}
-    const byGroup = new Map(linked.map(g => [String(g.group_id), { group: g, options: [] }]));
+    const byGroup = new Map((effective||[]).map(g => [String(g.group_id), { group: g, options: [] }]));
     for (const o of (opts||[])){
       const key = String(o.group_id);
       if (byGroup.has(key)) byGroup.get(key).options.push({ id:o.id, name:o.name, price: Number(o.price)||0, sort_order: o.sort_order });
@@ -3191,6 +3486,7 @@ function parseFoodicsCsvs(){
     for (const p of prodRows) {
       const id = String(p.id || '').trim();
       const name = String(p.name || '').trim();
+      const name_localized = String(p.name_localized || '').trim();
       const price = Number(p.price || 0) || 0;
       const image_url = String(p.image || '').trim();
       const active = String(p.is_active || '').toLowerCase() === 'yes';
@@ -3199,7 +3495,7 @@ function parseFoodicsCsvs(){
       const category_id = cat ? cat.id : '';
       const category_name = cat ? cat.name : '';
       if (!id || !name) continue;
-      products.push({ id, name, price, image_url, active, category_id, category_name });
+      products.push({ id, name, name_localized, price, image_url, active, category_id, category_name });
     }
     return { categories, products };
   } catch (_e) {
@@ -4039,8 +4335,11 @@ async function ensureModifiersSchema(){
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  // Backfill new columns/indexes for pre-existing deployments
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS reference text'); } catch {}
   await db('CREATE INDEX IF NOT EXISTS ix_modifier_groups_tenant_ref ON modifier_groups(tenant_id, reference)');
   await db('CREATE INDEX IF NOT EXISTS ix_modifier_options_group ON modifier_options(group_id)');
+  await db('CREATE INDEX IF NOT EXISTS ix_modifier_options_tenant_ref ON modifier_options(tenant_id, reference)');
 }
 
 // List modifier groups
@@ -4089,7 +4388,7 @@ addRoute('get', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTenan
   if (!HAS_DB) return res.json({ items: [] });
   await ensureModifiersSchema();
   const gid = String(req.query.group_id || '').trim();
-  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, o.name, o.price, o.is_active, o.sort_order, o.created_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
+  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, g.reference as group_reference, o.name, o.reference, o.price, o.is_active, o.sort_order, o.created_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
   const params = [req.params.id];
   if (gid) { sql += ' and o.group_id=$2'; params.push(gid); }
   sql += ' order by g.name asc, coalesce(o.sort_order, 999999) asc, o.name asc';
@@ -4103,8 +4402,9 @@ addRoute('post', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTena
   const id = req.params.id; const f = req.body||{};
   const group_id = String(f.group_id||'').trim(); if (!group_id) return res.status(400).json({ error: 'group_id_required' });
   const name = String(f.name||'').trim(); if (!name) return res.status(400).json({ error: 'name_required' });
+  const reference = f.reference != null ? String(f.reference).trim() : null;
   const price = Number(f.price||0)||0; const is_active = f.is_active != null ? Boolean(f.is_active) : true; const sort_order = f.sort_order != null ? Number(f.sort_order) : null;
-  const [row] = await db('insert into modifier_options (tenant_id, group_id, name, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6) returning id, group_id, name, price, is_active, sort_order', [id, group_id, name, price, is_active, sort_order]);
+  const [row] = await db('insert into modifier_options (tenant_id, group_id, name, reference, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7) returning id, group_id, name, reference, price, is_active, sort_order', [id, group_id, name, reference, price, is_active, sort_order]);
   res.json({ ok:true, option: row });
 });
 // Update option
@@ -4114,6 +4414,7 @@ addRoute('put', '/admin/tenants/:id/modifiers/options/:oid', verifyAuth, require
   const id=req.params.id, oid=req.params.oid; const f=req.body||{};
   if (f.group_id != null) await db('update modifier_options set group_id=$1 where tenant_id=$2 and id=$3', [String(f.group_id), id, oid]);
   if (f.name != null) await db('update modifier_options set name=$1 where tenant_id=$2 and id=$3', [String(f.name), id, oid]);
+  if (f.reference != null) await db('update modifier_options set reference=$1 where tenant_id=$2 and id=$3', [String(f.reference||''), id, oid]);
   if (f.price != null) await db('update modifier_options set price=$1 where tenant_id=$2 and id=$3', [Number(f.price)||0, id, oid]);
   if (f.is_active != null) await db('update modifier_options set is_active=$1 where tenant_id=$2 and id=$3', [Boolean(f.is_active), id, oid]);
   if (f.sort_order != null) await db('update modifier_options set sort_order=$1 where tenant_id=$2 and id=$3', [Number(f.sort_order), id, oid]);
@@ -4256,14 +4557,16 @@ addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAd
     needInsert = true;
   } else {
     const r0 = rows[0];
-    if (r0.claimed_at) return res.status(409).json({ error: 'code_already_claimed' });
-    if (new Date(r0.expires_at).getTime() < Date.now()) needInsert = true;
+    // If code is claimed and still tied to a device, block
+    if (r0.claimed_at && r0.device_id) return res.status(409).json({ error: 'code_already_claimed' });
+    // If code was claimed but device is gone, or expired, reset
+    if (r0.claimed_at || new Date(r0.expires_at).getTime() < Date.now()) needInsert = true;
   }
   if (needInsert) {
-    await db('insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2, now() + interval \'"+ (14*24*60) +" minutes\', $3::jsonb) on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=coalesce(device_activation_codes.meta,\'{}\'::jsonb) || excluded.meta', [code, tenantId, JSON.stringify({ created_by: 'admin-claim' })]);
+    await db("insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2, now() + interval '14 days', $3::jsonb) on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta, claimed_at=null, device_id=null", [code, tenantId, JSON.stringify({ created_by: 'admin-claim' })]);
   } else {
-    // ensure tenant binding
-    await db('update device_activation_codes set tenant_id=$1 where code=$2', [tenantId, code]);
+    // ensure tenant binding and clear stale claim flags just in case
+    await db('update device_activation_codes set tenant_id=$1, claimed_at=null, device_id=null where code=$2', [tenantId, code]);
   }
   const token = genDeviceToken();
   const [dev] = await db(
@@ -4308,7 +4611,7 @@ addRoute('delete', '/admin/tenants/:id/devices/:deviceId', verifyAuth, requireTe
   if (rows[0].status !== 'revoked') return res.status(409).json({ error: 'device_not_revoked' });
   // Clear FK from activation codes, then delete
   try {
-    await db("update device_activation_codes set device_id=null where device_id=$1", [deviceId]);
+    await db("delete from device_activation_codes where device_id=$1", [deviceId]);
   } catch {}
   await db("delete from devices where tenant_id=$1 and id=$2", [tenantId, deviceId]);
 res.json({ ok:true });
@@ -4522,24 +4825,224 @@ addRoute('put', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTenan
   res.json({ ok:true });
 });
 
-// Remove user from tenant
+// Remove user from tenant (soft-delete semantics: record tombstone; mark user deleted when no memberships remain)
 addRoute('delete', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
   const tenantId = req.params.id; const userId = req.params.userId;
   if (!HAS_DB && DEV_OPEN_ADMIN) {
     const arr = memTenantUsersByTenant.get(tenantId) || [];
     const before = arr.length;
+    // Find and remove
+    const idx = arr.findIndex(x => x.id === userId);
+    let tomb = null;
+    if (idx >= 0) {
+      const u = arr[idx];
+      tomb = { id: u.id, email: u.email, role: u.role, deleted_at: new Date().toISOString() };
+    }
     const next = arr.filter(x => x.id !== userId);
     memTenantUsersByTenant.set(tenantId, next);
+    if (tomb) {
+      const delArr = memTenantUsersDeletedByTenant.get(tenantId) || [];
+      delArr.unshift(tomb);
+      memTenantUsersDeletedByTenant.set(tenantId, delArr);
+    }
     return res.json({ ok: next.length < before });
   }
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
-  await db('delete from tenant_users where tenant_id=$1 and user_id=$2', [tenantId, userId]);
-  cacheDelByPrefix(`adm:users:${tenantId}`);
-  res.json({ ok:true });
+  try {
+    await ensureUsersDeletionSchema();
+    // Snapshot role/email before delete
+    const rows = await db(
+      `select tu.role::text as role, lower(u.email) as email
+         from tenant_users tu
+         join users u on u.id=tu.user_id
+        where tu.tenant_id=$1 and tu.user_id=$2
+        limit 1`, [tenantId, userId]
+    );
+    if (rows && rows[0]) {
+      const r = rows[0];
+      try { await db('insert into tenant_users_deleted (tenant_id, user_id, email, role, deleted_at) values ($1,$2,$3,$4, now())', [tenantId, userId, r.email||null, r.role||null]); } catch {}
+    }
+    await db('delete from tenant_users where tenant_id=$1 and user_id=$2', [tenantId, userId]);
+    // If user has no memberships left, mark soft-deleted
+    try {
+      const c = await db('select count(*)::int as n from tenant_users where user_id=$1', [userId]);
+      const n = (c && c[0] && c[0].n) || 0;
+      if (n === 0) {
+        await db('update users set deleted_at=coalesce(deleted_at, now()) where id=$1', [userId]);
+      }
+    } catch {}
+    cacheDelByPrefix(`adm:users:${tenantId}`);
+    cacheDelByPrefix(`adm:users-deleted:${tenantId}`);
+    res.json({ ok:true });
+  } catch (_e) {
+    res.status(500).json({ error: 'delete_failed' });
+  }
+});
+
+// List deleted users for a tenant (tombstones)
+addRoute('get', '/admin/tenants/:id/users/deleted', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit || 50)));
+  const offset = Math.max(0, Number(req.query.offset || 0));
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      const arr = memTenantUsersDeletedByTenant.get(tenantId) || [];
+      const items = arr.slice(offset, offset+limit).map(x => ({ id: x.id, email: x.email, role: x.role, deleted_at: x.deleted_at }));
+      return res.json({ items });
+    }
+    return res.json({ items: [] });
+  }
+  try {
+    await ensureUsersDeletionSchema();
+    const key = `adm:users-deleted:${tenantId}:l=${limit}:o=${offset}`;
+    const cached = cacheGet(key);
+    if (cached) return res.json(cached);
+    const rows = await db(
+      `select tud.user_id as id, tud.email as email, tud.role as role, tud.deleted_at as deleted_at
+         from tenant_users_deleted tud
+        where tud.tenant_id=$1
+        order by tud.deleted_at desc
+        limit $2 offset $3`, [tenantId, limit, offset]
+    );
+    const payload = { items: rows };
+    cacheSet(key, payload, 5000);
+    res.json(payload);
+  } catch (_e) {
+    res.json({ items: [] });
+  }
+});
+
+// Permanently purge a user from the database (only if not a member of any tenant)
+addRoute('delete', '/admin/tenants/:id/users/:userId/purge', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const userId = String(req.params.userId||'').trim();
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      // Remove from mem deleted list for this and any tenant; remove from active lists as well
+      try {
+        for (const [tid, arr] of memTenantUsersDeletedByTenant.entries()) {
+          memTenantUsersDeletedByTenant.set(tid, (arr||[]).filter(x => x.id !== userId));
+        }
+        for (const [tid, arr] of memTenantUsersByTenant.entries()) {
+          memTenantUsersByTenant.set(tid, (arr||[]).filter(x => x.id !== userId));
+        }
+      } catch {}
+      return res.json({ ok:true });
+    }
+    return res.status(503).json({ error: 'DB not configured' });
+  }
+  try {
+    await ensureUsersDeletionSchema();
+    const c = await db('select count(*)::int as n from tenant_users where user_id=$1', [userId]);
+    const n = (c && c[0] && c[0].n) || 0;
+    if (n > 0) return res.status(409).json({ error: 'still_member' });
+    // Best-effort: remove tombstones for this user
+    try { await db('delete from tenant_users_deleted where user_id=$1', [userId]); } catch {}
+    await db('delete from users where id=$1', [userId]);
+    cacheDelByPrefix(`adm:users:${tenantId}`);
+    cacheDelByPrefix(`adm:users-deleted:${tenantId}`);
+    res.json({ ok:true });
+  } catch (_e) {
+    res.status(500).json({ error: 'purge_failed' });
+  }
+});
+
+// ---- Logs UI and APIs
+// Serve UI at /logs only when Accept includes HTML; otherwise fall through
+addRoute('get', /^\/logs$/, (req, res, next) => {
+  try { const accept = String(req.headers.accept||''); if (accept.includes('text/html')) return res.redirect(302, '/logs/'); } catch {}
+  return next();
+});
+addRoute('get', /^\/logs\/$/, verifyAuthOpen, requirePlatformAdminOpen, (_req, res) => {
+  res.sendFile(path.join(__dirname, 'logs', 'index.html'));
+});
+
+// Platform admin: list logs with filters
+addRoute('get', '/admin/logs', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const level = String(req.query.level||'').toLowerCase();
+  const action = String(req.query.action||'').trim();
+  const tenant_id_raw = req.query.tenant_id;
+  const tenant_id = tenant_id_raw == null ? '' : String(tenant_id_raw).trim();
+  const q = String(req.query.q||'').trim();
+  const from = String(req.query.from||'').trim();
+  const to = String(req.query.to||'').trim();
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit||50)));
+  const offset = Math.max(0, Number(req.query.offset||0));
+
+  if (!HAS_DB) {
+    const arr = memActivityLogs.slice().reverse();
+    const items = arr.filter(r => (!level || String(r.level||'').toLowerCase()===level)
+      && (!action || String(r.action||'').includes(action))
+      && (!tenant_id || String(r.tenant_id||'')===tenant_id)
+      && (!q || JSON.stringify(r.meta||{}).toLowerCase().includes(q.toLowerCase()) || String(r.action||'').toLowerCase().includes(q.toLowerCase()))
+    ).slice(offset, offset+limit);
+    return res.json({ items, total: arr.length });
+  }
+  try {
+    await ensureLoggingSchema();
+    const where = [];
+    const params = [];
+    function add(cond, val){ where.push(cond); params.push(val); }
+    if (level) add('lower(level)=$'+(params.length+1), level);
+    if (action) add('action ilike $'+(params.length+1), '%'+action+'%');
+    if (tenant_id !== '') add('tenant_id=$'+(params.length+1), tenant_id);
+    if (tenant_id === '') where.push('tenant_id is null');
+    if (from) add('ts >= $'+(params.length+1), from);
+    if (to) add('ts <= $'+(params.length+1), to);
+    if (q) add('(action ilike $'+(params.length+1)+' OR path ilike $'+(params.length+1)+' OR actor ilike $'+(params.length+1)+' OR cast(meta as text) ilike $'+(params.length+1)+')', '%'+q+'%');
+    const whereSql = where.length ? (' where ' + where.join(' and ')) : '';
+    const sql = `select id, ts, level, scope, tenant_id, actor, action, path, method, status, duration_ms, ip, user_agent, meta from admin_activity_logs ${whereSql} order by ts desc limit ${limit} offset ${offset}`;
+    const rows = await db(sql, params);
+    res.json({ items: rows });
+  } catch (_e) { res.json({ items: [] }); }
+});
+
+// Tenant admin: list their logs
+addRoute('get', '/admin/tenants/:id/logs', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const level = String(req.query.level||'').toLowerCase();
+  const action = String(req.query.action||'').trim();
+  const q = String(req.query.q||'').trim();
+  const from = String(req.query.from||'').trim();
+  const to = String(req.query.to||'').trim();
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit||50)));
+  const offset = Math.max(0, Number(req.query.offset||0));
+
+  if (!HAS_DB) {
+    const arr = memActivityLogs.slice().reverse();
+    const items = arr.filter(r => String(r.tenant_id||'')===tenantId
+      && (!level || String(r.level||'').toLowerCase()===level)
+      && (!action || String(r.action||'').includes(action))
+      && (!q || JSON.stringify(r.meta||{}).toLowerCase().includes(q.toLowerCase()) || String(r.action||'').toLowerCase().includes(q.toLowerCase()))
+    ).slice(offset, offset+limit);
+    return res.json({ items, total: items.length });
+  }
+  try {
+    await ensureLoggingSchema();
+    const where = ['tenant_id=$1'];
+    const params = [tenantId];
+    if (level) { where.push('lower(level)=$'+(params.length+1)); params.push(level); }
+    if (action) { where.push('action ilike $'+(params.length+1)); params.push('%'+action+'%'); }
+    if (from) { where.push('ts >= $'+(params.length+1)); params.push(from); }
+    if (to) { where.push('ts <= $'+(params.length+1)); params.push(to); }
+    if (q) { where.push('(action ilike $'+(params.length+1)+' OR path ilike $'+(params.length+1)+' OR actor ilike $'+(params.length+1)+' OR cast(meta as text) ilike $'+(params.length+1)+')'); params.push('%'+q+'%'); }
+    const sql = `select id, ts, level, scope, tenant_id, actor, action, path, method, status, duration_ms, ip, user_agent, meta from admin_activity_logs where ${where.join(' and ')} order by ts desc limit ${limit} offset ${offset}`;
+    const rows = await db(sql, params);
+    res.json({ items: rows });
+  } catch (_e) { res.json({ items: [] }); }
 });
 
 // My tenants (for the logged-in user)
 addRoute('get', '/admin/my/tenants', verifyAuthOpen, async (req, res) => {
+  // In dev-open mode, always expose the in-memory default tenant(s) so the UI does not force start-trial
+if (DEV_OPEN_ADMIN || isLocalRequest(req)) {
+    try { ensureMemTenantsSeed(); } catch {}
+    try {
+      const arr = Array.from(__memTenants.values());
+      if (arr && arr.length) return res.json(arr);
+    } catch {}
+    return res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
+  }
   if (!HAS_DB) return res.json([]);
   try {
     const email = (req.user?.email||'').toLowerCase();
@@ -4643,9 +5146,11 @@ addRoute('post', '/auth/bootstrap-trial', verifyAuth, async (req, res) => {
   const email = (req.user?.email||'').toLowerCase();
   if (!email) return res.status(401).json({ error: 'unauthorized' });
   try {
-    // If user already mapped to any tenant, return that list
-    const rows = await db(`select tu.tenant_id from tenant_users tu join users u on u.id=tu.user_id where lower(u.email)=$1 limit 1`, [email]);
-    if (rows.length) return res.json({ ok:true, existing:true });
+    // If user already mapped to any tenant, decide whether to proceed
+    // Safety: if the only existing mapping is to the default bootstrap tenant, still allow creating a new tenant
+    const rows = await db(`select tu.tenant_id from tenant_users tu join users u on u.id=tu.user_id where lower(u.email)=$1`, [email]);
+    const onlyDefault = Array.isArray(rows) && rows.length > 0 && rows.every(r => String(r.tenant_id) === String(DEFAULT_TENANT_ID));
+    if (rows.length && !onlyDefault) return res.json({ ok:true, existing:true });
 
     // Create tenant
     const id = require('crypto').randomUUID();
@@ -4837,6 +5342,9 @@ try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads'), { recursive: true 
 app.use('/sidebar', express.static(path.join(__dirname, 'sidebar')));
 // Expose CSV data (e.g., top_sellers.csv) for frontend consumption
 app.use('/data', express.static(path.join(__dirname, 'data')));
+// Kiosk auto-update feed (Electron generic provider) — currently served from local folder (requires redeploy per release)
+try { fs.mkdirSync(path.join(__dirname, 'kiosk', 'win'), { recursive: true }); } catch {}
+app.use('/kiosk/win', express.static(path.join(__dirname, 'kiosk', 'win')));
 
 
 
@@ -4857,6 +5365,8 @@ addRoute('get', '/billing/', (_req, res) => res.sendFile(path.join(__dirname, 'b
 addRoute('get', '/poster/', (_req, res) => res.sendFile(path.join(__dirname, 'poster', 'index.html')));
 addRoute('get', '/posters/', (_req, res) => res.redirect(301, '/poster/'));
 addRoute('get', '/messages/', (_req, res) => res.sendFile(path.join(__dirname, 'messages', 'index.html')));
+// Platform Admin pages
+addRoute('get', '/platform/admins/', (_req, res) => res.sendFile(path.join(__dirname, 'platform', 'admins', 'index.html')));
 // Friendly aliases for cashier/display
 addRoute('get', /^\/drive\/?$/,  (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
 addRoute('get', '/drive/', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
@@ -4865,7 +5375,9 @@ addRoute('get', '/display', (_req, res) => res.sendFile(path.join(__dirname, 'dr
 addRoute('get', /^\/cashier\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier/', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
-// Login page (root-level)
+// Login page (root-level) — support /login and /login/
+addRoute('get', /^\/login\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
+addRoute('get', '/login', (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
 addRoute('get', '/login/', (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
 
 // Singular aliases to plural
@@ -4891,6 +5403,9 @@ addRoute('get', '/favico.ico', (_req, res) => {
 // Root logo used by UI headers
 addRoute('get', '/ordertech.png', (_req, res) => {
   try { return res.sendFile(path.join(__dirname, 'ordertech.png')); } catch { return res.status(404).end(); }
+});
+addRoute('get', '/placeholder.jpg', (_req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'placeholder.jpg')); } catch { return res.status(404).end(); }
 });
 // Default poster asset mapping
 addRoute('get', '/poster.png', (_req, res) => {

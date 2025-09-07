@@ -1,3 +1,3 @@
 NAME                  REGION                                                                                  ENDPOINT_TYPE
-smartorder-ew1-neg    https://www.googleapis.com/compute/v1/projects/smart-order-469705/regions/europe-west1  SERVERLESS
+ordertech-me1-neg     https://www.googleapis.com/compute/v1/projects/smart-order-469705/regions/me-central1   SERVERLESS
 smartorder-koobs-neg  https://www.googleapis.com/compute/v1/projects/smart-order-469705/regions/me-central1   SERVERLESS

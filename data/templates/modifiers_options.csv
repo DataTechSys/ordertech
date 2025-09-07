@@ -1,0 +1,7 @@
+modifier_group_reference,option_name,price,is_active,sort_order
+MILK,Whole Milk,0,yes,1
+MILK,Oat Milk,0.200,yes,2
+SHOT,1 Espresso,0.000,yes,1
+SHOT,2 Espresso,0.300,yes,2
+TOPPING,Chocolate Sauce,0.150,yes,1
+

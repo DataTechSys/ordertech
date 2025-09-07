@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accept Invite</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Accept Invite</h1>
+    <p id="msg">Checking token...</p>
+  </div>
+  <script src="/config.js"></script>
+  <script>
+  (async function(){
+    function qs(s, el=document){ return el.querySelector(s); }
+    function setMsg(t){ const m=qs('#msg'); if (m) m.textContent=t; }
+    // Ensure Firebase login (or dev-open) before accepting
+    function ensureFirebase(){ try { if (!window.firebase) return null; if (!firebase.apps?.length) firebase.initializeApp(window.firebaseConfig||{}); return firebase; } catch { return window.firebase||null; } }
+    const u = new URL(window.location.href);
+    const token = (u.searchParams.get('token')||'').trim();
+    if (!token) { setMsg('Invalid invite link'); return; }
+    const fb = ensureFirebase();
+    async function accept(){
+      try {
+        const idTok = fb && fb.auth ? await (fb.auth().currentUser?.getIdToken(true)) : (localStorage.getItem('ID_TOKEN')||'');
+        const res = await fetch('/admin/invite/accept', { method:'POST', headers:{ 'Content-Type':'application/json', ...(idTok?{Authorization:'Bearer '+idTok}:{}) }, body: JSON.stringify({ token }) });
+        const j = await res.json().catch(()=>({}));
+        if (!res.ok || !j.ok) { setMsg('Invite acceptance failed'); return; }
+        setMsg('Invite accepted. Redirecting...');
+        setTimeout(()=>{ window.location.href = '/products/?tenant='+encodeURIComponent(j.tenant_id); }, 800);
+      } catch { setMsg('Invite acceptance failed'); }
+    }
+    if (fb && fb.auth) {
+      fb.auth().onAuthStateChanged((usr)=>{ if (usr) accept(); else { window.location.href = '/login/?next='+encodeURIComponent(window.location.href); } });
+    } else {
+      // dev-open fallback
+      accept();
+    }
+  })();
+  </script>
+</body>
+</html>

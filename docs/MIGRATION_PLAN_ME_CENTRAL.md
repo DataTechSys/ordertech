@@ -11,12 +11,12 @@ Purpose
 - Achieve near-zero downtime using Database Migration Service (continuous replication) with a short write-freeze at cutover.
 
 Current known state (from repo)
-- Cloud Run (prod): smart-order in me-central1 (lb backend via serverless NEG); URL in docs/PROJECT_CONTEXT.md
+- Cloud Run (prod): ordertech in me-central1 (LB backend via serverless NEG); URL in docs/PROJECT_CONTEXT.md
 - Cloud SQL (prod): smart-order-469705:me-central1:ordertech-db (primary)
 - HTTPS LB (global): IP 34.160.231.88 with managed cert for app.ordertech.me; URL map smartorder-koobs-map (names in docs)
 - Secret Manager: DATABASE_URL used by service and job; PGPASSWORD present in CI; scripts/setup_db_secret.sh standardizes DATABASE_URL
 - GCS assets: ASSETS_BUCKET env consumed by @google-cloud/storage for signed URLs (/admin/upload-url)
-- CI/CD: cloudbuild.yaml uses _REGION=europe-west1 and _AR_LOCATION=us-central1; Cloud Run Job migration references us-central1 Cloud SQL
+- CI/CD: cloudbuild.yaml targets me-central1 (service: ordertech) and runs the migrate-smart-order job; the DATABASE_URL secret points to me-central1 Cloud SQL (ordertech-db)
 - WebRTC ICE/TURN: supports ICE_SERVERS_JSON or TURN_URLS/USERNAME/PASSWORD; Twilio fallback supported
 
 High-level phases

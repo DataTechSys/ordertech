@@ -106,7 +106,7 @@ body {
   object-fit: cover;
 }
 
-.order-panel .billCard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;min-height:100%}
+.order-panel .billCard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;min-height:100%;position:relative}
 .order-panel .billHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .order-panel .billItems{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 .order-panel .billItems li{display:grid;grid-template-columns:40px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #eee}
@@ -140,28 +140,6 @@ body {
 .tab-row { display: grid; gap: var(--space-2); }
 .tab-row .tab { width: 100%; }
 
-/* Category buttons */
-.tab {
-  appearance: none;
-  border: 1px solid #e5e7eb;
-  background: #f3f4f6;
-  color: var(--ink);
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition: background .12s ease, border-color .12s ease, transform .12s ease, box-shadow .12s ease;
-}
-.tab:hover { background: #eef2f7; border-color: #d1d5db; transform: translateY(-1px); }
-.tab:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-
-.tab.active {
-  background: var(--acc);
-  border-color: var(--acc);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
 
 .grid {
   flex-grow: 1;
@@ -196,16 +174,62 @@ body {
   border-radius: var(--radius);
 }
 
-.name {
-  font-weight: var(--font-weight-semibold);
+/* Names wrapper and lines: Arabic first, then English */
+.names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-top: var(--space-1);
   flex-grow: 1;
+}
+
+/* Apply Almarai to the visible menu name lines and price */
+.names .name-ar,
+.names .name-en,
+.price {
+  font-family: 'Almarai', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.names .name-ar {
+  direction: rtl;
+  text-align: right;
+  font-weight: 700;
+}
+
+.names .name-en {
+  font-weight: 600;
 }
 
 .price {
   color: var(--muted);
   font-weight: var(--font-weight-bold);
 }
+
+/* Device overlay (Bill Area) */
+#deviceOverlay { position:absolute; inset:12px; background:rgba(10,12,16,0.92); z-index:25; color:#fff; display:none; flex-direction:column; border:1px solid #243244; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,0.35); }
+#deviceOverlay.show { display:flex; }
+#deviceOverlay .ov-header { padding:10px 14px; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.08); letter-spacing:0.2px; border-top-left-radius:14px; border-top-right-radius:14px; }
+#deviceOverlay .ov-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; padding:10px; overflow:auto; }
+#deviceOverlay .ov-card { background:#0f172a; border:1px solid #243244; border-radius:12px; padding:10px; cursor:pointer; transition:transform .12s ease, border-color .12s ease; }
+#deviceOverlay .ov-card:hover { transform:translateY(-1px); border-color:#3a4b61; }
+#deviceOverlay .ov-title { font-weight:700; }
+#deviceOverlay .ov-sub { font-size:12px; opacity:0.75; margin-top:2px; }
+#deviceOverlay .ov-badges { display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+#deviceOverlay .ov-badge { font-size:11px; padding:2px 6px; border-radius:6px; border:1px solid #2a3346; background:#0b1220; }
+#deviceOverlay .ov-badge.good { border-color:#22c55e; }
+#deviceOverlay .ov-badge.mid { border-color:#eab308; }
+#deviceOverlay .ov-badge.bad { border-color:#ef4444; }
+#deviceOverlay .ov-foot { padding:8px 16px; border-top:1px solid rgba(255,255,255,0.08); font-size:12px; opacity:0.75; }
+
+/* Network Bars next to status chip */
+.net-bars { display:inline-flex; align-items:flex-end; gap:2px; margin-left:8px; vertical-align:middle; }
+.net-bars i { display:inline-block; width:4px; background:#9ca3af; border-radius:2px; }
+.net-bars i:nth-child(1){ height:6px; }
+.net-bars i:nth-child(2){ height:9px; }
+.net-bars i:nth-child(3){ height:12px; }
+.net-bars.bars-1 i:nth-child(1){ background:#ef4444; }
+.net-bars.bars-2 i:nth-child(-n+2){ background:#eab308; }
+.net-bars.bars-3 i:nth-child(-n+3){ background:#22c55e; }
 
 /* Responsive Layout */
 @media (max-width: 768px) {

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Platform Admins</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><span>Platform</span><span class="sep">›</span><span>Admins</span></nav>
+      <div class="searchbar"></div>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Platform Admins</div>
+            <span class="spacer"></span>
+          </div>
+          <div class="row cols-2" style="margin-bottom: 12px;">
+            <label class="grid"><span class="label">Admin email</span>
+              <input id="admEmail" class="input" type="email" placeholder="user@example.com" />
+            </label>
+            <div style="display:flex; align-items:flex-end; gap:8px;">
+              <button id="btnAdd" class="btn primary">Add</button>
+            </div>
+          </div>
+          <div id="status" class="muted" style="margin-bottom:8px;">—</div>
+          <div id="list" class="list"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script>
+      (function(){
+        const $ = (s, el=document) => el.querySelector(s);
+        const listEl = $('#list');
+        const statusEl = $('#status');
+        function setStatus(t){ if (statusEl) statusEl.textContent = t || ''; }
+
+        let envAdmins = [];
+        let dbAdmins = [];
+
+        function render(){
+          const set = new Set([...(envAdmins||[]).map(e=>e.toLowerCase()), ...(dbAdmins||[]).map(e=>e.toLowerCase())]);
+          const items = Array.from(set.values()).sort();
+          if (!items.length) { listEl.innerHTML = '<div class="muted">No platform admins yet.</div>'; return; }
+          const rows = items.map(email => {
+            const isEnv = (envAdmins||[]).map(e=>e.toLowerCase()).includes(email.toLowerCase());
+            const canRemove = !isEnv;
+            return `
+              <div class="row" style="display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="icon ri ri-shield-user-line"></span>
+                  <div>
+                    <div style="font-weight:600;">${email}</div>
+                    ${isEnv ? '<div class="muted-sm">From env (read-only)</div>' : ''}
+                  </div>
+                </div>
+                <div>
+                  ${canRemove ? `<button class="btn danger sm" data-email="${email}">Remove</button>` : ''}
+                </div>
+              </div>
+            `;
+          }).join('');
+          listEl.innerHTML = rows;
+          Array.from(listEl.querySelectorAll('button[data-email]')).forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              const email = e.currentTarget.getAttribute('data-email');
+              await removeAdmin(email);
+            });
+          });
+        }
+
+        async function load(){
+          setStatus('Loading...');
+          try {
+            const res = await Admin.api('/platform/settings');
+            const s = (res && res.settings) || {};
+            envAdmins = Array.isArray(s.platform_admins_env) ? s.platform_admins_env : [];
+            dbAdmins  = Array.isArray(s.platform_admins) ? s.platform_admins : [];
+            setStatus('');
+            render();
+          } catch (e) {
+            setStatus('Failed to load platform admins.');
+          }
+        }
+
+        function normEmail(v){ return String(v||'').trim().toLowerCase(); }
+        function isEmail(v){ return /.+@.+\..+/.test(v); }
+
+        async function save(list){
+          try {
+            setStatus('Saving...');
+            await Admin.api('/platform/settings', { method: 'PUT', body: { settings: { platform_admins: list } } });
+            dbAdmins = list.slice();
+            setStatus('Saved.');
+            render();
+          } catch (e) {
+            setStatus('Save failed.');
+          }
+        }
+
+        async function addAdmin(){
+          const inp = $('#admEmail');
+          const email = normEmail(inp && inp.value);
+          if (!isEmail(email)) { setStatus('Enter a valid email.'); return; }
+          const lower = (dbAdmins||[]).map(e=>e.toLowerCase());
+          if (lower.includes(email)) { setStatus('Already added.'); return; }
+          const next = (dbAdmins||[]).slice(); next.push(email);
+          await save(next);
+          try { inp.value=''; } catch{}
+        }
+
+        async function removeAdmin(email){
+          const lower = normEmail(email);
+          const next = (dbAdmins||[]).filter(e => normEmail(e) !== lower);
+          await save(next);
+        }
+
+        document.getElementById('btnAdd')?.addEventListener('click', addAdmin);
+
+        Admin.bootstrapAuth(load);
+      })();
+    </script>
+  </body>
+</html>
+

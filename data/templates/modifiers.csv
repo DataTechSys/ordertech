@@ -1,0 +1,5 @@
+reference,name,min_select,max_select,required
+MILK,MIlk Choice,0,1,no
+SHOT,Coffee Shots,0,3,no
+TOPPING,Topping,0,3,no
+

@@ -1,10 +1,13 @@
 /* General styles */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* prevent page-level scrollbars; inner panels manage their own scroll */
+}
 body {
   background-color: var(--bg);
   color: var(--ink);
   font-family: var(--font-family);
-  margin: 0;
-  height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -55,6 +58,9 @@ body {
   gap: var(--space-2);
   padding: var(--space-2);
   min-height: 0;
+  overflow: hidden; /* prevent small overflows from creating outer scrollbars */
+  box-sizing: border-box;
+  margin-top: 8px; /* bring page down slightly */
 }
 
 /* Upper section: 1/3 of height */
@@ -64,6 +70,7 @@ body {
   grid-template-columns: 1fr 2fr; /* 1/3 width for video, 2/3 for order */
   gap: var(--space-2);
   min-height: 0;
+  overflow: hidden;
 }
 
 .video-panel,
@@ -119,6 +126,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .tabs {
@@ -126,28 +134,45 @@ body {
   display: flex;
   gap: var(--space-2);
   border-bottom: 1px solid var(--muted);
+  flex-wrap: wrap;
+  overflow: hidden;
 }
-/* Two-row equal-width categories */
-.tabs.two-rows {
+/* Responsive category grid — auto-fit into as many columns/rows as needed */
+.tabs {
   display: grid;
-  gap: var(--space-2);
-  border-bottom: none;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--muted);
+  max-height: calc((var(--tab-height, 42px) + 6px) * 3);
+  overflow-y: auto; /* allow scroll when >3 rows */
+  overscroll-behavior: contain;
 }
-.tab-row .tab { width: 100%; }
 
+/* Folder-style category buttons */
 .tab {
-  background: none;
-  border: none;
-  padding: var(--space-1) 0;
-  font-size: 16px;
+  background: #111827;
+  border: 1px solid #2a3340;
+  border-bottom-width: 2px;
+  border-bottom-color: transparent;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 15px;
   font-weight: var(--font-weight-semibold);
   color: var(--muted);
   cursor: pointer;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+.tab:hover { border-color: #3a4759; color: var(--ink); }
 
 .tab.active {
   color: var(--ink);
-  border-bottom: 3px solid var(--acc);
+  border-color: var(--acc);
+  background: #1b2430;
 }
 
 .grid {
@@ -183,10 +208,30 @@ body {
   border-radius: var(--radius);
 }
 
-.name {
-  font-weight: var(--font-weight-semibold);
+/* Names wrapper and lines: Arabic first, then English */
+.names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-top: var(--space-1);
   flex-grow: 1;
+}
+
+/* Apply Almarai to the menu name lines and price */
+.names .name-ar,
+.names .name-en,
+.price {
+  font-family: 'Almarai', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+.names .name-ar {
+  direction: rtl;
+  text-align: right;
+  font-weight: 700;
+}
+
+.names .name-en {
+  font-weight: 600;
 }
 
 .price {

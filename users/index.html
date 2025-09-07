@@ -31,24 +31,27 @@
                 <option value="admin">admin</option>
                 <option value="owner">owner</option>
               </select>
-              <button id="btnAddUser" class="btn primary">Add</button>
+              <button id="btnAddUser" class="btn primary">Invite</button>
             </div>
             <span class="spacer"></span>
-            <label class="grid" style="max-width:160px;">
-              <span class="label">Page size</span>
-              <select id="userPageSize" class="select">
+            <div id="userPageSizeWrap" class="flex center" style="gap:8px; max-width:200px;">
+              <span class="label" style="white-space:nowrap;">Page size</span>
+              <select id="userPageSize" class="select" style="min-width:80px;">
                 <option value="25">25</option>
                 <option value="50" selected>50</option>
                 <option value="100">100</option>
               </select>
-            </label>
-            <div class="btn-group">
+            </div>
+            <div id="userPagerGroup" class="btn-group">
               <button id="userPrev" class="btn">Prev</button>
               <button id="userNext" class="btn">Next</button>
             </div>
           </div>
-          <div id="usersPageInfo" class="chip">—</div>
-          <div id="usersTableWrap"></div>
+          <div class="tabs" id="userTabs" style="margin-top:8px;">
+            <button class="tab active" data-tab="active">Active</button>
+            <button class="tab" data-tab="deleted">Deleted</button>
+          </div>
+          <div id="usersTableWrap" class="mt-2"></div>
         </div>
       </section>
     </main>

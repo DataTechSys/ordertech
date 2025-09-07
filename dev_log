@@ -8,7 +8,7 @@
 
 Next:
 - Pushed feature/admin-ui-wiring and deployed to Cloud Run (pending below)
-- Verify production at https://app.ordertech.me/public/admin/index.html after deploy completes
+- Verify production at https://app.ordertech.me/products/ after deploy completes
 
 dev_log — project activity log
 
@@ -21,7 +21,7 @@ Local Admin Token (dev) quickstart
 - For local Admin endpoints without Firebase Admin:
   - export ADMIN_TOKEN=dev
   - npm start
-  - Open http://localhost:5050/public/admin/?admin_token=dev
+- Open http://localhost:5050/products/?admin_token=dev
 - To clear/override: run localStorage.removeItem('ADMIN_TOKEN') in the browser console, or visit with a different admin_token to overwrite.
 
 === 2025-08-30T07:06:47Z — Admin UI auth stability, prod deploy, dev token ===
@@ -74,7 +74,7 @@ Admin UI wiring highlights
 
 Local status
 - Server restarted; Admin login page:
-  - http://localhost:5050/public/admin/login.html → 200 OK after restart
+- http://localhost:5050/login/ → 200 OK after restart
 - Public endpoints available: /categories, /products
 
 Next actions (owner)
@@ -175,7 +175,7 @@ Stop/disable
   - Health: curl -s https://app.ordertech.me/health
   - Cloud SQL attachment (names only): gcloud run services describe smart-order --region=europe-west1 --format='value(spec.template.metadata.annotations.run.googleapis.com/cloudsql-instances)'
   - Env names: gcloud run services describe smart-order --region=europe-west1 --format='value(spec.template.spec.containers[0].env.name)'
-  - Firebase config served: curl -s https://app.ordertech.me/public/admin/config.js | head -n 3
+- Firebase config served: curl -s https://app.ordertech.me/config.js | head -n 3
 - Notes: Server sets no-cache headers for /public/admin; root pages should be served by express.static(PUB).
 
 Results:

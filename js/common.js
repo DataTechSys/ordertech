@@ -14,8 +14,12 @@ export function proxiedImageSrc(u){
 // tenant + remote params
 export function getParams() {
   const u = new URL(location.href);
+  let tenant = u.searchParams.get('tenant') || '';
+  if (!tenant) {
+    try { tenant = localStorage.getItem('DEVICE_TENANT_ID') || ''; } catch {}
+  }
   return {
-    tenant: u.searchParams.get('tenant') || '',
+    tenant,
     remote: u.searchParams.get('remote') || '' // optional test video URL
   };
 }
@@ -42,16 +46,38 @@ export async function loadProducts(tenant, categoryName = '') {
 
 // camera helpers
 export async function startLocalCam(videoEl, opts = {}) {
+  async function tryGet(constraints) {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia(constraints);
+      return s || null;
+    } catch { return null; }
+  }
+  function attach(el, stream){
+    if (!el || !stream) return;
+    try { el.muted = true; el.playsInline = true; el.autoplay = true; } catch {}
+    el.srcObject = stream;
+    try { el.play && el.play().catch(()=>{}); } catch {}
+  }
   try {
-    // Request a reasonable resolution without forcing a camera selection
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30 }
-      },
+    // 1) Preferred constraints
+    let stream = await tryGet({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
       audio: opts && opts.audio === true
     });
+    // 2) Simpler fallback
+    if (!stream) stream = await tryGet({ video: true, audio: opts && opts.audio === true });
+    // 3) Enumerate devices and pick the first available videoinput
+    if (!stream) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        if (cams.length) {
+          const d = cams[0];
+          stream = await tryGet({ video: { deviceId: { exact: d.deviceId } }, audio: opts && opts.audio === true });
+        }
+      } catch {}
+    }
+    if (!stream) return null;
 
     // Apply auto-exposure/white-balance/focus if supported by the camera/driver
     try {
@@ -59,33 +85,19 @@ export async function startLocalCam(videoEl, opts = {}) {
       if (track && typeof track.getCapabilities === 'function') {
         const caps = track.getCapabilities();
         const advanced = [];
-        if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes('continuous')) {
-          advanced.push({ exposureMode: 'continuous' });
-        }
-        if (Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('continuous')) {
-          advanced.push({ whiteBalanceMode: 'continuous' });
-        }
-        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
-          advanced.push({ focusMode: 'continuous' });
-        }
+        if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes('continuous')) advanced.push({ exposureMode: 'continuous' });
+        if (Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('continuous')) advanced.push({ whiteBalanceMode: 'continuous' });
+        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) advanced.push({ focusMode: 'continuous' });
         if (caps.exposureCompensation && typeof caps.exposureCompensation.min === 'number' && typeof caps.exposureCompensation.max === 'number') {
-          const min = caps.exposureCompensation.min;
-          const max = caps.exposureCompensation.max;
+          const min = caps.exposureCompensation.min; const max = caps.exposureCompensation.max;
           let neutral = 0; if (neutral < min) neutral = min; if (neutral > max) neutral = max;
           advanced.push({ exposureCompensation: neutral });
         }
-        if (advanced.length) {
-          await track.applyConstraints({ advanced });
-        }
+        if (advanced.length) await track.applyConstraints({ advanced });
       }
-    } catch (e2) {
-      console.warn('Auto constraints not supported or failed:', e2);
-    }
+    } catch (e2) { console.warn('Auto constraints not supported or failed:', e2); }
 
-    if (videoEl) {
-      videoEl.srcObject = stream;
-      await videoEl.play().catch(() => {});
-    }
+    attach(videoEl, stream);
     return stream;
   } catch (e) {
     console.warn('Local camera denied/unavailable:', e);

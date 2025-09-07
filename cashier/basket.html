@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="topbar">
-    <img class="logo" src="/ordertech.png" alt="OrderTech" />
+    <img class="logo" id="brandLogo" src="/images/OrderTech.png" alt="OrderTech" />
     <div class="live-pill">
       <span class="dot" aria-hidden="true"></span>
       <span id="connection-status" class="label">LIVE - Fouz</span>
@@ -50,5 +50,20 @@
   </main>
 
   <script src="/js/cashier-basket.js?v=1.0.7" defer></script>
+  <script>
+    (function(){
+      async function updateBrand(){
+        try{
+          const r = await fetch('/brand', { cache:'no-store' });
+          if (!r.ok) return;
+          const b = await r.json();
+          const el = document.getElementById('brandLogo');
+          if (el && b && b.logo_url) el.src = b.logo_url;
+          if (b && b.display_name) { try { document.title = b.display_name + ' · Cashier'; } catch(e){} }
+        }catch(_e){}
+      }
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', updateBrand); } else { updateBrand(); }
+    })();
+  </script>
 </body>
 </html>

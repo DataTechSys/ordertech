@@ -22,10 +22,44 @@
     <main class="main">
       <section class="card">
         <div class="body">
-          <p class="lead">Built-in roles</p>
-          <div id="rolesList" class="list"></div>
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Roles</div>
+            <span class="spacer"></span>
+            <button id="addRoleBtn" class="btn primary">Add Role</button>
+          </div>
+          <div id="rolesTableWrap"></div>
+          <div class="muted mt-2">Changes are in-memory for local testing.</div>
+
+          <!-- Modal for Add/Edit Role -->
+          <div id="roleModal" class="modal" style="display:none; position:fixed; inset:0; z-index:1000; align-items:center; justify-content:center; background:rgba(0,0,0,.4);">
+            <div class="card" style="width:min(900px, 95vw); max-height:90vh; overflow:auto;">
+              <div class="body">
+                <div class="toolbar">
+                  <div class="title" id="roleModalTitle" style="font-weight:700;">Role</div>
+                  <span class="spacer"></span>
+                  <button id="roleModalClose" class="btn">Close</button>
+                </div>
+                <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
+                  <label class="grid"><span class="label">Name</span>
+                    <input id="roleNameInput" class="input" placeholder="Role name" />
+                  </label>
+                  <label class="grid"><span class="label">Description</span>
+                    <input id="roleDescInput" class="input" placeholder="Short description" />
+                  </label>
+                </div>
+                <div class="mt-2">
+                  <div class="label" style="margin-bottom:6px;">Permissions by page</div>
+                  <div id="rolePermsWrap"></div>
+                </div>
+                <div class="row" style="justify-content:flex-end;">
+                  <button id="roleSaveBtn" class="btn primary">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
+
     </main>
 
     <script src="/js/admin-common.js"></script>

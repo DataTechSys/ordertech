@@ -7,13 +7,11 @@ This document captures the current deployment, load balancer routing, domains/DN
 ## Services & environments
 
 - Cloud Run (prod)
-  - Service: smart-order
+  - Service: ordertech
   - Region: me-central1
-  - URL: https://smart-order-715493130630.me-central1.run.app
+  - URL: https://ordertech-715493130630.me-central1.run.app
 - Cloud Run (legacy/test)
-  - Service: smart-order
-  - Region: europe-west1
-  - URL: https://smart-order-715493130630.europe-west1.run.app
+  - None active (europe-west1 legacy has been decommissioned)
 
 ## HTTPS Load Balancer
 
@@ -24,9 +22,9 @@ This document captures the current deployment, load balancer routing, domains/DN
 - Target HTTPS proxy: smartorder-koobs-https-proxy
 - URL map: smartorder-koobs-map
 - Host rules:
-  - app.ordertech.me → path matcher: app-ordertech
+- app.ordertech.me → path matcher: app-ordertech
     - default service: backend smartorder-me1-backend
-    - backend smartorder-me1-backend → serverless NEG smartorder-me1-neg → Cloud Run service smart-order (me-central1)
+    - backend smartorder-me1-backend → serverless NEG ordertech-me1-neg → Cloud Run service ordertech (me-central1)
   - smartorder.koobs.cafe → path matcher: smartorder
     - default service: backend bucket smartorder-static-bucket
     - path rules (to backend smartorder-koobs-backend):
@@ -52,7 +50,7 @@ This document captures the current deployment, load balancer routing, domains/DN
 
 Once DNS updates propagate and the cert is ACTIVE, use:
 - https://app.ordertech.me/health
-- https://app.ordertech.me/public/admin/
+- https://app.ordertech.me/products/
 - https://app.ordertech.me/drive
 - https://app.ordertech.me/cashier
 
@@ -69,7 +67,7 @@ Once DNS updates propagate and the cert is ACTIVE, use:
 - Health endpoints
   - /health, /__health, /readyz
 - Admin auth
-  - Firebase; config served at /public/admin/config.js (via env FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN or static file)
+- Firebase; config served at /config.js (via env FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN or static file)
 - Assets upload
   - /admin/upload-url uses ASSETS_BUCKET (GCS) for signed uploads
 
@@ -91,7 +89,7 @@ Once DNS updates propagate and the cert is ACTIVE, use:
 
 ## Quick links
 
-- Cloud Run (prod): https://console.cloud.google.com/run/detail/me-central1/smart-order/metrics?project=smart-order-469705
+- Cloud Run (prod): https://console.cloud.google.com/run/detail/me-central1/ordertech/metrics?project=smart-order-469705
 - HTTPS LB: https://console.cloud.google.com/net-services/loadbalancing/list?project=smart-order-469705
 - Certificates: https://console.cloud.google.com/net-services/loadbalancing/advanced/sslCertificates/list?project=smart-order-469705
 

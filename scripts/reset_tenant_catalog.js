@@ -26,6 +26,10 @@ if (!TENANT_ID) { console.error('TENANT_ID missing. Provide --tenant=<UUID> or s
     await q('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE tenant_id = $1)', [TENANT_ID]);
     await q('DELETE FROM orders WHERE tenant_id = $1', [TENANT_ID]);
 
+    // Delete product links and availability
+    await q('DELETE FROM product_modifier_groups WHERE product_id IN (SELECT id FROM products WHERE tenant_id = $1)', [TENANT_ID]);
+    await q('DELETE FROM product_branch_availability USING products p WHERE product_branch_availability.product_id = p.id AND p.tenant_id = $1', [TENANT_ID]);
+
     // Delete modifiers (options then groups)
     await q('DELETE FROM modifier_options WHERE tenant_id = $1', [TENANT_ID]);
     await q('DELETE FROM modifier_groups WHERE tenant_id = $1', [TENANT_ID]);

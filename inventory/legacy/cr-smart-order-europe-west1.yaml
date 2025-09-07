@@ -1,0 +1,124 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    run.googleapis.com/build-enable-automatic-updates: 'false'
+    run.googleapis.com/build-id: 46e010d4-d082-46f1-9cbd-f3ad33e89be3
+    run.googleapis.com/build-image-uri: europe-west1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/smart-order
+    run.googleapis.com/build-name: projects/715493130630/locations/europe-west1/builds/46e010d4-d082-46f1-9cbd-f3ad33e89be3
+    run.googleapis.com/build-source-location: gs://run-sources-smart-order-469705-europe-west1/services/smart-order/1756719935.405239-3a2efa93efb644c6ba93716e33cd67f0.zip#1756719952531948
+    run.googleapis.com/client-name: gcloud
+    run.googleapis.com/client-version: 535.0.0
+    run.googleapis.com/ingress: all
+    run.googleapis.com/ingress-status: all
+    run.googleapis.com/operation-id: 0685f1bd-3a81-4c7c-a09d-60701d9264f3
+    run.googleapis.com/urls: '["https://smart-order-715493130630.europe-west1.run.app","https://smart-order-64v5pfkeba-ew.a.run.app"]'
+    serving.knative.dev/creator: hussain@mosawi.com
+    serving.knative.dev/lastModifier: hussain@mosawi.com
+  creationTimestamp: '2025-08-29T08:00:45.226352Z'
+  generation: 119
+  labels:
+    cloud.googleapis.com/location: europe-west1
+  name: smart-order
+  namespace: '715493130630'
+  resourceVersion: AAY9ukDNsKY
+  selfLink: /apis/serving.knative.dev/v1/namespaces/715493130630/services/smart-order
+  uid: 6bcb4b12-c2e8-430b-b0d5-0e541b1b1700
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '20'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 535.0.0
+        run.googleapis.com/cloudsql-instances: smart-order-469705:us-central1:smart-order-pg
+        run.googleapis.com/startup-cpu-boost: 'true'
+      labels:
+        client.knative.dev/nonce: dzuilzqwlf
+        run.googleapis.com/startupProbeType: Default
+    spec:
+      containerConcurrency: 80
+      containers:
+      - env:
+        - name: APP_BASE_URL
+          value: https://app.ordertech.me
+        - name: PGHOST
+          value: /cloudsql/smart-order-469705:us-central1:smart-order-pg
+        - name: PGPORT
+          value: '5432'
+        - name: REQUIRE_DB
+          value: 'true'
+        - name: PGUSER
+          value: ordertech
+        - name: PGDATABASE
+          value: smart_order
+        - name: REDEPLOY_AT
+          value: '1756716850'
+        - name: PLATFORM_ADMIN_EMAILS
+          value: hussain@mosawi.com
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: PGPASSWORD
+        - name: ADMIN_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: ADMIN_TOKEN
+        - name: TWILIO_ACCOUNT_SID
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: twilio-account-sid
+        - name: TWILIO_KEY_SID
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: twilio-key-sid
+        - name: TWILIO_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: twilio-key-secret
+        image: europe-west1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/smart-order@sha256:d952c9fdd124562973d651e6a9081bbf9c87e00ac2452be03d6933df46c362fa
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 240
+      serviceAccountName: 715493130630-compute@developer.gserviceaccount.com
+      timeoutSeconds: 300
+  traffic:
+  - latestRevision: true
+    percent: 100
+status:
+  address:
+    url: https://smart-order-64v5pfkeba-ew.a.run.app
+  conditions:
+  - lastTransitionTime: '2025-09-01T09:47:00.697254Z'
+    status: 'True'
+    type: Ready
+  - lastTransitionTime: '2025-09-01T09:46:59.429572Z'
+    status: 'True'
+    type: ConfigurationsReady
+  - lastTransitionTime: '2025-09-01T09:47:00.666934Z'
+    status: 'True'
+    type: RoutesReady
+  latestCreatedRevisionName: smart-order-00119-kz6
+  latestReadyRevisionName: smart-order-00119-kz6
+  observedGeneration: 119
+  traffic:
+  - latestRevision: true
+    percent: 100
+    revisionName: smart-order-00119-kz6
+  url: https://smart-order-64v5pfkeba-ew.a.run.app
+

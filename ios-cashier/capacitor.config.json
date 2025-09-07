@@ -1,0 +1,10 @@
+{
+  "appId": "com.ordertech.cashier",
+  "appName": "OrderTech Cashier",
+  "webDir": "web",
+  "server": {
+    "url": "https://app.ordertech.me/cashier/",
+    "cleartext": false,
+    "allowNavigation": ["app.ordertech.me"]
+  }
+}

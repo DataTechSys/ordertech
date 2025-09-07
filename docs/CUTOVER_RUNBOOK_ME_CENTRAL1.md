@@ -40,7 +40,7 @@ Notes
 - Validate row counts for a few key tables in destination.
 
 2) Pre-cutover validation
-- Cloud Run (me1) direct URL: gcloud run services describe smart-order --region=me-central1 --format='value(status.url)'
+- Cloud Run (me1) direct URL: gcloud run services describe ordertech --region=me-central1 --format='value(status.url)'
 - Validate endpoints: /health, core read APIs, signed uploads (ASSETS_BUCKET configured)
 - Warm instances (set min instances in service or hit a few endpoints)
 
@@ -49,7 +49,7 @@ Notes
 - Wait for DMS CDC lag ~0
 - Promote destination (Stop replication / promote in DMS)
 - Run migration job on me1 (if not already applied post-changes):
-  gcloud run jobs execute smart-order-migrate --region=me-central1 --wait
+  gcloud run jobs execute migrate-smart-order --region=me-central1 --wait
 
 4) Load Balancer switch to me-central1 backend
 - Export URL map, edit path matcher default service, import back
@@ -80,7 +80,7 @@ Commands:
   # Provide DB user and password when prompted
 
 - Deploy via Cloud Build to me1:
-  gcloud builds submit --config=cloudbuild.yaml --substitutions=_SERVICE=smart-order
+  gcloud builds submit --config=cloudbuild.yaml --substitutions=_SERVICE=ordertech
 
 7) Rollback plan (during canary or after cutover)
 - LB rollback:
