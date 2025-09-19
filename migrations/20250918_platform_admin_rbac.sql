@@ -79,33 +79,68 @@ BEGIN
     ON CONFLICT DO NOTHING;
 END$$;
 
--- Upsert platform admin: hussain@mosawi.com as SuperAdmin (support either admin_id or id PK)
-DO $$
-DECLARE a_id uuid;
-DECLARE r_id uuid;
-BEGIN
-  BEGIN
-    SELECT admin_id INTO a_id FROM platform_admins WHERE lower(email)=lower('hussain@mosawi.com');
-  EXCEPTION WHEN undefined_column THEN
-    EXECUTE 'SELECT id FROM platform_admins WHERE lower(email)=lower($1)' INTO a_id USING 'hussain@mosawi.com';
-  END;
+-- Upsert platform admin: hussain@mosawi.com as SuperAdmin (robust, skip if schema differs)
+-- Ensure minimum columns on existing table
+ALTER TABLE IF EXISTS platform_admins
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS full_name text,
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
 
-  IF a_id IS NULL THEN
-    BEGIN
-      INSERT INTO platform_admins(email, full_name, status)
-        VALUES('hussain@mosawi.com','Hussain Mosawi','active')
-        RETURNING admin_id INTO a_id;
-    EXCEPTION WHEN undefined_column THEN
-      EXECUTE 'INSERT INTO platform_admins(email, full_name, status) VALUES ($1,$2,$3) RETURNING id'
-        INTO a_id USING 'hussain@mosawi.com','Hussain Mosawi','active';
-    END;
+DO $$
+DECLARE
+  pk_col text;
+  a_id uuid;
+  r_id uuid;
+BEGIN
+  -- Verify email column exists; otherwise skip seeding to avoid failure on legacy shapes
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='platform_admins' AND column_name='email'
+  ) THEN
+    RETURN;
   END IF;
 
+  -- Determine primary key column name
+  SELECT a.attname INTO pk_col
+  FROM pg_index i
+  JOIN pg_class c ON c.oid = i.indrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+  WHERE n.nspname='public' AND c.relname='platform_admins' AND i.indisprimary
+  LIMIT 1;
+
+  IF pk_col IS NULL THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='platform_admins' AND column_name='admin_id') THEN
+      pk_col := 'admin_id';
+    ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='platform_admins' AND column_name='id') THEN
+      pk_col := 'id';
+    ELSE
+      RETURN;
+    END IF;
+  END IF;
+
+  -- Insert if not exists (no reliance on unique constraint)
+  EXECUTE
+    'INSERT INTO platform_admins(email, full_name, status) ' ||
+    'SELECT $1, $2, $3 WHERE NOT EXISTS (' ||
+    'SELECT 1 FROM platform_admins WHERE lower(email)=lower($1))'
+  USING 'hussain@mosawi.com', 'Hussain Mosawi', 'active';
+
+  -- Read PK into a_id using dynamic PK column
+  EXECUTE format('SELECT %I FROM platform_admins WHERE lower(email)=lower($1)', pk_col)
+  INTO a_id
+  USING 'hussain@mosawi.com';
+
+  -- Ensure SuperAdmin role exists and get role_id
   SELECT role_id INTO r_id FROM platform_roles WHERE role_name='SuperAdmin';
+  IF r_id IS NULL THEN
+    INSERT INTO platform_roles(role_name, description) VALUES('SuperAdmin','Full platform access') RETURNING role_id INTO r_id;
+  END IF;
+
+  -- Grant role if mapping table present
   IF a_id IS NOT NULL AND r_id IS NOT NULL THEN
-    -- platform_admin_roles uses admin_id column name regardless; if table shape differs, ignore error
     BEGIN
       INSERT INTO platform_admin_roles(admin_id, role_id) VALUES(a_id, r_id) ON CONFLICT DO NOTHING;
-    EXCEPTION WHEN undefined_column THEN NULL; END;
+    EXCEPTION WHEN undefined_table OR undefined_column THEN NULL; END;
   END IF;
 END$$;
