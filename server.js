@@ -6327,22 +6327,55 @@ addRoute('put', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdmin
                                     returning user_id as id`, [email]);
       userId = u.rows[0].id;
     }
+
+    // Demote existing owner(s) to admin — try tenant_role, then user_role, then plain text
+    let demoted = false;
     try {
       await client.query(`update tenant_users set role='admin'::tenant_role where tenant_id=$1 and role='owner'::tenant_role`, [id]);
-    } catch (_e) {
-      await client.query(`update tenant_users set role='admin'::user_role where tenant_id=$1 and role='owner'::user_role`, [id]);
+      demoted = true;
+    } catch (_e1) {
+      try {
+        await client.query(`update tenant_users set role='admin'::user_role where tenant_id=$1 and role='owner'::user_role`, [id]);
+        demoted = true;
+      } catch (_e2) {
+        try {
+          await client.query(`update tenant_users set role=$2 where tenant_id=$1 and role=$3`, [id, 'admin', 'owner']);
+          demoted = true;
+        } catch (_e3) {
+          // keep demoted=false
+        }
+      }
     }
+
+    // Upsert new owner mapping — try tenant_role, then user_role, then plain text
+    let upserted = false;
     try {
       await client.query(`insert into tenant_users (tenant_id, user_id, role)
                            values ($1,$2,'owner'::tenant_role)
                            on conflict (tenant_id, user_id) do update set role='owner'::tenant_role`, [id, userId]);
-    } catch (_e) {
-      await client.query(`insert into tenant_users (tenant_id, user_id, role)
-                           values ($1,$2,'owner'::user_role)
-                           on conflict (tenant_id, user_id) do update set role='owner'::user_role`, [id, userId]);
+      upserted = true;
+    } catch (_e1) {
+      try {
+        await client.query(`insert into tenant_users (tenant_id, user_id, role)
+                             values ($1,$2,'owner'::user_role)
+                             on conflict (tenant_id, user_id) do update set role='owner'::user_role`, [id, userId]);
+        upserted = true;
+      } catch (_e2) {
+        try {
+          await client.query(`insert into tenant_users (tenant_id, user_id, role)
+                               values ($1,$2,$3)
+                               on conflict (tenant_id, user_id) do update set role=excluded.role`, [id, userId, 'owner']);
+          upserted = true;
+        } catch (_e3) {
+          // keep upserted=false
+        }
+      }
     }
+
+    if (!upserted) throw new Error('upsert_failed');
+
     await client.query('COMMIT');
-    return res.json({ ok: true });
+    return res.json({ ok: true, demoted });
   } catch (_e) {
     try { await client.query('ROLLBACK'); } catch {}
     return res.status(500).json({ error: 'owner_update_failed' });
