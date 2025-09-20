@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -34,14 +33,31 @@
               <input id="newTenantSlug" class="input" placeholder="e.g., koobs-cafe" />
             </label>
             <label class="grid">
-              <span class="label">Short Code (optional, 6 digits)</span>
-              <input id="newTenantCode" class="input" placeholder="e.g., 123456" maxlength="6" />
+<span class="label" style="font-weight:800;">Company ID (6 Digit)</span>
+              <div class="grid" style="gap:6px;">
+                <input id="newTenantCode" class="input" placeholder="e.g., 123456" maxlength="6" pattern="\d{6}" required inputmode="numeric" />
+                <div class="flex" style="gap:8px; align-items:center;">
+<small class="muted">Required</small>
+                </div>
+              </div>
             </label>
           </div>
           <div class="toolbar">
             <button id="btnCreateTenant" class="btn primary"><span class="icon ri ri-add-line"></span><span>Create Tenant</span></button>
             <span id="createStatus" class="muted"></span>
           </div>
+        </div>
+      </section>
+
+
+      <section class="card mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Tenants</div>
+            <span class="spacer"></span>
+            <button id="btnRefresh" class="btn"><span class="icon ri ri-refresh-line"></span><span>Refresh</span></button>
+          </div>
+          <div id="tenantsTableWrap"></div>
         </div>
       </section>
 
@@ -66,17 +82,6 @@
         </div>
       </section>
 
-      <section class="card mt-2">
-        <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700;">Tenants</div>
-            <span class="spacer"></span>
-            <button id="btnRefresh" class="btn"><span class="icon ri ri-refresh-line"></span><span>Refresh</span></button>
-          </div>
-          <div id="tenantsTableWrap"></div>
-        </div>
-      </section>
-
       <section id="notAllowed" class="card hidden mt-2">
         <div class="body">
           <div class="muted">You are not a platform admin. If you should have access, contact your administrator.</div>
@@ -92,15 +97,25 @@
       function renderTenantsTable(items) {
         const wrap = el('tenantsTableWrap');
         if (!items || !items.length) { wrap.innerHTML = '<div class="muted">No tenants</div>'; return; }
+        const normCode = (t) => {
+          try {
+            const raw = (t && (t.code || t.company_id || t.short_code || t.shortCode || '')) + '';
+            const onlyDigits = raw.replace(/\D+/g, '').slice(0, 6);
+            return /^\d{6}$/.test(onlyDigits) ? onlyDigits : '';
+          } catch { return ''; }
+        };
         const rows = items.map(t => {
-          const branch = Number.isFinite(Number(t.branch_limit)) ? Number(t.branch_limit) : '';
-          const lic = Number.isFinite(Number(t.license_limit)) ? Number(t.license_limit) : '';
+          const status = (t.status || '').trim();
+          const branches = Number.isFinite(Number(t.branch_count)) ? Number(t.branch_count) : '';
+          const devices = Number.isFinite(Number(t.device_count)) ? Number(t.device_count) : '';
+          const code = normCode(t);
           return `
             <tr class="row-click" data-id="${t.id}">
-              <td><div class="row-link" style="font-weight:700; color:var(--link); text-decoration:underline; cursor:pointer;">${t.name||''}</div><div class="muted" style="font-size:12px">${t.id}</div></td>
-              <td>${t.code||''}</td>
-              <td>${branch}</td>
-              <td>${lic}</td>
+              <td data-col="code"><div class="row-link" style="font-weight:800; color:var(--link); text-decoration:underline; cursor:pointer;">${code || ''}</div></td>
+              <td>${t.name||''}</td>
+              <td>${status}</td>
+              <td>${branches}</td>
+              <td>${devices}</td>
             </tr>
           `;
         }).join('');
@@ -108,7 +123,13 @@
           <div class="table" role="region" aria-label="Tenants">
             <table style="width:100%">
               <thead>
-                <tr><th style="text-align:left">Tenant</th><th>Code</th><th>Branch limit</th><th>Device licenses</th></tr>
+                <tr>
+                  <th style="text-align:left">Company ID</th>
+                  <th>Company Name</th>
+                  <th>Status</th>
+                  <th>Branches</th>
+                  <th>Devices</th>
+                </tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
@@ -125,6 +146,20 @@
           const tr = a.closest('tr.row-click');
           if (tr) a.addEventListener('click', (e) => { e.stopPropagation(); const id = tr.getAttribute('data-id'); if (id) window.location.href = '/tenants/' + encodeURIComponent(id); });
         });
+        // Backfill missing Company IDs (platform-admin only) using the per-tenant API
+        try {
+          const missing = (items||[]).filter(t => !normCode(t)).slice(0, 25);
+          missing.forEach(async (t) => {
+            try {
+              const det = await Admin.api(`/admin/tenants/${encodeURIComponent(t.id)}`, { tenantId: null });
+              const code = normCode(det);
+              if (code) {
+                const cell = wrap.querySelector(`tr.row-click[data-id="${t.id}"] td[data-col="code"] .row-link`);
+                if (cell) cell.textContent = code;
+              }
+            } catch {}
+          });
+        } catch {}
       }
 
       async function loadTenants() {
@@ -136,12 +171,21 @@
         }
       }
 
+      async function generateNewAccountId(){
+        try {
+          const j = await Admin.api('/admin/tenants/company-id/new', { tenantId: null });
+          const code = (j && j.code) ? String(j.code) : '';
+          if (code) document.getElementById('newTenantCode').value = code;
+        } catch { Admin.toast('Generate failed'); }
+      }
+
       function wireCreateTenant() {
         el('btnCreateTenant').addEventListener('click', async () => {
           const name = String(el('newTenantName').value || '').trim();
           const slug = String(el('newTenantSlug').value || '').trim();
           const code = String(el('newTenantCode').value || '').trim();
           if (!name) { Admin.toast('Name is required'); return; }
+          if (!/^\d{6}$/.test(code)) { Admin.toast('Account ID must be 6 digits'); return; }
           try {
             const body = { name }; if (slug) body.slug = slug; if (code) body.code = code;
             await Admin.api('/admin/tenants', { method:'POST', body, tenantId: null });
@@ -161,9 +205,13 @@
           const r = await Admin.api('/platform/settings', { tenantId: null });
           const url = (r && r.settings && r.settings.defaultPosterUrl) ? String(r.settings.defaultPosterUrl) : '';
           const img = document.getElementById('platformPosterPreview');
-          if (img) img.src = url || '/poster-default.png';
+          if (img) {
+            try { img.onerror = ()=>{ try { img.onerror=null; img.src='/poster-defualt.png'; } catch {} }; } catch {}
+            img.src = url || '/poster-default.png';
+          }
         } catch {
-          const img = document.getElementById('platformPosterPreview'); if (img) img.src = '/poster-default.png';
+          const img = document.getElementById('platformPosterPreview');
+          if (img) { try { img.onerror = ()=>{ try { img.onerror=null; img.src='/poster-defualt.png'; } catch {} }; } catch {} img.src = '/poster-default.png'; }
         }
       }
       async function uploadPlatformPoster(){
