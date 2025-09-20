@@ -9,12 +9,15 @@
 
   function setUserPageInfo(count){
     const info = $('#usersPageInfo'); if (info) info.textContent = `Page ${userPage+1} • ${count} users`;
+    const container = document.getElementById('userPagination');
     const prev = $('#userPrev'); const next = $('#userNext'); const group = document.getElementById('userPagerGroup');
-    const showPrev = userPage > 0;
-    const showNext = count >= userPageSize; // only show Next if we likely have a next page
-    if (prev) prev.style.display = showPrev ? '' : 'none';
-    if (next) next.style.display = showNext ? '' : 'none';
-    if (group) group.style.display = (showPrev || showNext) ? '' : 'none';
+    const hasPrev = userPage > 0;
+    const hasNext = count >= userPageSize; // only show Next if we likely have a next page
+    const needPager = hasPrev || hasNext;
+    if (container) container.style.display = needPager ? '' : 'none';
+    if (prev) prev.disabled = !hasPrev;
+    if (next) next.disabled = !hasNext;
+    if (group) group.style.display = needPager ? '' : 'none';
   }
 
   function updatePageSizeVisibility(initialCount){
@@ -121,7 +124,13 @@ try {
           toast('User added');
         }
         loadUsers();
-      } catch { toast('Invite failed'); }
+      } catch (e) {
+        if (e?.status === 409 && (e?.data?.error === 'already_member')) {
+          toast('User already added');
+        } else {
+          toast('Invite failed');
+        }
+      }
     });
     const sel=$('#userPageSize');
     sel?.addEventListener('change', ()=>{ userPageSize=Number(sel.value)||50; userPage=0; loadUsers(); });
