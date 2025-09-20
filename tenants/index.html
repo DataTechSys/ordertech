@@ -222,13 +222,16 @@
           const ct = f.type || 'image/jpeg';
           const name = f.name || 'poster.jpg';
           const sig = await Admin.api('/admin/upload-url-global', { method:'POST', body:{ filename: name, kind: 'poster', contentType: ct }, tenantId: null });
-          await fetch(sig.url, { method: sig.method || 'PUT', headers: { 'Content-Type': ct }, body: f });
+          const up = await fetch(sig.url, { method: sig.method || 'PUT', headers: { 'Content-Type': ct, ...(sig.cacheControl?{ 'Cache-Control': sig.cacheControl }: {}) }, body: f });
+          if (!up.ok) { throw new Error('upload_failed'); }
           const publicUrl = sig.publicUrl || '';
           if (!publicUrl) throw new Error('upload_failed');
+          // Best-effort HEAD to ensure the object is readable before saving the URL
+          try { const head = await fetch(publicUrl, { method:'HEAD', cache:'no-store' }); if (!head.ok) { throw new Error('head_failed'); } } catch (e) { console.warn('poster HEAD check failed', e); }
           await Admin.api('/platform/settings', { method:'PUT', body:{ settings:{ defaultPosterUrl: publicUrl } }, tenantId: null });
           document.getElementById('platformPosterStatus').textContent = 'Saved'; Admin.toast('Saved');
           await loadPlatformDefaults();
-        } catch { document.getElementById('platformPosterStatus').textContent = 'Failed'; Admin.toast('Save failed'); }
+        } catch (e) { console.warn('uploadPlatformPoster failed', e); document.getElementById('platformPosterStatus').textContent = 'Failed'; Admin.toast('Save failed'); }
       }
       async function clearPlatformPoster(){
         try {
