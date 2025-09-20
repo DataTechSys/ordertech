@@ -13,6 +13,7 @@ const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
 const fs = require('fs');
+const os = require('os');
 let admin = null; // firebase-admin
 // GCS client not needed for redirect approach
 try {
@@ -25,17 +26,89 @@ try {
 const app = express();
 // Treat "/path" and "/path/" as different, so UI at trailing-slash paths don't get eaten by API JSON routes
 try { app.enable('strict routing'); } catch {}
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT || 3000;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae';
+const SKIP_DEFAULT_TENANT = /^(1|true|yes|on)$/i.test(String(process.env.SKIP_DEFAULT_TENANT||''));
 const crypto = require('crypto');
 const cryptoUtil = require('./server/crypto-util');
 
 // Route registry for /__routes
 const routes = [];
 
-app.use(cors());
+// ---- CORS: allowlist-based with credentials support
+// Allows:
+// - console.ordertech.me
+// - Any tenant subdomain *.ordertech.me
+// - ordertech.me apex
+// - localhost / 127.0.0.1 (http/https with any port) for dev
+// - Additional exact origins via CORS_ALLOWED_ORIGINS (comma-separated)
+const STATIC_ALLOWED_ORIGINS = String(process.env.CORS_ALLOWED_ORIGINS||'')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  try {
+    if (!origin) return false; // Non-browser/curl without Origin => no CORS headers
+    const u = new URL(origin);
+    const host = (u.hostname||'').toLowerCase();
+
+    // Explicit exact origins via env
+    if (STATIC_ALLOWED_ORIGINS.includes(origin)) return true;
+
+    // Tenant subdomains and apex for production
+    if (host === 'ordertech.me' || host.endsWith('.ordertech.me')) return true;
+
+    // Local development: allow localhost and subdomains of localhost, loopbacks
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost')) return true;
+
+    return false;
+  } catch { return false; }
+}
+
+const corsOptions = {
+  origin(origin, cb) {
+    if (isAllowedOrigin(origin)) return cb(null, true);
+    // Disallow unknown origins (no CORS headers). Do not error to avoid 500s on preflight.
+    return cb(null, false);
+  },
+  credentials: true,
+  methods: ['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'],
+  // Let cors reflect request headers if not specified; include common ones explicitly
+  allowedHeaders: ['Authorization','Content-Type','X-Requested-With','X-Admin-Token','X-Tenant-Id','X-Platform-Admin','X-Device-Id','X-Client-Id','X-Client-Version'],
+  exposedHeaders: ['X-Total-Count'],
+  maxAge: 86400,
+};
+
+// Ensure preflight handled early and Vary header set for caches/CDNs
+app.use((req, res, next) => { try { const prev = res.getHeader('Vary'); res.setHeader('Vary', prev ? String(prev)+', Origin' : 'Origin'); } catch {} next(); });
+app.options(/.*/, cors(corsOptions));
+app.use(cors(corsOptions));
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Static assets (minimal)
+try { app.use('/images', express.static(path.join(__dirname, 'images'))); } catch {}
+// Alias: serve /images/placeholder.png even if only JPEG exists on disk
+try {
+  app.get('/images/placeholder.png', (req, res) => {
+    const jpg = path.join(__dirname, 'images', 'placeholder.jpg');
+    try { if (fs.existsSync(jpg)) return res.sendFile(jpg); } catch {}
+    const svgFile = path.join(__dirname, 'images', 'placeholder.svg');
+    try { if (fs.existsSync(svgFile)) return res.sendFile(svgFile); } catch {}
+    // Inline visible SVG placeholder (gray background with label)
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">
+  <rect width="100%" height="100%" fill="#e5e7eb"/>
+  <path d="M40 180 L120 100 L180 160 L230 120 L280 180" stroke="#cbd5e1" stroke-width="8" fill="none"/>
+  <circle cx="110" cy="85" r="20" fill="#cbd5e1"/>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#6b7280">No Image</text>
+</svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    return res.send(svgContent);
+  });
+} catch {}
 
 // ---- Activity logging (platform + per-tenant)
 const memActivityLogs = [];
@@ -95,6 +168,13 @@ async function writeActivityLog(entry){
   } catch { pushMemLog(safe); }
 }
 
+// Convenience: log connection events to platform log
+async function logConnectionEvent(event, meta){
+  try {
+    await writeActivityLog({ level:'info', scope:'platform', action:`connection:${event}`, path:'/rtc', method:'EVENT', status:200, meta: meta||{} });
+  } catch {}
+}
+
 // Middleware: log admin requests
 app.use(async (req, res, next) => {
   try {
@@ -146,6 +226,9 @@ const memCatalogByTenant = new Map(); // tenant_id -> { categories:[], products:
 // In-memory tenant settings and brand for dev-open mode (when DB not configured)
 const memTenantSettingsByTenant = new Map(); // tenant_id -> settings
 const memTenantBrandByTenant = new Map();    // tenant_id -> brand
+// In-memory domain mappings (host -> tenant) for dev-open mode
+// Map: tenant_id -> [{ host, verified_at }]
+const memTenantDomainsByTenant = new Map();
 // In-memory users per tenant for dev-open mode (when DB not configured)
 const memTenantUsersByTenant = new Map();    // tenant_id -> [{id,email,role,created_at}]
 // In-memory deleted users tombstones per tenant (dev-open mode)
@@ -153,8 +236,18 @@ const memTenantUsersDeletedByTenant = new Map(); // tenant_id -> [{id,email,role
 
 // ---- DB
 function buildDbConfig(){
-  const pgHost = process.env.PGHOST || process.env.DB_HOST || '';
+  let pgHost = process.env.PGHOST || process.env.DB_HOST || '';
   const url = process.env.DATABASE_URL || '';
+
+  // If PGHOST is a Cloud Run path (/cloudsql/<instance>) but not present locally,
+  // map it to the local developer socket under $HOME/.cloudsql/<instance> when available.
+  try {
+    if (pgHost && pgHost.startsWith('/cloudsql/')) {
+      const inst = pgHost.replace(/^\/cloudsql\/+/, '');
+      const alt = path.join(os.homedir(), '.cloudsql', inst);
+      if (fs.existsSync(alt)) pgHost = alt;
+    }
+  } catch {}
 
   // Prefer explicit PGHOST (e.g., Cloud SQL unix socket) when provided.
   if (pgHost) {
@@ -183,7 +276,24 @@ function buildDbConfig(){
   }
 
   // Fallback: use DATABASE_URL directly when no explicit host override.
-  if (url) return { connectionString: url };
+  if (url) {
+    // Rewrite ?host=/cloudsql/<instance> to use the local developer socket if present
+    try {
+      const u = new URL(url);
+      const params = new URLSearchParams(u.search);
+      const h = params.get('host');
+      if (h && h.startsWith('/cloudsql/')) {
+        const inst = h.replace(/^\/cloudsql\/+/, '');
+        const alt = path.join(os.homedir(), '.cloudsql', inst);
+        if (fs.existsSync(alt)) {
+          params.set('host', alt);
+          u.search = params.toString();
+          return { connectionString: u.toString() };
+        }
+      }
+    } catch {}
+    return { connectionString: url };
+  }
 
   // Legacy discrete vars without PGHOST (TCP host)
   const host = process.env.DB_HOST || '';
@@ -199,7 +309,18 @@ function buildDbConfig(){
 const REQUIRE_DB = /^(1|true|yes|on)$/i.test(String(process.env.REQUIRE_DB||''));
 const __dbCfg = buildDbConfig();
 const HAS_DB = !!__dbCfg;
-const pool = HAS_DB ? new Pool(__dbCfg) : null;
+const pool = HAS_DB ? new Pool({
+  ...__dbCfg,
+  // Keep connections healthy and fail fast on bad sockets
+  keepAlive: true,
+  idleTimeoutMillis: Number(process.env.PG_IDLE_MS || 30000),
+  connectionTimeoutMillis: Number(process.env.PG_CONN_MS || 8000),
+  max: Number(process.env.PGPOOL_MAX || 20)
+}) : null;
+// Development bypass toggles (for local testing only)
+// Set DEV_OPEN_ADMIN=1 to bypass auth on selected admin routes (Tenants)
+const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || process.env.DEV_OPEN || ''))
+  && String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 // In dev-open mode, do not enforce DB-required gates
 const REQUIRE_DB_EFFECTIVE = REQUIRE_DB && !DEV_OPEN_ADMIN;
 
@@ -231,24 +352,24 @@ async function ensureDefaultTenant() {
   if (!HAS_DB) return; // no-op if DB not configured
   await db(`
     CREATE TABLE IF NOT EXISTS tenants (
-      id uuid PRIMARY KEY,
-      name text NOT NULL,
+      tenant_id uuid PRIMARY KEY,
+      company_name text NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
   await db(
-    `INSERT INTO tenants (id, name)
+    `INSERT INTO tenants (tenant_id, company_name)
      VALUES ($1, $2)
-     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
+     ON CONFLICT (tenant_id) DO UPDATE SET company_name = EXCLUDED.company_name`,
     [DEFAULT_TENANT_ID, 'Koobs Café']
   );
-  // Ensure tenant has a 6-digit short code
+  // Ensure tenant has a 6-digit company_id (formerly short_code)
   try {
-    const rows = await db('select short_code from tenants where id=$1', [DEFAULT_TENANT_ID]);
-    const sc = rows && rows[0] ? rows[0].short_code : null;
+    const rows = await db('select company_id from tenants where tenant_id=$1', [DEFAULT_TENANT_ID]);
+    const sc = rows && rows[0] ? rows[0].company_id : null;
     if (!sc) {
       const code = await genTenantShortCode();
-      await db('update tenants set short_code=$1 where id=$2', [code, DEFAULT_TENANT_ID]);
+      await db('update tenants set company_id=$1 where tenant_id=$2', [code, DEFAULT_TENANT_ID]);
     }
   } catch {}
 }
@@ -258,7 +379,7 @@ async function genTenantShortCode(){
   if (!HAS_DB) throw new Error('NO_DB');
   for (let i=0; i<30; i++){
     const n = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
-    const rows = await db('select 1 from tenants where short_code=$1', [n]);
+    const rows = await db('select 1 from tenants where company_id=$1', [n]);
     if (!rows.length) return n;
   }
   throw new Error('short_code_generation_failed');
@@ -286,9 +407,9 @@ async function ensureLicensingSchema(){
   // devices table
   await db(`
     CREATE TABLE IF NOT EXISTS devices (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-      name text,
+      device_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+      device_name text,
       role device_role NOT NULL,
       status device_status NOT NULL DEFAULT 'active',
       branch text,
@@ -302,14 +423,22 @@ async function ensureLicensingSchema(){
   await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant ON devices(tenant_id)");
   await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant_role ON devices(tenant_id, role)");
   await db("CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status)");
+  // New: branch_id and location on devices + helpful indexes (idempotent)
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES branches(branch_id) ON DELETE SET NULL"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS location text"); } catch (_e) {}
+  try { await db("CREATE INDEX IF NOT EXISTS ix_devices_tenant_branch    ON devices(tenant_id, branch)"); } catch (_e) {}
+  try { await db("CREATE INDEX IF NOT EXISTS ix_devices_tenant_branch_id ON devices(tenant_id, branch_id)"); } catch (_e) {}
+  // Ensure per-device activation short code column exists (6 digits)
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS short_code char(6)"); } catch (_e) {}
+  try { await db("CREATE UNIQUE INDEX IF NOT EXISTS ux_devices_short_code ON devices(short_code)"); } catch (_e) {}
   // branches table (unique name per tenant)
   await db(`
     CREATE TABLE IF NOT EXISTS branches (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-      name text NOT NULL,
+      branch_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+      branch_name text NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now(),
-      UNIQUE(tenant_id, name)
+      UNIQUE(tenant_id, branch_name)
     )
   `);
   await db("CREATE INDEX IF NOT EXISTS idx_branches_tenant ON branches(tenant_id)");
@@ -318,15 +447,26 @@ async function ensureLicensingSchema(){
   await db(`
     CREATE TABLE IF NOT EXISTS device_activation_codes (
       code text PRIMARY KEY,
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
       created_at timestamptz NOT NULL DEFAULT now(),
       expires_at timestamptz NOT NULL,
       claimed_at timestamptz,
-      device_id uuid REFERENCES devices(id),
+      device_id uuid REFERENCES devices(device_id),
       meta jsonb NOT NULL DEFAULT '{}'::jsonb
     )
   `);
   await db("CREATE INDEX IF NOT EXISTS idx_dac_tenant_expires ON device_activation_codes(tenant_id, expires_at)");
+  // New: explicit pairing-code lifecycle and role
+  await db(`DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'device_activation_status') THEN
+      CREATE TYPE device_activation_status AS ENUM ('pending','claimed','expired','canceled');
+    END IF;
+  END$$;`);
+  try { await db("ALTER TABLE IF EXISTS device_activation_codes ADD COLUMN IF NOT EXISTS status device_activation_status NOT NULL DEFAULT 'pending'"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS device_activation_codes ADD COLUMN IF NOT EXISTS role device_role"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS device_activation_codes ADD CONSTRAINT chk_dac_code_6digits CHECK (code ~ '^\\d{6}$') NOT VALID"); } catch (_e) {}
+  try { await db("CREATE INDEX IF NOT EXISTS ix_dac_tenant_status_expires ON device_activation_codes(tenant_id, status, expires_at DESC)"); } catch (_e) {}
 }
 
 // Ensure products table has image_url column (idempotent)
@@ -441,7 +581,7 @@ async function ensureRBACSchema(){
   // users table
   await db(`
     CREATE TABLE IF NOT EXISTS users (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       email text NOT NULL UNIQUE,
       created_at timestamptz NOT NULL DEFAULT now()
     )
@@ -450,8 +590,8 @@ async function ensureRBACSchema(){
   // tenant_users table
   await db(`
     CREATE TABLE IF NOT EXISTS tenant_users (
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-      user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+      user_id uuid NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
       role tenant_role NOT NULL DEFAULT 'viewer',
       created_at timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY (tenant_id, user_id)
@@ -467,7 +607,7 @@ async function ensureInvitesSchema(){
   await db(`
     CREATE TABLE IF NOT EXISTS invites (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
       email text NOT NULL,
       role tenant_role NOT NULL DEFAULT 'viewer',
       token text UNIQUE NOT NULL,
@@ -476,7 +616,54 @@ async function ensureInvitesSchema(){
       redeemed_at timestamptz
     )
   `);
-  try { await db("CREATE INDEX IF NOT EXISTS ix_invites_tenant_email ON invites(tenant_id, email)"); } catch (_) {}
+  await db('CREATE INDEX IF NOT EXISTS idx_invites_tenant ON invites(tenant_id)');
+}
+
+// Paid orders captured at payment time (cashier) for post-settlement with Foodics
+async function ensurePaidOrdersSchema(){
+  if (!HAS_DB) return;
+  await db(`
+    CREATE TABLE IF NOT EXISTS paid_orders (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      ticket_no bigserial UNIQUE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+      branch_id uuid REFERENCES branches(branch_id) ON DELETE SET NULL,
+      basket_id text NOT NULL,
+      osn text,
+      ref text,
+      branch_ticket_no bigint,
+      cashier_device_id uuid REFERENCES devices(device_id) ON DELETE SET NULL,
+      cashier_name text,
+      display_device_id uuid REFERENCES devices(device_id) ON DELETE SET NULL,
+      customer_name text,
+      source text,
+      location text,
+      branch text,
+      items jsonb NOT NULL DEFAULT '[]'::jsonb,
+      total numeric(10,3) NOT NULL DEFAULT 0,
+      currency text NOT NULL DEFAULT 'KWD',
+      paid_at timestamptz NOT NULL DEFAULT now(),
+      sent_to_foodics_at timestamptz,
+      foodics_status text,
+      foodics_order_id text,
+      meta jsonb NOT NULL DEFAULT '{}'::jsonb
+    )`);
+  // Non-breaking add columns for legacy tables
+  try { await db("ALTER TABLE IF EXISTS paid_orders ADD COLUMN IF NOT EXISTS ref text"); } catch {}
+  try { await db("ALTER TABLE IF EXISTS paid_orders ADD COLUMN IF NOT EXISTS branch_ticket_no bigint"); } catch {}
+  try { await db("ALTER TABLE IF EXISTS paid_orders ADD COLUMN IF NOT EXISTS customer_name text"); } catch {}
+  try { await db("ALTER TABLE IF EXISTS paid_orders ADD COLUMN IF NOT EXISTS source text"); } catch {}
+  try { await db('CREATE INDEX IF NOT EXISTS ix_paid_orders_tenant_paid_at ON paid_orders(tenant_id, paid_at DESC)'); } catch {}
+  try { await db('CREATE INDEX IF NOT EXISTS ix_paid_orders_branch_paid_at ON paid_orders(branch_id, paid_at DESC)'); } catch {}
+  try { await db('CREATE INDEX IF NOT EXISTS ix_paid_orders_basket_paid_at ON paid_orders(basket_id, paid_at DESC)'); } catch {}
+  // Per-branch counters for branch_ticket_no
+  await db(`
+    CREATE TABLE IF NOT EXISTS paid_order_counters (
+      tenant_id uuid NOT NULL,
+      branch_id uuid,
+      current bigint NOT NULL DEFAULT 0,
+      PRIMARY KEY (tenant_id, branch_id)
+    )`);
 }
 
 // Send email via SendGrid (optional)
@@ -617,13 +804,13 @@ addRoute('post', '/auth/company-owner-reset', async (req, res) => {
     if (!admin) return res.status(503).json({ error: 'auth_unavailable' });
     const name = String(req.body?.company||'').trim();
     if (!name) return res.status(400).json({ error: 'invalid_company' });
-    const [t] = await db('select id from tenants where lower(name)=lower($1) limit 1', [name]);
+const [t] = await db('select tenant_id as id from tenants where lower(company_name)=lower($1) limit 1', [name]);
     if (!t) return res.json({ ok: true, email_sent: false });
     // Find an owner email (first created)
-    const rows = await db(`
+const rows = await db(`
       select lower(u.email) as email
         from tenant_users tu
-        join users u on u.id=tu.user_id
+        join users u on u.user_id=tu.user_id
        where tu.tenant_id=$1 and tu.role='owner'
        order by tu.created_at asc
        limit 1`, [t.id]);
@@ -662,13 +849,14 @@ async function ensureUsersDeletionSchema(){
   // Create tenant_users_deleted tombstone table
   await db(`
     CREATE TABLE IF NOT EXISTS tenant_users_deleted (
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
       user_id uuid NOT NULL,
       email text,
       role text,
       deleted_at timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY (tenant_id, user_id, deleted_at)
-    )`);
+    )
+  `);
   try { await db("CREATE INDEX IF NOT EXISTS idx_tud_tenant_deleted ON tenant_users_deleted(tenant_id, deleted_at DESC)"); } catch {}
 }
 
@@ -707,7 +895,9 @@ function getForwardedProto(req) {
 function isLocalRequest(req) {
   try {
     const host = getForwardedHost(req);
-    return /^localhost$|^127\.0\.0\.1$|^::1$|\.local$/i.test(String(host||''));
+    const h = String(host||'').toLowerCase();
+    // Treat localhost, *.localhost, loopbacks, and *.local as local
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.localhost') || /\.local$/i.test(h);
   } catch { return false; }
 }
 
@@ -717,13 +907,21 @@ async function requireTenant(req, res, next) {
     // Prefer explicit header provided by clients/devices
     try { const hdr = String(req.header('x-tenant-id') || '').trim(); if (hdr) t = hdr; } catch {}
     // Fallback to host mapping if header is absent
-    if (!t && HAS_DB) {
+    if (!t) {
       const host = getForwardedHost(req);
       if (host) {
-        try {
-          const rows = await db('select tenant_id from tenant_domains where host=$1', [host]);
-          if (rows.length) t = rows[0].tenant_id;
-        } catch {}
+        if (HAS_DB) {
+          try {
+            const rows = await db('select tenant_id from tenant_domains where host=$1', [host]);
+            if (rows.length) t = rows[0].tenant_id;
+          } catch {}
+        } else if (DEV_OPEN_ADMIN) {
+          try {
+            for (const [tid, arr] of memTenantDomainsByTenant.entries()) {
+              if (Array.isArray(arr) && arr.some(d => (d && String(d.host||'').toLowerCase()) === host)) { t = tid; break; }
+            }
+          } catch {}
+        }
       }
     }
     if (!t) t = DEFAULT_TENANT_ID;
@@ -761,12 +959,209 @@ async function verifyAuth(req, res, next){
   }
 }
 
+// Early dev-open wrappers for routes defined before later wrapper declarations
+function verifyAuthOpen(req, res, next) {
+  try {
+    if (DEV_OPEN_ADMIN || isLocalRequest(req)) {
+      req.user = req.user || { uid: 'dev', email: 'dev@local' };
+      return next();
+    }
+  } catch {}
+  return verifyAuth(req, res, next);
+}
+function requireTenantAdminParamOpen(req, res, next) {
+  try {
+    if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
+  } catch {}
+  return requireTenantAdminParam(req, res, next);
+}
+
 // ---- health/diag
-addRoute('get', '/__health', (_req, res) => res.status(200).send('OK-7'));
-addRoute('get', '/health',   (_req, res) => res.status(200).send('OK-7'));
-addRoute('get', '/readyz',   (_req, res) => res.status(200).send('OK-7'));
+addRoute('get', '/__health', async (_req, res) => {
+  try {
+    if (REQUIRE_DB_EFFECTIVE) {
+      try { await db('select 1'); } catch { return res.status(503).send('DB-NOK'); }
+    }
+    return res.status(200).send('OK-7');
+  } catch { return res.status(200).send('OK-7'); }
+});
+
+// Liveness check (LB friendly). If DB is required, gate on DB connectivity.
+addRoute('get', '/health',   async (_req, res) => {
+  try {
+    if (REQUIRE_DB_EFFECTIVE) {
+      try { await db('select 1'); } catch { return res.status(503).send('DB-NOK'); }
+    }
+    return res.status(200).send('OK-7');
+  } catch { return res.status(200).send('OK-7'); }
+});
+
+// Kubernetes/Cloud LB standard liveness alias
+addRoute('get', '/healthz',  async (_req, res) => {
+  try {
+    if (REQUIRE_DB_EFFECTIVE) {
+      try { await db('select 1'); } catch { return res.status(503).type('text/plain').send('DB-NOK'); }
+    }
+    return res.status(200).type('text/plain').send('ok');
+  } catch { return res.status(200).type('text/plain').send('ok'); }
+});
+
+// Readiness: always verify DB connectivity (primary). Returns READY when OK.
+addRoute('get', '/readyz', async (_req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).type('text/plain').send('DB-NOK');
+    try { await db('select 1'); return res.status(200).type('text/plain').send('READY'); }
+    catch { return res.status(503).type('text/plain').send('DB-NOK'); }
+  } catch { return res.status(503).type('text/plain').send('DB-NOK'); }
+});
+
 // Canary health for LB testing path
 addRoute('get', '/_canary/health', (_req, res) => res.status(200).send('OK-7'));
+
+// ---- RTC preflight telemetry (DB-backed with in-memory fallback)
+const memRtcPreflightLogs = [];
+async function ensureRtcPreflightSchema(){
+  if (!HAS_DB) return;
+    await db(`
+      CREATE TABLE IF NOT EXISTS rtc_preflight_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+      device_id text,
+      device_name text,
+      scenario_id text,
+      provider text,
+      policy text,
+      connect_time_ms integer,
+      rtt_avg_ms integer,
+      local_candidate text,
+      local_protocol text,
+      remote_candidate text,
+      remote_protocol text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try { await db('CREATE INDEX IF NOT EXISTS ix_rtc_preflight_tenant_created ON rtc_preflight_logs(tenant_id, created_at desc)'); } catch {}
+}
+
+// Public (tenant-scoped) endpoint to log preflight results
+// ---- RTC sessions schema (headers and time-series stats)
+async function ensureRtcSessionSchema(){
+  if (!HAS_DB) return;
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS rtc_sessions (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        basket_id text,
+        cashier_device_id uuid REFERENCES devices(id) ON DELETE SET NULL,
+        display_device_id uuid REFERENCES devices(id) ON DELETE SET NULL,
+        provider text,
+        started_at timestamptz NOT NULL DEFAULT now(),
+        ended_at timestamptz,
+        summary jsonb
+      )
+    `);
+    await db('CREATE INDEX IF NOT EXISTS ix_rtc_sessions_tenant_started ON rtc_sessions(tenant_id, started_at DESC)');
+    await db('CREATE INDEX IF NOT EXISTS ix_rtc_sessions_basket ON rtc_sessions(basket_id)');
+    await db('CREATE INDEX IF NOT EXISTS ix_rtc_sessions_cashier_started ON rtc_sessions(cashier_device_id, started_at DESC)');
+    await db('CREATE INDEX IF NOT EXISTS ix_rtc_sessions_display_started ON rtc_sessions(display_device_id, started_at DESC)');
+  } catch {}
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS rtc_session_stats (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id uuid NOT NULL REFERENCES rtc_sessions(id) ON DELETE CASCADE,
+        side text NOT NULL CHECK (side IN ('cashier','display')),
+        ts timestamptz NOT NULL DEFAULT now(),
+        metrics jsonb NOT NULL
+      )
+    `);
+    await db('CREATE INDEX IF NOT EXISTS ix_rtc_session_stats_session_ts ON rtc_session_stats(session_id, ts)');
+  } catch {}
+}
+
+addRoute('post', '/rtc/preflight/log', requireTenant, async (req, res) => {
+  try {
+    const t = req.tenantId;
+    const b = req.body || {};
+    const row = {
+      tenant_id: t,
+      device_id: String(b.device_id||'')||null,
+      device_name: String(b.device_name||'')||null,
+      scenario_id: String(b.scenario_id||'')||null,
+      provider: String(b.provider||'')||null,
+      policy: String(b.policy||'')||null,
+      connect_time_ms: Number.isFinite(Number(b.connect_time_ms)) ? Number(b.connect_time_ms) : null,
+      rtt_avg_ms: Number.isFinite(Number(b.rtt_avg_ms)) ? Number(b.rtt_avg_ms) : null,
+      local_candidate: String(b.local_candidate||'')||null,
+      local_protocol: String(b.local_protocol||'')||null,
+      remote_candidate: String(b.remote_candidate||'')||null,
+      remote_protocol: String(b.remote_protocol||'')||null,
+    };
+    if (HAS_DB) {
+      try {
+        await ensureRtcPreflightSchema();
+        await db(`insert into rtc_preflight_logs (tenant_id, device_id, device_name, scenario_id, provider, policy, connect_time_ms, rtt_avg_ms, local_candidate, local_protocol, remote_candidate, remote_protocol)
+                  values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                 [row.tenant_id, row.device_id, row.device_name, row.scenario_id, row.provider, row.policy, row.connect_time_ms, row.rtt_avg_ms, row.local_candidate, row.local_protocol, row.remote_candidate, row.remote_protocol]);
+        return res.json({ ok:true, mode:'db' });
+      } catch (e) { /* fallthrough to mem */ }
+    }
+    // Memory fallback (best-effort, non-persistent)
+    try {
+      memRtcPreflightLogs.push({ ...row, created_at: new Date().toISOString() });
+      if (memRtcPreflightLogs.length > 500) memRtcPreflightLogs.shift();
+    } catch {}
+    return res.json({ ok:true, mode:'memory' });
+  } catch { return res.status(500).json({ error:'log_failed' }); }
+});
+
+// Admin: read recent preflight logs (platform or tenant)
+addRoute('get', '/admin/rtc/preflight', verifyAuth, requirePlatformAdmin, async (req, res) => {
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit||100)));
+  const tenant = String(req.query.tenant_id||'').trim();
+  if (!HAS_DB) {
+    const items = memRtcPreflightLogs
+      .filter(x => !tenant || String(x.tenant_id||'')===tenant)
+      .slice(-limit)
+      .reverse();
+    return res.json({ items });
+  }
+  try {
+    await ensureRtcPreflightSchema();
+    const rows = await db(
+      `select tenant_id, device_id, device_name, scenario_id, provider, policy, connect_time_ms, rtt_avg_ms, local_candidate, local_protocol, remote_candidate, remote_protocol, created_at
+         from rtc_preflight_logs
+        ${tenant ? 'where tenant_id=$1' : ''}
+        order by created_at desc
+        limit ${limit}`,
+      tenant ? [tenant] : []
+    );
+    return res.json({ items: rows });
+  } catch { return res.json({ items: [] }); }
+});
+
+// Tenant admin: read recent preflight logs for a tenant
+addRoute('get', '/admin/tenants/:id/rtc/preflight', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit||100)));
+  if (!HAS_DB) {
+    const items = memRtcPreflightLogs.filter(x => String(x.tenant_id||'')===tenantId).slice(-limit).reverse();
+    return res.json({ items });
+  }
+  try {
+    await ensureRtcPreflightSchema();
+    const rows = await db(
+      `select tenant_id, device_id, device_name, scenario_id, provider, policy, connect_time_ms, rtt_avg_ms, local_candidate, local_protocol, remote_candidate, remote_protocol, created_at
+         from rtc_preflight_logs
+        where tenant_id=$1
+        order by created_at desc
+        limit ${limit}`,
+      [tenantId]
+    );
+    return res.json({ items: rows });
+  } catch { return res.json({ items: [] }); }
+});
 
 addRoute('get', '/dbz', async (_req, res) => {
   if (!HAS_DB) {
@@ -934,7 +1329,11 @@ function loadJsonCatalog(){
 }
 
 // Serve Tenants UI for exact trailing-slash path before any JSON handlers
-addRoute('get', /^\/tenants\/$/, (_req, res) => res.sendFile(path.join(__dirname, 'tenants', 'index.html')));
+addRoute('get', /^\/tenants\/$/, (_req, res) => {
+  // Serve local Tenants UI directly
+  try { return res.sendFile(path.join(__dirname, 'tenants', 'index.html')); }
+  catch { return res.status(404).end(); }
+});
 
 // Tenants list: exact path '/tenants' only. If Accept: text/html -> redirect to UI; else JSON.
 addRoute('get', /^\/tenants$/, (req, res, next) => {
@@ -951,7 +1350,7 @@ addRoute('get', /^\/tenants$/, async (req, res) => {
   // Serve JSON list
   if (!HAS_DB) return res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
   try {
-    const rows = await db('select id, name from tenants order by name asc');
+const rows = await db('select tenant_id as id, company_name as name from tenants order by company_name asc');
     res.json(rows);
   } catch (_e) {
     res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
@@ -970,6 +1369,14 @@ addRoute('get', /^\/categories$/, (req, res, next) => {
 });
 
 addRoute('get', /^\/categories$/, requireTenant, async (req, res) => {
+  // Prevent caching so deletions become visible immediately
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('ETag', 'W/"ts-' + Date.now() + '"');
+  } catch {}
+
 if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // If in-memory catalog overrides exist for this tenant, use them and augment with image from products
   const mem = memCatalogByTenant.get(req.tenantId);
@@ -981,25 +1388,20 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
     for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
 const stateMem = memDriveThruState.get(req.tenantId) || {};
     const hiddenIds = Array.isArray(stateMem.hiddenCategoryIds) ? stateMem.hiddenCategoryIds.map(String) : [];
-    const out = (baseCats || []).map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }))
+    const out = (baseCats || [])
+      .filter(c => c?.active !== false && c?.deleted !== true)
+      .map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }))
       .filter(c => !hiddenIds.includes(String(c.id)));
     return res.json(out);
   }
   try {
     await ensureCategoryStatusColumns();
     const rows = await db(
-      'select id, name, reference, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 order by name asc',
+      'select id, name, reference, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 and coalesce(active,true) and coalesce(deleted,false)=false order by name asc',
       [req.tenantId]
     );
     if (!Array.isArray(rows) || rows.length === 0) {
-      // Only fallback for default tenant; others return empty when DB has no rows
-      if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
-        const prods = JSON_CATALOG.products || [];
-        const byCatName = new Map();
-        for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
-        const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }));
-        return res.json(out);
-      }
+      // In DB mode, do not fallback to JSON — return empty to honor deletions/inactivity
       return res.json([]);
     }
     // Build image map from DB products (non-null image_url)
@@ -1019,14 +1421,7 @@ let hiddenIdsDb = [];
       .filter(c => !hiddenIdsDb.includes(String(c.id)));
     res.json(out);
   } catch (_e) {
-    // DB failed — only default tenant gets JSON fallback
-    if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
-      const prods = JSON_CATALOG.products || [];
-      const byCatName = new Map();
-      for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
-      const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || byCatName.get(c.name) || null }));
-      return res.json(out);
-    }
+    // DB failed — return empty to avoid showing stale defaults
     res.json([]);
   }
 });
@@ -1049,22 +1444,20 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
     for (const p of prods) { if (p?.category_name && p?.image_url && !byCatName.has(p.category_name)) byCatName.set(p.category_name, p.image_url); }
 const stateMem = memDriveThruState.get(req.tenantId) || {};
     const hiddenIds = Array.isArray(stateMem.hiddenCategoryIds) ? stateMem.hiddenCategoryIds.map(String) : [];
-    const out = (baseCats || []).map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }))
+    const out = (baseCats || [])
+      .filter(c => c?.active !== false && c?.deleted !== true)
+      .map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }))
       .filter(c => !hiddenIds.includes(String(c.id)));
     return res.json(out);
   }
   try {
     await ensureCategoryStatusColumns();
     const rows = await db(
-      'select id, name, reference, name_localized, image_url, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 order by name asc',
+      'select id, name, reference, name_localized, image_url, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 and coalesce(active,true) and coalesce(deleted,false)=false order by name asc',
       [req.tenantId]
     );
     if (!Array.isArray(rows) || rows.length === 0) {
-      if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
-        const byCatName = new Map((JSON_CATALOG.products||[]).filter(p => p.image_url).map(p => [p.category_name, p.image_url]));
-        const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }));
-        return res.json(out);
-      }
+      // Do not fallback to JSON defaults when DB is configured — avoid resurrecting deleted categories
       return res.json([]);
     }
     let imgRows = [];
@@ -1082,11 +1475,7 @@ let hiddenIdsDb = [];
       .filter(c => !hiddenIdsDb.includes(String(c.id)));
     res.json(out);
   } catch (_e) {
-    if (String(req.tenantId) === String(DEFAULT_TENANT_ID)) {
-      const byCatName = new Map((JSON_CATALOG.products||[]).filter(p => p.image_url).map(p => [p.category_name, p.image_url]));
-      const out = (JSON_CATALOG.categories || []).map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }));
-      return res.json(out);
-    }
+    // On DB error, return empty to avoid stale defaults
     res.json([]);
   }
 });
@@ -1102,19 +1491,32 @@ addRoute('get', /^\/products$/, (req, res, next) => {
   return next();
 });
 
+// Redirect helper for editor path without trailing slash
+addRoute('get', /^\/products\/edit$/, (req, res, next) => {
+  try {
+    const accept = String(req.headers.accept || '');
+    if (accept.includes('text/html')) {
+      return res.redirect(302, '/products/edit/');
+    }
+  } catch {}
+  return next();
+});
+
 addRoute('get', /^\/products$/, requireTenant, async (req, res) => {
 if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_required' });
   // In-memory override
   const mem = memCatalogByTenant.get(req.tenantId);
   if (mem) {
     const { category_name } = req.query;
-    let list = mem.products || [];
+    let list = (mem.products || []).filter(p => p?.active !== false);
     if (category_name) list = list.filter(p => p.category_name === category_name);
     return res.json(list);
   }
   if (!HAS_DB) {
     const { category_name } = req.query;
-    const list = category_name ? JSON_CATALOG.products.filter(p => p.category_name === category_name) : JSON_CATALOG.products;
+    let list = JSON_CATALOG.products;
+    list = Array.isArray(list) ? list.filter(p => p?.active !== false) : [];
+    if (category_name) list = list.filter(p => p.category_name === category_name);
     return res.json(list);
   }
   try {
@@ -1131,11 +1533,12 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
         p.ingredients_en, p.ingredients_ar, p.allergens,
         p.pos_visible, p.online_visible, p.delivery_visible,
         p.talabat_reference, p.jahez_reference, p.vthru_reference
-reference
       from products p
       join categories c on c.id=p.category_id
       where p.tenant_id=$1
       and coalesce(p.active, true)
+      and coalesce(c.active, true)
+      and coalesce(c.deleted, false) = false
       ${category_name ? 'and c.name=$2' : ''}
       order by c.name, p.name
     `;
@@ -1191,13 +1594,15 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
   const mem = memCatalogByTenant.get(req.tenantId);
   if (mem) {
     const { category_name } = req.query;
-    let list = mem.products || [];
+    let list = (mem.products || []).filter(p => p?.active !== false);
     if (category_name) list = list.filter(p => p.category_name === category_name);
     return res.json(list);
   }
   if (!HAS_DB) {
     const { category_name } = req.query;
-    const list = category_name ? JSON_CATALOG.products.filter(p => p.category_name === category_name) : JSON_CATALOG.products;
+    let list = JSON_CATALOG.products;
+    list = Array.isArray(list) ? list.filter(p => p?.active !== false) : [];
+    if (category_name) list = list.filter(p => p.category_name === category_name);
     return res.json(list);
   }
   try {
@@ -1218,6 +1623,8 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
       join categories c on c.id=p.category_id
       where p.tenant_id=$1
       and coalesce(p.active, true)
+      and coalesce(c.active, true)
+      and coalesce(c.deleted, false) = false
       ${category_name ? 'and c.name=$2' : ''}
       order by c.name, p.name
     `;
@@ -1251,7 +1658,7 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
 });
 
 // Admin: list products with status filtering (active/inactive/all). Returns both active and inactive by default (status=all).
-addRoute('get', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   // No-store to avoid stale admin lists
   try {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -1304,7 +1711,12 @@ addRoute('get', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminPar
         p.ingredients_en, p.ingredients_ar, p.allergens,
         p.pos_visible, p.online_visible, p.delivery_visible,
         p.talabat_reference, p.jahez_reference, p.vthru_reference,
-        coalesce(p.active, true) as active
+        coalesce(p.active, true) as active,
+        -- New fields for Advanced editor
+        p.created_at, p.updated_at, p.version, p.last_modified_by,
+        p.sort_order, p.is_featured, p.tags, p.diet_flags, p.product_type::text as product_type,
+        p.sync_status::text as sync_status, p.published_channels,
+        p.internal_notes, p.staff_notes
       from products p
       join categories c on c.id=p.category_id
       where ${status==='active' ? 'p.tenant_id=$1 and coalesce(p.active,true)'
@@ -1507,11 +1919,67 @@ addRoute('post', '/session/start', async (req, res) => {
   try { broadcast(id, { type:'session:started', basketId: id, osn: s.osn }); } catch {}
   try { broadcastPeerStatus(id); } catch {}
   try { broadcastAdminLive(); } catch {}
+  // Persist session header
+  (async () => {
+    if (!HAS_DB) return;
+    try {
+      await ensureRtcSessionSchema();
+      // Resolve tenant_id by display device id (=basketId) if possible
+      let tenantId = DEFAULT_TENANT_ID;
+      try { const rows = await db('select tenant_id from devices where device_id=$1', [id]); if (rows && rows[0] && rows[0].tenant_id) tenantId = rows[0].tenant_id; } catch {}
+      // Find existing open session
+      const open = await db('select id, cashier_device_id, display_device_id from rtc_sessions where tenant_id=$1 and basket_id=$2 and ended_at is null order by started_at desc limit 1', [tenantId, id]);
+      // Discover peers' device ids from WS meta
+      let cashierDeviceId = null, displayDeviceId = null;
+      try {
+        const set = basketClients.get(id);
+        if (set) {
+          for (const ws of set) {
+            const meta = clientMeta.get(ws) || {};
+            if (meta.role === 'cashier' && meta.device_id && !cashierDeviceId) cashierDeviceId = String(meta.device_id);
+            if (meta.role === 'display' && meta.device_id && !displayDeviceId) displayDeviceId = String(meta.device_id);
+          }
+        }
+      } catch {}
+      if (!open.length) {
+        await db('insert into rtc_sessions (tenant_id, basket_id, cashier_device_id, display_device_id, provider, started_at) values ($1,$2,$3,$4,null, now())', [tenantId, id, cashierDeviceId, displayDeviceId]);
+        // Log device events (best-effort)
+        try { if (cashierDeviceId) await logDeviceEvent(tenantId, cashierDeviceId, 'rtc_session_start', { basketId: id }); } catch {}
+        try { if (displayDeviceId) await logDeviceEvent(tenantId, displayDeviceId, 'rtc_session_start', { basketId: id }); } catch {}
+      } else {
+        // Update missing device ids if any
+        const sess = open[0];
+        const nextCash = sess.cashier_device_id || cashierDeviceId;
+        const nextDisp  = sess.display_device_id || displayDeviceId;
+        if (nextCash !== sess.cashier_device_id || nextDisp !== sess.display_device_id) {
+          try { await db('update rtc_sessions set cashier_device_id=$1, display_device_id=$2 where id=$3', [nextCash, nextDisp, sess.id]); } catch {}
+        }
+      }
+    } catch {}
+  })();
   res.json({ ok:true, osn: s.osn });
 });
 addRoute('post', '/session/reset', async (req, res) => {
   const id = String(req.query.pairId||req.body?.pairId||'').trim();
   if (!id) return res.status(400).json({ error:'pairId required' });
+  // Mark session ended
+  (async () => {
+    if (!HAS_DB) return;
+    try {
+      await ensureRtcSessionSchema();
+      let tenantId = DEFAULT_TENANT_ID;
+      try { const rows = await db('select tenant_id from devices where device_id=$1', [id]); if (rows && rows[0] && rows[0].tenant_id) tenantId = rows[0].tenant_id; } catch {}
+      await db('update rtc_sessions set ended_at=now() where tenant_id=$1 and basket_id=$2 and ended_at is null', [tenantId, id]);
+      // Log device events if peers are known
+      try {
+        const set = basketClients.get(id);
+        let c=null,d=null; if (set) for (const ws of set){ const m=clientMeta.get(ws)||{}; if (m.role==='cashier'&&m.device_id) c=m.device_id; if (m.role==='display'&&m.device_id) d=m.device_id; }
+        if (c) await logDeviceEvent(tenantId, c, 'rtc_session_end', { basketId: id, reason: 'reset' });
+        if (d) await logDeviceEvent(tenantId, d, 'rtc_session_end', { basketId: id, reason: 'reset' });
+      } catch {}
+    } catch {}
+  })();
+  // Clear session state and notify clients (existing behavior)
   // Clear session state
   try { sessions.delete(id); } catch {}
   // Best-effort: clear any lingering WebRTC signaling state
@@ -1542,13 +2010,137 @@ addRoute('post', '/session/pay', async (req, res) => {
   const s = getSession(id);
   if (!s.osn) s.osn = genOSN();
   s.status = 'paid';
+
+  // Snapshot basket before clearing for persistence
+  let itemsArr = [];
+  let total = 0;
+  try {
+    const b = ensureBasket(id);
+    itemsArr = Array.from(b.items.values()).map(it => ({
+      sku: String(it.sku||'') || String(it.id||''),
+      name: it.name || '',
+      price: Number(it.price)||0,
+      qty: Number(it.qty)||0
+    }));
+    for (const it of itemsArr) total += (Number(it.price)||0) * (Number(it.qty)||0);
+    total = Math.round(total*1000)/1000;
+  } catch {}
+
+  // Persist paid order if DB is available
+  (async () => {
+    if (!HAS_DB) return;
+    const client = await pool.connect();
+    try {
+      await ensurePaidOrdersSchema();
+      // Resolve peers and tenant/branch
+      let cashierDeviceId = null, displayDeviceId = null, cashierName = null;
+      try {
+        const set = basketClients.get(id);
+        if (set) {
+          for (const ws of set) {
+            const meta = clientMeta.get(ws) || {};
+            if (meta.role === 'cashier') { if (!cashierDeviceId && meta.device_id) cashierDeviceId = String(meta.device_id); if (!cashierName && meta.name) cashierName = String(meta.name); }
+            if (meta.role === 'display') { if (!displayDeviceId && meta.device_id) displayDeviceId = String(meta.device_id); }
+          }
+        }
+      } catch {}
+
+      // Determine tenant_id, branch info, location
+      let tenantId = DEFAULT_TENANT_ID;
+      let branchId = null;
+      let branchName = null;
+      let location = null;
+      const devId = displayDeviceId || cashierDeviceId;
+      if (devId) {
+        try {
+          const rows = await db('select tenant_id, branch_id, branch, location from devices where device_id=$1', [devId]);
+          if (rows && rows[0]) {
+            tenantId = rows[0].tenant_id || tenantId;
+            branchId = rows[0].branch_id || null;
+            branchName = rows[0].branch || null;
+            location = rows[0].location || null;
+          }
+        } catch {}
+      } else {
+        try { const rows = await db('select tenant_id from devices where device_id=$1', [id]); if (rows && rows[0] && rows[0].tenant_id) tenantId = rows[0].tenant_id; } catch {}
+      }
+
+      // Begin transaction for branch counters + order insert
+      await client.query('BEGIN');
+      let nextBranchNo = null;
+      try {
+        const BRANCH_SENTINEL = '00000000-0000-0000-0000-000000000000';
+        const branchKey = branchId || BRANCH_SENTINEL;
+        const lock = await client.query('SELECT current FROM paid_order_counters WHERE tenant_id=$1 AND branch_id=$2 FOR UPDATE', [tenantId, branchKey]);
+        if (!lock.rows.length) {
+          await client.query('INSERT INTO paid_order_counters (tenant_id, branch_id, current) VALUES ($1,$2,0) ON CONFLICT (tenant_id, branch_id) DO NOTHING', [tenantId, branchKey]);
+        }
+        const inc = await client.query('UPDATE paid_order_counters SET current = current + 1 WHERE tenant_id=$1 AND branch_id=$2 RETURNING current', [tenantId, branchKey]);
+        nextBranchNo = inc.rows[0]?.current || 1;
+      } catch {
+        nextBranchNo = null;
+      }
+
+      const ref = s.osn || null;
+      const payload = [
+        tenantId,
+        branchId,
+        id,
+        s.osn || null,
+        ref,
+        nextBranchNo,
+        cashierDeviceId,
+        cashierName,
+        displayDeviceId,
+        null, // customer_name (reserved)
+        'Cashier', // source
+        location,
+        branchName,
+        JSON.stringify(itemsArr||[]),
+        total,
+        'KWD'
+      ];
+      const ins = await client.query(`
+        INSERT INTO paid_orders(
+          tenant_id, branch_id, basket_id, osn, ref, branch_ticket_no, cashier_device_id, cashier_name, display_device_id, customer_name, source, location, branch, items, total, currency
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16)
+        RETURNING id, ticket_no, branch_ticket_no
+      `, payload);
+      await client.query('COMMIT');
+      try { console.log('[orders] paid order recorded', { basketId: id, ticket_no: ins?.rows?.[0]?.ticket_no, branch_ticket_no: ins?.rows?.[0]?.branch_ticket_no, total }); } catch {}
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      try { console.warn('persist paid order failed', e && e.message ? e.message : e); } catch {}
+    } finally {
+      client.release();
+    }
+  })();
+
+  // Notify clients that the current order is paid
   try { broadcast(id, { type:'session:paid', basketId: id, osn: s.osn }); } catch {}
   try { broadcastAdminLive(); } catch {}
+
   // Clear basket on pay (keep RTC connected to take next order)
   try {
     const b = ensureBasket(id); b.items.clear(); computeTotals(b); b.version++;
     broadcast(id, { type:'basket:update', basketId: id, op: { action: 'clear' }, basket: toWireBasket(b), serverTs: Date.now() });
   } catch {}
+
+  // Immediately start next order with a new OSN
+  try {
+    s.osn = genOSN(); s.status = 'active'; s.started_at = Date.now();
+    broadcast(id, { type:'session:started', basketId: id, osn: s.osn });
+    try { broadcastPeerStatus(id); } catch {}
+    try {
+      if (HAS_DB) {
+        // Best-effort: record a new rtc_session header for the next order
+        let tenantId = DEFAULT_TENANT_ID;
+        try { const rows = await db('select tenant_id from devices where device_id=$1', [id]); if (rows && rows[0] && rows[0].tenant_id) tenantId = rows[0].tenant_id; } catch {}
+        await db('insert into rtc_sessions (tenant_id, basket_id, provider, started_at) values ($1,$2,null, now())', [tenantId, id]);
+      }
+    } catch {}
+  } catch {}
+
   res.json({ ok:true, osn: s.osn });
 });
 
@@ -1640,6 +2232,8 @@ addRoute('post', '/webrtc/answer', async (req, res) => {
 addRoute('delete', '/webrtc/session/:pairId', async (req, res) => {
   const id = String(req.params.pairId||'').trim();
   const reason = String(req.query?.reason || '').trim() || 'user';
+  // Mark session ended
+  (async () => { if (!HAS_DB) return; try { await ensureRtcSessionSchema(); let tenantId = DEFAULT_TENANT_ID; try { const r = await db('select tenant_id from devices where device_id=$1', [id]); if (r && r[0] && r[0].tenant_id) tenantId = r[0].tenant_id; } catch {}; await db('update rtc_sessions set ended_at=now() where tenant_id=$1 and basket_id=$2 and ended_at is null', [tenantId, id]); } catch {} })();
   if (HAS_DB) {
     await db('delete from webrtc_rooms where pair_id=$1', [id]);
   } else {
@@ -1660,6 +2254,52 @@ addRoute('post', '/preflight/begin', async (req, res) => {
     try { broadcast(targetId, { type:'preflight:begin', basketId: targetId, requestId, scenarios }); } catch {}
     return res.json({ ok:true });
   } catch { return res.status(500).json({ ok:false, error:'server_error' }); }
+});
+
+// Telemetry ingestion for RTC metrics (rtt, bitrate, candidate types)
+addRoute('post', '/rtc/telemetry', requireTenant, async (req, res) => {
+  try {
+    // Optional backend toggle (default accept)
+    const accept = !('BACKEND_RTC_TELEMETRY_ACCEPT' in process.env) || /^(1|true|yes|on)$/i.test(String(process.env.BACKEND_RTC_TELEMETRY_ACCEPT||''));
+    if (!accept) return res.status(202).json({ ok:true, accepted:false });
+    if (!HAS_DB) return res.status(202).json({ ok:true, accepted:false });
+    const b = req.body || {};
+    const basketId = String(b.basketId||'').trim();
+    const role = String(b.role||'').trim().toLowerCase();
+    if (!basketId || (role!=='cashier' && role!=='display')) return res.status(400).json({ error:'invalid_request' });
+    await ensureRtcSessionSchema();
+    // Upsert/find session by tenant + basketId
+    let sess = null;
+    try {
+      const rows = await db('select id from rtc_sessions where tenant_id=$1 and basket_id=$2 and ended_at is null order by started_at desc limit 1', [req.tenantId, basketId]);
+      if (rows.length) sess = rows[0];
+    } catch {}
+    if (!sess) {
+      const prov = (b.provider && typeof b.provider==='string') ? String(b.provider) : null;
+      const ins = await db('insert into rtc_sessions (tenant_id, basket_id, provider) values ($1,$2,$3) returning id', [req.tenantId, basketId, prov]);
+      sess = ins && ins[0] ? ins[0] : null;
+    } else if (b.provider) {
+      try { await db('update rtc_sessions set provider=$1 where id=$2', [String(b.provider), sess.id]); } catch {}
+    }
+    if (!sess) return res.status(202).json({ ok:true, accepted:false });
+    // Insert stats row
+    const metrics = (b.metrics && typeof b.metrics==='object') ? b.metrics : {};
+    await db('insert into rtc_session_stats (session_id, side, metrics) values ($1,$2,$3::jsonb)', [sess.id, role, JSON.stringify(metrics)]);
+    // Update summary rollup
+    try {
+      const summaryPatch = {
+        last_provider: (b.provider||null),
+        last_rtt_ms: metrics.rtt_ms||null,
+        last_br_in_kbps: metrics.br_in_kbps||null,
+        last_br_out_kbps: metrics.br_out_kbps||null,
+        last_candidates: { local: metrics.local_candidate||null, remote: metrics.remote_candidate||null },
+        last_pair_id: metrics.pair_id||null,
+        last_side: role
+      };
+      await db(`update rtc_sessions set summary = coalesce(summary, '{}'::jsonb) || $1::jsonb where id=$2`, [JSON.stringify(summaryPatch), sess.id]);
+    } catch {}
+    return res.json({ ok:true, accepted:true });
+  } catch { return res.status(500).json({ error:'telemetry_failed' }); }
 });
 
 addRoute('get', '/webrtc/answer', async (req, res) => {
@@ -1733,8 +2373,45 @@ function buildIceServers(){
   return out;
 }
 
+// ---- Secret hydration (GCP Secret Manager → env) for Twilio
+let __twilioHydrateOnce = null;
+async function hydrateTwilioSecretsFromGcp(){
+  try {
+    // Skip if already provided via env
+    const hasEnv = (process.env.TWILIO_ACCOUNT_SID||'').trim() && (process.env.TWILIO_KEY_SID||'').trim() && (process.env.TWILIO_KEY_SECRET||'').trim();
+    const enable = /^(1|true|yes|on)$/i.test(String(process.env.GCP_SECRETS_ENABLE||'1'));
+    if (hasEnv || !enable) return;
+    let sms;
+    try { sms = require('@google-cloud/secret-manager'); } catch { return; }
+    const { SecretManagerServiceClient } = sms;
+    const client = new SecretManagerServiceClient();
+    const project = (process.env.GCP_PROJECT_ID||process.env.GOOGLE_CLOUD_PROJECT||process.env.GCLOUD_PROJECT||'').trim();
+    async function readSecretByEnv(nameEnv){
+      const id = (process.env[nameEnv]||'').trim();
+      if (!id) return null;
+      const full = id.startsWith('projects/') ? id : (project ? `projects/${project}/secrets/${id}/versions/latest` : null);
+      if (!full) return null;
+      try {
+        const [v] = await client.accessSecretVersion({ name: full });
+        const s = (v && v.payload && v.payload.data) ? String(v.payload.data.toString('utf8')||'').trim() : '';
+        return s || null;
+      } catch { return null; }
+    }
+    const acc = (process.env.TWILIO_ACCOUNT_SID||await readSecretByEnv('TWILIO_ACCOUNT_SID_SECRET')||'').trim();
+    const ksid = (process.env.TWILIO_KEY_SID||await readSecretByEnv('TWILIO_KEY_SID_SECRET')||'').trim();
+    const ksec = (process.env.TWILIO_KEY_SECRET||await readSecretByEnv('TWILIO_KEY_SECRET_SECRET')||'').trim();
+    if (acc) process.env.TWILIO_ACCOUNT_SID = acc;
+    if (ksid) process.env.TWILIO_KEY_SID = ksid;
+    if (ksec) process.env.TWILIO_KEY_SECRET = ksec;
+  } catch {}
+}
+async function ensureTwilioSecretsLoaded(){
+  try { __twilioHydrateOnce = __twilioHydrateOnce || hydrateTwilioSecretsFromGcp().catch(()=>{}); await __twilioHydrateOnce; } catch {}
+}
+
 // Fetch Twilio ICE servers (ephemeral) via Tokens API if creds are configured
 async function fetchTwilioIceServers(){
+  await ensureTwilioSecretsLoaded();
   const accountSid = (process.env.TWILIO_ACCOUNT_SID || '').trim();
   const authToken  = (process.env.TWILIO_AUTH_TOKEN || '').trim();
   const keySid     = (process.env.TWILIO_KEY_SID || '').trim();
@@ -1777,8 +2454,27 @@ function getSelfTurnServersFromEnv(){
   } catch { return []; }
 }
 
+function hasLivekitSecrets(){
+  try { return !!((process.env.LIVEKIT_API_KEY||'').trim() && (process.env.LIVEKIT_API_SECRET||'').trim() && (process.env.LIVEKIT_WS_URL||'').trim()); } catch { return false; }
+}
+function hasTwilioVideoSecrets(){
+  try { return !!((process.env.TWILIO_ACCOUNT_SID||'').trim() && (process.env.TWILIO_KEY_SID||'').trim() && (process.env.TWILIO_KEY_SECRET||'').trim()); } catch { return false; }
+}
+function getRtcFallbackOrder(){
+  try {
+    const raw = (process.env.RTC_FALLBACK_ORDER||'p2p,livekit,twilio');
+    const arr = raw.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+    const avail = new Set(['p2p']);
+    if (hasLivekitSecrets()) avail.add('livekit');
+    if (hasTwilioVideoSecrets()) avail.add('twilio');
+    const out = arr.filter(p => avail.has(p));
+    return out.length ? out : ['p2p'];
+  } catch { return ['p2p']; }
+}
+
 addRoute('get', '/webrtc/config', async (_req, res) => {
   // Base config (STUN + any self-hosted TURN from env or ICE_SERVERS_JSON)
+  await ensureTwilioSecretsLoaded();
   const base = buildIceServers();
   const selfServers = getSelfTurnServersFromEnv();
   let twilioServers = [];
@@ -1788,9 +2484,90 @@ addRoute('get', '/webrtc/config', async (_req, res) => {
   // Compose final list; keep backward-compatible iceServers key
   const merged = [...(Array.isArray(base)?base:[{ urls: ['stun:stun.l.google.com:19302'] }]), ...(Array.isArray(twilioServers)?twilioServers:[])];
   try {
-    return res.json({ iceServers: merged, selfServers, twilioServers });
+    const order = getRtcFallbackOrder();
+    const nonP2PDefault = order.find(p => p !== 'p2p') || 'none';
+    const sfu = {
+      enabled: hasLivekitSecrets() || hasTwilioVideoSecrets(),
+      defaultProvider: nonP2PDefault,
+      tokenEndpoint: '/rtc/token',
+      livekit: { url: (process.env.LIVEKIT_WS_URL||'').trim() || null },
+      fallbackOrder: order
+    };
+    return res.json({ iceServers: merged, selfServers, twilioServers, sfu });
   } catch {
     return res.json({ iceServers: merged });
+  }
+});
+
+// --- SFU token minting (LiveKit or Twilio Video)
+const __rateIp = new Map();
+const __rateKey = new Map();
+function rlCheck(key, map, limit){
+  const now = Date.now();
+  let e = map.get(key);
+  if (!e || e.resetAt < now) { e = { count: 0, resetAt: now + 60_000 }; }
+  e.count++;
+  map.set(key, e);
+  return e.count <= limit;
+}
+
+addRoute('post', '/rtc/token', async (req, res) => {
+  try {
+    const ip = String(req.headers['x-forwarded-for']||req.socket?.remoteAddress||'').split(',')[0].trim();
+    const b = req.body || {};
+    const basketId = String(b.basketId||'').trim();
+    let provider = String(b.provider||'').trim().toLowerCase();
+    const role = (String(b.role||'drive').trim().toLowerCase() === 'cashier') ? 'cashier' : 'drive';
+    const identity = String(b.identity||'').trim() || `${role}-${Math.random().toString(36).slice(2,8)}`;
+    if (!basketId || !/^[a-zA-Z0-9._-]{1,64}$/.test(basketId)) return res.status(400).json({ error: 'invalid_basketId' });
+
+    // Rate limits
+    if (!rlCheck(ip||'noip', __rateIp, 12)) return res.status(429).json({ error: 'rate_limited' });
+    if (!rlCheck('b:'+basketId, __rateKey, 8)) return res.status(429).json({ error: 'rate_limited' });
+
+    // Choose provider from fallback order if not specified
+    if (!provider) {
+      const order = getRtcFallbackOrder();
+      provider = order.find(p => p !== 'p2p') || (hasLivekitSecrets() ? 'livekit' : (hasTwilioVideoSecrets() ? 'twilio' : ''));
+    }
+    if (provider === 'livekit') {
+      if (!hasLivekitSecrets()) return res.status(503).json({ error: 'livekit_unavailable' });
+      let LK;
+      try { LK = await import('livekit-server-sdk'); } catch (e) { return res.status(500).json({ error: 'livekit_sdk_missing' }); }
+      try {
+        const at = new LK.AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, { identity, ttl: '1h' });
+        at.addGrant({ roomJoin: true, room: basketId, canPublish: true, canSubscribe: true });
+        const token = await at.toJwt();
+        const url = (process.env.LIVEKIT_WS_URL||'').trim();
+        try { await logConnectionEvent('livekit_token_issued', { basketId, role, identity, url }); } catch {}
+        return res.json({ provider: 'livekit', room: basketId, token, url });
+      } catch (e) {
+        return res.status(500).json({ error: 'livekit_token_error' });
+      }
+} else if (provider === 'twilio') {
+      await ensureTwilioSecretsLoaded();
+      if (!hasTwilioVideoSecrets()) return res.status(503).json({ error: 'twilio_unavailable' });
+      let twilio;
+      try { twilio = require('twilio'); } catch (e) { return res.status(500).json({ error: 'twilio_sdk_missing' }); }
+      try {
+        const AccessToken = twilio.jwt.AccessToken;
+        const VideoGrant = twilio.jwt.AccessToken.VideoGrant;
+        const token = new AccessToken(
+          (process.env.TWILIO_ACCOUNT_SID||'').trim(),
+          (process.env.TWILIO_KEY_SID||'').trim(),
+          (process.env.TWILIO_KEY_SECRET||'').trim(),
+          { ttl: 3600 }
+        );
+        token.identity = identity;
+        token.addGrant(new VideoGrant({ room: basketId }));
+        return res.json({ provider: 'twilio', room: basketId, token: token.toJwt() });
+      } catch (e) {
+        return res.status(500).json({ error: 'twilio_token_error' });
+      }
+    }
+    return res.status(400).json({ error: 'invalid_provider' });
+  } catch (e) {
+    return res.status(500).json({ error: 'server_error' });
   }
 });
 
@@ -1827,6 +2604,26 @@ addRoute('get', '/admin/metrics', verifyAuth, requireTenant, async (req, res) =>
   }
 });
 
+// Platform: connection logs — last N entries with action like 'connection:%'
+addRoute('get', '/admin/logs/connections', verifyAuth, async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit||100)));
+    if (!HAS_DB) {
+      const items = (memActivityLogs||[]).filter(x => x && typeof x.action==='string' && x.action.startsWith('connection:')).slice(-limit).reverse();
+      return res.json({ items });
+    }
+    await ensureLoggingSchema();
+    const rows = await db(`select ts, level, scope, tenant_id, actor, action, path, method, status, duration_ms, ip, user_agent, meta
+                           from admin_activity_logs
+                           where action like 'connection:%'
+                           order by ts desc
+                           limit $1`, [limit]);
+    res.json({ items: rows });
+  } catch (_e) {
+    res.json({ items: [] });
+  }
+});
+
 // ---- Live admin telemetry (devices, sessions)
 function peerNamesForBasket(basketId){
   let cashierName = null, displayName = null;
@@ -1846,21 +2643,23 @@ async function computeLiveDevices(tenantId){
   const items = [];
   if (HAS_DB) {
     try {
-      const rows = await db("select id, name, role::text as role, status::text as status, branch, last_seen from devices where tenant_id=$1 order by name asc", [tenantId]);
+      const rows = await db("select device_id as id, device_name as name, role::text as role, status::text as status, branch, branch_id, last_seen from devices where tenant_id=$1 order by device_name asc", [tenantId]);
       for (const d of rows) {
         const online = d.last_seen ? (now - new Date(d.last_seen).getTime()) < PRESENCE_TTL_MS : false;
-        // infer connected/session by matching active sockets by role+name
-        let connected = false, session_id = null;
+        // infer connected/session and whether a cashier is present in the same basket
+        let connected = false, session_id = null, busy = false;
         for (const [bid, set] of basketClients.entries()) {
+          let foundDisplay = false, foundCashier = false;
           for (const ws of set) {
             const meta = clientMeta.get(ws) || {};
-            if (meta.role === d.role && (meta.name||'').trim() && (d.name||'').trim() && meta.name.trim() === d.name.trim()) {
-              connected = true; session_id = bid; break;
-            }
+            if (meta.role === 'cashier') foundCashier = true;
+            const byId = (meta.role === d.role && meta.device_id && String(meta.device_id) === String(d.id));
+            const byName = (meta.role === d.role && (meta.name||'').trim() && (d.name||'').trim() && meta.name.trim() === d.name.trim());
+            if (byId || byName) foundDisplay = true;
           }
-          if (connected) break;
+          if (foundDisplay) { connected = true; session_id = bid; busy = foundCashier; break; }
         }
-        items.push({ id: d.id, name: d.name, role: d.role, status: d.status, branch: d.branch, last_seen: d.last_seen, online, connected, session_id });
+        items.push({ id: d.id, name: d.name, role: d.role, status: d.status, branch: d.branch, branch_id: d.branch_id || null, last_seen: d.last_seen, online, connected, session_id, busy });
       }
       return items;
     } catch {}
@@ -1870,15 +2669,17 @@ async function computeLiveDevices(tenantId){
   prunePresence(m);
   for (const v of m.values()) {
     const online = (now - v.last_seen) < PRESENCE_TTL_MS;
-    let connected = false, session_id = null;
+    let connected = false, session_id = null, busy = false;
     for (const [bid, set] of basketClients.entries()) {
+      let foundDisplay = false, foundCashier = false;
       for (const ws of set) {
         const meta = clientMeta.get(ws) || {};
-        if (meta.role === 'display' && meta.name && v.name && meta.name.trim() === v.name.trim()) { connected = true; session_id = bid; break; }
+        if (meta.role === 'cashier') foundCashier = true;
+        if (meta.role === 'display' && meta.name && v.name && meta.name.trim() === v.name.trim()) { foundDisplay = true; }
       }
-      if (connected) break;
+      if (foundDisplay) { connected = true; session_id = bid; busy = foundCashier; break; }
     }
-    items.push({ id: v.id, name: v.name, role: 'display', status: 'active', branch: v.branch, last_seen: new Date(v.last_seen).toISOString(), online, connected, session_id });
+    items.push({ id: v.id, name: v.name, role: 'display', status: 'active', branch: v.branch, last_seen: new Date(v.last_seen).toISOString(), online, connected, session_id, busy });
   }
   return items;
 }
@@ -1888,7 +2689,7 @@ async function computeLiveSessions(tenantId){
   const names = { cashier: new Set(), display: new Set() };
   if (HAS_DB) {
     try {
-      const rows = await db("select name, role::text as role from devices where tenant_id=$1", [tenantId]);
+      const rows = await db("select device_name as name, role::text as role from devices where tenant_id=$1", [tenantId]);
       for (const r of rows) { if (r.name && (r.role==='cashier'||r.role==='display')) names[r.role].add(r.name.trim()); }
     } catch {}
   }
@@ -1925,7 +2726,7 @@ function broadcastAdminLive(){
   })();
 }
 
-addRoute('get', '/admin/tenants/:id/live/devices', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/live/devices', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   try {
     const key = `adm:live-devices:${req.params.id}`;
     const cached = cacheGet(key);
@@ -1939,7 +2740,7 @@ addRoute('get', '/admin/tenants/:id/live/devices', verifyAuth, requireTenantAdmi
   }
 });
 
-addRoute('get', '/admin/tenants/:id/live/sessions', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/live/sessions', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   try {
     const key = `adm:live-sessions:${req.params.id}`;
     const cached = cacheGet(key);
@@ -1970,35 +2771,82 @@ addRoute('post', '/admin/sessions/:basketId/evict', verifyAuth, requireTenant, r
 // Display device heartbeat.
 // Backward compatible: if x-device-token present, require role=display; else accept manual id/name.
 addRoute('post', '/presence/display', requireTenant, async (req, res) => {
-  const token = String(req.header('x-device-token') || '').trim();
-  let id = String(req.body?.id||'').trim();
+  // Require a valid device token for display presence
+  const auth = String(req.header('authorization') || '').trim();
+  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+  const token = String(req.header('x-device-token') || bearer || '').trim();
+  if (!token) return res.status(401).json({ error: 'device_unauthorized' });
+  if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+
   let name = String(req.body?.name||'Car');
   let branch = String(req.body?.branch||'').trim();
-  let fromToken = false;
-  if (token && HAS_DB) {
-    const rows = await db(`select id, tenant_id, role::text as role, name, branch from devices where device_token=$1 and status='active'`, [token]);
-    if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
-    if (rows[0].role !== 'display') return res.status(403).json({ error: 'device_role_invalid' });
-    id = rows[0].id; name = rows[0].name || name; branch = rows[0].branch || branch; fromToken = true;
-    // update last_seen async
-    db(`update devices set last_seen=now() where id=$1`, [rows[0].id]).catch(()=>{});
-    // Heartbeat logging (throttled to once per 5 minutes per device)
-    try {
-      const last = __heartbeatLogAt.get(id) || 0;
-      const now = Date.now();
-      if (now - last > 5*60*1000) {
-        __heartbeatLogAt.set(id, now);
-        await logDeviceEvent(rows[0].tenant_id, id, 'heartbeat', { branch: branch||null });
-      }
-    } catch {}
-  }
-  if(!id) return res.status(400).json({ error: 'id required' });
+
+  // Validate token and role=display
+  const rows = await db(`select device_id as id, tenant_id, role::text as role, device_name as name, branch from devices where device_token=$1 and status='active'`, [token]);
+  if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
+  if (rows[0].role !== 'display') return res.status(403).json({ error: 'device_role_invalid' });
+  const id = rows[0].id;
+  name = rows[0].name || name;
+  branch = rows[0].branch || branch;
+
+  // Update last_seen
+  db(`update devices set last_seen=now() where device_id=$1`, [id]).catch(()=>{});
+  // Heartbeat logging (throttled to once per 5 minutes per device)
+  try {
+    const last = __heartbeatLogAt.get(id) || 0;
+    const now = Date.now();
+    if (now - last > 5*60*1000) {
+      __heartbeatLogAt.set(id, now);
+      await logDeviceEvent(rows[0].tenant_id, id, 'heartbeat', { branch: branch||null });
+    }
+  } catch {}
+
   const m = getPresenceMap(req.tenantId);
   m.set(id, { id, name, branch, last_seen: Date.now() });
   try { broadcastAdminLive(); } catch {}
-  const payload = { ok:true };
-  if (fromToken) { payload.id = id; payload.name = name; payload.branch = branch; }
-  res.json(payload);
+  res.json({ ok:true, id, name, branch });
+});
+
+// Public: generate and register a new activation code for a tenant resolved by Company ID (short_code) or UUID
+addRoute('post', '/device/pair/new', verifyAuth, async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    const headerTid = String(req.header('x-tenant-id')||'').trim();
+    let tenantId = null;
+    if (/^\d{6}$/.test(headerTid)) {
+      const t = await db('select tenant_id as id from tenants where company_id=$1 limit 1', [headerTid]);
+      if (!t.length) return res.status(404).json({ error: 'tenant_not_found' });
+      tenantId = t[0].id;
+    } else if (/^[0-9a-f-]{36}$/i.test(headerTid)) {
+      tenantId = headerTid;
+    } else {
+      // Fallback: try host mapping
+      if (req.tenantId) tenantId = req.tenantId; else return res.status(400).json({ error: 'tenant_missing' });
+    }
+    const role = String(req.body?.role||'display').toLowerCase();
+    const name = req.body?.name != null ? String(req.body.name) : null;
+    const branch = req.body?.branch != null ? String(req.body.branch) : null;
+
+    // Generate unique 6-digit code
+    let code = null; let tries = 0;
+    while (tries++ < 40) {
+      const n = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
+      const exists = await db('select 1 from device_activation_codes where code=$1 and expires_at>now()', [n]);
+      if (!exists.length) { code = n; break; }
+    }
+    if (!code) return res.status(500).json({ error: 'code_generation_failed' });
+
+    const expires = new Date(Date.now() + 10*60*1000);
+    await db(`
+      insert into device_activation_codes (code, tenant_id, created_at, expires_at, claimed_at, device_id, meta)
+      values ($1, $2, now(), $3, null, null, $4::jsonb)
+      on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=excluded.meta
+    `, [code, tenantId, expires.toISOString(), { role, name, branch }]);
+
+    return res.json({ code, expires_at: expires.toISOString() });
+  } catch (e) {
+    return res.status(500).json({ error: 'server_error' });
+  }
 });
 
 // Cashier requests list of online displays for the tenant
@@ -2017,7 +2865,7 @@ addRoute('get', '/presence/displays', requireTenant, async (req, res) => {
   try { list = await computeLiveDevices(req.tenantId); } catch {}
   const items = (list || [])
     .filter(it => String(it.role||'').toLowerCase() === 'display' && (it.online || it.connected))
-    .map(it => ({ id: it.id, name: it.name, branch: it.branch, online: !!it.online, connected: !!it.connected, session_id: it.session_id || null }));
+    .map(it => ({ id: it.id, name: it.name, branch: it.branch, branch_id: it.branch_id || null, online: !!it.online, connected: !!it.connected, busy: !!it.busy, session_id: it.session_id || null, last_seen: it.last_seen || null }));
   try { broadcastAdminLive(); } catch {}
   res.json({ items });
 });
@@ -2028,7 +2876,7 @@ async function getBranchStatuses(tenantId){
   let branches = [];
   if (HAS_DB) {
     try {
-      const rows = await db('select id, name from branches where tenant_id=$1 order by name asc', [tenantId]);
+      const rows = await db('select branch_id as id, branch_name as name from branches where tenant_id=$1 order by branch_name asc', [tenantId]);
       branches = rows.map(r => ({ id: r.id, name: r.name }));
     } catch {}
   }
@@ -2071,6 +2919,57 @@ addRoute('get', '/branches/status', requireTenant, async (req, res) => {
     res.json({ items: [] });
   }
 });
+
+// Public: resolve tenant domain by 6-digit company code
+addRoute('get', '/tenant/by-code/:code/domain', async (req, res) => {
+  try {
+    const code = String(req.params.code||'').trim();
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_code' });
+    if (!HAS_DB) return res.json({ host: null, suggestion: null });
+    // Resolve tenant by code (prefer company_id, fallback to short_code) and handle both schemas
+    let occ = null;
+    try { const r = await db('select id as id, name as name from tenants where company_id=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {}
+    if (!occ) { try { const r = await db('select tenant_id as id, company_name as name from tenants where company_id=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {} }
+    if (!occ) { try { const r = await db('select id as id, name as name from tenants where short_code=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {} }
+    if (!occ) { try { const r = await db('select tenant_id as id, company_name as name from tenants where short_code=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {} }
+    if (!occ) return res.json({ host: null, suggestion: null });
+    const tid = occ.id;
+    const name = occ.name || '';
+    let host = null;
+    try {
+      const d = await db('select host from tenant_domains where tenant_id=$1 order by host asc limit 1', [tid]);
+      host = (d && d[0] && d[0].host) || null;
+    } catch {}
+    // Build suggestion from slug or name
+    let suggestion = null;
+    try {
+      const s = await db('select slug from tenant_settings where tenant_id=$1', [tid]);
+      const slug = (s && s[0] && s[0].slug) || null;
+      const label = normalizeLabel(slug || name);
+      if (label) suggestion = `${label}.ordertech.me`;
+    } catch {
+      const label = normalizeLabel(name);
+      if (label) suggestion = `${label}.ordertech.me`;
+    }
+    return res.json({ host, suggestion, tenant_id: tid });
+  } catch (_e) {
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+function normalizeLabel(s){
+  try {
+    if (!s) return null;
+    let out = String(s).trim().toLowerCase();
+    out = out.replace(/[^a-z0-9-]+/g, '-');
+    out = out.replace(/-+/g, '-');
+    out = out.replace(/^-+/, '').replace(/-+$/, '');
+    if (out.length < 1) return null;
+    if (out.length > 63) out = out.slice(0,63).replace(/-+$/, '');
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])$/.test(out)) return null;
+    return out;
+  } catch { return null; }
+}
 
 // ---- Drive‑Thru display state (per tenant)
 addRoute('get', '/drive-thru/state', requireTenant, async (req, res) => {
@@ -2146,13 +3045,21 @@ addRoute('post', '/drive-thru/state', requireTenant, verifyAuth, requireTenantAd
 });
 
 
+// WS/HTTP association for device identity (validate x-device-token)
+addRoute('post', '/ws/associate', requireDeviceAuth, async (req, res) => {
+  try {
+    const d = req.device || {};
+    return res.json({ ok:true, device_id: d.id, tenant_id: d.tenant_id, branch: d.branch||null, branch_id: d.branch_id||null, name: d.name||null, role: d.role||null, meta: d.meta||{} });
+  } catch { return res.status(500).json({ error: 'associate_failed' }); }
+});
+
 // ---- Device auth middleware
 async function requireDeviceAuth(req, res, next) {
   try {
     const tok = String(req.header('x-device-token') || '').trim();
     if (!tok) return res.status(401).json({ error: 'device_unauthorized' });
     if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
-    const rows = await db(`select id, tenant_id, name, role::text as role, status::text as status, branch from devices where device_token=$1`, [tok]);
+    const rows = await db(`select device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch from devices where device_token=$1`, [tok]);
     if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
     const d = rows[0];
     if (d.status !== 'active') return res.status(403).json({ error: 'device_inactive' });
@@ -2226,17 +3133,29 @@ function roleHasPerm(role, perm){ role = String(role||'').toLowerCase(); return 
 async function getUserRoleForTenant(email, tenantId){
   if (!HAS_DB) return null;
   if (!email || !tenantId) return null;
-  const rows = await db(`select tu.role::text as role
-                          from tenant_users tu
-                          join users u on u.id=tu.user_id
-                         where tu.tenant_id=$1 and lower(u.email)=$2
-                         limit 1`, [tenantId, String(email).toLowerCase()]);
-  return rows.length ? rows[0].role : null;
+  // Try new schema first (users.id), then legacy (users.user_id)
+  try {
+    const rows = await db(`select tu.role::text as role
+                             from tenant_users tu
+                             join users u on u.id = tu.user_id
+                            where tu.tenant_id=$1 and lower(u.email)=$2
+                            limit 1`, [tenantId, String(email).toLowerCase()]);
+    if (rows.length) return rows[0].role;
+  } catch {}
+  try {
+    const rows = await db(`select tu.role::text as role
+                             from tenant_users tu
+                             join users u on u.user_id = tu.user_id
+                            where tu.tenant_id=$1 and lower(u.email)=$2
+                            limit 1`, [tenantId, String(email).toLowerCase()]);
+    if (rows.length) return rows[0].role;
+  } catch {}
+  return null;
 }
 function requireTenantPermParamFactory(perm){
   return async (req, res, next) => {
     try {
-      if (isPlatformAdmin(req)) return next();
+      if (await isPlatformAdmin(req)) return next();
       const email = (req.user?.email || '').toLowerCase();
       const tenantId = String(req.params.id||'').trim();
       if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
@@ -2246,37 +3165,34 @@ function requireTenantPermParamFactory(perm){
     } catch { return res.status(401).json({ error: 'unauthorized' }); }
   };
 }
-function isPlatformAdmin(req){
+async function isPlatformAdmin(req){
   const tok = req.header('x-admin-token') || '';
   if (ADMIN_TOKEN && tok === ADMIN_TOKEN) return true;
   const email = (req.user?.email || '').toLowerCase();
   const envList = PLATFORM_ADMIN_EMAILS || [];
   const dbList = Array.isArray(memPlatformSettings?.platform_admins) ? memPlatformSettings.platform_admins.map(e => String(e||'').toLowerCase()) : [];
-  return Boolean(email && (envList.includes(email) || dbList.includes(email)));
+  if (email && (envList.includes(email) || dbList.includes(email))) return true;
+  // Fallback: check platform_admins table
+  try {
+    const rows = await db('select 1 from platform_admins where lower(email)=$1 and status=\'active\' limit 1', [email]);
+    if (rows && rows.length) return true;
+  } catch {}
+  return false;
 }
-function requirePlatformAdmin(req, res, next){
-  if (isPlatformAdmin(req)) return next();
+async function requirePlatformAdmin(req, res, next){
+  if (await isPlatformAdmin(req)) return next();
   return res.status(401).json({ error: 'unauthorized' });
 }
 async function userHasTenantRole(email, tenantId, roles = ['owner','admin']){
   if (!HAS_DB) return false;
   if (!email || !tenantId) return false;
   try {
-    const rows = await db(
-      `select 1
-       from tenant_users tu
-       join users u on u.id = tu.user_id
-       where tu.tenant_id = $1
-         and lower(u.email) = $2
-         and tu.role::text = any($3::text[])
-       limit 1`,
-      [tenantId, email.toLowerCase(), roles]
-    );
-    return rows.length > 0;
+    const role = await getUserRoleForTenant(email, tenantId);
+    return role ? roles.includes(String(role).toLowerCase()) : false;
   } catch { return false; }
 }
 async function requireTenantAdminResolved(req, res, next){
-  if (isPlatformAdmin(req)) return next();
+  if (await isPlatformAdmin(req)) return next();
   const email = (req.user?.email || '').toLowerCase();
   const tenantId = req.tenantId;
   if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
@@ -2284,7 +3200,7 @@ async function requireTenantAdminResolved(req, res, next){
   return res.status(403).json({ error: 'forbidden' });
 }
 async function requireTenantAdminParam(req, res, next){
-  if (isPlatformAdmin(req)) return next();
+  if (await isPlatformAdmin(req)) return next();
   const email = (req.user?.email || '').toLowerCase();
   const tenantId = String(req.params.id || '').trim();
   if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
@@ -2292,7 +3208,7 @@ async function requireTenantAdminParam(req, res, next){
   return res.status(403).json({ error: 'forbidden' });
 }
 async function requireTenantAdminBodyTenant(req, res, next){
-  if (isPlatformAdmin(req)) return next();
+  if (await isPlatformAdmin(req)) return next();
   const email = (req.user?.email || '').toLowerCase();
   const tenantId = String(req.body?.tenant_id || req.body?.tenantId || '').trim();
   if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
@@ -2304,28 +3220,19 @@ const requireAdmin = requirePlatformAdmin;
 
 // Development bypass toggles (for local testing only)
 // Set DEV_OPEN_ADMIN=1 to bypass auth on selected admin routes (Tenants)
-const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || process.env.DEV_OPEN || ''))
-  && String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 // Wrapper middlewares used by admin routes below
-const verifyAuthOpen = (req, res, next) => {
-  if (DEV_OPEN_ADMIN || isLocalRequest(req)) { req.user = req.user || { uid: 'dev', email: 'dev@local' }; return next(); }
-  return verifyAuth(req, res, next);
-};
-const requirePlatformAdminOpen = (req, res, next) => {
+// Note: verifyAuthOpen and requireTenantAdminParamOpen are defined earlier for use by early routes
+const requirePlatformAdminOpen = async (req, res, next) => {
   if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
-  return requirePlatformAdmin(req, res, next);
+  return await requirePlatformAdmin(req, res, next);
 };
-const requireTenantAdminResolvedOpen = (req, res, next) => {
+const requireTenantAdminResolvedOpen = async (req, res, next) => {
   if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
-  return requireTenantAdminResolved(req, res, next);
+  return await requireTenantAdminResolved(req, res, next);
 };
-const requireTenantAdminParamOpen = (req, res, next) => {
+const requireTenantAdminBodyTenantOpen = async (req, res, next) => {
   if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
-  return requireTenantAdminParam(req, res, next);
-};
-const requireTenantAdminBodyTenantOpen = (req, res, next) => {
-  if (DEV_OPEN_ADMIN || isLocalRequest(req)) return next();
-  return requireTenantAdminBodyTenant(req, res, next);
+  return await requireTenantAdminBodyTenant(req, res, next);
 };
 // Open wrapper for permission-checked routes (e.g., manage_users) in dev-open or localhost
 const requireTenantPermParamOpenFactory = (perm) => {
@@ -2357,6 +3264,7 @@ addRoute('get', '/config.js', (req, res) => {
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
+  const apiBase = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE || 'https://app.ordertech.me';
 // Auto-enable devOpenAdmin on localhost; otherwise honor env in non-production
   let devOpen = false;
   try {
@@ -2367,14 +3275,14 @@ addRoute('get', '/config.js', (req, res) => {
   } catch { devOpen = false; }
   if (apiKey && authDomain) {
     const cfg = { apiKey, authDomain };
-    return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};window.devOpenAdmin=${devOpen};`);
+    return res.type('application/javascript').send(`window.firebaseConfig=${JSON.stringify(cfg)};window.devOpenAdmin=${devOpen};window.apiBase=${JSON.stringify(apiBase)};`);
   }
   try {
     const fp = path.join(__dirname, 'admin', 'config.js');
     const content = fs.readFileSync(fp, 'utf8');
-    return res.type('application/javascript').send(`${content}\nwindow.devOpenAdmin=${devOpen};`);
+    return res.type('application/javascript').send(`${content}\nwindow.devOpenAdmin=${devOpen};window.apiBase=${JSON.stringify(apiBase)};`);
   } catch {
-    return res.type('application/javascript').send(`window.firebaseConfig={apiKey:"",authDomain:""};window.devOpenAdmin=${devOpen};`);
+    return res.type('application/javascript').send(`window.firebaseConfig={apiKey:"",authDomain:""};window.devOpenAdmin=${devOpen};window.apiBase=${JSON.stringify(apiBase)};`);
   }
 });
 
@@ -2384,7 +3292,8 @@ addRoute('get', '/config.json', (_req, res) => {
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
-  return res.json({ apiKey, authDomain });
+  const apiBase = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE || 'https://app.ordertech.me';
+  return res.json({ apiKey, authDomain, apiBase });
 });
 
 // ---- Platform/global settings (for super admins)
@@ -2515,6 +3424,43 @@ addRoute('get', '/brand', requireTenant, async (req, res) => {
   } catch { return res.json({ display_name: '', logo_url: '', color_primary: '', color_secondary: '' }); }
 });
 
+  // Device profile for current token (returns display_name, branch, tenant_name, short_code)
+addRoute('get', '/device/profile', requireTenant, requireDeviceAuth, async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+    const tok = String(req.header('x-device-token')||'').trim();
+    if (!tok) return res.status(401).json({ error: 'unauthorized' });
+      const rows = await db(`
+      select d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
+        from devices d
+        left join tenants t on t.tenant_id = d.tenant_id
+       where d.device_token=$1 and d.status='active' and d.tenant_id=$2
+       limit 1
+    `, [tok, req.tenantId]);
+    if (!rows.length) return res.status(401).json({ error: 'unauthorized' });
+    return res.json(rows[0]);
+  } catch (_e) { return res.status(500).json({ error: 'server_error' }); }
+});
+
+// Compact manifest bundles brand + profile (no fallbacks)
+addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    const [brandRow] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
+    const tok = String(req.header('x-device-token')||'').trim();
+    const profileRows = tok ? await db(`
+      select d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
+        from devices d
+        left join tenants t on t.tenant_id = d.tenant_id
+       where d.device_token=$1 and d.status='active' and d.tenant_id=$2
+       limit 1
+    `, [tok, req.tenantId]) : [];
+    const brand = brandRow || {};
+    const profile = (profileRows && profileRows[0]) ? profileRows[0] : {};
+    return res.json({ brand, profile });
+  } catch (_e) { return res.status(500).json({ error: 'server_error' }); }
+});
+
 // Static: signup and profile pages
 addRoute('get', /^\/signup\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'signup', 'index.html')));
 addRoute('get', /^\/verify-email\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'verify-email', 'index.html')));
@@ -2630,8 +3576,19 @@ addRoute('get', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, asyn
     }
     return res.json([]);
   }
-  const rows = await db('select id, name, short_code as code, branch_limit, license_limit from tenants order by created_at desc');
-  res.json(rows);
+  try {
+    // Ensure dependent schema so this route doesn't 500 on fresh DBs
+    await ensureLicensingSchema(); // creates branches/devices + adds branch_limit/license_limit
+    try { await db("ALTER TABLE IF EXISTS tenants ADD COLUMN IF NOT EXISTS company_id char(6)"); } catch {}
+    const rows = await db("select t.tenant_id as id, t.company_name as name, trim(t.company_id) as code, t.status, t.branch_limit, t.license_limit, (select count(*)::int from branches b where b.tenant_id=t.tenant_id) as branch_count, (select count(*)::int from devices d where d.tenant_id=t.tenant_id and d.status='active') as device_count from tenants t order by t.created_at desc");
+    return res.json(rows);
+  } catch (_e) {
+    // Minimal fallback (no counts) if schema is incomplete
+    try {
+      const rows = await db("select tenant_id as id, company_name as name from tenants order by created_at desc");
+      return res.json(rows);
+    } catch { return res.json([]); }
+  }
 });
 
 // Super admin: fetch a single tenant + slug
@@ -2645,12 +3602,70 @@ addRoute('get', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
     if (!t) return res.status(404).json({ error: 'not_found' });
     return res.json({ id: t.id, name: t.name, code: t.code||null, branch_limit: t.branch_limit, license_limit: t.license_limit, slug: t.slug||null });
   }
-  const rows = await db('select id, name, short_code as code, branch_limit, license_limit from tenants where id=$1', [id]);
+  try {
+    // Ensure required columns/tables exist (idempotent)
+    try { await db("ALTER TABLE IF EXISTS tenants ADD COLUMN IF NOT EXISTS company_id char(6)"); } catch {}
+    // Minimal tenant_settings table to provide slug if migrations haven't run yet
+    try { await db("CREATE TABLE IF NOT EXISTS tenant_settings (tenant_id uuid PRIMARY KEY, slug text)"); } catch {}
+
+    const rows = await db('select tenant_id as id, company_name as name, trim(company_id) as code, subdomain, email, status, plan_type, start_date, renewal_date, branch_limit, license_limit, created_at from tenants where tenant_id=$1', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    let slug = null;
+    try { const s = await db('select slug from tenant_settings where tenant_id=$1', [id]); slug = (s && s[0] && s[0].slug) || null; } catch {}
+    const r = rows[0];
+    return res.json({ id: r.id, name: r.name, code: r.code||null, branch_limit: r.branch_limit, license_limit: r.license_limit, slug });
+  } catch (_e) {
+    // Fallback to minimal shape to avoid 500s on partially-migrated DBs
+    try {
+      const rows = await db('select tenant_id as id, company_name as name from tenants where tenant_id=$1', [id]);
+      if (!rows.length) return res.status(404).json({ error: 'not_found' });
+      return res.json({ id: rows[0].id, name: rows[0].name, code: null, branch_limit: 3, license_limit: 1, slug: null });
+    } catch { return res.status(500).json({ error: 'failed' }); }
+  }
+});
+
+// Public summary for tenant admins: minimal info including account id (short_code)
+addRoute('get', '/admin/tenants/:id/public', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  const id = String(req.params.id||'').trim();
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.json({ id, name: 'Company', code: null });
+    ensureMemTenantsSeed();
+    const t = __memTenants.get(id);
+    if (!t) return res.status(404).json({ error: 'not_found' });
+    return res.json({ id: t.id, name: t.name, code: t.code||null });
+  }
+  try {
+    // Ensure column exists to avoid 500 on fresh DBs
+    try { await db("ALTER TABLE IF EXISTS tenants ADD COLUMN IF NOT EXISTS company_id char(6)"); } catch {}
+    const rows = await db('select tenant_id as id, company_name as name, trim(company_id) as code from tenants where tenant_id=$1', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    const r = rows[0];
+    return res.json({ id: r.id, name: r.name, code: r.code||null });
+  } catch (_e) {
+    // Fallback minimal payload
+    try {
+      const rows = await db('select tenant_id as id, company_name as name from tenants where tenant_id=$1', [id]);
+      if (!rows.length) return res.status(404).json({ error: 'not_found' });
+      return res.json({ id: rows[0].id, name: rows[0].name, code: null });
+    } catch { return res.status(500).json({ error: 'failed' }); }
+  }
+});
+
+// Platform admin: generate Account ID (short_code) if missing
+addRoute('post', '/admin/tenants/:id/company-id', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const id = String(req.params.id||'').trim();
+  if (!id) return res.status(400).json({ error: 'invalid_id' });
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const rows = await db('select company_id from tenants where id=$1', [id]);
   if (!rows.length) return res.status(404).json({ error: 'not_found' });
-  const [s] = await db('select slug from tenant_settings where tenant_id=$1', [id]);
-  const slug = s && s.slug || null;
-  const r = rows[0];
-  res.json({ id: r.id, name: r.name, code: r.code||null, branch_limit: r.branch_limit, license_limit: r.license_limit, slug });
+  const current = rows[0].company_id || null;
+  if (current) return res.status(409).json({ error: 'code_exists', code: current });
+  try {
+    const code = await genTenantShortCode();
+    await db('update tenants set company_id=$1 where id=$2', [code, id]);
+    return res.json({ ok:true, code });
+  } catch { return res.status(500).json({ error: 'code_generation_failed' }); }
 });
 
 // Super admin: create tenant (name, optional slug)
@@ -2658,17 +3673,18 @@ addRoute('post', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, asy
   if (!HAS_DB && DEV_OPEN_ADMIN) {
     const name = String(req.body?.name||'').trim();
     const slug = String(req.body?.slug||'').trim() || null;
-    const rawCode = String(req.body?.code||'').trim();
+    const rawCode = req.body?.code != null ? String(req.body.code).trim() : '';
     if (!name) return res.status(400).json({ error: 'name required' });
     ensureMemTenantsSeed();
-    // code uniqueness
-    let code = null;
-    if (rawCode) {
-      if (!/^\d{6}$/.test(rawCode)) return res.status(400).json({ error: 'invalid_code' });
-      for (const t of __memTenants.values()) { if (t.code === rawCode) return res.status(409).json({ error: 'code_exists' }); }
-      code = rawCode;
+    let code = rawCode;
+    if (code) {
+      if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_company_id', message: 'Company ID must be exactly 6 digits' });
+      for (const [, tt] of __memTenants) { if (tt.code === code) return res.status(409).json({ error: 'company_id_in_use' }); }
     } else {
       code = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
+      // Simple ensure unique in memory
+      const used = new Set(Array.from(__memTenants.values()).map(t => t.code));
+      while (used.has(code)) code = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
     }
     const id = require('crypto').randomUUID();
     __memTenants.set(id, { id, name, code, branch_limit: 3, license_limit: 1, slug });
@@ -2677,20 +3693,24 @@ addRoute('post', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, asy
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const name = String(req.body?.name||'').trim();
   const slug = String(req.body?.slug||'').trim() || null;
-  const rawCode = String(req.body?.code||'').trim();
+  const rawCode = req.body?.code != null ? String(req.body.code).trim() : '';
   if (!name) return res.status(400).json({ error: 'name required' });
-  // Validate/derive short code
-  let code = null;
-  if (rawCode) {
-    if (!/^\d{6}$/.test(rawCode)) return res.status(400).json({ error: 'invalid_code' });
-    const exists = await db('select 1 from tenants where short_code=$1', [rawCode]);
-    if (exists.length) return res.status(409).json({ error: 'code_exists' });
-    code = rawCode;
+  // Determine Company ID
+  let code = rawCode;
+  if (code) {
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_company_id', message: 'Company ID must be exactly 6 digits' });
+    // Check availability across company_id and legacy short_code
+    let occupied = null;
+    try { const r = await db('select id as id, name as name from tenants where company_id=$1 limit 1', [code]); if (r && r.length) occupied = r[0]; } catch {}
+    if (!occupied) { try { const r = await db('select tenant_id as id, company_name as name from tenants where company_id=$1 limit 1', [code]); if (r && r.length) occupied = r[0]; } catch {} }
+    if (!occupied) { try { const r = await db('select id as id, name as name from tenants where short_code=$1 limit 1', [code]); if (r && r.length) occupied = r[0]; } catch {} }
+    if (!occupied) { try { const r = await db('select tenant_id as id, company_name as name from tenants where short_code=$1 limit 1', [code]); if (r && r.length) occupied = r[0]; } catch {} }
+    if (occupied) return res.status(409).json({ error: 'company_id_in_use', occupant: { tenant_id: occupied.id, name: occupied.name||'' } });
   } else {
     try { code = await genTenantShortCode(); } catch { return res.status(500).json({ error: 'code_generation_failed' }); }
   }
   const id = require('crypto').randomUUID();
-  await db('insert into tenants (id, name, short_code) values ($1,$2,$3) on conflict (id) do nothing', [id, name, code]);
+  await db('insert into tenants (id, name, company_id) values ($1,$2,$3) on conflict (id) do nothing', [id, name, code]);
   if (slug) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug]);
   res.json({ id, name, slug, code });
 });
@@ -2711,12 +3731,9 @@ addRoute('put', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
     if (slug !== undefined) t.slug = slug || null;
     if (rawCode != null) {
       const codeStr = String(rawCode).trim();
-      if (codeStr === '') t.code = null;
-      else {
-        if (!/^\d{6}$/.test(codeStr)) return res.status(400).json({ error: 'invalid_code' });
-        for (const [tid, tt] of __memTenants) { if (tid !== id && tt.code === codeStr) return res.status(409).json({ error: 'code_exists' }); }
-        t.code = codeStr;
-      }
+      if (!/^\d{6}$/.test(codeStr)) return res.status(400).json({ error: 'invalid_company_id', message: 'Company ID must be exactly 6 digits' });
+      for (const [tid, tt] of __memTenants) { if (String(tid) !== String(id) && tt.code === codeStr) return res.status(409).json({ error: 'company_id_in_use' }); }
+      t.code = codeStr;
     }
     if (rawBranchLimit != null) {
       const n = Number.parseInt(String(rawBranchLimit), 10); if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_branch_limit' }); t.branch_limit = n;
@@ -2734,17 +3751,33 @@ addRoute('put', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
   const rawBranchLimit = req.body?.branch_limit;
   const rawLicenseLimit = req.body?.license_limit;
   if (!id) return res.status(400).json({ error: 'invalid_id' });
-  if (name) await db('update tenants set name=$1 where id=$2', [name, id]);
+  if (name) await db('update tenants set company_name=$1 where tenant_id=$2', [name, id]).catch(async ()=>{ try { await db('update tenants set name=$1 where id=$2', [name, id]); } catch {} });
   if (slug != null) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug||null]);
+
+  // Company ID update (6 digits, unique, required)
   if (rawCode != null) {
     const codeStr = String(rawCode).trim();
-    if (codeStr === '') {
-      await db('update tenants set short_code=NULL where id=$1', [id]);
+    if (!/^\d{6}$/.test(codeStr)) return res.status(400).json({ error: 'invalid_company_id', message: 'Company ID must be exactly 6 digits' });
+    // If unchanged, skip
+    let current = null;
+    try { const r = await db('select company_id from tenants where tenant_id=$1', [id]); if (r && r.length) current = (r[0].company_id||'').trim(); } catch {}
+    if (current == null) { try { const r = await db('select company_id from tenants where id=$1', [id]); if (r && r.length) current = (r[0].company_id||'').trim(); } catch {} }
+    if (current && String(current) === codeStr) {
+      // no change
     } else {
-      if (!/^\d{6}$/.test(codeStr)) return res.status(400).json({ error: 'invalid_code' });
-      const exists = await db('select 1 from tenants where short_code=$1 and id<>$2', [codeStr, id]);
-      if (exists.length) return res.status(409).json({ error: 'code_exists' });
-      await db('update tenants set short_code=$1 where id=$2', [codeStr, id]);
+      // Check availability against company_id and legacy short_code (other tenants)
+      let occupied = null;
+      try { const r = await db('select id as id, name as name from tenants where company_id=$1 and id<>$2', [codeStr, id]); if (r && r.length) occupied = r[0]; } catch {}
+      if (!occupied) { try { const r = await db('select tenant_id as id, company_name as name from tenants where company_id=$1 and tenant_id<>$2', [codeStr, id]); if (r && r.length) occupied = r[0]; } catch {} }
+      if (!occupied) { try { const r = await db('select id as id, name as name from tenants where short_code=$1 and id<>$2', [codeStr, id]); if (r && r.length) occupied = r[0]; } catch {} }
+      if (!occupied) { try { const r = await db('select tenant_id as id, company_name as name from tenants where short_code=$1 and tenant_id<>$2', [codeStr, id]); if (r && r.length) occupied = r[0]; } catch {} }
+      if (occupied) return res.status(409).json({ error: 'company_id_in_use', occupant: { tenant_id: occupied.id, name: occupied.name||'' } });
+      // Update (try both schemas)
+      let ok = true;
+      try { await db('update tenants set company_id=$1 where tenant_id=$2', [codeStr, id]); }
+      catch { ok = false; }
+      if (!ok) { try { await db('update tenants set company_id=$1 where id=$2', [codeStr, id]); ok = true; } catch { ok = false; } }
+      if (!ok) return res.status(500).json({ error: 'update_failed' });
     }
   }
   // Optional limits updates
@@ -2779,7 +3812,7 @@ addRoute('delete', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpe
     await db('delete from drive_thru_state where tenant_id=$1', [id]);
   } catch {}
   try {
-    await db('delete from tenants where id=$1', [id]);
+    await db('delete from tenants where tenant_id=$1', [id]);
     return res.json({ ok:true });
   } catch (e) {
     return res.status(409).json({ error: 'tenant_in_use' });
@@ -2810,7 +3843,7 @@ addRoute('get', '/admin/tenants/:id/export', verifyAuthOpen, async (req, res) =>
     }
     // Tenant
     try {
-      const [t] = await db('select id, name, short_code as code, branch_limit, license_limit from tenants where id=$1', [tenantId]);
+      const [t] = await db('select tenant_id as id, company_name as name, company_id as code, branch_limit, license_limit from tenants where tenant_id=$1', [tenantId]);
       payload.tenant = t || {};
     } catch {}
     // Settings + brand
@@ -2825,7 +3858,7 @@ addRoute('get', '/admin/tenants/:id/export', verifyAuthOpen, async (req, res) =>
     // Domains
     try { payload.domains = await db('select host, verified_at from tenant_domains where tenant_id=$1', [tenantId]); } catch {}
     // Branches
-    try { payload.branches = await db('select id, name, created_at from branches where tenant_id=$1 order by name asc', [tenantId]); } catch {}
+    try { payload.branches = await db('select branch_id as id, branch_name as name, created_at from branches where tenant_id=$1 order by branch_name asc', [tenantId]); } catch {}
     // Categories
     try { payload.categories = await db('select id, name, reference, created_at from categories where tenant_id=$1 order by name asc', [tenantId]); } catch {}
     // Products
@@ -2870,6 +3903,50 @@ addRoute('post', '/admin/tenants/:id/delete-cascade', verifyAuthOpen, requirePla
   } catch (e) {
     try { await c.query('ROLLBACK'); } catch {}
     res.status(500).json({ error: 'delete_failed' });
+  } finally {
+    c.release();
+  }
+});
+
+// HARD DELETE: remove a tenant and all associated data, including the default tenant.
+// Requires platform admin.
+addRoute('post', '/admin/tenants/:id/delete-hard', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    // Tables without FK cascade or external to tenants
+    try { await c.query('delete from admin_activity_logs where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from rtc_preflight_logs where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from device_events where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from order_items where order_id in (select id from orders where tenant_id=$1)', [tenantId]); } catch {}
+    try { await c.query('delete from orders where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from drive_thru_state where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from tenant_users_deleted where tenant_id=$1', [tenantId]); } catch {}
+    // As a fallback, clear catalog relations that might remain in legacy schemas
+    try { await c.query('delete from product_modifier_groups where product_id in (select id from products where tenant_id=$1)', [tenantId]); } catch {}
+    try { await c.query('delete from product_branch_availability using products p where product_branch_availability.product_id=p.id and p.tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from modifier_options where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from modifier_groups where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from products where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from categories where tenant_id=$1', [tenantId]); } catch {}
+    // Finally, remove the tenant row (this will cascade for tables with FK ON DELETE CASCADE)
+    await c.query('delete from tenants where tenant_id=$1', [tenantId]);
+    // Best-effort cleanup for auxiliary per-tenant tables (in case cascade was absent)
+    try { await c.query('delete from tenant_domains where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from tenant_settings where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from tenant_brand where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from tenant_api_integrations where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from tenant_external_mappings where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from integration_sync_runs where tenant_id=$1', [tenantId]); } catch {}
+    try { await c.query('delete from invites where tenant_id=$1', [tenantId]); } catch {}
+    await c.query('COMMIT');
+    return res.json({ ok:true });
+  } catch (e) {
+    try { await c.query('ROLLBACK'); } catch {}
+    return res.status(500).json({ error: 'delete_failed' });
   } finally {
     c.release();
   }
@@ -3029,8 +4106,43 @@ addRoute('post', '/admin/tenants/:id/categories/soft-delete-noactive', verifyAut
   }
 });
 
+// Single product getter (full row)
+addRoute('get', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const pid = String(req.params.pid||'').trim();
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  try {
+    const sql = `
+      select 
+        p.id, p.tenant_id, p.name, p.name_localized, p.description, p.description_localized,
+        p.sku, p.barcode,
+        p.price, p.cost, p.packaging_fee,
+        p.category_id, c.name as category_name,
+        p.image_url, p.image_white_url, p.image_beauty_url,
+        p.preparation_time, p.calories, p.fat_g, p.carbs_g, p.protein_g, p.sugar_g, p.sodium_mg, p.salt_g, p.serving_size,
+        p.spice_level::text as spice_level,
+        p.ingredients_en, p.ingredients_ar, p.allergens,
+        p.pos_visible, p.online_visible, p.delivery_visible,
+        p.talabat_reference, p.jahez_reference, p.vthru_reference,
+        coalesce(p.active, true) as active,
+        p.created_at, p.updated_at, p.version, p.last_modified_by,
+        p.sort_order, p.is_featured, p.tags, p.diet_flags, p.product_type::text as product_type,
+        p.sync_status::text as sync_status, p.published_channels,
+        p.internal_notes, p.staff_notes
+      from products p
+      join categories c on c.id=p.category_id
+      where p.tenant_id=$1 and p.id=$2
+      limit 1`;
+    const rows = await db(sql, [tenantId, pid]);
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    return res.json(rows[0]);
+  } catch (_e) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+});
+
 // Products CRUD
-addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('post', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   const tenantId = req.params.id;
   const body = req.body||{};
   const name = String(body.name||'').trim();
@@ -3056,7 +4168,10 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminPa
         pos_visible, online_visible, delivery_visible,
         spice_level,
         talabat_reference, jahez_reference, vthru_reference,
-        active
+        active,
+        -- New advanced fields
+        sort_order, is_featured, tags, diet_flags, product_type, sync_status, published_channels, internal_notes, staff_notes,
+        last_modified_by
       ) values (
         $1,
         $2,$3,$4,$5,$6,$7,
@@ -3070,7 +4185,9 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminPa
         $32,$33,$34,
         $35,
         $36,$37,$38,
-        $39
+        $39,
+        $40,$41,$42,$43::diet_flag_enum[],$44::product_type,$45::sync_status,$46,$47,$48,
+        $49
       ) returning id, name, price, category_id, image_url, active`, [
         id,
         tenantId,
@@ -3110,7 +4227,17 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminPa
         String(body.talabat_reference||'').trim()||null,
         String(body.jahez_reference||'').trim()||null,
         String(body.vthru_reference||'').trim()||null,
-        active
+        active,
+        (n=>Number.isFinite(n)?n:null)(parseInt(body.sort_order,10)),
+        (body.is_featured===true),
+        (Array.isArray(body.tags)?body.tags:String(body.tags||'').split(',').map(s=>s.trim()).filter(Boolean)),
+        (Array.isArray(body.diet_flags)?body.diet_flags:String(body.diet_flags||'').split(',').map(s=>s.trim()).filter(Boolean)),
+        (s=>{ s=String(s||'').toLowerCase(); return ['standard','combo','modifier','digital'].includes(s)?s:'standard'; })(body.type||body.product_type),
+        (s=>{ s=String(s||'').toLowerCase(); return ['pending','synced','error'].includes(s)?s:'pending'; })(body.sync_status),
+        (Array.isArray(body.published_channels)?body.published_channels:String(body.published_channels||'').split(',').map(s=>s.trim()).filter(Boolean)),
+        String(body.internal_notes||'').trim()||null,
+        String(body.staff_notes||'').trim()||null,
+        (req.user && req.user.email ? String(req.user.email).toLowerCase() : null)
       ]);
     return res.json({ ok:true, product: row[0] });
   } else {
@@ -3124,7 +4251,7 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuth, requireTenantAdminPa
     return res.json({ ok:true, product: prod });
   }
 });
-addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   const tenantId = req.params.id;
   const pid = req.params.pid;
   const body = req.body||{};
@@ -3173,6 +4300,17 @@ addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdm
     if (body.jahez_reference != null) await db('update products set jahez_reference=$1 where tenant_id=$2 and id=$3', [String(body.jahez_reference), tenantId, pid]);
     if (body.vthru_reference != null) await db('update products set vthru_reference=$1 where tenant_id=$2 and id=$3', [String(body.vthru_reference), tenantId, pid]);
     if (body.active != null) await db('update products set active=$1 where tenant_id=$2 and id=$3', [Boolean(body.active), tenantId, pid]);
+    if (body.sort_order != null) await db('update products set sort_order=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.sort_order,10)), tenantId, pid]);
+    if (body.is_featured != null) await db('update products set is_featured=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_featured), tenantId, pid]);
+    if (body.tags != null) await db('update products set tags=$1 where tenant_id=$2 and id=$3', [Array.isArray(body.tags)?body.tags:String(body.tags||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
+    if (body.diet_flags != null) await db('update products set diet_flags=$1::diet_flag_enum[] where tenant_id=$2 and id=$3', [Array.isArray(body.diet_flags)?body.diet_flags:String(body.diet_flags||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
+    if (body.type != null || body.product_type != null) await db('update products set product_type=$1::product_type where tenant_id=$2 and id=$3', [(s=>{ s=String((s||'')).toLowerCase(); return ['standard','combo','modifier','digital'].includes(s)?s:null; })(body.type||body.product_type), tenantId, pid]);
+    if (body.sync_status != null) await db('update products set sync_status=$1::sync_status where tenant_id=$2 and id=$3', [(s=>{ s=String(s||'').toLowerCase(); return ['pending','synced','error'].includes(s)?s:null; })(body.sync_status), tenantId, pid]);
+    if (body.published_channels != null) await db('update products set published_channels=$1 where tenant_id=$2 and id=$3', [Array.isArray(body.published_channels)?body.published_channels:String(body.published_channels||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
+    if (body.internal_notes != null) await db('update products set internal_notes=$1 where tenant_id=$2 and id=$3', [String(body.internal_notes||'').trim()||null, tenantId, pid]);
+    if (body.staff_notes != null) await db('update products set staff_notes=$1 where tenant_id=$2 and id=$3', [String(body.staff_notes||'').trim()||null, tenantId, pid]);
+    // Set last_modified_by best-effort from authenticated user
+    try { await db('update products set last_modified_by=$1 where tenant_id=$2 and id=$3', [(req.user && req.user.email ? String(req.user.email).toLowerCase() : null), tenantId, pid]); } catch {}
     return res.json({ ok:true });
   } else {
     const mem = ensureMemCatalog(tenantId);
@@ -3196,7 +4334,7 @@ addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdm
     return res.json({ ok:true, product: p });
   }
 });
-addRoute('delete', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('delete', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   const tenantId = req.params.id;
   const pid = req.params.pid;
   if (HAS_DB) {
@@ -3217,7 +4355,7 @@ addRoute('delete', '/admin/tenants/:id/products/:pid', verifyAuth, requireTenant
 });
 
 // ---- Product Meta (extra images)
-addRoute('get', '/admin/tenants/:id/products/:pid/meta', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/products/:pid/meta', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ meta: {} });
   try {
     const rows = await db('select meta from products where tenant_id=$1 and id=$2', [req.params.id, req.params.pid]);
@@ -3226,7 +4364,7 @@ addRoute('get', '/admin/tenants/:id/products/:pid/meta', verifyAuth, requireTena
     return res.json({ meta: {} });
   }
 });
-addRoute('put', '/admin/tenants/:id/products/:pid/meta', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('put', '/admin/tenants/:id/products/:pid/meta', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   const tenantId = req.params.id; const pid = req.params.pid;
   const ex = await db('select 1 from products where tenant_id=$1 and id=$2', [tenantId, pid]);
@@ -3249,7 +4387,7 @@ addRoute('put', '/admin/tenants/:id/products/:pid/meta', verifyAuth, requireTena
 });
 
 // ---- Per-branch availability
-addRoute('get', '/admin/tenants/:id/products/:pid/availability', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/products/:pid/availability', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
   const tenantId = req.params.id; const pid = req.params.pid;
   try {
@@ -3267,7 +4405,7 @@ addRoute('get', '/admin/tenants/:id/products/:pid/availability', verifyAuth, req
     return res.json({ items: rows });
   } catch (_e) { return res.json({ items: [] }); }
 });
-addRoute('put', '/admin/tenants/:id/products/:pid/availability', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('put', '/admin/tenants/:id/products/:pid/availability', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   const tenantId = req.params.id; const pid = req.params.pid;
   const ex = await db('select 1 from products where tenant_id=$1 and id=$2', [tenantId, pid]);
@@ -3306,8 +4444,14 @@ addRoute('put', '/admin/tenants/:id/products/:pid/availability', verifyAuth, req
 addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
   await ensureModifiersSchema();
-  const tenantId = req.tenantId; const pid = req.params.pid;
+  const tenantId = req.tenantId; const pidRaw = req.params.pid;
   try {
+    // Resolve product id by id OR sku for robustness
+    let pid = pidRaw;
+    try {
+      const rows = await db('select id from products where tenant_id=$1 and (id=$2 or lower(sku)=lower($2)) limit 1', [tenantId, pidRaw]);
+      if (rows && rows.length && rows[0].id) pid = String(rows[0].id);
+    } catch {}
     // Get linked groups for this product, falling back to all groups when none linked
     let rows = await db(
       `select mg.id as group_id, mg.name, mg.reference,
@@ -3325,22 +4469,7 @@ addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
     );
     // If none linked, fall back to all groups for this tenant to avoid empty popups
     const linked = (rows||[]).filter(r => r.linked);
-    let effective = linked;
-    if (!effective.length) {
-      try {
-        effective = await db(
-          `select mg.id as group_id, mg.name, mg.reference,
-                  coalesce(mg.required,false) as required,
-                  coalesce(mg.min_select,0) as min_select,
-                  coalesce(mg.max_select,0) as max_select,
-                  false as linked
-             from modifier_groups mg
-            where mg.tenant_id=$1
-            order by mg.name asc`,
-          [tenantId]
-        );
-      } catch { effective = []; }
-    }
+    const effective = linked;
     const groupIds = effective.map(r => r.group_id);
     let opts = [];
     try {
@@ -3366,7 +4495,7 @@ addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
 });
 
 // ---- Product ↔ Modifier group linking
-addRoute('get', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
   await ensureModifiersSchema();
   const tenantId = req.params.id; const pid = req.params.pid;
@@ -3422,6 +4551,131 @@ addRoute('put', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, 
     );
   }
   return res.json({ ok: true });
+});
+
+// Import product-modifier links from CSV (tenant-scoped, admin only)
+addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuth, requireTenantAdminParam, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  await ensureModifiersSchema();
+  // Ensure link table exists (idempotent)
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS product_modifier_groups (
+        product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        group_id   uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
+        sort_order integer,
+        required   boolean,
+        min_select integer,
+        max_select integer,
+        PRIMARY KEY (product_id, group_id)
+      )`);
+  } catch {}
+
+  const tenantId = req.params.id;
+  function csvLine(s){
+    const out = []; let cur=''; let i=0; let inQ=false;
+    while (i < s.length) {
+      const ch = s[i];
+      if (inQ) {
+        if (ch === '"') { if (s[i+1] === '"'){ cur += '"'; i+=2; continue; } inQ=false; i++; continue; }
+        cur += ch; i++; continue;
+      } else {
+        if (ch === '"') { inQ=true; i++; continue; }
+        if (ch === ',') { out.push(cur); cur=''; i++; continue; }
+        cur += ch; i++;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+  function normKey(k){ return String(k||'').trim().toLowerCase().replace(/\s+/g,'_'); }
+  function toInt(v){ const n = parseInt(String(v??'').trim(), 10); return Number.isFinite(n) ? n : null; }
+
+  try {
+    const text = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body||'');
+    const lines = String(text||'').split(/\r?\n/).filter(l => l.trim().length>0);
+    if (!lines.length) return res.json({ ok:false, error: 'empty_csv' });
+    const headers = csvLine(lines[0]).map(h => String(h||'').trim());
+    const idx = Object.fromEntries(headers.map((h,i)=>[normKey(h), i]));
+    const rows = [];
+    for (let li=1; li<lines.length; li++) {
+      const cols = csvLine(lines[li]);
+      if (cols.length === 1 && cols[0] === '') continue;
+      const obj = {};
+      for (const [k,i] of Object.entries(idx)) obj[k] = cols[i] != null ? cols[i] : '';
+      rows.push(obj);
+    }
+
+    // Prefetch products & groups
+    const prods = await db('select id, sku, name from products where tenant_id=$1', [tenantId]);
+    const bySku = new Map();
+    const byName = new Map();
+    for (const p of (prods||[])) {
+      if (p.sku) bySku.set(String(p.sku).toLowerCase(), p.id);
+      if (p.name) byName.set(String(p.name).toLowerCase(), p.id);
+    }
+    const groups = await db('select id, reference, name from modifier_groups where tenant_id=$1', [tenantId]);
+    const grpByRef = new Map();
+    const grpByName = new Map();
+    for (const g of (groups||[])) {
+      if (g.reference) grpByRef.set(String(g.reference).toLowerCase(), g.id);
+      if (g.name) grpByName.set(String(g.name).toLowerCase(), g.id);
+    }
+
+    // Group by product key (sku preferred)
+    const byProduct = new Map();
+    for (const r of rows) {
+      const sku = String(r.product_sku||'').trim();
+      const name= String(r.product_name||'').trim();
+      const key = (sku||'').toLowerCase() || (name||'').toLowerCase();
+      if (!key) continue;
+      if (!byProduct.has(key)) byProduct.set(key, []);
+      byProduct.get(key).push(r);
+    }
+
+    let linked=0, missingProducts=0, createdGroups=0, missingGroups=0;
+
+    for (const [key, list] of byProduct.entries()) {
+      const pid = bySku.get(key) || byName.get(key);
+      if (!pid) { missingProducts++; continue; }
+
+      // Replace links for this product
+      await db('delete from product_modifier_groups where product_id=$1', [pid]);
+      let idxSort = 0;
+      for (const r of list) {
+        const ref = String(r.modifier_reference||'').trim();
+        const mname = String(r.modifier_name||'').trim();
+        let gid = ref ? (grpByRef.get(ref.toLowerCase()) || null) : null;
+        if (!gid && mname) gid = grpByName.get(mname.toLowerCase()) || null;
+        if (!gid && ref) {
+          const nameToUse = mname || ref;
+          const ins = await db(
+            `insert into modifier_groups (tenant_id, name, reference)
+             values ($1,$2,$3)
+             on conflict (tenant_id, reference) do update set name=excluded.name
+             returning id`, [tenantId, nameToUse, ref]
+          );
+          gid = ins && ins[0] && ins[0].id ? String(ins[0].id) : null;
+          if (gid) { grpByRef.set(ref.toLowerCase(), gid); createdGroups++; }
+        }
+        if (!gid) { missingGroups++; continue; }
+        const min = toInt(r.minimum_options);
+        const max = toInt(r.maximum_options);
+        const required = (min != null) ? (min > 0) : null;
+        await db(
+          `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select)
+           values ($1,$2,$3,$4,$5,$6)
+           on conflict (product_id, group_id) do update set sort_order=excluded.sort_order, required=excluded.required, min_select=excluded.min_select, max_select=excluded.max_select`,
+          [pid, gid, idxSort++, required, min, max]
+        );
+        linked++;
+      }
+    }
+
+    return res.json({ ok:true, linked, missing_products: missingProducts, missing_groups: missingGroups, created_groups: createdGroups });
+  } catch (e) {
+    return res.status(500).json({ error: 'import_failed', detail: e?.message||String(e) });
+  }
 });
 
 
@@ -3538,22 +4792,60 @@ addRoute('post', '/admin/tenants/:id/catalog/import', verifyAuth, requireTenantA
 });
 
 // Tenant domains CRUD
-addRoute('get', '/admin/tenants/:id/domains', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (!HAS_DB) return res.json({ items: [] });
+addRoute('get', '/admin/tenants/:id/domains', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.json({ items: [] });
+    const tid = String(req.params.id||'').trim();
+    const arr = memTenantDomainsByTenant.get(tid) || [];
+    return res.json({ items: arr });
+  }
   const rows = await db('select host, verified_at from tenant_domains where tenant_id=$1 order by host asc', [req.params.id]);
   res.json({ items: rows });
 });
-addRoute('post', '/admin/tenants/:id/domains', verifyAuth, requireTenantAdminParam, async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+addRoute('post', '/admin/tenants/:id/domains', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
   const host = String(req.body?.host||'').toLowerCase().trim();
   if (!host) return res.status(400).json({ error: 'host required' });
-  await db('insert into tenant_domains (host, tenant_id) values ($1,$2) on conflict (host) do update set tenant_id=excluded.tenant_id', [host, req.params.id]);
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    const tid = String(req.params.id||'').trim();
+    const arr = memTenantDomainsByTenant.get(tid) || [];
+    // If host exists mapped to another tenant, reassign since platform admin
+    for (const [otherTid, otherArr] of memTenantDomainsByTenant.entries()) {
+      if (otherTid !== tid) {
+        const idx = (otherArr||[]).findIndex(d => (d && String(d.host||'').toLowerCase()) === host);
+        if (idx >= 0) { otherArr.splice(idx, 1); memTenantDomainsByTenant.set(otherTid, otherArr); }
+      }
+    }
+    const now = new Date().toISOString();
+    const existsIdx = arr.findIndex(d => (d && String(d.host||'').toLowerCase()) === host);
+    if (existsIdx >= 0) arr[existsIdx] = { host, verified_at: now };
+    else arr.push({ host, verified_at: now });
+    memTenantDomainsByTenant.set(tid, arr);
+    return res.json({ ok: true, mode: 'memory' });
+  }
+  await db('insert into tenant_domains (host, tenant_id, verified_at) values ($1,$2, now()) on conflict (host) do update set tenant_id=excluded.tenant_id, verified_at=now()', [host, req.params.id]);
   res.json({ ok: true });
 });
 addRoute('delete', '/admin/domains/:host', verifyAuth, async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const host = String(req.params.host||'').toLowerCase().trim();
   if (!host) return res.status(400).json({ error: 'host required' });
+  if (!HAS_DB) {
+    if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
+    // Platform admin can delete any in-memory mapping; tenant admins can delete only their own
+    if (isPlatformAdmin(req)) {
+      try {
+        for (const [tid, arr] of memTenantDomainsByTenant.entries()) {
+          const idx = (arr||[]).findIndex(d => (d && String(d.host||'').toLowerCase()) === host);
+          if (idx >= 0) { arr.splice(idx, 1); memTenantDomainsByTenant.set(tid, arr); break; }
+        }
+        return res.json({ ok: true, mode: 'memory' });
+      } catch {}
+    }
+    const email = (req.user?.email || '').toLowerCase();
+    if (!email) return res.status(401).json({ error: 'unauthorized' });
+    // Without DB we cannot verify tenant role; deny non-platform requests
+    return res.status(403).json({ error: 'forbidden' });
+  }
   if (isPlatformAdmin(req)) {
     await db('delete from tenant_domains where host=$1', [host]);
     return res.json({ ok: true });
@@ -3649,6 +4941,9 @@ addRoute('put', '/admin/tenants/:id/settings', verifyAuthOpen, requireTenantAdmi
               on conflict (tenant_id) do update set display_name=excluded.display_name, logo_url=excluded.logo_url, color_primary=excluded.color_primary, color_secondary=excluded.color_secondary`,
             [req.params.id, b.display_name||null, b.logo_url||null, b.color_primary||null, b.color_secondary||null]);
   }
+  // Invalidate cached settings/brand payloads so the next GET reflects updated logo immediately
+  try { cacheDelByPrefix('adm:settings:'); } catch {}
+  try { cacheDelByPrefix('brand:'); } catch {}
   res.json({ ok: true });
 });
 
@@ -3656,24 +4951,12 @@ addRoute('put', '/admin/tenants/:id/settings', verifyAuthOpen, requireTenantAdmi
 addRoute('get', '/admin/tenants/:id/posters', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   const tenantId = String(req.params.id||'').trim();
   if (!tenantId) return res.json({ items: [] });
-  // Trial gating: listing posters is allowed
-  if (bucket) {
-    try {
-      const [files] = await bucket.getFiles({ prefix: `tenants/${tenantId}/posters/` });
-      const items = (files || [])
-        .filter(f => f && f.name && !f.name.endsWith('/'))
-        .map(f => ({ object: f.name, url: `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(f.name)}` }));
-      return res.json({ items });
-    } catch {
-      return res.json({ items: [] });
-    }
-  }
   try {
-    const dir = path.join(__dirname, 'images', 'uploads', 'tenants', tenantId, 'posters');
-    const files = fs.readdirSync(dir)
-      .filter(f => /\.(png|jpe?g|webp|gif|avif)$/i.test(f))
-      .sort((a,b) => a.localeCompare(b));
-    const items = files.map(f => ({ object: path.posix.join('tenants', tenantId, 'posters', f), url: `/images/uploads/tenants/${encodeURIComponent(tenantId)}/posters/${encodeURIComponent(f)}` }));
+    if (!bucket) return res.json({ items: [] });
+    const [files] = await bucket.getFiles({ prefix: `tenants/${tenantId}/posters/` });
+    const items = (files || [])
+      .filter(f => f && f.name && !f.name.endsWith('/'))
+      .map(f => ({ object: f.name, url: `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${f.name.split('/').map(encodeURIComponent).join('/')}` }));
     return res.json({ items });
   } catch {
     return res.json({ items: [] });
@@ -3967,7 +5250,7 @@ async function runTenantFoodicsSync(tenantId, opts={}){
     for (const o of (options.items||[])){
       const extId = o.id || o.uuid || o.reference || o.code;
       if (!extId) { stats.modifier_options.skipped++; continue; }
-      const ref = (o.reference || o.code || '').toString() || null;
+      const ref = (o.reference || o.code || o.sku || o.barcode || '').toString() || null;
       const group_ref = (o.modifier_group_reference || o.group_reference || (o.group?.reference) || '').toString();
       let group_id = await getMapping('modifier_group', o.group_id || o.modifier_group_id || '') || (group_ref ? groupByRef.get(group_ref) : null);
       if (!group_id) { stats.modifier_options.skipped++; continue; }
@@ -3984,11 +5267,11 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const sort_order = (n=>Number.isFinite(n)?n:null)(parseInt(o.sort_order ?? o.position, 10));
       if (!id) {
         const newId = require('crypto').randomUUID();
-        await db('insert into modifier_options (id, tenant_id, group_id, name, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing', [newId, tenantId, group_id, name||'Option', price, is_active, sort_order]);
+        await db('insert into modifier_options (id, tenant_id, group_id, name, reference, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing', [newId, tenantId, group_id, name||'Option', ref||null, price, is_active, sort_order]);
         await setMapping('modifier_option', newId, extId, ref||null);
         stats.modifier_options.created++;
       } else {
-        await db('update modifier_options set group_id=$1, name=$2, price=$3, is_active=$4, sort_order=$5 where tenant_id=$6 and id=$7', [group_id, name||'Option', price, is_active, sort_order, tenantId, id]);
+        await db('update modifier_options set group_id=$1, name=$2, reference=$3, price=$4, is_active=$5, sort_order=$6 where tenant_id=$7 and id=$8', [group_id, name||'Option', ref||null, price, is_active, sort_order, tenantId, id]);
         await setMapping('modifier_option', id, extId, ref||null);
         stats.modifier_options.updated++;
       }
@@ -4173,6 +5456,7 @@ addRoute('post', '/admin/integrations/foodics/sync-all', verifyAuthOpen, require
 
 // Signed upload URL for assets (logos, product images)
 const ASSETS_BUCKET = process.env.ASSETS_BUCKET || '';
+const ASSETS_CACHE_CONTROL = process.env.ASSETS_CACHE_CONTROL || 'public, max-age=31536000, immutable';
 let storage = null, bucket = null;
 if (ASSETS_BUCKET) {
   try {
@@ -4182,6 +5466,8 @@ if (ASSETS_BUCKET) {
   } catch (e) {
     console.error('Storage init failed', e);
   }
+} else {
+  try { console.warn('[assets] ASSETS_BUCKET not set; asset upload endpoints will be disabled'); } catch {}
 }
 
 // Integrations: Foodics client
@@ -4195,7 +5481,7 @@ async function ensureIntegrationTables(){
     await db(`
       CREATE TABLE IF NOT EXISTS integration_sync_runs (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
         provider text NOT NULL,
         started_at timestamptz NOT NULL DEFAULT now(),
         finished_at timestamptz,
@@ -4210,7 +5496,7 @@ async function ensureIntegrationTables(){
     await db(`
       CREATE TABLE IF NOT EXISTS tenant_external_mappings (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
         provider text NOT NULL,
         entity_type text NOT NULL,
         entity_id uuid NOT NULL,
@@ -4229,6 +5515,7 @@ addRoute('post', '/admin/upload-url', verifyAuthOpen, requireTenantAdminBodyTena
     const filename = String(req.body?.filename || '').trim();
     const kind = String(req.body?.kind || 'logo');
     const contentType = String(req.body?.contentType || 'application/octet-stream');
+    const cacheControl = ASSETS_CACHE_CONTROL;
     if (!tenantId || !filename) return res.status(400).json({ error: 'tenant_id and filename required' });
 
     // Trial gating: block poster uploads for trial tenants (non-platform admins)
@@ -4246,19 +5533,17 @@ addRoute('post', '/admin/upload-url', verifyAuthOpen, requireTenantAdminBodyTena
     const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
     const objectName = `tenants/${tenantId}/${kind}s/${Date.now()}-${safeName}`;
 
-    // Local dev fallback when bucket not configured
-    if (!bucket && DEV_OPEN_ADMIN) {
-      try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads', path.dirname(objectName)), { recursive: true }); } catch {}
-      const url = `/admin/upload-local/${encodeURIComponent(objectName)}`;
-      const publicUrl = `/images/uploads/${encodeURIComponent(objectName)}`;
-      return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
-    }
-
     if (!bucket) return res.status(503).json({ error: 'assets not configured' });
     const file = bucket.file(objectName);
-    const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
-    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
-    res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 15*60*1000,
+      contentType,
+      extensionHeaders: { 'Cache-Control': cacheControl }
+    });
+    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${objectName.split('/').map(encodeURIComponent).join('/')}`;
+    res.json({ url, method: 'PUT', contentType, cacheControl, objectName, publicUrl });
   } catch (e) {
     res.status(500).json({ error: 'sign_failed' });
   }
@@ -4270,42 +5555,27 @@ addRoute('post', '/admin/upload-url-global', verifyAuthOpen, requirePlatformAdmi
     const filename = String(req.body?.filename || '').trim();
     const kind = (String(req.body?.kind || 'poster').replace(/[^a-z0-9_-]/gi,'').toLowerCase()) || 'poster';
     const contentType = String(req.body?.contentType || 'application/octet-stream');
+    const cacheControl = ASSETS_CACHE_CONTROL;
     if (!filename) return res.status(400).json({ error: 'filename required' });
     const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
     const objectName = `platform/${kind}s/${Date.now()}-${safeName}`;
 
-    if (!bucket && DEV_OPEN_ADMIN) {
-      try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads', path.dirname(objectName)), { recursive: true }); } catch {}
-      const url = `/admin/upload-local/${encodeURIComponent(objectName)}`;
-      const publicUrl = `/images/uploads/${encodeURIComponent(objectName)}`;
-      return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
-    }
     if (!bucket) return res.status(503).json({ error: 'assets not configured' });
     const file = bucket.file(objectName);
-    const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
-    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
-    return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 15*60*1000,
+      contentType,
+      extensionHeaders: { 'Cache-Control': cacheControl }
+    });
+    const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${objectName.split('/').map(encodeURIComponent).join('/')}`;
+    return res.json({ url, method: 'PUT', contentType, cacheControl, objectName, publicUrl });
   } catch (e) {
     return res.status(500).json({ error: 'sign_failed' });
   }
 });
 
-// Local dev: accept PUT uploads and write to /images/uploads/<objectName>
-addRoute('put', /^\/admin\/upload-local\/(.+)$/, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
-  try {
-    if (!DEV_OPEN_ADMIN) return res.status(403).json({ error: 'forbidden' });
-    const m = req.path.match(/^\/admin\/upload-local\/(.+)$/);
-    const objectName = decodeURIComponent((m && m[1]) ? m[1] : '').replace(/^\/+/, '');
-    if (!objectName) return res.status(400).json({ error: 'object_required' });
-    const outPath = path.join(__dirname, 'images', 'uploads', objectName);
-    const dir = path.dirname(outPath);
-    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
-    fs.writeFileSync(outPath, req.body);
-    return res.status(200).end();
-  } catch (e) {
-    return res.status(500).json({ error: 'upload_failed' });
-  }
-});
 
 // ---- Modifiers schema and API
 async function ensureModifiersSchema(){
@@ -4313,7 +5583,7 @@ async function ensureModifiersSchema(){
   await db(`
     CREATE TABLE IF NOT EXISTS modifier_groups (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
       name text NOT NULL,
       reference text,
       min_select integer,
@@ -4326,7 +5596,7 @@ async function ensureModifiersSchema(){
   await db(`
     CREATE TABLE IF NOT EXISTS modifier_options (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
       group_id uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
       name text NOT NULL,
       price numeric(10,3) NOT NULL DEFAULT 0,
@@ -4429,9 +5699,19 @@ addRoute('delete', '/admin/tenants/:id/modifiers/options/:oid', verifyAuth, requ
 });
 
 // ---- Device activation and licensing
-function genCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+function genCode(){ return String(crypto.randomInt(0, 1000000)).padStart(6, '0'); }
 function genNonce(){ return crypto.randomBytes(16).toString('hex'); }
 function genDeviceToken(){ return crypto.randomBytes(32).toString('hex'); }
+// Generate a unique per-device activation short code (6 digits)
+async function genDeviceShortCode(){
+  if (!HAS_DB) throw new Error('NO_DB');
+  for (let i = 0; i < 30; i++) {
+    const n = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
+    const rows = await db('select 1 from devices where short_code=$1', [n]);
+    if (!rows.length) return n;
+  }
+  throw new Error('short_code_generation_failed');
+}
 
 // ---- Device events logging (activity timeline)
 async function logDeviceEvent(tenantId, deviceId, event_type, meta = {}){
@@ -4456,16 +5736,101 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
   try {
     await ensureLicensingSchema();
     const code = String(req.body?.code||'').trim();
-    const role = String(req.body?.role||'').trim().toLowerCase();
+    let role = String(req.body?.role||'display').trim().toLowerCase();
     const name = String(req.body?.name||'').trim() || null;
     const branch = String(req.body?.branch||'').trim() || null;
     if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_code' });
-    const meta = { local: true, role, name, branch };
-    await db(`insert into device_activation_codes (code, tenant_id, expires_at, meta)
-              values ($1,$2, now() + interval '14 days', $3::jsonb)
-              on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta`,
-            [code, req.tenantId, JSON.stringify(meta)]);
-    return res.json({ ok:true });
+    if (role !== 'display' && role !== 'cashier') role = 'display';
+
+    // Resolve tenant id: prefer header/requireTenant, fallback to body. Accept 6-digit company ID or UUID.
+    let tenantId = req.tenantId || '';
+    try {
+      const bodyTid = String(req.body?.tenant_id||'').trim();
+      if (!tenantId && bodyTid) {
+        if (/^\d{6}$/.test(bodyTid)) {
+          // Prefer company_id, fallback to short_code and handle both id/tenant_id schemas
+          let t = [];
+          try { t = await db('select tenant_id as id from tenants where company_id=$1 limit 1', [bodyTid]); } catch {}
+          if (!t || !t.length) { try { t = await db('select id as id from tenants where company_id=$1 limit 1', [bodyTid]); } catch {} }
+          if (!t || !t.length) { try { t = await db('select tenant_id as id from tenants where short_code=$1 limit 1', [bodyTid]); } catch {} }
+          if (!t || !t.length) { try { t = await db('select id as id from tenants where short_code=$1 limit 1', [bodyTid]); } catch {} }
+          if (t && t.length) tenantId = t[0].id;
+        } else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bodyTid)) {
+          tenantId = bodyTid;
+        }
+      }
+    } catch {}
+    if (!tenantId) return res.status(400).json({ error: 'tenant_missing' });
+
+    // Upsert activation code metadata (we'll set claimed_at after we know the device)
+    const meta = { role, name, branch, via: 'device-register' };
+    await db(`insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta)
+              values ($1,$2, now() + interval '10 minutes', 'pending'::device_activation_status, $3::device_role, $4::jsonb)
+              on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, role = coalesce(excluded.role, device_activation_codes.role), status = CASE WHEN device_activation_codes.status='expired' THEN 'pending'::device_activation_status ELSE device_activation_codes.status END, meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta`,
+            [code, tenantId, role, JSON.stringify(meta)]);
+
+    // If there's an existing pre-created device with this short_code, claim that instead of creating a new one
+    let existing = null;
+    try {
+    const rows = await db("select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch, status::text as status, activated_at from devices where tenant_id=$1 and short_code=$2 limit 1", [tenantId, code]);
+      if (rows.length) existing = rows[0];
+    } catch {}
+    if (existing) {
+      // Enforce license limit only when moving from revoked -> active
+      try {
+        const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
+        const limit = lic?.license_limit ?? 1;
+        const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+        if (existing.status !== 'active' && (count || 0) >= limit) {
+          return res.status(409).json({ error: 'license_limit_reached' });
+        }
+      } catch {}
+      // If device is inactive (revoked), activate it, rotate token, and set name/branch
+      let token = existing.device_token;
+      if (existing.status !== 'active') {
+        token = genDeviceToken();
+        try { await db("update devices set device_token=$1, status='active', activated_at=coalesce(activated_at, now()), device_name=coalesce($2, device_name), branch=coalesce($3, branch) where device_id=$4", [token, name, branch, existing.id]); } catch {}
+      } else {
+        // Already active: best-effort update of name/branch without token rotation
+        try { await db('update devices set device_name=coalesce($1, device_name), branch=coalesce($2, branch) where device_id=$3', [name, branch, existing.id]); } catch {}
+      }
+      try { await db("update device_activation_codes set claimed_at=now(), status='claimed', device_id=$1 where code=$2", [existing.id, code]); } catch {}
+      try { await logDeviceEvent(tenantId, existing.id, 'claimed', { role: existing.role||role, branch: existing.branch||branch||null }); } catch {}
+      return res.json({ status: 'claimed', device_token: token, tenant_id: tenantId, role: existing.role || role, branch: existing.branch || branch || null, device_id: existing.id, name: existing.name || name || null });
+    }
+
+    // If already claimed to another device, return that token (idempotent)
+    try {
+      const rows = await db('select device_id, claimed_at from device_activation_codes where code=$1', [code]);
+      if (rows.length && rows[0].device_id && rows[0].claimed_at) {
+        const [dev] = await db('select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch from devices where device_id=$1', [rows[0].device_id]);
+        if (dev && dev.device_token) {
+          return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
+        }
+      }
+    } catch {}
+
+    // License limit for on-the-fly device creation
+  try {
+    const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
+    const limit = lic?.license_limit ?? 1;
+    const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+    if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
+  } catch {}
+  // Create device immediately and claim the code (no pre-created device)
+  const token = genDeviceToken();
+  const [dev] = await db(
+    `insert into devices (tenant_id, device_name, role, status, branch, device_token)
+     values ($1,$2,$3,'active',$4,$5)
+     returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
+    [tenantId, name||null, role, branch||null, token]
+  );
+  await db('update devices set activated_at=now() where device_id=$1 and activated_at is null', [dev.id]);
+  await db("update device_activation_codes set claimed_at=now(), status='claimed', device_id=$1 where code=$2", [dev.id, code]);
+  try { await logDeviceEvent(tenantId, dev.id, 'claimed', { role, branch: dev.branch||null }); } catch {}
+
+  // Return immediate activation payload
+  return res.json({ status: 'claimed', device_token: token, tenant_id: tenantId, role, branch: dev.branch, device_id: dev.id, name: dev.name });
   } catch (e) {
     return res.status(500).json({ error: 'register_failed' });
   }
@@ -4486,8 +5851,35 @@ addRoute('post', '/device/pair/start', requireTenant, async (req, res) => {
     }
     const nonce = genNonce();
     const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-    await db('insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2,$3,$4::jsonb)', [code, req.tenantId, expires.toISOString(), JSON.stringify({ nonce })]);
-    return res.json({ code, expires_at: expires.toISOString(), nonce });
+    let role = String(req.body?.role||'display').trim().toLowerCase();
+    if (role !== 'display' && role !== 'cashier') role = 'display';
+    await db(`insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta)
+              values ($1,$2,$3,'pending'::device_activation_status,$4::device_role,$5::jsonb)`,
+            [code, req.tenantId, expires.toISOString(), role, JSON.stringify({ nonce })]);
+    return res.json({ code, expires_at: expires.toISOString(), nonce, role });
+  } catch (e) {
+    return res.status(500).json({ error: 'pair_start_failed' });
+  }
+});
+
+// Alias: /device/pair/new (same semantics as /device/pair/start)
+addRoute('post', '/device/pair/new', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try {
+    await ensureLicensingSchema();
+    let code = genCode();
+    for (let i = 0; i < 5; i++) {
+      const exists = await db('select 1 from device_activation_codes where code=$1', [code]);
+      if (!exists.length) break; code = genCode();
+    }
+    const nonce = genNonce();
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    let role = String(req.body?.role||'display').trim().toLowerCase();
+    if (role !== 'display' && role !== 'cashier') role = 'display';
+    await db(`insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta)
+              values ($1,$2,$3,'pending'::device_activation_status,$4::device_role,$5::jsonb)`,
+            [code, req.tenantId, expires.toISOString(), role, JSON.stringify({ nonce })]);
+    return res.json({ code, expires_at: expires.toISOString(), nonce, role });
   } catch (e) {
     return res.status(500).json({ error: 'pair_start_failed' });
   }
@@ -4498,18 +5890,162 @@ addRoute('get', '/device/pair/:code/status', async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const code = String(req.params.code||'').trim();
   const nonce = String(req.query.nonce||'').trim();
-  const rows = await db('select code, tenant_id, expires_at, claimed_at, device_id, meta from device_activation_codes where code=$1', [code]);
+  const rows = await db('select code, tenant_id, status::text as status, role::text as role, expires_at, claimed_at, device_id, meta from device_activation_codes where code=$1', [code]);
   if (!rows.length) return res.json({ status: 'expired' });
   const r = rows[0];
-  if (new Date(r.expires_at).getTime() < Date.now()) return res.json({ status: 'expired' });
-  if (!r.claimed_at || !r.device_id) return res.json({ status: 'pending' });
-  // return device token if nonce matches OR if no nonce is required
-  const [dev] = await db('select id, name, device_token, role::text as role, tenant_id, branch from devices where id=$1', [r.device_id]);
-  if (!dev) return res.json({ status: 'pending' });
-  if (!nonce || (r.meta && r.meta.nonce && r.meta.nonce === nonce)) {
-    return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
+  const isExpired = new Date(r.expires_at).getTime() < Date.now();
+  if (isExpired) {
+    try { await db("update device_activation_codes set status='expired' where code=$1 and status<>'expired'", [code]); } catch {}
+    return res.json({ status: 'expired' });
   }
-  return res.json({ status: 'claimed' });
+  if (!r.claimed_at || !r.device_id) {
+    const role = r.role || (r.meta && r.meta.role ? String(r.meta.role).toLowerCase() : null);
+    return res.json({ status: 'pending', role, tenant_id: r.tenant_id });
+  }
+  // return device token if nonce matches OR if no nonce is required
+  const [dev] = await db('select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch from devices where device_id=$1', [r.device_id]);
+  if (!dev) return res.json({ status: 'pending' });
+  try { await db("update device_activation_codes set status='claimed' where code=$1 and status<>'claimed'", [code]); } catch {}
+  // Lookup the primary host for this tenant to help clients switch to subdomain connections
+  let host = null;
+  try {
+    const d = await db('select host from tenant_domains where tenant_id=$1 order by host asc limit 1', [dev.tenant_id]);
+    host = (d && d[0] && d[0].host) || null;
+  } catch {}
+  if (!nonce || (r.meta && r.meta.nonce && r.meta.nonce === nonce)) {
+    // Mark activation moment when the client is authorized to receive the token
+    try { await db('update devices set activated_at=now() where device_id=$1 and activated_at is null', [dev.id]); } catch {}
+    return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name, host });
+  }
+  return res.json({ status: 'claimed', role: dev.role, tenant_id: dev.tenant_id, host });
+});
+
+// New: Device activation by Company ID (tenant) + Activation Code (device short_code)
+addRoute('post', '/device/activate', async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try {
+    await ensureLicensingSchema();
+    const code = String(req.body?.code || '').trim();
+    const company = String(req.body?.company || '').trim();
+    if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_code' });
+    // Resolve tenant
+    let tenantId = String(req.header('x-tenant-id') || '').trim();
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!tenantId) {
+      if (/^\d{6}$/.test(company)) {
+        // Resolve by company_id first, then short_code; handle id/tenant_id schemas
+        let t = [];
+        try { t = await db('select tenant_id as id from tenants where company_id=$1 limit 1', [company]); } catch {}
+        if (!t || !t.length) { try { t = await db('select id as id from tenants where company_id=$1 limit 1', [company]); } catch {} }
+        if (!t || !t.length) { try { t = await db('select tenant_id as id from tenants where short_code=$1 limit 1', [company]); } catch {} }
+        if (!t || !t.length) { try { t = await db('select id as id from tenants where short_code=$1 limit 1', [company]); } catch {} }
+        if (t && t.length) tenantId = t[0].id;
+      } else if (isUUID.test(company)) {
+        tenantId = company;
+      } else if (company) {
+        // Try slug
+        const t = await db('select tenant_id from tenant_settings where slug=$1 limit 1', [company]);
+        if (t.length) tenantId = t[0].tenant_id;
+      }
+    }
+    if (!tenantId) return res.status(400).json({ error: 'invalid_company' });
+    // Find device by tenant + short_code (regardless of status)
+    const rows = await db("select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch, status::text as status from devices where tenant_id=$1 and short_code=$2 limit 1", [tenantId, code]);
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    let dev = rows[0];
+    let token = dev.device_token;
+    // If device is not active, enforce license limit and activate + rotate token
+    if (dev.status !== 'active') {
+      try {
+        const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
+        const limit = lic?.license_limit ?? 1;
+        const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+        if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
+      } catch {}
+      token = genDeviceToken();
+      try { await db("update devices set device_token=$1, status='active', activated_at=coalesce(activated_at, now()) where device_id=$2", [token, dev.id]); } catch {}
+      // re-read minimal fields
+      try { const r2 = await db('select device_token from devices where device_id=$1', [dev.id]); if (r2 && r2[0]) token = r2[0].device_token || token; } catch {}
+    } else {
+      // ensure activated_at is set
+      try { await db('update devices set activated_at=now() where device_id=$1 and activated_at is null', [dev.id]); } catch {}
+    }
+    // Update activation code state to claimed and extend expiry (14 days)
+    try { await db("update device_activation_codes set expires_at=now() + interval '14 days', device_id=$1, claimed_at=coalesce(claimed_at, now()), status='claimed' where code=$2", [dev.id, code]); } catch {}
+    return res.json({ status: 'claimed', device_token: token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
+  } catch (e) {
+    return res.status(500).json({ error: 'activation_failed' });
+  }
+});
+
+// Admin: explicit link endpoint to claim a code to a device and issue token
+addRoute('post', '/device/pair/link', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try {
+    await ensureLicensingSchema();
+    const code = String(req.body?.code||'').trim();
+    const deviceId = String(req.body?.device_id||'').trim();
+    if (!/^\d{6}$/.test(code) || !deviceId) return res.status(400).json({ error: 'invalid_request' });
+    const [r] = await db("select code, tenant_id, status::text as status, role::text as role, expires_at, claimed_at, device_id from device_activation_codes where code=$1", [code]);
+    if (!r) return res.status(404).json({ error: 'not_found' });
+    if (new Date(r.expires_at).getTime() < Date.now()) { try { await db("update device_activation_codes set status='expired' where code=$1", [code]); } catch {}; return res.status(409).json({ error: 'expired' }); }
+    const tenantId = r.tenant_id;
+    // AuthZ: platform admin or tenant admin for this tenant
+    let allowed = false;
+    try { if (await isPlatformAdmin(req)) allowed = true; } catch {}
+    if (!allowed) {
+      const email = (req.user?.email||'').toLowerCase();
+      if (email && await userHasTenantRole(email, tenantId)) allowed = true;
+    }
+    if (!allowed) return res.status(403).json({ error: 'forbidden' });
+
+    const [dev] = await db("select device_id as id, device_name as name, device_token, role::text as role, tenant_id, status::text as status, branch from devices where device_id=$1", [deviceId]);
+    if (!dev) return res.status(404).json({ error: 'device_not_found' });
+    if (String(dev.tenant_id) !== String(tenantId)) return res.status(409).json({ error: 'tenant_mismatch' });
+    if (r.role && String(r.role) !== String(dev.role)) return res.status(409).json({ error: 'role_mismatch' });
+
+    // If device is not active, enforce license limit and activate + rotate token
+    let token = dev.device_token;
+    if (dev.status !== 'active') {
+      try {
+        const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
+        const limit = lic?.license_limit ?? 1;
+        const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+        if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
+      } catch {}
+      token = genDeviceToken();
+      try { await db("update devices set device_token=$1, status='active', activated_at=coalesce(activated_at, now()) where device_id=$2", [token, deviceId]); } catch {}
+    }
+    // Mark code claimed
+    try { await db("update device_activation_codes set claimed_at=now(), device_id=$1, status='claimed' where code=$2", [deviceId, code]); } catch {}
+    try { await logDeviceEvent(tenantId, deviceId, 'claimed', { role: dev.role||null, branch: dev.branch||null }); } catch {}
+
+    return res.json({ ok:true, status:'claimed', device_token: token, tenant_id: tenantId, role: dev.role, device_id: dev.id, name: dev.name||null });
+  } catch (e) {
+    return res.status(500).json({ error: 'link_failed' });
+  }
+});
+
+// Platform admin: generate a new Account ID suggestion (not reserved)
+addRoute('get', '/admin/tenants/company-id/new', verifyAuthOpen, requirePlatformAdminOpen, async (_req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try { const code = await genTenantShortCode(); return res.json({ code }); } catch { return res.status(500).json({ error: 'code_generation_failed' }); }
+});
+
+// Platform admin: check Company ID availability (6 digits)
+addRoute('get', '/admin/company-id/availability', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const code = String(req.query?.code||'').trim();
+  const tenantId = String(req.query?.tenantId||'').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'invalid_company_id', message: 'Company ID must be exactly 6 digits' });
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  let occ = null;
+  try { const r = await db('select id as id, name as name from tenants where company_id=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {}
+  if (!occ) { try { const r = await db('select tenant_id as id, company_name as name from tenants where company_id=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {} }
+  if (!occ) { try { const r = await db('select id as id, name as name from tenants where short_code=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {} }
+  if (!occ) { try { const r = await db('select tenant_id as id, company_name as name from tenants where short_code=$1 limit 1', [code]); if (r && r.length) occ = r[0]; } catch {} }
+  if (!occ) return res.json({ available: true });
+  if (tenantId && String(occ.id) === String(tenantId)) return res.json({ available: true });
+  return res.json({ available: false, tenant_id: occ.id, name: occ.name || '' });
 });
 
 // Super admin: view/update license limit
@@ -4518,7 +6054,7 @@ addRoute('get', '/admin/tenants/:id/license', verifyAuth, async (req, res) => {
   const tenantId = req.params.id;
   const email = (req.user?.email||'').toLowerCase();
   if (!isPlatformAdmin(req) && !(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
-  const [t] = await db('select license_limit from tenants where id=$1', [tenantId]);
+  const [t] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
   res.json({ license_limit: t?.license_limit ?? 1, active_count: count||0 });
 });
@@ -4526,11 +6062,11 @@ addRoute('put', '/admin/tenants/:id/license', verifyAuth, requirePlatformAdmin, 
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const tenantId = req.params.id;
   const n = Math.max(1, Number(req.body?.license_limit || 1));
-  await db('update tenants set license_limit=$1 where id=$2', [n, tenantId]);
+  await db('update tenants set license_limit=$1 where tenant_id=$2', [n, tenantId]);
   res.json({ ok:true, license_limit: n });
 });
 
-// Tenant admin: claim device using code
+// Tenant admin: claim device using code (legacy flow; kept for compatibility)
 addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAdminParam, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const tenantId = req.params.id;
@@ -4541,12 +6077,12 @@ addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAd
   if (!code || (role !== 'cashier' && role !== 'display')) return res.status(400).json({ error: 'invalid_request' });
   // If branch looks like a UUID, resolve to branch name
   if (branch && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branch)) {
-    const [b] = await db('select name from branches where tenant_id=$1 and id=$2', [tenantId, branch]);
+    const [b] = await db('select branch_name as name from branches where tenant_id=$1 and branch_id=$2', [tenantId, branch]);
     if (!b) return res.status(404).json({ error: 'branch_not_found' });
     branch = b.name;
   }
   if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
-  const [lic] = await db('select license_limit from tenants where id=$1', [tenantId]);
+  const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
   const limit = lic?.license_limit ?? 1;
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
   if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
@@ -4563,21 +6099,56 @@ addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAd
     if (r0.claimed_at || new Date(r0.expires_at).getTime() < Date.now()) needInsert = true;
   }
   if (needInsert) {
-    await db("insert into device_activation_codes (code, tenant_id, expires_at, meta) values ($1,$2, now() + interval '14 days', $3::jsonb) on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta, claimed_at=null, device_id=null", [code, tenantId, JSON.stringify({ created_by: 'admin-claim' })]);
+    await db("insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta) values ($1,$2, now() + interval '14 days', 'pending'::device_activation_status, $3::device_role, $4::jsonb) on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, status='pending'::device_activation_status, role=coalesce(excluded.role, device_activation_codes.role), meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta, claimed_at=null, device_id=null", [code, tenantId, role, JSON.stringify({ created_by: 'admin-claim' })]);
   } else {
     // ensure tenant binding and clear stale claim flags just in case
-    await db('update device_activation_codes set tenant_id=$1, claimed_at=null, device_id=null where code=$2', [tenantId, code]);
+    await db("update device_activation_codes set tenant_id=$1, status='pending'::device_activation_status, claimed_at=null, device_id=null where code=$2", [tenantId, code]);
   }
   const token = genDeviceToken();
   const [dev] = await db(
-    `insert into devices (tenant_id, name, role, status, branch, device_token)
+    `insert into devices (tenant_id, device_name, role, status, branch, device_token)
      values ($1,$2,$3,'active',$4,$5)
-     returning id, tenant_id, name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
+     returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
     [tenantId, name||null, role, branch||null, token]
   );
-  await db('update device_activation_codes set claimed_at=now(), device_id=$1 where code=$2', [dev.id, code]);
+  await db("update device_activation_codes set claimed_at=now(), status='claimed', device_id=$1 where code=$2", [dev.id, code]);
   try { await logDeviceEvent(tenantId, dev.id, 'claimed', { role, branch: dev.branch||null }); } catch {}
   res.json({ ok:true, device: dev });
+});
+
+// Tenant admin: create device and auto-generate a 6-digit activation code
+addRoute('post', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureLicensingSchema();
+  const tenantId = req.params.id;
+  const role = String(req.body?.role||'').trim().toLowerCase();
+  const name = String(req.body?.name||'').trim();
+  let branch = String(req.body?.branch||'').trim();
+  if (role !== 'cashier' && role !== 'display') return res.status(400).json({ error: 'invalid_role' });
+  // If branch looks like a UUID, resolve to branch name
+  if (branch && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branch)) {
+    const [b] = await db('select branch_name as name from branches where tenant_id=$1 and branch_id=$2', [tenantId, branch]);
+    if (!b) return res.status(404).json({ error: 'branch_not_found' });
+    branch = b.name;
+  }
+  if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
+  // License check
+  const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
+  const limit = lic?.license_limit ?? 1;
+  const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
+  if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
+  // Generate unique 6-digit activation code and device token
+  let shortCode;
+  try { shortCode = await genDeviceShortCode(); } catch { return res.status(500).json({ error: 'code_generation_failed' }); }
+  const token = genDeviceToken();
+  const [dev] = await db(
+    `insert into devices (tenant_id, device_name, role, status, branch, device_token, short_code)
+     values ($1,$2,$3,'revoked',$4,$5,$6)
+     returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, short_code::text as short_code`,
+    [tenantId, name||null, role, branch||null, token, shortCode]
+  );
+  try { await logDeviceEvent(tenantId, dev.id, 'created', { role, branch: dev.branch||null }); } catch {}
+  return res.json({ ok:true, device: dev });
 });
 
 // Tenant admin: list and revoke devices
@@ -4588,15 +6159,30 @@ addRoute('get', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPara
   const key = `adm:devices:${req.params.id}:l=${limit}:o=${offset}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
-  const rows = await db("select id, null::text as short_code, name, role::text as role, status::text as status, branch, activated_at, revoked_at, last_seen from devices where tenant_id=$1 order by activated_at desc limit $2 offset $3", [req.params.id, limit, offset]);
+  const rows = await db("select device_id as id, short_code::text as short_code, device_name as name, role::text as role, status::text as status, branch, activated_at, revoked_at, last_seen from devices where tenant_id=$1 order by activated_at desc limit $2 offset $3", [req.params.id, limit, offset]);
   const payload = { items: rows };
   cacheSet(key, payload, 10000); // 10s TTL
   res.json(payload);
 });
 addRoute('post', '/admin/tenants/:id/devices/:deviceId/revoke', verifyAuth, requireTenantPermParamFactory('manage_devices'), async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
-  await db("update devices set status='revoked', revoked_at=now() where tenant_id=$1 and id=$2", [req.params.id, req.params.deviceId]);
+  // Set inactive and clear activation timestamp
+  await db("update devices set status='revoked', revoked_at=now(), activated_at=null where tenant_id=$1 and device_id=$2", [req.params.id, req.params.deviceId]);
+  // Regenerate a new activation code for future activation
+  try {
+    const next = await genDeviceShortCode();
+    await db('update devices set short_code=$1 where tenant_id=$2 and device_id=$3', [next, req.params.id, req.params.deviceId]);
+  } catch {}
   try { await logDeviceEvent(req.params.id, req.params.deviceId, 'revoked', {}); } catch {}
+  // WebSocket: notify clients to deactivate immediately by token mapping
+  try {
+    const [row] = await db('select device_token from devices where tenant_id=$1 and device_id=$2', [req.params.id, req.params.deviceId]);
+    const tok = row && row.device_token ? String(row.device_token) : '';
+    if (tok && __wsByDeviceToken.has(tok)) {
+      const set = __wsByDeviceToken.get(tok);
+      for (const c of set) { try { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify({ type:'device:deactivate' })); } catch {} }
+    }
+  } catch {}
   res.json({ ok:true });
 });
 
@@ -4606,15 +6192,29 @@ addRoute('delete', '/admin/tenants/:id/devices/:deviceId', verifyAuth, requireTe
   const tenantId = req.params.id;
   const deviceId = req.params.deviceId;
   // Ensure device exists and is revoked
-  const rows = await db("select id, status from devices where tenant_id=$1 and id=$2", [tenantId, deviceId]);
+  const rows = await db("select device_id as id, status::text as status from devices where tenant_id=$1 and device_id=$2", [tenantId, deviceId]);
   if (!rows.length) return res.status(404).json({ error: 'not_found' });
   if (rows[0].status !== 'revoked') return res.status(409).json({ error: 'device_not_revoked' });
   // Clear FK from activation codes, then delete
   try {
     await db("delete from device_activation_codes where device_id=$1", [deviceId]);
   } catch {}
-  await db("delete from devices where tenant_id=$1 and id=$2", [tenantId, deviceId]);
-res.json({ ok:true });
+  // WebSocket: notify clients to deactivate immediately by token mapping (fetch token before delete)
+  try {
+    const [row] = await db('select device_token from devices where tenant_id=$1 and device_id=$2', [tenantId, deviceId]);
+    const tok = row && row.device_token ? String(row.device_token) : '';
+    if (tok && __wsByDeviceToken.has(tok)) {
+      const set = __wsByDeviceToken.get(tok);
+      for (const c of set) { try { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify({ type:'device:deactivate' })); } catch {} }
+    }
+  } catch {}
+  await db("delete from devices where tenant_id=$1 and device_id=$2", [tenantId, deviceId]);
+  res.json({ ok:true });
+});
+
+// Admin: simple HTML page to view tenant orders (dev-open allowed)
+addRoute('get', '/admin/tenant-orders', (req, res) => {
+  try { return res.sendFile(path.join(__dirname, 'admin', 'tenant-orders.html')); } catch { return res.status(500).send('failed'); }
 });
 
 // Super admin: get tenant owner (email/name)
@@ -4647,6 +6247,59 @@ addRoute('get', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdmin
   }
 });
 
+// Tenant admin: list paid orders
+addRoute('get', '/admin/tenants/:id/orders', verifyAuth, requireTenantPermParamFactory('view_orders'), async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const tenantId = String(req.params.id||'').trim();
+  const limit = Math.max(1, Math.min(200, Number(req.query.limit || 100)));
+  const offset = Math.max(0, Number(req.query.offset || 0));
+  const rows = await db(
+    `select ref, branch_ticket_no, ticket_no, paid_at, osn, branch, location, customer_name, source, total, currency
+       from paid_orders
+      where tenant_id=$1
+      order by paid_at desc
+      limit $2 offset $3`,
+    [tenantId, limit, offset]
+  );
+  res.json({ items: rows });
+});
+
+// Tenant admin: order details by ticket number
+addRoute('get', '/admin/tenants/:id/orders/by-ticket/:ticketNo', verifyAuth, requireTenantPermParamFactory('view_orders'), async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = String(req.params.id||'').trim();
+  const ticketNo = Number(req.params.ticketNo||'0');
+  const rows = await db(
+    `select id, ref, ticket_no, branch_ticket_no, osn, tenant_id, branch_id, branch, location,
+            cashier_device_id, cashier_name, display_device_id,
+            customer_name, source, items, total, currency, foodics_order_id, foodics_status, sent_to_foodics_at, paid_at
+       from paid_orders
+      where tenant_id=$1 and ticket_no=$2
+      limit 1`,
+    [tenantId, ticketNo]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  res.json({ order: rows[0] });
+});
+
+// Tenant admin: order details by id (uuid)
+addRoute('get', '/admin/tenants/:id/orders/:orderId', verifyAuth, requireTenantPermParamFactory('view_orders'), async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  const tenantId = String(req.params.id||'').trim();
+  const orderId = String(req.params.orderId||'').trim();
+  const rows = await db(
+    `select id, ref, ticket_no, branch_ticket_no, osn, tenant_id, branch_id, branch, location,
+            cashier_device_id, cashier_name, display_device_id,
+            customer_name, source, items, total, currency, foodics_order_id, foodics_status, sent_to_foodics_at, paid_at
+       from paid_orders
+      where tenant_id=$1 and id=$2
+      limit 1`,
+    [tenantId, orderId]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  res.json({ order: rows[0] });
+});
+
 // Super admin: set/replace tenant owner
 addRoute('put', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
   const id = String(req.params.id||'').trim();
@@ -4662,10 +6315,18 @@ addRoute('put', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdmin
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const u = await client.query(`insert into users (email) values ($1)
-                                  on conflict (email) do update set email=excluded.email
-                                  returning id`, [email]);
-    const userId = u.rows[0].id;
+    let userId = null;
+    try {
+      const u = await client.query(`insert into users (email) values ($1)
+                                    on conflict (email) do update set email=excluded.email
+                                    returning id`, [email]);
+      userId = u.rows[0].id;
+    } catch (_e) {
+      const u = await client.query(`insert into users (email) values ($1)
+                                    on conflict (email) do update set email=excluded.email
+                                    returning user_id as id`, [email]);
+      userId = u.rows[0].id;
+    }
     try {
       await client.query(`update tenant_users set role='admin'::tenant_role where tenant_id=$1 and role='owner'::tenant_role`, [id]);
     } catch (_e) {
@@ -4715,7 +6376,7 @@ addRoute('get', '/admin/tenants/:id/branch-limit', verifyAuth, async (req, res) 
   const tenantId = req.params.id;
   const email = (req.user?.email||'').toLowerCase();
   if (!isPlatformAdmin(req) && !(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
-  const [t] = await db('select branch_limit from tenants where id=$1', [tenantId]);
+const [t] = await db('select branch_limit from tenants where tenant_id=$1', [tenantId]);
   const [{ count }] = await db('select count(*)::int as count from branches where tenant_id=$1', [tenantId]);
   res.json({ branch_limit: t?.branch_limit ?? 3, branch_count: count||0 });
 });
@@ -4723,7 +6384,7 @@ addRoute('put', '/admin/tenants/:id/branch-limit', verifyAuth, requirePlatformAd
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const tenantId = req.params.id;
   const n = Math.max(1, Number(req.body?.branch_limit || 3));
-  await db('update tenants set branch_limit=$1 where id=$2', [n, tenantId]);
+await db('update tenants set branch_limit=$1 where tenant_id=$2', [n, tenantId]);
   res.json({ ok:true, branch_limit: n });
 });
 
@@ -4752,15 +6413,28 @@ addRoute('get', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPar
   const key = `adm:users:${req.params.id}:l=${limit}:o=${offset}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
-  const rows = await db(
-    `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
-       from tenant_users tu
-       join users u on u.id = tu.user_id
-      where tu.tenant_id=$1
-      order by lower(u.email) asc
-      limit $2 offset $3`,
-    [req.params.id, limit, offset]
-  );
+  let rows;
+  try {
+    rows = await db(
+      `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
+         from tenant_users tu
+         join users u on u.id = tu.user_id
+        where tu.tenant_id=$1
+        order by lower(u.email) asc
+        limit $2 offset $3`,
+      [req.params.id, limit, offset]
+    );
+  } catch (_e) {
+    rows = await db(
+      `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
+         from tenant_users tu
+         join users u on u.user_id = tu.user_id
+        where tu.tenant_id=$1
+        order by lower(u.email) asc
+        limit $2 offset $3`,
+      [req.params.id, limit, offset]
+    );
+  }
   const payload = { items: rows };
   cacheSet(key, payload, 5000);
   res.json(payload);
@@ -4786,9 +6460,16 @@ addRoute('post', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPa
   }
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   // upsert user by email
-  const [u] = await db(`insert into users (email) values ($1)
+  let u;
+  try {
+    [u] = await db(`insert into users (email) values ($1)
                         on conflict (email) do update set email=excluded.email
                         returning id, lower(email) as email, created_at`, [email]);
+  } catch (_e) {
+    [u] = await db(`insert into users (email) values ($1)
+                        on conflict (email) do update set email=excluded.email
+                        returning user_id as id, lower(email) as email, created_at`, [email]);
+  }
   // upsert tenant_users mapping — prefer tenant_role; fallback to user_role if schema is legacy
   try {
     await db(`insert into tenant_users (tenant_id, user_id, role)
@@ -4851,10 +6532,10 @@ addRoute('delete', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTe
   try {
     await ensureUsersDeletionSchema();
     // Snapshot role/email before delete
-    const rows = await db(
+const rows = await db(
       `select tu.role::text as role, lower(u.email) as email
          from tenant_users tu
-         join users u on u.id=tu.user_id
+         join users u on u.user_id=tu.user_id
         where tu.tenant_id=$1 and tu.user_id=$2
         limit 1`, [tenantId, userId]
     );
@@ -4868,7 +6549,8 @@ addRoute('delete', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTe
       const c = await db('select count(*)::int as n from tenant_users where user_id=$1', [userId]);
       const n = (c && c[0] && c[0].n) || 0;
       if (n === 0) {
-        await db('update users set deleted_at=coalesce(deleted_at, now()) where id=$1', [userId]);
+        try { await db('update users set deleted_at=coalesce(deleted_at, now()) where id=$1', [userId]); }
+        catch { await db('update users set deleted_at=coalesce(deleted_at, now()) where user_id=$1', [userId]); }
       }
     } catch {}
     cacheDelByPrefix(`adm:users:${tenantId}`);
@@ -4938,7 +6620,7 @@ addRoute('delete', '/admin/tenants/:id/users/:userId/purge', verifyAuthOpen, req
     if (n > 0) return res.status(409).json({ error: 'still_member' });
     // Best-effort: remove tombstones for this user
     try { await db('delete from tenant_users_deleted where user_id=$1', [userId]); } catch {}
-    await db('delete from users where id=$1', [userId]);
+await db('delete from users where user_id=$1', [userId]);
     cacheDelByPrefix(`adm:users:${tenantId}`);
     cacheDelByPrefix(`adm:users-deleted:${tenantId}`);
     res.json({ ok:true });
@@ -4957,7 +6639,68 @@ addRoute('get', /^\/logs\/$/, verifyAuthOpen, requirePlatformAdminOpen, (_req, r
   res.sendFile(path.join(__dirname, 'logs', 'index.html'));
 });
 
+// Admin: recent sessions for a device
+addRoute('get', '/admin/tenants/:id/devices/:deviceId/sessions', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const tenantId = String(req.params.id||'').trim();
+  const deviceId = String(req.params.deviceId||'').trim();
+  const limit = Math.max(1, Math.min(50, Number(req.query.limit||20)));
+  try {
+    await ensureRtcSessionSchema();
+    const rows = await db(
+      `select s.id,
+              s.basket_id,
+              s.provider,
+              s.started_at,
+              s.ended_at,
+              extract(epoch from (coalesce(s.ended_at, now()) - s.started_at))::int as duration_sec,
+              case when s.cashier_device_id = $2 then s.display_device_id else s.cashier_device_id end as counterpart_device_id
+         from rtc_sessions s
+        where s.tenant_id=$1 and ($2 = any(array[s.cashier_device_id, s.display_device_id]))
+        order by s.started_at desc
+        limit $3`,
+      [tenantId, deviceId, limit]
+    );
+    res.json({ items: rows });
+  } catch (_e) { res.json({ items: [] }); }
+});
+
 // Platform admin: list logs with filters
+
+// Verify (and optionally clean) residual data for a tenant after deletion
+addRoute('get', '/admin/tenants/:id/verify-deleted', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ ok: false, error: 'db_unavailable' });
+  const tenantId = String(req.params.id||'').trim();
+  const out = {};
+  async function count(sql, params){ try { const r = await db(sql, params); const k = Object.keys(r?.[0]||{})[0]; return Number(r?.[0]?.[k]||0); } catch { return 0; } }
+  out.tenants = await count("select count(*) as n from tenants where tenant_id=$1", [tenantId]);
+  out.tenant_settings = await count("select count(*) as n from tenant_settings where tenant_id=$1", [tenantId]);
+  out.tenant_brand = await count("select count(*) as n from tenant_brand where tenant_id=$1", [tenantId]);
+  out.tenant_domains = await count("select count(*) as n from tenant_domains where tenant_id=$1", [tenantId]);
+  out.tenant_api_integrations = await count("select count(*) as n from tenant_api_integrations where tenant_id=$1", [tenantId]);
+  out.branches = await count("select count(*) as n from branches where tenant_id=$1", [tenantId]);
+  out.devices = await count("select count(*) as n from devices where tenant_id=$1", [tenantId]);
+  out.categories = await count("select count(*) as n from categories where tenant_id=$1", [tenantId]);
+  out.products = await count("select count(*) as n from products where tenant_id=$1", [tenantId]);
+  out.product_branch_availability = await count("select count(*) as n from product_branch_availability where product_id in (select id from products where tenant_id=$1)", [tenantId]);
+  out.product_modifier_groups = await count("select count(*) as n from product_modifier_groups where product_id in (select id from products where tenant_id=$1)", [tenantId]);
+  out.modifier_groups = await count("select count(*) as n from modifier_groups where tenant_id=$1", [tenantId]);
+  out.modifier_options = await count("select count(*) as n from modifier_options where tenant_id=$1", [tenantId]);
+  out.orders = await count("select count(*) as n from orders where tenant_id=$1", [tenantId]);
+  out.order_items = await count("select count(*) as n from order_items where order_id in (select id from orders where tenant_id=$1)", [tenantId]);
+  out.drive_thru_state = await count("select count(*) as n from drive_thru_state where tenant_id=$1", [tenantId]);
+  out.device_events = await count("select count(*) as n from device_events where tenant_id=$1", [tenantId]);
+  out.rtc_sessions = await count("select count(*) as n from rtc_sessions where tenant_id=$1", [tenantId]);
+  out.admin_activity_logs = await count("select count(*) as n from admin_activity_logs where tenant_id=$1", [tenantId]);
+  out.tenant_users = await count("select count(*) as n from tenant_users where tenant_id=$1", [tenantId]);
+  out.tenant_users_deleted = await count("select count(*) as n from tenant_users_deleted where tenant_id=$1", [tenantId]);
+  // Optional extras
+  try { out.paid_orders = await count("select count(*) as n from paid_orders where tenant_id=$1", [tenantId]); } catch { out.paid_orders = 0; }
+  try { out.invites = await count("select count(*) as n from invites where tenant_id=$1", [tenantId]); } catch { out.invites = 0; }
+  const totalResidual = Object.values(out).reduce((s, n) => s + (Number(n)||0), 0);
+  res.json({ ok: true, tenant_id: tenantId, totalResidual, tables: out });
+});
+
 addRoute('get', '/admin/logs', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
   const level = String(req.query.level||'').toLowerCase();
   const action = String(req.query.action||'').trim();
@@ -5034,27 +6777,68 @@ addRoute('get', '/admin/tenants/:id/logs', verifyAuth, requireTenantAdminParam, 
 
 // My tenants (for the logged-in user)
 addRoute('get', '/admin/my/tenants', verifyAuthOpen, async (req, res) => {
-  // In dev-open mode, always expose the in-memory default tenant(s) so the UI does not force start-trial
-if (DEV_OPEN_ADMIN || isLocalRequest(req)) {
+  // In dev-open mode or localhost, expose default in-memory tenant(s) and also include host-mapped tenant when available
+  if (DEV_OPEN_ADMIN || isLocalRequest(req)) {
+    const out = [];
     try { ensureMemTenantsSeed(); } catch {}
+    try { out.push(...Array.from(__memTenants.values())); } catch {}
+    // Include host-mapped tenant to make subdomain.localhost resolve in the UI without manual selection
     try {
-      const arr = Array.from(__memTenants.values());
-      if (arr && arr.length) return res.json(arr);
+      if (HAS_DB) {
+        const host = getForwardedHost(req);
+        if (host) {
+          const rows = await db(`select t.tenant_id as id, t.company_name as name from tenant_domains d join tenants t on t.tenant_id=d.tenant_id where d.host=$1 limit 1`, [host]);
+          if (rows && rows[0]) {
+            const tid = String(rows[0].id);
+            if (!out.some(x => String(x.id) === tid)) out.push(rows[0]);
+          }
+        }
+      }
     } catch {}
+    if (out.length) return res.json(out);
     return res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
   }
   if (!HAS_DB) return res.json([]);
   try {
     const email = (req.user?.email||'').toLowerCase();
     if (!email) return res.status(401).json([]);
-    const rows = await db(`
-      select t.id, t.name
+    // Platform admins can see all tenants
+    try {
+      if (await isPlatformAdmin(req)) {
+        const all = await db('select tenant_id as id, company_name as name from tenants order by created_at desc');
+        return res.json(all);
+      }
+    } catch {}
+    // Regular users: list only memberships
+    let rows;
+    try {
+      rows = await db(`
+      select t.tenant_id as id, t.company_name as name
         from tenant_users tu
         join users u on u.id=tu.user_id
-        join tenants t on t.id=tu.tenant_id
+        join tenants t on t.tenant_id=tu.tenant_id
        where lower(u.email)=$1
        order by t.created_at desc
     `, [email]);
+    } catch (_e) {
+      rows = await db(`
+      select t.tenant_id as id, t.company_name as name
+        from tenant_users tu
+        join users u on u.user_id=tu.user_id
+        join tenants t on t.tenant_id=tu.tenant_id
+       where lower(u.email)=$1
+       order by t.created_at desc
+    `, [email]);
+    }
+    return res.json(rows);
+  } catch (_e) { return res.json([]); }
+});
+
+// Platform admin: list all tenants (for admin tenants table)
+addRoute('get', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, async (_req, res) => {
+  if (!HAS_DB) return res.json([]);
+  try {
+    const rows = await db('select tenant_id as id, company_name as name, short_code as code, created_at from tenants order by created_at desc');
     return res.json(rows);
   } catch (_e) { return res.json([]); }
 });
@@ -5078,9 +6862,9 @@ addRoute('post', '/admin/invite/accept', verifyAuthOpen, async (req, res) => {
   // Upsert user and mapping
   const [u] = await db(`insert into users (email) values ($1)
                         on conflict (email) do update set email=excluded.email
-                        returning id, lower(email) as email`, [email]);
-  if (full_name != null) { try { await db('update users set full_name=$1 where id=$2', [full_name, u.id]); } catch {} }
-  if (mobile != null) { try { await db('update users set mobile=$1 where id=$2', [mobile, u.id]); } catch {} }
+                        returning user_id as id, lower(email) as email`, [email]);
+  if (full_name != null) { try { await db('update users set full_name=$1 where user_id=$2', [full_name, u.id]); } catch {} }
+  if (mobile != null) { try { await db('update users set mobile=$1 where user_id=$2', [mobile, u.id]); } catch {} }
   try {
     await db(`insert into tenant_users (tenant_id, user_id, role)
               values ($1,$2,$3::tenant_role)
@@ -5103,14 +6887,14 @@ addRoute('post', '/auth/profile', verifyAuth, async (req, res) => {
   const mobile = req.body?.mobile != null ? String(req.body.mobile).trim() : null;
   const photo_url = req.body?.photo_url != null ? String(req.body.photo_url).trim() : null;
   try {
-    const rows = await db('select id from users where lower(email)=$1 limit 1', [email]);
+  const rows = await db('select user_id as id from users where lower(email)=$1 limit 1', [email]);
     if (!rows.length) return res.status(404).json({ error: 'user_not_found' });
     const id = rows[0].id;
     // Add photo_url column if missing (idempotent)
     try { await db("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS photo_url text"); } catch {}
-    if (full_name != null) { try { await db('update users set full_name=$1 where id=$2', [full_name, id]); } catch {} }
-    if (mobile != null) { try { await db('update users set mobile=$1 where id=$2', [mobile, id]); } catch {} }
-    if (photo_url != null) { try { await db('update users set photo_url=$1 where id=$2', [photo_url, id]); } catch {} }
+    if (full_name != null) { try { await db('update users set full_name=$1 where user_id=$2', [full_name, id]); } catch {} }
+    if (mobile != null) { try { await db('update users set mobile=$1 where user_id=$2', [mobile, id]); } catch {} }
+    if (photo_url != null) { try { await db('update users set photo_url=$1 where user_id=$2', [photo_url, id]); } catch {} }
     return res.json({ ok:true });
   } catch (_e) { return res.status(500).json({ error: 'profile_failed' }); }
 });
@@ -5122,19 +6906,26 @@ addRoute('post', '/auth/avatar/upload-url', verifyAuth, async (req, res) => {
     const uid = (req.user?.uid||'') || email.replace(/[^a-z0-9]+/gi,'_');
     const filename = String(req.body?.filename || 'avatar.jpg').trim();
     const contentType = String(req.body?.contentType || 'image/jpeg').trim();
+    const cacheControl = ASSETS_CACHE_CONTROL;
     const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g,'_');
     const objectName = `users/${uid}/` + (Date.now()) + '-' + safeName;
     if (!bucket) {
       if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'assets not configured' });
       try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads', path.dirname(objectName)), { recursive: true }); } catch {}
-      const url = `/admin/upload-local/${encodeURIComponent(objectName)}`;
-      const publicUrl = `/images/uploads/${encodeURIComponent(objectName)}`;
-      return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+      const url = `/admin/upload-local/${objectName.split('/').map(encodeURIComponent).join('/')}`;
+      const publicUrl = `/images/uploads/${objectName.split('/').map(encodeURIComponent).join('/')}`;
+      return res.json({ url, method: 'PUT', contentType, cacheControl, objectName, publicUrl });
     }
     const file = bucket.file(objectName);
-    const [url] = await file.getSignedUrl({ version: 'v4', action: 'write', expires: Date.now()+15*60*1000, contentType });
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 15*60*1000,
+      contentType,
+      extensionHeaders: { 'Cache-Control': cacheControl }
+    });
     const publicUrl = `https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(objectName)}`;
-    return res.json({ url, method: 'PUT', contentType, objectName, publicUrl });
+    return res.json({ url, method: 'PUT', contentType, cacheControl, objectName, publicUrl });
   } catch (e) {
     return res.status(500).json({ error: 'sign_failed' });
   }
@@ -5253,52 +7044,52 @@ addRoute('post', '/auth/bootstrap-trial', verifyAuth, async (req, res) => {
 });
 
 // Branch CRUD (tenant admin)
-addRoute('get', '/admin/tenants/:id/branches', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('get', '/admin/tenants/:id/branches', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
   const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
   const offset = Math.max(0, Number(req.query.offset || 0));
   const key = `adm:branches:${req.params.id}:l=${limit}:o=${offset}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
-  const rows = await db('select id, name, created_at from branches where tenant_id=$1 order by name asc limit $2 offset $3', [req.params.id, limit, offset]);
+const rows = await db('select branch_id as id, branch_name as name, created_at from branches where tenant_id=$1 order by branch_name asc limit $2 offset $3', [req.params.id, limit, offset]);
   const payload = { items: rows };
   cacheSet(key, payload, 30000); // 30s TTL
   res.json(payload);
 });
-addRoute('post', '/admin/tenants/:id/branches', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('post', '/admin/tenants/:id/branches', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const name = String(req.body?.name||'').trim();
   if (!name) return res.status(400).json({ error: 'name_required' });
   const tenantId = req.params.id;
-  const [lim] = await db('select branch_limit from tenants where id=$1', [tenantId]);
+const [lim] = await db('select branch_limit from tenants where tenant_id=$1', [tenantId]);
   const limit = lim?.branch_limit ?? 3;
   const [{ count }] = await db('select count(*)::int as count from branches where tenant_id=$1', [tenantId]);
   if ((count||0) >= limit) return res.status(409).json({ error: 'branch_limit_reached' });
   // enforce unique name per tenant
-  const exists = await db('select 1 from branches where tenant_id=$1 and lower(name)=lower($2)', [tenantId, name]);
+const exists = await db('select 1 from branches where tenant_id=$1 and lower(branch_name)=lower($2)', [tenantId, name]);
   if (exists.length) return res.status(409).json({ error: 'branch_name_exists' });
-  const [b] = await db('insert into branches (tenant_id, name) values ($1,$2) returning id, name, created_at', [tenantId, name]);
+const [b] = await db('insert into branches (tenant_id, branch_name) values ($1,$2) returning branch_id as id, branch_name as name, created_at', [tenantId, name]);
   res.json({ ok:true, branch: b });
 });
-addRoute('put', '/admin/tenants/:id/branches/:branchId', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('put', '/admin/tenants/:id/branches/:branchId', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const name = String(req.body?.name||'').trim();
   if (!name) return res.status(400).json({ error: 'name_required' });
   const tenantId = req.params.id;
   // check unique
-  const exists = await db('select 1 from branches where tenant_id=$1 and lower(name)=lower($2) and id<>$3', [tenantId, name, req.params.branchId]);
+const exists = await db('select 1 from branches where tenant_id=$1 and lower(branch_name)=lower($2) and branch_id<>$3', [tenantId, name, req.params.branchId]);
   if (exists.length) return res.status(409).json({ error: 'branch_name_exists' });
-  await db('update branches set name=$1 where tenant_id=$2 and id=$3', [name, tenantId, req.params.branchId]);
+await db('update branches set branch_name=$1 where tenant_id=$2 and branch_id=$3', [name, tenantId, req.params.branchId]);
   res.json({ ok:true });
 });
-addRoute('delete', '/admin/tenants/:id/branches/:branchId', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('delete', '/admin/tenants/:id/branches/:branchId', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const tenantId = req.params.id;
-  const [b] = await db('select name from branches where tenant_id=$1 and id=$2', [tenantId, req.params.branchId]);
+const [b] = await db('select branch_name as name from branches where tenant_id=$1 and branch_id=$2', [tenantId, req.params.branchId]);
   if (!b) return res.status(404).json({ error: 'not_found' });
   const [{ cnt }] = await db('select count(*)::int as cnt from devices where tenant_id=$1 and status=\'active\' and branch=$2', [tenantId, b.name]);
   if ((cnt||0) > 0) return res.status(409).json({ error: 'branch_has_devices' });
-  await db('delete from branches where tenant_id=$1 and id=$2', [tenantId, req.params.branchId]);
+await db('delete from branches where tenant_id=$1 and branch_id=$2', [tenantId, req.params.branchId]);
   res.json({ ok:true });
 });
 
@@ -5317,18 +7108,13 @@ app.use('/images/products', express.static(path.join(__dirname, 'images', 'produ
 
 // Public: brand info for current tenant (logo, name, colors)
 addRoute('get', '/brand', requireTenant, async (req, res) => {
-  if (!HAS_DB) {
-    if (DEV_OPEN_ADMIN) {
-      const b = memTenantBrandByTenant.get(req.tenantId) || {};
-      return res.json({ display_name: b.display_name || 'Company', logo_url: b.logo_url || '', color_primary: b.color_primary || null, color_secondary: b.color_secondary || null });
-    }
-    return res.json({ tenant_id: req.tenantId, display_name: 'Company', logo_url: '', color_primary: null, color_secondary: null });
-  }
+  if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
   try {
     const [row] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
-    return res.json(row || { tenant_id: req.tenantId, display_name: 'Company', logo_url: '', color_primary: null, color_secondary: null });
+    // No fallback brand; return empty object if not configured
+    return res.json(row || {});
   } catch (_e) {
-    return res.json({ tenant_id: req.tenantId, display_name: 'Company', logo_url: '', color_primary: null, color_secondary: null });
+    return res.status(500).json({ error: 'server_error' });
   }
 });
 app.use('/images/products', express.static(path.join(__dirname, 'photos')));
@@ -5337,8 +7123,8 @@ app.use('/images/products', express.static(path.join(__dirname, 'photos')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/images', express.static(path.join(__dirname, 'images')));
-// Ensure uploads are served (e.g., /images/uploads/tenants/<id>/logos/...)
-try { fs.mkdirSync(path.join(__dirname, 'images', 'uploads'), { recursive: true }); } catch {}
+// Serve web fonts
+app.use('/fonts', express.static(path.join(__dirname, 'fonts')));
 app.use('/sidebar', express.static(path.join(__dirname, 'sidebar')));
 // Expose CSV data (e.g., top_sellers.csv) for frontend consumption
 app.use('/data', express.static(path.join(__dirname, 'data')));
@@ -5350,8 +7136,10 @@ app.use('/kiosk/win', express.static(path.join(__dirname, 'kiosk', 'win')));
 
 // Root admin pages
 addRoute('get', '/products/', (_req, res) => res.sendFile(path.join(__dirname, 'products', 'index.html')));
+addRoute('get', '/products/edit/', (_req, res) => res.sendFile(path.join(__dirname, 'products', 'edit', 'index.html')));
 addRoute('get', '/categories/', (_req, res) => res.sendFile(path.join(__dirname, 'categories', 'index.html')));
 addRoute('get', '/modifiers/', (_req, res) => res.sendFile(path.join(__dirname, 'modifiers', 'index.html')));
+addRoute('get', '/orders/',   (_req, res) => res.sendFile(path.join(__dirname, 'orders',   'index.html')));
 // Organization pages
 addRoute('get', '/company/',  (_req, res) => res.sendFile(path.join(__dirname, 'company',  'index.html')));
 addRoute('get', '/users/',    (_req, res) => res.sendFile(path.join(__dirname, 'users',    'index.html')));
@@ -5359,8 +7147,16 @@ addRoute('get', '/roles/',    (_req, res) => res.sendFile(path.join(__dirname, '
 addRoute('get', '/branches/', (_req, res) => res.sendFile(path.join(__dirname, 'branches', 'index.html')));
 addRoute('get', '/devices/',  (_req, res) => res.sendFile(path.join(__dirname, 'devices',  'index.html')));
 // New: Platform and Marketing pages
-addRoute('get', '/tenants/', (_req, res) => res.sendFile(path.join(__dirname, 'tenants', 'index.html')));
-addRoute('get', '/tenants/:id', (_req, res) => res.sendFile(path.join(__dirname, 'tenants', 'edit', 'index.html')));
+addRoute('get', '/tenants/', (_req, res) => {
+  // Serve local Tenants UI directly from the container
+  try { return res.sendFile(path.join(__dirname, 'tenants', 'index.html')); }
+  catch { return res.status(404).end(); }
+});
+addRoute('get', '/tenants/:id', (req, res) => {
+  // Serve the Tenant edit UI; the page reads the :id from the URL to load details
+  try { return res.sendFile(path.join(__dirname, 'tenants', 'edit', 'index.html')); }
+  catch { return res.status(404).end(); }
+});
 addRoute('get', '/billing/', (_req, res) => res.sendFile(path.join(__dirname, 'billing', 'index.html')));
 addRoute('get', '/poster/', (_req, res) => res.sendFile(path.join(__dirname, 'poster', 'index.html')));
 addRoute('get', '/posters/', (_req, res) => res.redirect(301, '/poster/'));
@@ -5436,6 +7232,8 @@ addRoute('get', '/sw.js', (_req, res) => {
 
 // Simple in-memory image cache for proxy (/img)
 const memImageCache = new Map(); // url -> { buf:Buffer, type:string, etag:string, exp:number }
+// Simple in-memory JS cache for vendor modules (/js/vendor/*)
+const memScriptCache = new Map(); // key -> { buf:Buffer, type:string, etag:string, exp:number }
 function isPrivateHostOrIp(host){
   if (!host) return true;
   const h = String(host).toLowerCase();
@@ -5447,25 +7245,18 @@ function isPrivateHostOrIp(host){
   return false;
 }
 
-// Posters list for rotating display overlay (tenant‑aware; cloud bucket when configured)
+// Posters list for rotating display overlay (tenant‑aware; cloud bucket only)
 async function listTenantPosters(tenantId) {
   try {
-    if (bucket) {
-      const [files] = await bucket.getFiles({ prefix: `tenants/${tenantId}/posters/` });
-      const urls = [];
-      for (const f of (files || [])) {
-        if (f && f.name && !f.name.endsWith('/')) {
-          urls.push(`https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${encodeURIComponent(f.name)}`);
-        }
+    if (!bucket) return [];
+    const [files] = await bucket.getFiles({ prefix: `tenants/${tenantId}/posters/` });
+    const urls = [];
+    for (const f of (files || [])) {
+      if (f && f.name && !f.name.endsWith('/')) {
+        urls.push(`https://storage.googleapis.com/${encodeURIComponent(ASSETS_BUCKET)}/${f.name.split('/').map(encodeURIComponent).join('/')}`);
       }
-      return urls;
     }
-    // Local dev fallback: files uploaded via /admin/upload-local
-    const dir = path.join(__dirname, 'images', 'uploads', 'tenants', tenantId, 'posters');
-    const files = fs.readdirSync(dir)
-      .filter(f => /\.(png|jpe?g|webp|gif|avif)$/i.test(f))
-      .sort((a,b) => a.localeCompare(b));
-    return files.map(f => `/images/uploads/tenants/${encodeURIComponent(tenantId)}/posters/${encodeURIComponent(f)}`);
+    return urls;
   } catch {
     return [];
   }
@@ -5548,7 +7339,177 @@ addRoute('get', '/img', async (req, res) => {
   }
 });
 
+// Vendor proxy: serve LiveKit client ESM/UMD from same-origin with caching to avoid CORS/DNS issues
+async function fetchFirstOkay(urls){
+  let lastErr;
+  for (const u of urls){
+    try {
+      const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; SmartOrder/1.0)' } });
+      if (r.ok) { return await r.arrayBuffer(); }
+      lastErr = new Error('bad_status_'+r.status);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('no_source');
+}
+
+addRoute('get', '/js/vendor/livekit-client.esm.js', async (req, res) => {
+  try {
+    const key = 'lk-esm-v2.4.0-local';
+    const now = Date.now();
+    const cached = memScriptCache.get(key);
+    if (cached && cached.exp > now) {
+      const inm = String(req.headers['if-none-match'] || '');
+      if (inm && inm === cached.etag) return res.status(304).end();
+      res.set('Cache-Control','public, max-age=86400, s-maxage=86400');
+      res.set('ETag', cached.etag);
+      res.type('application/javascript');
+      return res.send(cached.buf);
+    }
+
+    function tryReadLocalESM(){
+      try {
+        // 1a) Resolve via package resolution
+        try {
+          // Avoid resolving package internals via require.resolve which may trigger exports errors
+        } catch {}
+        // 1b) Resolve via explicit node_modules paths (scoped or unscoped)
+        const prefixes = [
+          path.join(__dirname, 'node_modules', '@livekit', 'client', 'dist'),
+          path.join(__dirname, 'node_modules', 'livekit-client', 'dist')
+        ];
+        const files = ['livekit-client.esm.mjs', 'livekit-client.esm.js', 'livekit-client.esm.min.js'];
+        for (const dir of prefixes) {
+          for (const f of files) {
+            const p = path.join(dir, f);
+            if (fs.existsSync(p)) return fs.readFileSync(p);
+          }
+        }
+        return null;
+      } catch { return null; }
+    }
+
+    const localBuf = tryReadLocalESM();
+    if (localBuf) {
+      const etag = 'W/"' + require('crypto').createHash('sha1').update(localBuf).digest('hex') + '"';
+      memScriptCache.set(key, { buf: localBuf, type: 'application/javascript', etag, exp: now + 3600*1000 });
+      const inm = String(req.headers['if-none-match'] || '');
+      if (inm && inm === etag) return res.status(304).end();
+      res.set('Cache-Control','public, max-age=86400, s-maxage=86400');
+      res.set('ETag', etag);
+      res.type('application/javascript');
+      return res.send(localBuf);
+    }
+
+    // 2) Next, try GCS or public CDNs as a fallback
+    const bucket = (process.env.ASSETS_BUCKET||'').trim();
+    const gcs = bucket ? `https://storage.googleapis.com/${encodeURIComponent(bucket)}/vendor/livekit-client.esm.js` : null;
+    const sources = [
+      gcs,
+      'https://cdn.livekit.io/client-sdk-js/v2.4.0/livekit-client.esm.js',
+      'https://cdn.jsdelivr.net/npm/@livekit/client@2.4.0/dist/livekit-client.esm.js',
+      'https://unpkg.com/@livekit/client@2.4.0/dist/livekit-client.esm.js'
+    ].filter(Boolean);
+    const arr = await fetchFirstOkay(sources);
+    const buf = Buffer.from(arr);
+    const etag = 'W/"' + require('crypto').createHash('sha1').update(buf).digest('hex') + '"';
+    memScriptCache.set(key, { buf, type: 'application/javascript', etag, exp: now + 3600*1000 });
+    const inm = String(req.headers['if-none-match'] || '');
+    if (inm && inm === etag) return res.status(304).end();
+    res.set('Cache-Control','public, max-age=86400, s-maxage=86400');
+    res.set('ETag', etag);
+    res.type('application/javascript');
+    return res.send(buf);
+  } catch {
+    return res.status(502).send('// livekit vendor esm fetch failed');
+  }
+});
+
+addRoute('get', '/js/vendor/livekit-client.umd.min.js', async (req, res) => {
+  try {
+    const key = 'lk-umd-v2.4.0-local';
+    const now = Date.now();
+    const cached = memScriptCache.get(key);
+    if (cached && cached.exp > now) {
+      const inm = String(req.headers['if-none-match'] || '');
+      if (inm && inm === cached.etag) return res.status(304).end();
+      res.set('Cache-Control','public, max-age=86400, s-maxage=86400');
+      res.set('ETag', cached.etag);
+      res.type('application/javascript');
+      return res.send(cached.buf);
+    }
+
+    function tryReadLocalUMD(){
+      try {
+        // 1a) Resolve via package resolution
+        try {
+          // Avoid resolving package internals via require.resolve which may trigger exports errors
+        } catch {}
+        // 1b) Explicit node_modules paths (scoped or unscoped)
+        const prefixes = [
+          path.join(__dirname, 'node_modules', '@livekit', 'client', 'dist'),
+          path.join(__dirname, 'node_modules', 'livekit-client', 'dist')
+        ];
+        const files = ['livekit-client.umd.min.js', 'livekit-client.umd.js'];
+        for (const dir of prefixes) {
+          for (const f of files) {
+            const p = path.join(dir, f);
+            if (fs.existsSync(p)) return fs.readFileSync(p);
+          }
+        }
+        return null;
+      } catch { return null; }
+    }
+
+    const localBuf = tryReadLocalUMD();
+    if (localBuf) {
+      const etag = 'W/"' + require('crypto').createHash('sha1').update(localBuf).digest('hex') + '"';
+      memScriptCache.set(key, { buf: localBuf, type: 'application/javascript', etag, exp: now + 3600*1000 });
+      const inm = String(req.headers['if-none-match'] || '');
+      if (inm && inm === etag) return res.status(304).end();
+      res.set('Cache-Control','public, max-age=86400, s-maxage=86400');
+      res.set('ETag', etag);
+      res.type('application/javascript');
+      return res.send(localBuf);
+    }
+
+    // 2) Fallback to GCS or public CDNs
+    const bucket = (process.env.ASSETS_BUCKET||'').trim();
+    const gcs = bucket ? `https://storage.googleapis.com/${encodeURIComponent(bucket)}/vendor/livekit-client.umd.min.js` : null;
+    const sources = [
+      gcs,
+      'https://cdn.jsdelivr.net/npm/@livekit/client@2.4.0/dist/livekit-client.umd.min.js',
+      'https://unpkg.com/@livekit/client@2.4.0/dist/livekit-client.umd.min.js'
+    ].filter(Boolean);
+    const arr = await fetchFirstOkay(sources);
+    const buf = Buffer.from(arr);
+    const etag = 'W/"' + require('crypto').createHash('sha1').update(buf).digest('hex') + '"';
+    memScriptCache.set(key, { buf, type: 'application/javascript', etag, exp: now + 3600*1000 });
+    const inm = String(req.headers['if-none-match'] || '');
+    if (inm && inm === etag) return res.status(304).end();
+    res.set('Cache-Control','public, max-age=86400, s-maxage=86400');
+    res.set('ETag', etag);
+    res.type('application/javascript');
+    return res.send(buf);
+  } catch {
+    return res.status(502).send('// livekit vendor umd fetch failed');
+  }
+});
+
 addRoute('get', '/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+// Lightweight client log endpoint for field diagnostics
+addRoute('post', '/client-log', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const tag = String(b.tag||'').trim() || 'client';
+    const basketId = String(b.basketId||'').trim();
+    const role = String(b.role||'').trim();
+    const msg = b.msg != null ? b.msg : (b.message != null ? b.message : null);
+    const meta = (typeof b.meta === 'object' && b.meta) ? b.meta : {};
+    console.log(`[client-log] tag=${tag} role=${role} basket=${basketId}`, msg, meta);
+  } catch {}
+  res.json({ ok: true });
+});
 
 // ---- boot
 const WebSocket = require('ws');
@@ -5669,6 +7630,19 @@ function handleUiSelectCategory(ws, msg) {
   broadcast(basketId, { type: 'ui:selectCategory', basketId, name, serverTs: Date.now() });
 }
 
+function handleUiShowPreview(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
+  const payload = {
+    type: 'ui:showPreview',
+    basketId,
+    product: msg.product || null,
+    serverTs: Date.now()
+  };
+  broadcast(basketId, payload);
+}
+
 function handleUiShowOptions(ws, msg) {
   const meta = clientMeta.get(ws) || {};
   const basketId = String(msg.basketId || meta.basketId || 'default');
@@ -5677,6 +7651,7 @@ function handleUiShowOptions(ws, msg) {
     type: 'ui:showOptions',
     basketId,
     product: msg.product || null,
+    groups: msg.groups || null,
     options: msg.options || null,
     selection: msg.selection || null,
     serverTs: Date.now()
@@ -5791,6 +7766,9 @@ function handleRtcHeartbeat(ws, msg){
   } catch {}
 }
 
+// Map of device_token -> Set<WebSocket>
+const __wsByDeviceToken = new Map();
+
 wss.on('connection', (ws, req) => {
   clientMeta.set(ws, { clientId: uuidv4(), basketId: null, alive: true, role: null, name: null });
 
@@ -5801,10 +7779,11 @@ wss.on('connection', (ws, req) => {
 
 if (msg.type === 'subscribe') return handleSubscribe(ws, msg);
     if (msg.type === 'rtc:heartbeat') return handleRtcHeartbeat(ws, msg);
-    if (msg.type === 'hello') { handleHello(ws, msg); return; }
+    if (msg.type === 'hello') { try { const t = String(msg.token||'').trim(); if (t) { const set = __wsByDeviceToken.get(t) || new Set(); set.add(ws); __wsByDeviceToken.set(t, set); const meta = clientMeta.get(ws) || {}; clientMeta.set(ws, { ...meta, token: t }); } } catch {} handleHello(ws, msg); return; }
     if (msg.type === 'basket:update') return handleUpdate(ws, msg);
     if (msg.type === 'basket:requestSync') return handleSubscribe(ws, msg); // safely re-sync
-    if (msg.type === 'ui:selectCategory') return handleUiSelectCategory(ws, msg);
+if (msg.type === 'ui:selectCategory') return handleUiSelectCategory(ws, msg);
+    if (msg.type === 'ui:showPreview') return handleUiShowPreview(ws, msg);
     if (msg.type === 'ui:showOptions') return handleUiShowOptions(ws, msg);
     if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
     if (msg.type === 'ui:optionsClose') return handleUiOptionsClose(ws, msg);
@@ -5813,6 +7792,16 @@ if (msg.type === 'subscribe') return handleSubscribe(ws, msg);
     // Poster status pass-through: cashier <-> display
     if (msg.type === 'poster:query') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:query', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId) }); } catch {}; return; }
     if (msg.type === 'poster:status') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:status', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId), active: !!msg.active }); } catch {}; return; }
+    // RTC config preference: broadcast to peers so display can apply and restart
+    if (msg.type === 'rtc:config') {
+      try {
+        const meta = clientMeta.get(ws) || {};
+        const bid = String(msg.basketId || meta.basketId || 'default');
+        clientMeta.set(ws, { ...meta, rtcConfig: msg.config || null });
+        broadcast(bid, { type: 'rtc:config', basketId: bid, config: msg.config || null });
+      } catch {}
+      return;
+    }
     return send(ws, { type: 'error', error: 'unknown_type' });
   });
 
@@ -5822,6 +7811,16 @@ if (msg.type === 'subscribe') return handleSubscribe(ws, msg);
   });
 
   ws.on('close', () => cleanup(ws));
+  ws.on('close', () => {
+    try {
+      const meta = clientMeta.get(ws) || {};
+      const t = String(meta.token||'').trim();
+      if (t && __wsByDeviceToken.has(t)) {
+        const set = __wsByDeviceToken.get(t);
+        if (set) { set.delete(ws); if (set.size === 0) __wsByDeviceToken.delete(t); }
+      }
+    } catch {}
+  });
 });
 
 function cleanup(ws) {
@@ -5850,8 +7849,9 @@ function handleHello(ws, msg){
   const meta = clientMeta.get(ws) || {};
   const role = String(msg.role||'').toLowerCase();
   const name = String(msg.name||'').trim();
+  const device_id = String(msg.device_id||'').trim();
   const allowed = (role==='cashier'||role==='display'||role==='admin') ? role : null;
-  const next = { ...meta, role: allowed, name: name || meta.name };
+  const next = { ...meta, role: allowed, name: name || meta.name, device_id: device_id || meta.device_id };
   clientMeta.set(ws, next);
   if (next.role === 'admin') {
     try { broadcastAdminLive(); } catch {}
@@ -5859,33 +7859,68 @@ function handleHello(ws, msg){
   if (next.basketId) broadcastPeerStatus(next.basketId);
 }
 
+// Track previous peer status to avoid noisy logs
+const __peerPrevStatus = new Map();
 function broadcastPeerStatus(basketId){
   const set = basketClients.get(basketId);
   if (!set) return;
   let cashierName = null, displayName = null;
+  let cashierDeviceId = null, displayDeviceId = null;
   for (const ws of set) {
     const meta = clientMeta.get(ws) || {};
-    if (meta.role === 'cashier' && !cashierName) cashierName = meta.name || 'Cashier';
-    if (meta.role === 'display' && !displayName) displayName = meta.name || 'Drive‑Thru';
+    if (meta.role === 'cashier') {
+      if (!cashierName) cashierName = meta.name || 'Cashier';
+      if (!cashierDeviceId && meta.device_id) cashierDeviceId = String(meta.device_id);
+    }
+    if (meta.role === 'display') {
+      if (!displayName) displayName = meta.name || 'Drive‑Thru';
+      if (!displayDeviceId && meta.device_id) displayDeviceId = String(meta.device_id);
+    }
   }
   const status = (cashierName && displayName) ? 'connected' : 'waiting';
-  const payload = { type:'peer:status', basketId, status, cashierName, displayName, serverTs: Date.now() };
+  // Log connection status transitions to platform log
+  try {
+    const prev = __peerPrevStatus.get(basketId);
+    if (prev !== status) {
+      __peerPrevStatus.set(basketId, status);
+      const ev = (status === 'connected') ? 'connected' : 'disconnected';
+      logConnectionEvent(ev, { basketId, cashierName, displayName }).catch(()=>{});
+    }
+  } catch {}
+  const payload = { type:'peer:status', basketId, status, cashierName, displayName, cashierDeviceId, displayDeviceId, serverTs: Date.now() };
   broadcast(basketId, payload);
 }
 
 const server = app.listen(PORT, '0.0.0.0', async () => {
-  if (HAS_DB) {
+if (HAS_DB) {
     try { await ensureStateTable(); } catch (e) { console.error('ensureStateTable failed', e); }
-    try { await ensureDefaultTenant(); } catch (e) { console.error('ensureDefaultTenant failed', e); }
+    if (!SKIP_DEFAULT_TENANT) { try { await ensureDefaultTenant(); } catch (e) { console.error('ensureDefaultTenant failed', e); } }
     try { await ensureLicensingSchema(); } catch (e) { console.error('ensureLicensingSchema failed', e); }
     try { await ensureWebrtcSchema(); } catch (e) { console.error('ensureWebrtcSchema failed', e); }
+    try { await ensureRtcSessionSchema(); } catch (e) { console.error('ensureRtcSessionSchema failed', e); }
     try { await ensureProductImageUrlColumn(); } catch (e) { console.error('ensureProductImageUrlColumn failed', e); }
     try { await ensureProductActiveColumn(); } catch (e) { console.error('ensureProductActiveColumn failed', e); }
     try { await ensureProductExtendedSchema(); } catch (e) { console.error('ensureProductExtendedSchema failed', e); }
     try { await ensureRBACSchema(); } catch (e) { console.error('ensureRBACSchema failed', e); }
     try { await ensureInvitesSchema(); } catch (e) { console.error('ensureInvitesSchema failed', e); }
+    try { await ensurePaidOrdersSchema(); } catch (e) { console.error('ensurePaidOrdersSchema failed', e); }
     try { await ensureAdminPerfIndexes(); } catch (e) { console.error('ensureAdminPerfIndexes failed', e); }
+    // Fail fast if DB is required but unreachable
+    try { if (REQUIRE_DB_EFFECTIVE) { await db('select 1'); } } catch (e) {
+      try { console.error('DB connectivity check failed at startup; exiting'); } catch {}
+      try { process.exit(1); } catch {}
+    }
+  } else if (REQUIRE_DB_EFFECTIVE) {
+    try { console.error('DB required but configuration missing; exiting'); } catch {}
+    try { process.exit(1); } catch {}
   }
+  try {
+    if (HAS_DB) {
+      const r = await db('select current_database() as db');
+      const dbname = (r && r[0] && (r[0].db || r[0].current_database)) || 'unknown';
+      console.log(`Connected database: ${dbname}`);
+    }
+  } catch {}
   console.log(`API running on http://0.0.0.0:${PORT}`);
 });
 
