@@ -7205,19 +7205,26 @@ addRoute('get', '/placeholder.jpg', (_req, res) => {
 });
 // Default poster asset mapping
 addRoute('get', '/poster.png', (_req, res) => {
-  // Redirect legacy path to the canonical default poster
-  try { return res.redirect(302, '/poster-default.png'); } catch {}
+  // Redirect legacy path to the canonical fallback poster (typo kept for compatibility)
+  try { return res.redirect(302, '/poster-defualt.png'); } catch {}
   return res.status(404).end();
 });
 // Explicit default poster aliases (support both spellings)
 addRoute('get', '/poster-default.png', (_req, res) => {
-  try { return res.sendFile(path.join(__dirname, 'images', 'poster', 'Koobs Main Screen.png')); } catch {}
-  try { return res.sendFile(path.join(__dirname, 'ordertech.png')); } catch {}
+  // Make this alias redirect to the canonical fallback route
+  try { return res.redirect(302, '/poster-defualt.png'); } catch {}
   return res.status(404).end();
 });
 addRoute('get', '/poster-defualt.png', (_req, res) => {
-  try { return res.sendFile(path.join(__dirname, 'images', 'poster', 'Koobs Main Screen.png')); } catch {}
-  try { return res.sendFile(path.join(__dirname, 'ordertech.png')); } catch {}
+  // Serve primary poster if present; otherwise fall back to a bundled image
+  try {
+    const primary = path.join(__dirname, 'images', 'poster', 'Koobs Main Screen.png');
+    const fallback = path.join(__dirname, 'ordertech.png');
+    const hasPrimary = (() => { try { return fs.existsSync(primary); } catch { return false; } })();
+    if (hasPrimary) return res.sendFile(primary);
+    const hasFallback = (() => { try { return fs.existsSync(fallback); } catch { return false; } })();
+    if (hasFallback) return res.sendFile(fallback);
+  } catch {}
   return res.status(404).end();
 });
 
