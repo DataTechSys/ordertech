@@ -420,9 +420,53 @@ async function ensureLicensingSchema(){
       meta jsonb NOT NULL DEFAULT '{}'::jsonb
     )
   `);
-  await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant ON devices(tenant_id)");
-  await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant_role ON devices(tenant_id, role)");
-  await db("CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status)");
+  // Backfill columns for legacy devices tables
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS role device_role"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS status device_status NOT NULL DEFAULT 'active'"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS device_name text"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS device_token text"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS activated_at timestamptz"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS revoked_at timestamptz"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS last_seen timestamptz"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS meta jsonb NOT NULL DEFAULT '{}'::jsonb"); } catch (_e) {}
+  try { await db("UPDATE devices SET role='display'::device_role WHERE role IS NULL"); } catch (_e) {}
+  try { await db("UPDATE devices SET status='active'::device_status WHERE status IS NULL"); } catch (_e) {}
+  try { await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant ON devices(tenant_id)"); } catch (_e) {}
+  try { await db("CREATE INDEX IF NOT EXISTS idx_devices_tenant_role ON devices(tenant_id, role)"); } catch (_e) {}
+  try { await db("CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status)"); } catch (_e) {}
+  // Harden legacy schemas: drop any CHECK constraints on devices.status and normalize column types
+  // 1) Drop a known constraint name (if present)
+  try { await db("ALTER TABLE IF EXISTS devices DROP CONSTRAINT IF EXISTS devices_status_check"); } catch (_e) {}
+  // 2) Drop any other CHECK constraints that mention status
+  try {
+    await db(`DO $$
+    DECLARE r record;
+    BEGIN
+      FOR r IN
+        SELECT conname FROM pg_constraint
+         WHERE conrelid='devices'::regclass
+           AND contype='c'
+           AND pg_get_constraintdef(oid) ILIKE '%status%'
+      LOOP
+        EXECUTE 'ALTER TABLE devices DROP CONSTRAINT IF EXISTS ' || quote_ident(r.conname);
+      END LOOP;
+    END$$;`);
+  } catch (_e) {}
+  // 3) Coerce status column to device_status with safe mapping
+  try {
+    await db("ALTER TABLE IF EXISTS devices ALTER COLUMN status TYPE device_status USING CASE WHEN status::text IN ('active','revoked') THEN status::text::device_status WHEN status::text='inactive' THEN 'revoked'::device_status ELSE 'active'::device_status END");
+  } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ALTER COLUMN status SET NOT NULL"); } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ALTER COLUMN status SET DEFAULT 'active'::device_status"); } catch (_e) {}
+  // Normalize any legacy values
+  try { await db("UPDATE devices SET status='revoked'::device_status WHERE status::text='inactive'"); } catch (_e) {}
+  // 4) Ensure role column is also of enum type
+  try {
+    await db("ALTER TABLE IF EXISTS devices ALTER COLUMN role TYPE device_role USING CASE WHEN role::text IN ('cashier','display') THEN role::text::device_role ELSE 'display'::device_role END");
+  } catch (_e) {}
+  try { await db("ALTER TABLE IF EXISTS devices ALTER COLUMN role SET NOT NULL"); } catch (_e) {}
+  // Backfill branch column (legacy tables may lack it)
+  try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS branch text"); } catch (_e) {}
   // New: branch_id and location on devices + helpful indexes (idempotent)
   try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES branches(branch_id) ON DELETE SET NULL"); } catch (_e) {}
   try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS location text"); } catch (_e) {}
@@ -430,7 +474,9 @@ async function ensureLicensingSchema(){
   try { await db("CREATE INDEX IF NOT EXISTS ix_devices_tenant_branch_id ON devices(tenant_id, branch_id)"); } catch (_e) {}
   // Ensure per-device activation short code column exists (6 digits)
   try { await db("ALTER TABLE IF EXISTS devices ADD COLUMN IF NOT EXISTS short_code char(6)"); } catch (_e) {}
-  try { await db("CREATE UNIQUE INDEX IF NOT EXISTS ux_devices_short_code ON devices(short_code)"); } catch (_e) {}
+  try { await db("CREATE UNIQUE INDEX IF NOT EXISTS ux_devices_short_code ON devices(short_code) WHERE short_code IS NOT NULL"); } catch (_e) {}
+  // Token uniqueness (only for non-null tokens)
+  try { await db("CREATE UNIQUE INDEX IF NOT EXISTS ux_devices_token ON devices(device_token) WHERE device_token IS NOT NULL"); } catch (_e) {}
   // branches table (unique name per tenant)
   await db(`
     CREATE TABLE IF NOT EXISTS branches (
@@ -469,6 +515,15 @@ async function ensureLicensingSchema(){
   try { await db("CREATE INDEX IF NOT EXISTS ix_dac_tenant_status_expires ON device_activation_codes(tenant_id, status, expires_at DESC)"); } catch (_e) {}
 }
 
+// Helper: read license_limit robustly across schemas (tenant_id or id)
+async function readLicenseLimit(tenantId){
+  let val = null;
+  try { const r = await db('select license_limit from tenants where tenant_id=$1', [tenantId]); if (r && r.length) val = r[0].license_limit; } catch {}
+  if (val == null) { try { const r = await db('select license_limit from tenants where id=$1', [tenantId]); if (r && r.length) val = r[0].license_limit; } catch {} }
+  const n = Number(val);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 // Ensure products table has image_url column (idempotent)
 async function ensureProductImageUrlColumn(){
   if (!HAS_DB) return;
@@ -489,6 +544,8 @@ async function ensureCategoryStatusColumns(){
   try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS reference text"); } catch (_) {}
   try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS name_localized text"); } catch (_) {}
   try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS image_url text"); } catch (_) {}
+  // Some databases enforce a NOT NULL slug; ensure the column exists to allow us to populate it
+  try { await db("ALTER TABLE IF EXISTS categories ADD COLUMN IF NOT EXISTS slug text"); } catch (_) {}
 }
 
 // Ensure extended product schema (columns and related tables)
@@ -858,6 +915,38 @@ async function ensureUsersDeletionSchema(){
     )
   `);
   try { await db("CREATE INDEX IF NOT EXISTS idx_tud_tenant_deleted ON tenant_users_deleted(tenant_id, deleted_at DESC)"); } catch {}
+}
+
+// Ensure minimal users/tenant_users core tables exist (idempotent for partially-migrated DBs)
+async function ensureUsersCore(){
+  if (!HAS_DB) return;
+  try { await db("CREATE EXTENSION IF NOT EXISTS pgcrypto"); } catch {}
+  // Ensure tenant_role enum exists
+  try { await db("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tenant_role') THEN CREATE TYPE tenant_role AS ENUM ('owner','admin','manager','viewer'); END IF; END$$;"); } catch {}
+  // Users table (minimal)
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email text UNIQUE NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`);
+  } catch {}
+  // tenant_users table (minimal)
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS tenant_users (
+        tenant_id uuid NOT NULL,
+        user_id uuid NOT NULL,
+        role tenant_role NOT NULL DEFAULT 'viewer',
+        invited_at timestamptz,
+        accepted_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (tenant_id, user_id)
+      )`);
+  } catch {}
+  // created_at column if missing
+  try { await db("ALTER TABLE IF EXISTS tenant_users ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()"); } catch {}
 }
 
 // ---- helpers
@@ -2836,7 +2925,7 @@ addRoute('post', '/device/pair/new', verifyAuth, async (req, res) => {
     }
     if (!code) return res.status(500).json({ error: 'code_generation_failed' });
 
-    const expires = new Date(Date.now() + 10*60*1000);
+    const expires = new Date(Date.now() + 24*60*60*1000);
     await db(`
       insert into device_activation_codes (code, tenant_id, created_at, expires_at, claimed_at, device_id, meta)
       values ($1, $2, now(), $3, null, null, $4::jsonb)
@@ -3751,6 +3840,8 @@ addRoute('put', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
   const rawBranchLimit = req.body?.branch_limit;
   const rawLicenseLimit = req.body?.license_limit;
   if (!id) return res.status(400).json({ error: 'invalid_id' });
+  // Ensure expected columns exist before updates on partially-migrated DBs
+  try { await ensureLicensingSchema(); } catch {}
   if (name) await db('update tenants set company_name=$1 where tenant_id=$2', [name, id]).catch(async ()=>{ try { await db('update tenants set name=$1 where id=$2', [name, id]); } catch {} });
   if (slug != null) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug||null]);
 
@@ -3784,12 +3875,20 @@ addRoute('put', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
   if (rawBranchLimit != null) {
     const n = Number.parseInt(String(rawBranchLimit), 10);
     if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_branch_limit' });
-    await db('update tenants set branch_limit=$1 where id=$2', [n, id]);
+    let ok = true;
+    try { await db('update tenants set branch_limit=$1 where tenant_id=$2', [n, id]); }
+    catch { ok = false; }
+    if (!ok) { try { await db('update tenants set branch_limit=$1 where id=$2', [n, id]); ok = true; } catch { ok = false; } }
+    if (!ok) return res.status(500).json({ error: 'update_failed' });
   }
   if (rawLicenseLimit != null) {
     const n = Number.parseInt(String(rawLicenseLimit), 10);
     if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'invalid_license_limit' });
-    await db('update tenants set license_limit=$1 where id=$2', [n, id]);
+    let ok = true;
+    try { await db('update tenants set license_limit=$1 where tenant_id=$2', [n, id]); }
+    catch { ok = false; }
+    if (!ok) { try { await db('update tenants set license_limit=$1 where id=$2', [n, id]); ok = true; } catch { ok = false; } }
+    if (!ok) return res.status(500).json({ error: 'update_failed' });
   }
   res.json({ ok:true });
 });
@@ -4873,14 +4972,22 @@ addRoute('get', '/admin/tenants/:id/settings', verifyAuthOpen, requireTenantAdmi
   const key = `adm:settings:${req.params.id}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
-  const [settings] = await db('select tenant_id, slug, default_locale, currency, timezone, features from tenant_settings where tenant_id=$1', [req.params.id]);
+  // Ensure table exists on partially-migrated DBs (idempotent)
+  try { await db("CREATE TABLE IF NOT EXISTS tenant_settings (tenant_id uuid PRIMARY KEY, slug text, default_locale text, currency text, timezone text, features jsonb NOT NULL DEFAULT '{}'::jsonb)"); } catch {}
+  let settings = {};
+  try {
+    const rowsS = await db('select tenant_id, slug, default_locale, currency, timezone, features from tenant_settings where tenant_id=$1', [req.params.id]);
+    settings = (rowsS && rowsS[0]) || {};
+  } catch { settings = {}; }
   let brand = null;
   try {
     const rows = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary, address, website, contact_phone, contact_email from tenant_brand where tenant_id=$1', [req.params.id]);
     brand = rows && rows[0] || null;
   } catch (_e) {
-    const rows = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.params.id]);
-    brand = rows && rows[0] || null;
+    try {
+      const rows = await db('select tenant_id, display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.params.id]);
+      brand = rows && rows[0] || null;
+    } catch { brand = null; }
   }
   const payload = { settings: settings||{}, brand: brand||{} };
   cacheSet(key, payload, 60000); // 60s TTL
@@ -4987,6 +5094,7 @@ addRoute('put', '/admin/tenants/:id/integrations/:provider', verifyAuthOpen, req
     return res.status(404).json({ error: 'not_found' });
   }
   try {
+    await ensureIntegrationTables();
     // Upsert by tenant/provider/label; allow label change only by passing same label value here
     await db(
       `insert into tenant_api_integrations (tenant_id, provider, label, meta, status, created_at, updated_at)
@@ -5041,6 +5149,7 @@ addRoute('get', '/admin/tenants/:id/integrations', verifyAuthOpen, requirePlatfo
     }));
     return res.json({ items });
   }
+  try { await ensureIntegrationTables(); } catch {}
   const rows = await db(`select provider, label, created_at, updated_at, last_used_at, status,
                                 (token_encrypted is not null and revoked_at is null) as has_token,
                                 coalesce(meta,'{}'::jsonb) as meta
@@ -5060,6 +5169,7 @@ addRoute('post', '/admin/tenants/:id/integrations', verifyAuthOpen, requirePlatf
   if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
   if (!provider) return res.status(400).json({ error: 'provider_required' });
   if (!token) return res.status(400).json({ error: 'token_required' });
+  try { await ensureIntegrationTables(); } catch {}
   // For now, restrict to known providers
   const allowed = ['foodics'];
   if (!allowed.includes(provider)) return res.status(400).json({ error: 'provider_not_supported' });
@@ -5186,6 +5296,14 @@ async function runTenantFoodicsSync(tenantId, opts={}){
     }
 
     // Categories
+    function slugifyCategory(input){
+      try {
+        let s = String(input||'').trim().toLowerCase();
+        s = s.normalize('NFKD').replace(/[^a-z0-9\s-]/g,'');
+        s = s.replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'');
+        return s || null;
+      } catch { return null; }
+    }
     for (const c of (cats.items||[])){
       const extId = c.id || c.uuid || c.reference || c.code;
       if (!extId) { stats.categories.skipped++; continue; }
@@ -5199,22 +5317,89 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const name = c.name || c.title || '';
       const name_localized = c.name_localized || c.name_ar || null;
       const image_url = c.image || c.image_url || null;
+      const baseSlug = name || ref || String(extId);
+      const slug = slugifyCategory(baseSlug) || (`cat-${String(extId).toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,20)}`);
       if (!id) {
         if (!name) { stats.categories.skipped++; continue; }
         const newId = require('crypto').randomUUID();
-        await db('insert into categories (id, tenant_id, name, reference, name_localized, image_url, active, deleted) values ($1,$2,$3,$4,$5,$6,$7,false) on conflict do nothing', [newId, tenantId, name, ref||null, name_localized, image_url, active!==false]);
+        // Try insert with slug (for schemas that require it); fallback to insert without slug
+        let ok = true;
+        try {
+          await db('insert into categories (id, tenant_id, name, slug, reference, name_localized, image_url, active, deleted) values ($1,$2,$3,$4,$5,$6,$7,$8,false) on conflict do nothing', [newId, tenantId, name, slug||null, ref||null, name_localized, image_url, active!==false]);
+        } catch (_e) {
+          ok = false;
+        }
+        if (!ok) {
+          await db('insert into categories (id, tenant_id, name, reference, name_localized, image_url, active, deleted) values ($1,$2,$3,$4,$5,$6,$7,false) on conflict do nothing', [newId, tenantId, name, ref||null, name_localized, image_url, active!==false]);
+        }
         await setMapping('category', newId, extId, ref||null);
         stats.categories.created++;
       } else {
-        await db('update categories set name=coalesce($1,name), reference=coalesce($2,reference), name_localized=$3, image_url=$4, active=$5 where tenant_id=$6 and id=$7', [name||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+        // Try update including slug; fallback without if column not present
+        let ok = true;
+        try {
+          await db('update categories set name=coalesce($1,name), slug=coalesce($2,slug), reference=coalesce($3,reference), name_localized=coalesce($4,name_localized), image_url=coalesce($5,image_url), active=$6 where tenant_id=$7 and id=$8', [name||null, slug||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+        } catch (_e) {
+          ok = false;
+        }
+        if (!ok) {
+          await db('update categories set name=coalesce($1,name), reference=coalesce($2,reference), name_localized=coalesce($3,name_localized), image_url=coalesce($4,image_url), active=$5 where tenant_id=$6 and id=$7', [name||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+        }
         await setMapping('category', id, extId, ref||null);
         stats.categories.updated++;
       }
     }
 
-    // Build category map name/ref to id for product linkage
+    // Build category maps for product linkage
     const catRows = await db('select id, reference from categories where tenant_id=$1', [tenantId]);
     const catByRef = new Map(catRows.map(r=>[String(r.reference||''), r.id]));
+    let catByExt = new Map();
+    try {
+      const mapRows = await db("select external_id, entity_id from tenant_external_mappings where tenant_id=$1 and provider=$2 and entity_type='category'", [tenantId, provider]);
+      catByExt = new Map(mapRows.map(r => [String(r.external_id||''), r.entity_id]));
+    } catch {}
+
+    async function ensureCategoryFromFoodics(c){
+      // Returns a valid category_id for this tenant, creating the category and mapping when needed
+      try {
+        const ext = (c?.id || c?.uuid || c?.reference || c?.code || '').toString();
+        const ref = (c?.reference || c?.code || '').toString() || null;
+        const name = (c?.name || c?.title || '').toString();
+        // 1) ext mapping
+        if (ext && catByExt.has(ext)) {
+          const cid = catByExt.get(ext);
+          const rows = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, cid]);
+          if (rows && rows.length) return cid;
+        }
+        // 2) ref lookup
+        if (ref && catByRef.has(ref)) {
+          const cid = catByRef.get(ref);
+          const rows = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, cid]);
+          if (rows && rows.length) {
+            if (ext) { try { await setMapping('category', cid, ext, ref); catByExt.set(ext, cid); } catch {} }
+            return cid;
+          }
+        }
+        // 3) create category if we have a name
+        if (name) {
+          const newId = require('crypto').randomUUID();
+          const baseSlug = name || ref || ext || newId;
+          const slug = (function slugifyCategory(input){ try { let s=String(input||'').trim().toLowerCase(); s=s.normalize('NFKD').replace(/[^a-z0-9\s-]/g,''); s=s.replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,''); return s||null; } catch { return null; } })(baseSlug) || (`cat-${String(newId).slice(0,8)}`);
+          const image_url = (c?.image || c?.image_url || c?.photo || null);
+          let ok = true;
+          try {
+            await db('insert into categories (id, tenant_id, name, slug, reference, image_url, active, deleted) values ($1,$2,$3,$4,$5,$6,true,false) on conflict do nothing', [newId, tenantId, name, slug, ref, image_url]);
+          } catch { ok = false; }
+          if (!ok) {
+            await db('insert into categories (id, tenant_id, name, reference, image_url, active, deleted) values ($1,$2,$3,$4,$5,true,false) on conflict do nothing', [newId, tenantId, name, ref, image_url]);
+          }
+          if (ext) { try { await setMapping('category', newId, ext, ref); catByExt.set(ext, newId); } catch {} }
+          if (ref) { catByRef.set(ref, newId); }
+          return newId;
+        }
+        return null;
+      } catch { return null; }
+    }
 
     // Modifier groups
     for (const g of (groups.items||[])){
@@ -5278,6 +5463,23 @@ async function runTenantFoodicsSync(tenantId, opts={}){
     }
 
     // Products
+    function deriveSkuForProduct(p, extId, ref, name){
+      try {
+        const candidates = [];
+        if (p.sku) candidates.push(String(p.sku).trim());
+        if (ref) candidates.push(String(ref).trim());
+        if (p.barcode) candidates.push(String(p.barcode).trim());
+        if (extId) candidates.push(String(extId).trim());
+        if (name) {
+          let s = String(name||'').trim().toLowerCase().normalize('NFKD').replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'');
+          if (s) candidates.push(s);
+        }
+        // Pick the first non-empty
+        let sku = candidates.find(v => !!v);
+        if (!sku) sku = 'SKU-' + (String(extId||'').replace(/[^a-zA-Z0-9]+/g,'').slice(0,24) || Math.random().toString(36).slice(2,10));
+        return sku;
+      } catch { return String(extId||'SKU').slice(0,24) || 'SKU'; }
+    }
     for (const p of (prods.items||[])){
       const extId = p.id || p.uuid || p.reference || p.code;
       if (!extId) { stats.products.skipped++; continue; }
@@ -5291,19 +5493,35 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const name = p.name || '';
       const active = (p.is_active === true) || (String(p.is_active||p.active||'').toLowerCase()==='yes');
       const price = (v=>Number.isFinite(v)?v:0)(Number(p.price));
-      const image_url = p.image || p.image_url || null;
+      const image_url = p.image || p.image_url || p.photo || (Array.isArray(p.images) ? (p.images.find(it => it?.url || it?.link)?.url || p.images[0]?.link || null) : null);
       const cost = (v=>Number.isFinite(v)?v:null)(Number(p.cost));
       const barcode = p.barcode ? String(p.barcode) : null;
       const preparation_time = (n=>Number.isFinite(n)?n:null)(parseInt(p.preparation_time,10));
       const calories = (n=>Number.isFinite(n)?n:null)(parseInt(p.calories,10));
       // category linkage
       let category_id = null;
-      const catRef = (p.category_reference || p.category_ref || p.category?.reference || '').toString();
-      if (catRef) category_id = catByRef.get(catRef) || null;
+      // Try external id mapping first
+      const catExtId = (p.category_id || p.category_uuid || (p.category && (p.category.id || p.category.uuid)) || '').toString();
+      if (catExtId) category_id = catByExt.get(catExtId) || null;
+      // Fallback: reference mapping
+      if (!category_id) {
+        const catRef = (p.category_reference || p.category_ref || p.category?.reference || '').toString();
+        if (catRef) category_id = catByRef.get(catRef) || null;
+      }
+      // As a last resort: ensure category by creating it using embedded category info
+      if (!category_id && p.category) {
+        category_id = await ensureCategoryFromFoodics(p.category);
+      }
+      // Verify FK existence defensively
+      if (category_id) {
+        const chk = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, category_id]).catch(()=>[]);
+        if (!chk || !chk.length) category_id = null;
+      }
 
       if (!id) {
         const newId = require('crypto').randomUUID();
         if (!category_id) { stats.products.skipped++; continue; }
+        const skuIns = deriveSkuForProduct(p, extId, ref, name);
         await db(
           `insert into products (
              id, tenant_id, name, category_id, price, cost,
@@ -5312,7 +5530,7 @@ async function runTenantFoodicsSync(tenantId, opts={}){
            ) values (
              $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
            ) on conflict do nothing`,
-          [newId, tenantId, name||'Product', category_id, price, cost, barcode, preparation_time, calories, ref||null, image_url||null, active!==false]
+          [newId, tenantId, name||'Product', category_id, price, cost, barcode, preparation_time, calories, skuIns, image_url||null, active!==false]
         );
         await setMapping('product', newId, extId, ref||null);
         stats.products.created++;
@@ -5327,7 +5545,7 @@ async function runTenantFoodicsSync(tenantId, opts={}){
              preparation_time=$6,
              calories=$7,
              sku=coalesce($8, sku),
-             image_url=$9,
+             image_url=coalesce($9, image_url),
              active=$10
            where tenant_id=$11 and id=$12`,
           [name||'Product', category_id, price, cost, barcode, preparation_time, calories, ref||null, image_url||null, active!==false, tenantId, id]
@@ -5506,6 +5724,26 @@ async function ensureIntegrationTables(){
         updated_at timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await db("CREATE UNIQUE INDEX IF NOT EXISTS uniq_tenant_provider_entitytype_externalid ON tenant_external_mappings(tenant_id, provider, entity_type, external_id)");
+  } catch {}
+  // Ensure tenant_api_integrations table (stores encrypted tokens)
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS tenant_api_integrations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        provider text NOT NULL,
+        label text,
+        token_encrypted bytea,
+        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+        status text,
+        last_used_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        revoked_at timestamptz
+      )
+    `);
+    await db("CREATE UNIQUE INDEX IF NOT EXISTS ux_tenant_api_integrations_tenant_provider_label ON tenant_api_integrations(tenant_id, provider, coalesce(label, ''))");
   } catch {}
 }
 
@@ -5765,7 +6003,7 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
     // Upsert activation code metadata (we'll set claimed_at after we know the device)
     const meta = { role, name, branch, via: 'device-register' };
     await db(`insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta)
-              values ($1,$2, now() + interval '10 minutes', 'pending'::device_activation_status, $3::device_role, $4::jsonb)
+              values ($1,$2, now() + interval '24 hours', 'pending'::device_activation_status, $3::device_role, $4::jsonb)
               on conflict (code) do update set tenant_id=excluded.tenant_id, expires_at=excluded.expires_at, role = coalesce(excluded.role, device_activation_codes.role), status = CASE WHEN device_activation_codes.status='expired' THEN 'pending'::device_activation_status ELSE device_activation_codes.status END, meta=coalesce(device_activation_codes.meta,'{}'::jsonb) || excluded.meta`,
             [code, tenantId, role, JSON.stringify(meta)]);
 
@@ -5778,8 +6016,7 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
     if (existing) {
       // Enforce license limit only when moving from revoked -> active
       try {
-        const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
-        const limit = lic?.license_limit ?? 1;
+        const limit = await readLicenseLimit(tenantId);
         const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
         if (existing.status !== 'active' && (count || 0) >= limit) {
           return res.status(409).json({ error: 'license_limit_reached' });
@@ -5812,8 +6049,7 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
 
     // License limit for on-the-fly device creation
   try {
-    const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
-    const limit = lic?.license_limit ?? 1;
+    const limit = await readLicenseLimit(tenantId);
     const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
     if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
   } catch {}
@@ -5850,7 +6086,7 @@ addRoute('post', '/device/pair/start', requireTenant, async (req, res) => {
       code = genCode();
     }
     const nonce = genNonce();
-    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     let role = String(req.body?.role||'display').trim().toLowerCase();
     if (role !== 'display' && role !== 'cashier') role = 'display';
     await db(`insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta)
@@ -5873,7 +6109,7 @@ addRoute('post', '/device/pair/new', requireTenant, async (req, res) => {
       if (!exists.length) break; code = genCode();
     }
     const nonce = genNonce();
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
     let role = String(req.body?.role||'display').trim().toLowerCase();
     if (role !== 'display' && role !== 'cashier') role = 'display';
     await db(`insert into device_activation_codes (code, tenant_id, expires_at, status, role, meta)
@@ -5957,8 +6193,7 @@ addRoute('post', '/device/activate', async (req, res) => {
     // If device is not active, enforce license limit and activate + rotate token
     if (dev.status !== 'active') {
       try {
-        const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
-        const limit = lic?.license_limit ?? 1;
+        const limit = await readLicenseLimit(tenantId);
         const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
         if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
       } catch {}
@@ -6008,8 +6243,7 @@ addRoute('post', '/device/pair/link', verifyAuthOpen, async (req, res) => {
     let token = dev.device_token;
     if (dev.status !== 'active') {
       try {
-        const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
-        const limit = lic?.license_limit ?? 1;
+        const limit = await readLicenseLimit(tenantId);
         const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
         if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
       } catch {}
@@ -6054,15 +6288,19 @@ addRoute('get', '/admin/tenants/:id/license', verifyAuth, async (req, res) => {
   const tenantId = req.params.id;
   const email = (req.user?.email||'').toLowerCase();
   if (!isPlatformAdmin(req) && !(await userHasTenantRole(email, tenantId))) return res.status(403).json({ error: 'forbidden' });
-  const [t] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
+  const limit = await readLicenseLimit(tenantId);
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
-  res.json({ license_limit: t?.license_limit ?? 1, active_count: count||0 });
+  res.json({ license_limit: limit, active_count: count||0 });
 });
 addRoute('put', '/admin/tenants/:id/license', verifyAuth, requirePlatformAdmin, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const tenantId = req.params.id;
   const n = Math.max(1, Number(req.body?.license_limit || 1));
-  await db('update tenants set license_limit=$1 where tenant_id=$2', [n, tenantId]);
+  let ok = true;
+  try { await db('update tenants set license_limit=$1 where tenant_id=$2', [n, tenantId]); }
+  catch { ok = false; }
+  if (!ok) { try { await db('update tenants set license_limit=$1 where id=$2', [n, tenantId]); ok = true; } catch { ok = false; } }
+  if (!ok) return res.status(500).json({ error: 'update_failed' });
   res.json({ ok:true, license_limit: n });
 });
 
@@ -6082,8 +6320,7 @@ addRoute('post', '/admin/tenants/:id/devices/claim', verifyAuth, requireTenantAd
     branch = b.name;
   }
   if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
-  const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
-  const limit = lic?.license_limit ?? 1;
+  const limit = await readLicenseLimit(tenantId);
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
   if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
   // Find activation record by code (any tenant). Create if missing.
@@ -6133,20 +6370,30 @@ addRoute('post', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPar
   }
   if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
   // License check
-  const [lic] = await db('select license_limit from tenants where tenant_id=$1', [tenantId]);
-  const limit = lic?.license_limit ?? 1;
+  const limit = await readLicenseLimit(tenantId);
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
   if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
   // Generate unique 6-digit activation code and device token
   let shortCode;
   try { shortCode = await genDeviceShortCode(); } catch { return res.status(500).json({ error: 'code_generation_failed' }); }
   const token = genDeviceToken();
-  const [dev] = await db(
-    `insert into devices (tenant_id, device_name, role, status, branch, device_token, short_code)
-     values ($1,$2,$3,'revoked',$4,$5,$6)
-     returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, short_code::text as short_code`,
-    [tenantId, name||null, role, branch||null, token, shortCode]
-  );
+  let dev;
+  try {
+    [dev] = await db(
+      `insert into devices (tenant_id, device_name, role, status, branch, device_token, short_code)
+       values ($1,$2,$3,'revoked',$4,$5,$6)
+       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, short_code::text as short_code`,
+      [tenantId, name||null, role, branch||null, token, shortCode]
+    );
+  } catch (_e) {
+    // Legacy schemas may only allow 'inactive' instead of 'revoked'
+    [dev] = await db(
+      `insert into devices (tenant_id, device_name, role, status, branch, device_token, short_code)
+       values ($1,$2,$3,'inactive',$4,$5,$6)
+       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, short_code::text as short_code`,
+      [tenantId, name||null, role, branch||null, token, shortCode]
+    );
+  }
   try { await logDeviceEvent(tenantId, dev.id, 'created', { role, branch: dev.branch||null }); } catch {}
   return res.json({ ok:true, device: dev });
 });
@@ -6154,6 +6401,7 @@ addRoute('post', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPar
 // Tenant admin: list and revoke devices
 addRoute('get', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminParam, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
+  try { await ensureLicensingSchema(); } catch {}
   const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
   const offset = Math.max(0, Number(req.query.offset || 0));
   const key = `adm:devices:${req.params.id}:l=${limit}:o=${offset}`;
@@ -6167,7 +6415,15 @@ addRoute('get', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPara
 addRoute('post', '/admin/tenants/:id/devices/:deviceId/revoke', verifyAuth, requireTenantPermParamFactory('manage_devices'), async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   // Set inactive and clear activation timestamp
-  await db("update devices set status='revoked', revoked_at=now(), activated_at=null where tenant_id=$1 and device_id=$2", [req.params.id, req.params.deviceId]);
+  let ok = true;
+  try {
+    await db("update devices set status='revoked', revoked_at=now(), activated_at=null where tenant_id=$1 and device_id=$2", [req.params.id, req.params.deviceId]);
+  } catch (_e) {
+    // Legacy schemas may use 'inactive' instead of 'revoked'
+    try { await db("update devices set status='inactive', revoked_at=now(), activated_at=null where tenant_id=$1 and device_id=$2", [req.params.id, req.params.deviceId]); }
+    catch { ok = false; }
+  }
+  if (!ok) return res.status(500).json({ error: 'revoke_failed' });
   // Regenerate a new activation code for future activation
   try {
     const next = await genDeviceShortCode();
@@ -6191,10 +6447,11 @@ addRoute('delete', '/admin/tenants/:id/devices/:deviceId', verifyAuth, requireTe
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   const tenantId = req.params.id;
   const deviceId = req.params.deviceId;
-  // Ensure device exists and is revoked
-  const rows = await db("select device_id as id, status::text as status from devices where tenant_id=$1 and device_id=$2", [tenantId, deviceId]);
+  // Ensure device exists and is revoked (or legacy 'inactive')
+  const rows = await db("select device_id as id, status::text as status from devices where tenant_id=$1 and device_id=$2", [req.params.id, req.params.deviceId]);
   if (!rows.length) return res.status(404).json({ error: 'not_found' });
-  if (rows[0].status !== 'revoked') return res.status(409).json({ error: 'device_not_revoked' });
+  const st = String(rows[0].status||'').toLowerCase();
+  if (st !== 'revoked' && st !== 'inactive') return res.status(409).json({ error: 'device_not_revoked' });
   // Clear FK from activation codes, then delete
   try {
     await db("delete from device_activation_codes where device_id=$1", [deviceId]);
@@ -6311,6 +6568,7 @@ addRoute('put', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdmin
     __memTenantOwners.set(id, { email, name: '' });
     return res.json({ ok: true });
   }
+  try { await ensureUsersCore(); } catch {}
   // Transactional upsert: demote existing owner(s) to admin; set new owner
   const client = await pool.connect();
   try {
@@ -6376,8 +6634,9 @@ addRoute('put', '/admin/tenants/:id/owner', verifyAuthOpen, requirePlatformAdmin
 
     await client.query('COMMIT');
     return res.json({ ok: true, demoted });
-  } catch (_e) {
+  } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
+    try { console.error('owner_update_failed', e?.message||e); } catch {}
     return res.status(500).json({ error: 'owner_update_failed' });
   } finally {
     client.release();
@@ -6441,12 +6700,13 @@ addRoute('get', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPar
     }
     return res.json({ items: [] });
   }
+  await ensureUsersCore();
   const limit = Math.max(1, Math.min(500, Number(req.query.limit || 50)));
   const offset = Math.max(0, Number(req.query.offset || 0));
   const key = `adm:users:${req.params.id}:l=${limit}:o=${offset}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
-  let rows;
+  let rows = [];
   try {
     rows = await db(
       `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
@@ -6457,16 +6717,21 @@ addRoute('get', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPar
         limit $2 offset $3`,
       [req.params.id, limit, offset]
     );
-  } catch (_e) {
-    rows = await db(
-      `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
-         from tenant_users tu
-         join users u on u.user_id = tu.user_id
-        where tu.tenant_id=$1
-        order by lower(u.email) asc
-        limit $2 offset $3`,
-      [req.params.id, limit, offset]
-    );
+  } catch (_e1) {
+    try {
+      rows = await db(
+        `select tu.user_id as id, lower(u.email) as email, tu.role::text as role
+           from tenant_users tu
+           join users u on u.user_id = tu.user_id
+          where tu.tenant_id=$1
+          order by lower(u.email) asc
+          limit $2 offset $3`,
+        [req.params.id, limit, offset]
+      );
+    } catch (_e2) {
+      // If schema is not ready yet, return empty list instead of 500
+      rows = [];
+    }
   }
   const payload = { items: rows };
   cacheSet(key, payload, 5000);
@@ -6475,46 +6740,69 @@ addRoute('get', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPar
 
 // Add or invite user to tenant
 addRoute('post', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
-  const tenantId = req.params.id;
-  const email = normalizeEmail(req.body?.email);
-  const role  = String(req.body?.role||'viewer').toLowerCase();
-  if (!email || !isValidEmail(email)) return res.status(400).json({ error: 'invalid_email' });
-  if (!BUILTIN_TENANT_ROLES.includes(role)) return res.status(400).json({ error: 'invalid_role' });
-  if (!HAS_DB && DEV_OPEN_ADMIN) {
-    const arr = memTenantUsersByTenant.get(tenantId) || [];
-    // upsert by email
-    let u = arr.find(x => (x.email||'').toLowerCase() === email);
-    if (u) { u.role = role; } else {
-      u = { id: require('crypto').randomUUID(), email, role, created_at: new Date().toISOString() };
-      arr.push(u);
-      memTenantUsersByTenant.set(tenantId, arr);
+  try {
+    const tenantId = req.params.id;
+    const email = normalizeEmail(req.body?.email);
+    const role  = String(req.body?.role||'viewer').toLowerCase();
+    if (!email || !isValidEmail(email)) return res.status(400).json({ error: 'invalid_email' });
+    if (!BUILTIN_TENANT_ROLES.includes(role)) return res.status(400).json({ error: 'invalid_role' });
+    await ensureUsersCore();
+    if (!HAS_DB && DEV_OPEN_ADMIN) {
+      const arr = memTenantUsersByTenant.get(tenantId) || [];
+      // upsert by email
+      let u = arr.find(x => (x.email||'').toLowerCase() === email);
+      if (u) {
+        return res.status(409).json({ error: 'already_member', user: { id: u.id, email: u.email, role: u.role } });
+      } else {
+        u = { id: require('crypto').randomUUID(), email, role, created_at: new Date().toISOString() };
+        arr.push(u);
+        memTenantUsersByTenant.set(tenantId, arr);
+        return res.json({ ok:true, user: { id: u.id, email: u.email, role: u.role } });
+      }
     }
-    return res.json({ ok:true, user: { id: u.id, email: u.email, role: u.role } });
+    if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+    // upsert user by email
+    let u;
+    try {
+      [u] = await db(`insert into users (email) values ($1)
+                          on conflict (email) do update set email=excluded.email
+                          returning id, lower(email) as email, created_at`, [email]);
+    } catch (_e) {
+      [u] = await db(`insert into users (email) values ($1)
+                          on conflict (email) do update set email=excluded.email
+                          returning user_id as id, lower(email) as email, created_at`, [email]);
+    }
+    // If already a member, report conflict
+    try {
+      const prev = await db('select role::text as role from tenant_users where tenant_id=$1 and user_id=$2 limit 1', [tenantId, u.id]);
+      if (prev && prev.length) return res.status(409).json({ error: 'already_member', user: { id: u.id, email: u.email, role: prev[0].role||'viewer' } });
+    } catch {}
+    // upsert tenant_users mapping — prefer tenant_role; fallback to user_role; finally plain text
+    let mapped = false;
+    try {
+      await db(`insert into tenant_users (tenant_id, user_id, role)
+                values ($1,$2,$3::tenant_role)
+                on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
+      mapped = true;
+    } catch (_e1) {
+      try {
+        await db(`insert into tenant_users (tenant_id, user_id, role)
+                  values ($1,$2,$3::user_role)
+                  on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
+        mapped = true;
+      } catch (_e2) {
+        await db(`insert into tenant_users (tenant_id, user_id, role)
+                  values ($1,$2,$3)
+                  on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
+        mapped = true;
+      }
+    }
+    cacheDelByPrefix(`adm:users:${tenantId}`);
+    return res.json({ ok:true, user: { id: u.id, email: u.email, role } });
+  } catch (e) {
+    try { console.error('add_user_failed', e?.message||e); } catch {}
+    return res.status(500).json({ error: 'add_failed' });
   }
-  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
-  // upsert user by email
-  let u;
-  try {
-    [u] = await db(`insert into users (email) values ($1)
-                        on conflict (email) do update set email=excluded.email
-                        returning id, lower(email) as email, created_at`, [email]);
-  } catch (_e) {
-    [u] = await db(`insert into users (email) values ($1)
-                        on conflict (email) do update set email=excluded.email
-                        returning user_id as id, lower(email) as email, created_at`, [email]);
-  }
-  // upsert tenant_users mapping — prefer tenant_role; fallback to user_role if schema is legacy
-  try {
-    await db(`insert into tenant_users (tenant_id, user_id, role)
-              values ($1,$2,$3::tenant_role)
-              on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
-  } catch (_e) {
-    await db(`insert into tenant_users (tenant_id, user_id, role)
-              values ($1,$2,$3::user_role)
-              on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
-  }
-  cacheDelByPrefix(`adm:users:${tenantId}`);
-  res.json({ ok:true, user: { id: u.id, email: u.email, role } });
 });
 
 // Update user role in tenant
@@ -6532,8 +6820,12 @@ addRoute('put', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTenan
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   try {
     await db(`update tenant_users set role=$1::tenant_role where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
-  } catch (_e) {
-    await db(`update tenant_users set role=$1::user_role where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
+  } catch (_e1) {
+    try {
+      await db(`update tenant_users set role=$1::user_role where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
+    } catch (_e2) {
+      await db(`update tenant_users set role=$1 where tenant_id=$2 and user_id=$3`, [role, tenantId, userId]);
+    }
   }
   cacheDelByPrefix(`adm:users:${tenantId}`);
   res.json({ ok:true });
@@ -6565,13 +6857,24 @@ addRoute('delete', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTe
   try {
     await ensureUsersDeletionSchema();
     // Snapshot role/email before delete
-const rows = await db(
-      `select tu.role::text as role, lower(u.email) as email
-         from tenant_users tu
-         join users u on u.user_id=tu.user_id
-        where tu.tenant_id=$1 and tu.user_id=$2
-        limit 1`, [tenantId, userId]
-    );
+    let rows = [];
+    try {
+      rows = await db(
+        `select tu.role::text as role, lower(u.email) as email
+           from tenant_users tu
+           join users u on u.id=tu.user_id
+          where tu.tenant_id=$1 and tu.user_id=$2
+          limit 1`, [tenantId, userId]
+      );
+    } catch (_e1) {
+      rows = await db(
+        `select tu.role::text as role, lower(u.email) as email
+           from tenant_users tu
+           join users u on u.user_id=tu.user_id
+          where tu.tenant_id=$1 and tu.user_id=$2
+          limit 1`, [tenantId, userId]
+      );
+    }
     if (rows && rows[0]) {
       const r = rows[0];
       try { await db('insert into tenant_users_deleted (tenant_id, user_id, email, role, deleted_at) values ($1,$2,$3,$4, now())', [tenantId, userId, r.email||null, r.role||null]); } catch {}
@@ -6653,7 +6956,8 @@ addRoute('delete', '/admin/tenants/:id/users/:userId/purge', verifyAuthOpen, req
     if (n > 0) return res.status(409).json({ error: 'still_member' });
     // Best-effort: remove tombstones for this user
     try { await db('delete from tenant_users_deleted where user_id=$1', [userId]); } catch {}
-await db('delete from users where user_id=$1', [userId]);
+    try { await db('delete from users where id=$1', [userId]); }
+    catch { await db('delete from users where user_id=$1', [userId]); }
     cacheDelByPrefix(`adm:users:${tenantId}`);
     cacheDelByPrefix(`adm:users-deleted:${tenantId}`);
     res.json({ ok:true });
