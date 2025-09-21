@@ -1,0 +1,72 @@
+{
+  "buildCommand" : {
+    "command" : "build",
+    "skipDependencies" : false,
+    "style" : "buildOnly"
+  },
+  "configuredTargets" : [
+    {
+      "guid" : "b4750c4fa6557b9927bd3b7280d19c49045dd67a906078f03c38da23ada394f2"
+    }
+  ],
+  "containerPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/DisplayApp.xcodeproj",
+  "continueBuildingAfterErrors" : false,
+  "dependencyScope" : "workspace",
+  "enableIndexBuildArena" : false,
+  "hideShellScriptEnvironment" : false,
+  "parameters" : {
+    "action" : "build",
+    "activeArchitecture" : "arm64",
+    "activeRunDestination" : {
+      "disableOnlyActiveArch" : false,
+      "platform" : "iphonesimulator",
+      "sdk" : "iphonesimulator18.5",
+      "sdkVariant" : "iphonesimulator",
+      "supportedArchitectures" : [
+        "arm64",
+        "x86_64"
+      ],
+      "targetArchitecture" : "arm64"
+    },
+    "arenaInfo" : {
+      "buildIntermediatesPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex",
+      "buildProductsPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Products",
+      "derivedDataPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build",
+      "indexDataStoreFolderPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Index.noindex/DataStore",
+      "indexEnableDataStore" : true,
+      "indexPCHPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Index.noindex/PrecompiledHeaders",
+      "pchPath" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/PrecompiledHeaders"
+    },
+    "configurationName" : "Debug",
+    "overrides" : {
+      "commandLine" : {
+        "table" : {
+
+        }
+      },
+      "synthesized" : {
+        "table" : {
+          "ACTION" : "build",
+          "ASSETCATALOG_FILTER_FOR_DEVICE_MODEL" : "iPad15,7",
+          "ASSETCATALOG_FILTER_FOR_DEVICE_OS_VERSION" : "18.4",
+          "ASSETCATALOG_FILTER_FOR_THINNING_DEVICE_CONFIGURATION" : "iPad15,7",
+          "BUILD_ACTIVE_RESOURCES_ONLY" : "YES",
+          "COLOR_DIAGNOSTICS" : "YES",
+          "diagnostic_message_length" : "102",
+          "ENABLE_PREVIEWS" : "NO",
+          "ENABLE_XOJIT_PREVIEWS" : "YES",
+          "TARGET_DEVICE_IDENTIFIER" : "B5C746D2-9489-4A27-8761-9DBD86F07FEB",
+          "TARGET_DEVICE_MODEL" : "iPad15,7",
+          "TARGET_DEVICE_OS_VERSION" : "18.4",
+          "TARGET_DEVICE_PLATFORM_NAME" : "iphonesimulator"
+        }
+      }
+    }
+  },
+  "schemeCommand" : "launch",
+  "showNonLoggedProgress" : true,
+  "useDryRun" : false,
+  "useImplicitDependencies" : true,
+  "useLegacyBuildLocations" : false,
+  "useParallelTargets" : true
+}

@@ -1,0 +1,60 @@
+name: CashierApp
+options:
+  minimumXcodeGenVersion: 2.38.0
+  developmentLanguage: en
+bundleIdPrefix: com.ordertech
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    branch: main
+
+targets:
+  CashierApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    resources:
+      - path: images
+      - path: ../OrderTech2.png
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ordertech.cashier.native
+        TARGETED_DEVICE_FAMILY: "1,2"  # iPhone + iPad
+        INFOPLIST_FILE: Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
+        UIUserInterfaceStyle: Light
+        UIBackgroundModes:
+          - audio
+        NSCameraUsageDescription: "Camera access is required for two-way video."
+        NSMicrophoneUsageDescription: "Microphone access is required for two-way audio."
+        NSLocalNetworkUsageDescription: "Local network is used to communicate with the Drive‑Thru display on the same network when internet is down."
+        NSBonjourServices:
+          - "_ordertech-cashier._tcp"
+    dependencies:
+      - package: LiveKit
+        product: LiveKit
+    scheme:
+      testTargets: []
+    prebuildScripts: []
+    postbuildScripts: []
+    prebuildScripts: []
+    postbuildScripts: []
+
+

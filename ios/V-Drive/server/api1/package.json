@@ -1,0 +1,20 @@
+{
+  "name": "ordertech-app-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development nodemon src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-master.dia",
+    "emit-module-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-master-emit-module.dia",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-master.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/OrderTechCore.build/Debug-iphonesimulator/OrderTechCore.build/Objects-normal/arm64/Core~partial.swiftmodule"
+  }
+}

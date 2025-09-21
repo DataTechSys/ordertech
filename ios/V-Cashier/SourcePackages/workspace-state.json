@@ -1,0 +1,44 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : "xcframework",
+        "packageRef" : {
+          "identity" : "webrtc",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/stasel/WebRTC.git",
+          "name" : "WebRTC"
+        },
+        "path" : "/Users/mosawi/DATATECH/OrderTech/ios-native-cashier/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework",
+        "source" : {
+          "checksum" : "023b2c9fb53ff014607ef2afe87e3a83c2632555562783ced682715e85da0cd9",
+          "type" : "remote",
+          "url" : "https://github.com/stasel/WebRTC/releases/download/114.0.0/WebRTC-M114.xcframework.zip"
+        },
+        "targetName" : "WebRTC"
+      }
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "webrtc",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/stasel/WebRTC.git",
+          "name" : "WebRTC"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "938564aac1e2e810ffb4931d93cf67e00c5ad679"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "WebRTC"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

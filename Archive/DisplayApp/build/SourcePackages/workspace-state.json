@@ -1,0 +1,129 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : "artifactsArchive",
+        "packageRef" : {
+          "identity" : "swift-protobuf",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-protobuf.git",
+          "name" : "SwiftProtobuf"
+        },
+        "path" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/SourcePackages/artifacts/swift-protobuf/protoc/protoc-31.1.artifactbundle",
+        "source" : {
+          "checksum" : "f18bf2cfbbebd83133a4c29733b01871e3afdc73c102d62949a841d4f9bab86f",
+          "type" : "remote",
+          "url" : "https://github.com/apple/swift-protobuf/releases/download/protoc-artifactbundle-v31.1/protoc-31.1.artifactbundle.zip"
+        },
+        "targetName" : "protoc"
+      },
+      {
+        "kind" : "xcframework",
+        "packageRef" : {
+          "identity" : "webrtc-xcframework",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/livekit/webrtc-xcframework.git",
+          "name" : "LiveKitWebRTC"
+        },
+        "path" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/SourcePackages/artifacts/webrtc-xcframework/LiveKitWebRTC/LiveKitWebRTC.xcframework",
+        "source" : {
+          "checksum" : "756683dc3d7f6a792d875845842c0583b0ddd2020740a3a4d99ef4148ab4a5c8",
+          "type" : "remote",
+          "url" : "https://github.com/livekit/webrtc-xcframework/releases/download/137.7151.05/LiveKitWebRTC.xcframework.zip"
+        },
+        "targetName" : "LiveKitWebRTC"
+      }
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "client-sdk-swift",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/livekit/client-sdk-swift",
+          "name" : "LiveKit"
+        },
+        "state" : {
+          "checkoutState" : {
+            "branch" : "main",
+            "revision" : "d0eba94d47dde5f71ac9458005155eb444e06ded"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "client-sdk-swift"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-collections",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-collections.git",
+          "name" : "swift-collections"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "8c0c0a8b49e080e54e5e328cc552821ff07cd341",
+            "version" : "1.2.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-collections"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-log",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-log.git",
+          "name" : "swift-log"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
+            "version" : "1.6.4"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-log"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-protobuf",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-protobuf.git",
+          "name" : "SwiftProtobuf"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "e3f69fd321d0c9fcdc16fb576a0cdd956675face",
+            "version" : "1.31.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-protobuf"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "webrtc-xcframework",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/livekit/webrtc-xcframework.git",
+          "name" : "LiveKitWebRTC"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "5bda55f1f7ba0df114de60b760f5206a07e0fab7",
+            "version" : "137.7151.5"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "webrtc-xcframework"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

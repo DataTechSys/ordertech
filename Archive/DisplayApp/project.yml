@@ -1,0 +1,70 @@
+name: DisplayApp
+options:
+  minimumXcodeGenVersion: 2.38.0
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    branch: main
+  OrderTechCoreLocal:
+    path: OrderTechCore
+
+# Do not create a Packages group with folder references; rely on SPM only
+fileGroups:
+  - Sources
+  - Resources
+
+targets:
+  DisplayApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+      - path: images
+    settings:
+      base:
+        OTHER_SWIFT_FLAGS: "$(inherited)"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.ordertech.display
+        TARGETED_DEVICE_FAMILY: "1,2"  # iPhone + iPad (universal)
+        INFOPLIST_FILE: Info.plist
+        OTHER_SWIFT_FLAGS: "$(inherited)"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
+        UIUserInterfaceStyle: Light
+        UIBackgroundModes:
+          - audio
+        NSCameraUsageDescription: "Camera access is required for two-way video."
+        NSMicrophoneUsageDescription: "Microphone access is required for two-way audio."
+        NSLocalNetworkUsageDescription: "Local network is used to communicate with the Cashier on the same LAN when needed."
+        NSBonjourServices:
+          - "_ordertech-display._tcp"
+    dependencies:
+      - package: LiveKit
+        product: LiveKit
+      - package: OrderTechCoreLocal
+        product: OrderTechCore
+      - framework: ../CashierApp/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework
+        embed: true
+        codeSign: true
+    scheme:
+      testTargets: []

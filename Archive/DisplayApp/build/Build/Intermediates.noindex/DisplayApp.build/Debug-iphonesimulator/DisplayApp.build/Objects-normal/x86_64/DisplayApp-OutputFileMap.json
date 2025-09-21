@@ -1,0 +1,108 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp-master.dia",
+    "emit-module-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp-master-emit-module.dia",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp-master.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Activation/ActivationBanner.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/ActivationBanner~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/App/DisplayApp.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayApp~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/App/DisplayHomeView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayHomeView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/App/RootView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/RootView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Catalog/CatalogModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/CatalogModels~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Design/SquareAsyncImage.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/SquareAsyncImage~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Design/Tokens.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/Tokens~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Persistence/LocalCache.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/LocalCache~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Session/DisplaySessionStore.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplaySessionStore~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/DisplayApp/Sources/Session/DisplayUIModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/DisplayApp/build/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/x86_64/DisplayUIModels~partial.swiftmodule"
+  }
+}
