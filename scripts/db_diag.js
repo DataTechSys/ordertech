@@ -19,7 +19,7 @@ function arg(name, def=''){
   return m ? m.split('=').slice(1).join('=') : (process.env[name.toUpperCase()] || def);
 }
 async function main(){
-  const tenantId = String(arg('tenant', process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae')).trim();
+const tenantId = String(arg('tenant', process.env.DEFAULT_TENANT_ID || 'f8578f9c-782b-4d31-b04f-3b2d890c5896')).trim();
   const pool = new Pool(buildConfig());
   const c = await pool.connect();
   try {
