@@ -273,7 +273,16 @@ struct ActivationFlow {
             return d.count == 6 ? d : nil
         }
         let companyName = nonEmpty(profile?["tenant_name"]) ?? nonEmpty(brand?["display_name"]) ?? nonEmpty(brand?["name"]) ?? nonEmpty(dict["tenant_name"]) ?? nil
-        let displayName = nonEmpty(profile?["display_name"]) ?? nonEmpty(dict["display_name"]) ?? nil
+        // Prefer device name from Admin profile; accept common variants
+        let displayName =
+            nonEmpty(profile?["display_name"]) ??
+            nonEmpty(profile?["name"]) ??
+            nonEmpty(profile?["device_name"]) ??
+            nonEmpty(profile?["deviceName"]) ??
+            nonEmpty(dict["display_name"]) ??
+            nonEmpty(dict["name"]) ??
+            nonEmpty(dict["device_name"]) ??
+            nonEmpty(dict["deviceName"]) ?? nil
         let branchName = nonEmpty(profile?["branch"]) ?? nonEmpty(dict["branch"]) ?? nil
         let shortId = onlyDigits6(nonEmpty(profile?["short_code"]) ?? nonEmpty(brand?["short_code"]) ?? nonEmpty(brand?["code"]))
         return (companyName, displayName, branchName, shortId)
