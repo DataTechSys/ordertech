@@ -1265,6 +1265,22 @@ addRoute('get', '/dbz', async (_req, res) => {
   }
 });
 
+// Public: resolve current tenant from hostname mapping (or x-tenant-id header)
+addRoute('get', '/tenant/resolve', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const id = req.tenantId;
+  try {
+    let rows = await db('select tenant_id as id, company_name as name from tenants where tenant_id=$1', [id]);
+    if (!rows || !rows.length) {
+      rows = await db('select id as id, name as name from tenants where id=$1', [id]);
+    }
+    if (rows && rows.length) return res.json({ id: rows[0].id, name: rows[0].name||'' });
+    return res.json({ id, name: '' });
+  } catch {
+    return res.json({ id, name: '' });
+  }
+});
+
 addRoute('get', '/__routes', (_req, res) => res.json(routes));
 addRoute('get', '/__code', (_req, res) => {
   res.type('text/plain').send(require('fs').readFileSync(__filename, 'utf8'));
@@ -5983,7 +5999,18 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
 
     // Resolve tenant id: prefer header/requireTenant, fallback to body. Accept 6-digit company ID or UUID.
     let tenantId = req.tenantId || '';
+    // Normalize tenant id: accept 6-digit company id in header or body, or UUID
     try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
+      if (tenantId && !isUUID && /^\d{6}$/.test(tenantId)) {
+        // Resolve header company id to tenant UUID
+        let t = [];
+        try { t = await db('select tenant_id as id from tenants where company_id=$1 limit 1', [tenantId]); } catch {}
+        if (!t || !t.length) { try { t = await db('select id as id from tenants where company_id=$1 limit 1', [tenantId]); } catch {} }
+        if (!t || !t.length) { try { t = await db('select tenant_id as id from tenants where short_code=$1 limit 1', [tenantId]); } catch {} }
+        if (!t || !t.length) { try { t = await db('select id as id from tenants where short_code=$1 limit 1', [tenantId]); } catch {} }
+        if (t && t.length) tenantId = t[0].id;
+      }
       const bodyTid = String(req.body?.tenant_id||'').trim();
       if (!tenantId && bodyTid) {
         if (/^\d{6}$/.test(bodyTid)) {
@@ -6011,9 +6038,14 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
     // If there's an existing pre-created device with this short_code, claim that instead of creating a new one
     let existing = null;
     try {
-    const rows = await db("select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch, status::text as status, activated_at from devices where tenant_id=$1 and short_code=$2 limit 1", [tenantId, code]);
+      const rows = await db("select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch, status::text as status, activated_at from devices where tenant_id=$1 and short_code=$2 limit 1", [tenantId, code]);
       if (rows.length) existing = rows[0];
-    } catch {}
+    } catch (_e) {
+      try {
+        const rows = await db("select id as id, name as name, device_token, role::text as role, tenant_id, branch, status::text as status, activated_at from devices where tenant_id=$1 and short_code=$2 limit 1", [tenantId, code]);
+        if (rows.length) existing = rows[0];
+      } catch {}
+    }
     if (existing) {
       // Enforce license limit only when moving from revoked -> active
       try {
@@ -6027,10 +6059,12 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
       let token = existing.device_token;
       if (existing.status !== 'active') {
         token = genDeviceToken();
-        try { await db("update devices set device_token=$1, status='active', activated_at=coalesce(activated_at, now()), device_name=coalesce($2, device_name), branch=coalesce($3, branch) where device_id=$4", [token, name, branch, existing.id]); } catch {}
+        try { await db("update devices set device_token=$1, status='active', activated_at=coalesce(activated_at, now()), device_name=coalesce($2, device_name), branch=coalesce($3, branch) where device_id=$4", [token, name, branch, existing.id]); }
+        catch (_e) { try { await db("update devices set device_token=$1, status='active', activated_at=coalesce(activated_at, now()), name=coalesce($2, name), branch=coalesce($3, branch) where id=$4", [token, name, branch, existing.id]); } catch {} }
       } else {
         // Already active: best-effort update of name/branch without token rotation
-        try { await db('update devices set device_name=coalesce($1, device_name), branch=coalesce($2, branch) where device_id=$3', [name, branch, existing.id]); } catch {}
+        try { await db('update devices set device_name=coalesce($1, device_name), branch=coalesce($2, branch) where device_id=$3', [name, branch, existing.id]); }
+        catch (_e) { try { await db('update devices set name=coalesce($1, name), branch=coalesce($2, branch) where id=$3', [name, branch, existing.id]); } catch {} }
       }
       try { await db("update device_activation_codes set claimed_at=now(), status='claimed', device_id=$1 where code=$2", [existing.id, code]); } catch {}
       try { await logDeviceEvent(tenantId, existing.id, 'claimed', { role: existing.role||role, branch: existing.branch||branch||null }); } catch {}
@@ -6040,10 +6074,20 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
     // If already claimed to another device, return that token (idempotent)
     try {
       const rows = await db('select device_id, claimed_at from device_activation_codes where code=$1', [code]);
-      if (rows.length && rows[0].device_id && rows[0].claimed_at) {
-        const [dev] = await db('select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch from devices where device_id=$1', [rows[0].device_id]);
-        if (dev && dev.device_token) {
-          return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
+      if (rows.length) {
+        const did = rows[0].device_id;
+        const claimed = !!rows[0].claimed_at;
+        const isUUID = typeof did === 'string' && /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(did);
+        if (claimed && isUUID) {
+          let dev;
+          try {
+            [dev] = await db('select device_id as id, device_name as name, device_token, role::text as role, tenant_id, branch from devices where device_id=$1', [did]);
+          } catch (_e) {
+            [dev] = await db('select id as id, name as name, device_token, role::text as role, tenant_id, branch from devices where id=$1', [did]);
+          }
+          if (dev && dev.device_token) {
+            return res.json({ status: 'claimed', device_token: dev.device_token, role: dev.role, tenant_id: dev.tenant_id, branch: dev.branch, device_id: dev.id, name: dev.name });
+          }
         }
       }
     } catch {}
@@ -6056,12 +6100,23 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
   } catch {}
   // Create device immediately and claim the code (no pre-created device)
   const token = genDeviceToken();
-  const [dev] = await db(
-    `insert into devices (tenant_id, device_name, role, status, branch, device_token)
-     values ($1,$2,$3,'active',$4,$5)
-     returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
-    [tenantId, name||null, role, branch||null, token]
-  );
+  let dev;
+  try {
+    [dev] = await db(
+      `insert into devices (tenant_id, device_name, role, status, branch, device_token)
+       values ($1,$2,$3,'active',$4,$5)
+       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
+      [tenantId, name||null, role, branch||null, token]
+    );
+  } catch (_e) {
+    // Legacy schema fallback: name/id columns
+    [dev] = await db(
+      `insert into devices (tenant_id, name, role, status, branch, device_token)
+       values ($1,$2,$3,'active',$4,$5)
+       returning id as id, tenant_id, name as name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
+      [tenantId, name||null, role, branch||null, token]
+    );
+  }
   await db('update devices set activated_at=now() where device_id=$1 and activated_at is null', [dev.id]);
   await db("update device_activation_codes set claimed_at=now(), status='claimed', device_id=$1 where code=$2", [dev.id, code]);
   try { await logDeviceEvent(tenantId, dev.id, 'claimed', { role, branch: dev.branch||null }); } catch {}
@@ -6069,6 +6124,7 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
   // Return immediate activation payload
   return res.json({ status: 'claimed', device_token: token, tenant_id: tenantId, role, branch: dev.branch, device_id: dev.id, name: dev.name });
   } catch (e) {
+    try { console.error('register_failed', e?.message || e, e?.stack ? String(e.stack).split('\n')[0] : ''); } catch {}
     return res.status(500).json({ error: 'register_failed' });
   }
 });

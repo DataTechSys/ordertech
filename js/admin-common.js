@@ -5,7 +5,7 @@
   try {
     // Force dev-open mode on localhost for seamless local development
     const hn = (window.location && window.location.hostname) || '';
-    if (/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(hn) || /\.local$/i.test(hn)) {
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(hn) || /\.local$/i.test(hn) || /\.localhost$/i.test(hn)) {
       window.devOpenAdmin = true;
     }
   } catch {}
@@ -25,10 +25,21 @@
     try { localStorage.setItem('SELECTED_TENANT_ID', STATE.selectedTenantId || ''); } catch {}
     const crumb = document.getElementById('tenantNameCrumb'); if (crumb) crumb.textContent = name || '—';
     const sel = document.getElementById('tenantSelect'); if (sel && id) sel.value = id;
+    try { window.__refreshCompanyIdSidebar && window.__refreshCompanyIdSidebar(); } catch {}
   }
 
   function getIdToken(){ try { return localStorage.getItem('ID_TOKEN') || ''; } catch { return ''; } }
-  function getAdminToken(){ return ''; }
+  function getAdminToken(){
+    try {
+      const fromLs = (localStorage.getItem('ADMIN_TOKEN') || '').trim();
+      if (fromLs) return fromLs;
+      const u = new URL(window.location.href);
+      const q = (u.searchParams.get('adminToken') || '').trim();
+      if (q) return q;
+      if (window.Admin && typeof window.Admin.adminToken === 'string') return window.Admin.adminToken.trim();
+    } catch {}
+    return '';
+  }
 
   // Ensure Firebase config is present and app is initialized
   function needFirebaseConfig(){
@@ -61,8 +72,32 @@
     } catch { return false; }
   }
 
+  // Global loading overlay management
+  let __loadingCount = 0;
+  function ensureLoadingOverlay(){
+    let s = document.getElementById('_globalLoadingStyle');
+    if (!s) {
+      s = document.createElement('style'); s.id = '_globalLoadingStyle'; s.textContent = `@keyframes __spin{to{transform:rotate(360deg)}} ._overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(255,255,255,0.35);backdrop-filter:saturate(1.2);z-index:9999;pointer-events:none} ._spinner{width:28px;height:28px;border:3px solid #e5e7eb;border-top-color:#3b82f6;border-radius:50%;animation:__spin 0.9s linear infinite}`; document.head.appendChild(s);
+    }
+    let o = document.getElementById('_globalLoading');
+    if (!o) {
+      o = document.createElement('div'); o.id = '_globalLoading'; o.className = '_overlay'; o.innerHTML = '<div class="_spinner" aria-label="Loading"></div>'; document.body.appendChild(o);
+    }
+    return o;
+  }
+  function showLoading(){ try { const o=ensureLoadingOverlay(); o.style.display='flex'; } catch {} }
+  function hideLoading(){ try { const o=document.getElementById('_globalLoading'); if(o) o.style.display='none'; } catch {} }
+
   async function api(path, { method='GET', body, headers={}, tenantId, query } = {}){
-    const url = new URL(path, window.location.origin);
+    // Determine API base (supports split-console/api domains). Fallback to current origin.
+    const baseOrigin = (() => {
+      try { const b = String(window.apiBase||'').trim(); if (b) return b; } catch {}
+      try { const c = window.location.origin; if (c) return c; } catch {}
+      return '';
+    })();
+    // Accept absolute or relative paths
+    const isAbs = /^https?:\/\//i.test(String(path||''));
+    const url = isAbs ? new URL(String(path)) : new URL(String(path||'/'), baseOrigin || window.location.origin);
     if (query && typeof query === 'object') {
       for (const [k,v] of Object.entries(query)) if (v != null && v !== '') url.searchParams.set(k, String(v));
     }
@@ -77,20 +112,28 @@
         } catch {}
       }
       if (tok) reqHeaders['Authorization'] = 'Bearer ' + tok;
+      const admTok = getAdminToken(); if (admTok) reqHeaders['x-admin-token'] = admTok;
       const tid = tenantId || STATE.selectedTenantId; if (tid) reqHeaders['x-tenant-id'] = tid;
       const res = await fetch(url.toString(), { method, headers: reqHeaders, body: body ? JSON.stringify(body) : undefined, credentials: 'include' });
       return res;
     }
-    let res = await doFetch(false);
-    if (res.status === 401) {
-      // Ensure Firebase app and config, then refresh ID token once and retry
-      await ensureAuthReady();
-      res = await doFetch(true);
+    // Show global loading while any API request is in flight
+    __loadingCount++; if (__loadingCount === 1) showLoading();
+    try {
+      let res = await doFetch(false);
+      if (res.status === 401) {
+        // Ensure Firebase app and config, then refresh ID token once and retry
+        await ensureAuthReady();
+        res = await doFetch(true);
+      }
+      const text = await res.text();
+      let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+      if (!res.ok) { const err = new Error('API error'); err.status = res.status; err.data = data; throw err; }
+      return data;
+    } finally {
+      __loadingCount = Math.max(0, __loadingCount - 1);
+      if (__loadingCount === 0) hideLoading();
     }
-    const text = await res.text();
-    let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
-    if (!res.ok) { const err = new Error('API error'); err.status = res.status; err.data = data; throw err; }
-    return data;
   }
 
   let toastTimeout;
@@ -99,6 +142,21 @@
     if (!t) { t = document.createElement('div'); t.id = '_toast'; t.className = 'toast'; document.body.appendChild(t); }
     t.textContent = msg; t.style.display='block';
     clearTimeout(toastTimeout); toastTimeout = setTimeout(()=> (t.style.display='none'), ms);
+  }
+
+  // Lightweight progress bar factory for reuse in modals and upload cards
+  function createProgressBar({ id, small=false } = {}){
+    try {
+      const wrap = document.createElement('div');
+      if (id) wrap.id = id;
+      wrap.className = 'progress' + (small ? ' sm' : '');
+      const bar = document.createElement('div'); bar.className = 'bar'; wrap.appendChild(bar);
+      wrap.style.display = 'none';
+      wrap.set = function(p){ const v = Math.max(0, Math.min(100, Number(p)||0)); bar.style.width = v + '%'; };
+      wrap.show = function(){ wrap.style.display = ''; };
+      wrap.hide = function(){ wrap.style.display = 'none'; };
+      return wrap;
+    } catch { return null; }
   }
 
   function ensureFirebaseApp(){
@@ -192,8 +250,16 @@
     } catch {}
 
     STATE.isSuperAdmin = isSuper;
-    // Use only memberships for the tenant selector; super admins can manage others via the Tenants page
-    STATE.tenants = my;
+    // For platform admins, show union of memberships + all tenants; otherwise show memberships only
+    if (isSuper) {
+      const ids = new Set((my || []).map(t => String(t.id)));
+      STATE.tenants = [...(my || []), ...adminList.filter(t => !ids.has(String(t.id)))];
+    } else {
+      STATE.tenants = my;
+    }
+
+    // Notify shell to refresh Platform section visibility now that isSuperAdmin may be known
+    try { if (typeof window !== 'undefined' && window.__updateSidebarPlatformVisibility) window.__updateSidebarPlatformVisibility(); } catch {}
   }
 
   function populateTenantSelect(){
@@ -304,9 +370,17 @@ function bootstrapAuth(after){
       let wantedId = null; try { wantedId = localStorage.getItem('SELECTED_TENANT_ID') || null; } catch {}
       if (wantedId) chosen = STATE.tenants.find(x => x.id === wantedId) || null;
       if (!chosen && STATE.tenants.length) chosen = STATE.tenants[0];
+      // If still no choice (no memberships) try resolving tenant from current host (public endpoint)
+      if (!chosen) {
+        try {
+          const r = await api('/tenant/resolve', { tenantId: null });
+          if (r && r.id) { chosen = { id: String(r.id), name: String(r.name||'') }; }
+        } catch {}
+      }
     }
     if (chosen) setSelectedTenant(chosen.id, chosen.name || '');
     populateTenantSelect();
+    try { window.__refreshCompanyIdSidebar && window.__refreshCompanyIdSidebar(); } catch {}
 
     // Do not auto-redirect users without tenant membership.
     // Rationale: platform-admin detection may be delayed (e.g., auth/domain differences),
@@ -319,7 +393,7 @@ function bootstrapAuth(after){
   }
 
   window.Admin = {
-    $, $$, STATE, setSelectedTenant, api, toast, bootstrapAuth
+    $, $$, STATE, setSelectedTenant, api, toast, bootstrapAuth, createProgressBar
   };
 })();
 
