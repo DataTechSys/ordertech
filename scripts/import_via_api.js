@@ -3,7 +3,7 @@
    Usage:
      FIREBASE_ID_TOKEN=... node scripts/import_via_api.js \
        --base https://smart-order-64v5pfkeba-ew.a.run.app \
-      --tenant f8578f9c-782b-4d31-b04f-3b2d890c5896 \
+      --tenant 56ac557e-589d-4602-bc9b-946b201fb6f6 \
        data/categories.csv data/products.csv [data/modifiers.csv data/modifiers_options.csv]
 */
 
@@ -18,7 +18,7 @@ function toNum(v){ const n = Number(String(v??'').trim()); return Number.isFinit
 async function main(){
   const argv = process.argv.slice(2);
   let BASE = process.env.SERVICE_BASE_URL || 'https://smart-order-64v5pfkeba-ew.a.run.app';
-  let TENANT = process.env.DEFAULT_TENANT_ID || 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+  let TENANT = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
   const tok = process.env.FIREBASE_ID_TOKEN;
   if (!tok) {
     console.error('FIREBASE_ID_TOKEN env var is required');

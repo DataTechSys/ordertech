@@ -27,7 +27,7 @@ const app = express();
 // Treat "/path" and "/path/" as different, so UI at trailing-slash paths don't get eaten by API JSON routes
 try { app.enable('strict routing'); } catch {}
 const PORT = process.env.PORT || 3000;
-const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
 // Skip seeding a default tenant by default in production
 const SKIP_DEFAULT_TENANT = /^(1|true|yes|on)$/i.test(String(process.env.SKIP_DEFAULT_TENANT || (String(process.env.NODE_ENV||'').toLowerCase()==='production' ? '1' : '')));
 const crypto = require('crypto');

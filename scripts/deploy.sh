@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
+# Unified deploy script pinned to me-central1. Fails if a different region is provided.
 set -euo pipefail
 
-# Usage: scripts/deploy.sh [staging|prod]
-# Default is prod.
-ENVIRONMENT="${1:-prod}"
-
-PROJECT_ID="$(gcloud config get-value project)"
-REGION="${REGION:-us-central1}"
-AR_LOCATION="${AR_LOCATION:-us-central1}"
-REPO="smart-order"
-# Ensure assets bucket is set; allow override via env
-ASSETS_BUCKET="${ASSETS_BUCKET:-smart-order-assets-me-central1-715493130630}"
-
-if [[ "$ENVIRONMENT" == "staging" ]]; then
-  SERVICE="smart-order-staging"
-else
-  SERVICE="smart-order"
+# Load canonical production config (no secrets)
+if [[ -f "config/prod.env" ]]; then
+  # shellcheck disable=SC1091
+  . "config/prod.env"
 fi
 
-VERSION="$(date +%Y%m%d-%H%M%S)"
-IMAGE="${AR_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${VERSION}"
+PROJECT_ID="${PROJECT_ID:-smart-order-469705}"
+SERVICE="${SERVICE:-ordertech}"
+REGION="${REGION:-me-central1}"
+DB_INSTANCE="${DB_INSTANCE:-smart-order-469705:me-central1:ordertech-db}"
+ASSETS_BUCKET="${ASSETS_BUCKET:-ordertech.me}"
+TENANTS_UI_BASE="${TENANTS_UI_BASE:-https://storage.googleapis.com/${ASSETS_BUCKET}/tenants/}"
 
-echo "Building ${IMAGE}..." >&2
-gcloud builds submit --tag "${IMAGE}"
+if [[ "$REGION" != "me-central1" ]]; then
+  echo "ERROR: Region must be me-central1 (got '$REGION')" >&2
+  exit 1
+fi
 
-echo "Deploying to Cloud Run service ${SERVICE}..." >&2
-gcloud run deploy "${SERVICE}" \
-  --image="${IMAGE}" \
-  --region="${REGION}" \
-  --platform=managed \
-  --port=8080 \
-  --update-env-vars "ASSETS_BUCKET=${ASSETS_BUCKET}"
+echo "[deploy] Project=$PROJECT_ID Service=$SERVICE Region=$REGION"
 
-echo "Deployment complete. Service URL:" >&2
-gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'
+# Deploy from source with minimized context (via .gcloudignore)
+gcloud run deploy "$SERVICE" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  --platform managed \
+  --source . \
+  --quiet \
+  --add-cloudsql-instances "$DB_INSTANCE" \
+  --set-secrets "DATABASE_URL=DATABASE_URL:latest,LIVEKIT_API_KEY=livekit-api-key:latest,LIVEKIT_API_SECRET=livekit-api-secret:latest" \
+  --update-env-vars "PGHOST=/cloudsql/$DB_INSTANCE,REQUIRE_DB=true,SKIP_DEFAULT_TENANT=1,DEFAULT_TENANT_ID=56ac557e-589d-4602-bc9b-946b201fb6f6,RTC_FALLBACK_ORDER=p2p,API_BASE_URL=https://app.ordertech.me" \
+  --allow-unauthenticated

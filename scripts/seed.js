@@ -3,7 +3,7 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
 
-const TENANT_ID = process.env.DEFAULT_TENANT_ID || 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+const TENANT_ID = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:password@hostname:port/databasename';
 if (!DATABASE_URL) {
   console.error('DATABASE_URL not set. Aborting seed.');
