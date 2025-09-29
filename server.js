@@ -9474,6 +9474,13 @@ if (JOB_COMMAND) {
           console.log('✅ Product-modifiers import job completed successfully');
           break;
           
+        case 'add-external-id-columns':
+          console.log('🗺️ Starting database schema update job...');
+          const { addExternalIdColumns } = require('./scripts/add_external_id_columns.js');
+          await addExternalIdColumns();
+          console.log('✅ Database schema update job completed successfully');
+          break;
+          
         default:
           console.log(`❌ Unknown job command: ${JOB_COMMAND}`);
           process.exit(1);
