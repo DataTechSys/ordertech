@@ -9,16 +9,16 @@ const { Pool } = require('pg');
 
 // Configuration
 const CSV_DATA = `product_name,product_name_localized,product_sku,modifier_name,modifier_name_localized,modifier_reference,minimum_options,maximum_options,free_options,default_options,unique_options
-"Cappuccino","كابتشينو",CAP-001,"Extra","إضافي",extra,0,2,0,,No
 "Cappuccino","كابتشينو",CAP-001,"Size","الحجم",size,1,1,0,,No
+"Cappuccino","كابتشينو",CAP-001,"Extra","إضافي",extra,0,2,0,,No
+"Cappuccino - Hot","كابتشينو ساخن",CAP-002,"Size","الحجم",size,1,1,0,,No
 "Cappuccino - Hot","كابتشينو ساخن",CAP-002,"Extra","إضافي",extra,0,2,0,,No
-"Cappuccino - Hot","كابتشينو ساخن",CAP-002,"Milk Options","خيارات الحليب",milk_options,0,1,0,,No
-"Espresso","إسبريسو",ESP-001,"Shots","جرعات",shots,1,3,0,,No
-"Espresso","إسبريسو",ESP-001,"Extra","إضافي",extra,0,1,0,,No
-"Hot Salted Caramel","كراميل مملح ساخن",HSC-001,"Extra","إضافي",extra,0,2,0,,No
-"Hot Salted Caramel","كراميل مملح ساخن",HSC-001,"Sweetness","الحلاوة",sweetness,0,1,0,,No
+"Espresso","إسبريسو",ESP-001,"Extra","إضافي",extra,0,2,0,,No
+"Mocha","موكا",MOC-001,"Size","الحجم",size,1,1,0,,No
 "Mocha","موكا",MOC-001,"Extra","إضافي",extra,0,2,0,,No
-"Mocha","موكا",MOC-001,"Whipped Cream","كريمة مخفوقة",whipped_cream,0,1,0,,No`;
+"Hot Salted Caramel","كراميل مملح ساخن",HSC-001,"Size","الحجم",size,1,1,0,,No
+"Hot Salted Caramel","كراميل مملح ساخن",HSC-001,"Extra","إضافي",extra,0,2,0,,No
+"Iced Americano | Cardamom","أمريكانو مثلج بالهيل",IAC-001,"Size","الحجم",size,1,1,0,,No`;
 
 const BATCH_SIZE = 10;
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
