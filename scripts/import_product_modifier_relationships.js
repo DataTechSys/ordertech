@@ -102,11 +102,17 @@ async function getProductByName(pool, tenantId, productName) {
 
 // Get modifier group by reference from database
 async function getModifierGroupByReference(pool, tenantId, reference) {
+    console.log(`    🔍 Looking for modifier group with reference: ${reference}`);
     const rows = await db(pool,
         'SELECT id, name, reference FROM modifier_groups WHERE tenant_id = $1 AND reference = $2',
         [tenantId, reference]
     );
-    return rows.length > 0 ? rows[0] : null;
+    console.log(`    📊 Found ${rows.length} matching modifier group(s)`);
+    if (rows.length > 0) {
+        console.log(`    ✅ Found modifier group: ${rows[0].name} (id: ${rows[0].id})`);
+        return rows[0];
+    }
+    return null;
 }
 
 // Check if product-modifier relationship already exists
