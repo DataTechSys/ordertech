@@ -77,7 +77,7 @@ async function addExternalIdColumns() {
         `);
         console.log('✅ Added external_id to modifier_options table');
 
-        // Ensure tenant_external_mappings table exists
+        // Ensure tenant_external_mappings table exists with proper schema
         console.log('🔗 Ensuring tenant_external_mappings table exists...');
         await db(pool, `
             CREATE TABLE IF NOT EXISTS tenant_external_mappings (
@@ -92,6 +92,12 @@ async function addExternalIdColumns() {
                 updated_at TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(tenant_id, provider, entity_type, entity_id)
             );
+        `);
+        
+        // Add external_reference column if it doesn't exist
+        await db(pool, `
+            ALTER TABLE tenant_external_mappings 
+            ADD COLUMN IF NOT EXISTS external_reference VARCHAR(255);
         `);
         
         await db(pool, `
