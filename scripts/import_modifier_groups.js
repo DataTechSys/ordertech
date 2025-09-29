@@ -116,13 +116,12 @@ async function createModifierGroup(pool, tenantId, groupData) {
     const nameLocalized = groupData.name_localized || null;
     
     await db(pool, `
-        INSERT INTO modifier_groups (tenant_id, reference, name, name_localized, is_active)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO modifier_groups (tenant_id, reference, name, name_localized)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (tenant_id, reference) DO UPDATE SET
             name = EXCLUDED.name,
-            name_localized = EXCLUDED.name_localized,
-            is_active = EXCLUDED.is_active
-    `, [tenantId, reference, name, nameLocalized, true]);
+            name_localized = EXCLUDED.name_localized
+    `, [tenantId, reference, name, nameLocalized]);
 }
 
 // Sleep helper
