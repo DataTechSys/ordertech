@@ -362,7 +362,7 @@ async function ensureDefaultTenant() {
     `INSERT INTO tenants (tenant_id, company_name)
      VALUES ($1, $2)
      ON CONFLICT (tenant_id) DO UPDATE SET company_name = EXCLUDED.company_name`,
-    [DEFAULT_TENANT_ID, 'Koobs Café']
+    [DEFAULT_TENANT_ID, 'Fouz Cafe']
   );
   // Ensure tenant has a 6-digit company_id (formerly short_code)
   try {
@@ -614,9 +614,14 @@ async function ensureProductExtendedSchema(){
         required   boolean,
         min_select integer,
         max_select integer,
+        default_option_reference text,
+        unique_options boolean NOT NULL DEFAULT true,
         PRIMARY KEY (product_id, group_id)
       )
     `);
+    // Idempotent backfills for deployments where the table already exists
+    await db("ALTER TABLE IF EXISTS product_modifier_groups ADD COLUMN IF NOT EXISTS default_option_reference text");
+    await db("ALTER TABLE IF EXISTS product_modifier_groups ADD COLUMN IF NOT EXISTS unique_options boolean NOT NULL DEFAULT true");
   } catch (_) {}
   // Unique mappings per tenant for external channels
   try { await db("CREATE UNIQUE INDEX IF NOT EXISTS ux_products_tenant_talabat_ref ON products(tenant_id, talabat_reference) WHERE talabat_reference IS NOT NULL"); } catch (_) {}
@@ -963,6 +968,64 @@ function cacheGet(key){ const v = __jsonCache.get(key); return (v && v.exp > Dat
 function cacheSet(key, data, ttlMs){ __jsonCache.set(key, { exp: Date.now()+Math.max(1, ttlMs), data }); }
 function cacheDelByPrefix(prefix){ try { for (const k of __jsonCache.keys()) { if (k.startsWith(prefix)) __jsonCache.delete(k); } } catch {} }
 
+// Global headers: revision marker and no-store for admin/UI HTML to avoid stale caches through LB/CDN
+app.use((req, res, next) => {
+  try {
+    const rev = process.env.K_REVISION || process.env.K_SERVICE || process.env.SOURCE_VERSION || process.env.COMMIT_SHA || '';
+    if (rev) res.set('X-Revision', rev);
+    const accept = String(req.headers.accept || '');
+    const isHtml = req.method === 'GET' && (accept.includes('text/html') || /\.html(?:$|\?)/i.test(req.path));
+    const adminPaths = [
+      /^\/admin\//,
+      /^\/tenants\//,
+      /^\/products(?:$|\/)\/?/,
+      /^\/posters\//,
+      /^\/poster\//,
+      /^\/logs(?:$|\/)\/?/,
+      /^\/signup(?:$|\/)\/?/,
+      /^\/login(?:$|\/)\/?/,
+      /^\/profile(?:$|\/)\/?/
+    ];
+    if (isHtml && adminPaths.some(re => re.test(req.path))) {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+    }
+  } catch {}
+  next();
+});
+
+// ---- Versioned image caching (append ?v=last finished Foodics sync) -----------------------------
+const __lastSyncVer = new Map(); // tenant_id -> { v: string, exp: number }
+function appendVersionParam(url, v){
+  try {
+    if (!url || !v) return url;
+    const s = String(url);
+    // Only http(s) URLs; leave data: and others untouched
+    if (!/^https?:\/\//i.test(s)) return s;
+    const hashIdx = s.indexOf('#');
+    const base = hashIdx >= 0 ? s.slice(0, hashIdx) : s;
+    const frag = hashIdx >= 0 ? s.slice(hashIdx) : '';
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}v=${encodeURIComponent(v)}${frag}`;
+  } catch { return url; }
+}
+async function getFoodicsSyncVersion(tenantId){
+  try {
+    if (!HAS_DB || !tenantId) return null;
+    const key = String(tenantId);
+    const now = Date.now();
+    const cached = __lastSyncVer.get(key);
+    if (cached && cached.exp > now) return cached.v;
+    // Ensure table exists best-effort
+    try { await ensureIntegrationTables(); } catch {}
+    const rows = await db(`select finished_at from integration_sync_runs where tenant_id=$1 and provider=$2 and ok=true and finished_at is not null order by finished_at desc limit 1`, [tenantId, 'foodics']).catch(()=>[]);
+    const v = (rows && rows[0] && rows[0].finished_at) ? new Date(rows[0].finished_at).toISOString() : null;
+    __lastSyncVer.set(key, { v, exp: now + 30000 }); // cache 30s
+    return v;
+  } catch { return null; }
+}
+
 // Admin token (temporary until full auth is in place)
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const PLATFORM_ADMIN_EMAILS = String(process.env.PLATFORM_ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
@@ -1045,6 +1108,11 @@ async function verifyAuth(req, res, next){
     req.user = { uid: decoded.uid, email: (decoded.email||'').toLowerCase() };
     next();
   } catch (e) {
+    try {
+      const hasAuth = !!(req.headers && req.headers.authorization);
+      const errMsg = e && (e.code || e.message) ? String(e.code || e.message) : 'unknown';
+      console.error('[auth] verifyAuth failed', { path: req.path, hasAuthHeader: hasAuth, error: errMsg });
+    } catch {}
     return res.status(401).json({ error: 'unauthorized' });
   }
 }
@@ -1454,12 +1522,12 @@ addRoute('get', /^\/tenants$/, (req, res, next) => {
 
 addRoute('get', /^\/tenants$/, async (req, res) => {
   // Serve JSON list
-  if (!HAS_DB) return res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
+  if (!HAS_DB) return res.json([{ id: DEFAULT_TENANT_ID, name: 'Fouz Cafe' }]);
   try {
 const rows = await db('select tenant_id as id, company_name as name from tenants order by company_name asc');
     res.json(rows);
   } catch (_e) {
-    res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
+    res.json([{ id: DEFAULT_TENANT_ID, name: 'Fouz Cafe' }]);
   }
 });
 
@@ -1525,6 +1593,13 @@ let hiddenIdsDb = [];
     } catch {}
     const out = rows.map(c => ({ ...c, image: byCatId.get(String(c.id)) || byCatName.get(c.name) || null }))
       .filter(c => !hiddenIdsDb.includes(String(c.id)));
+    // Append sync version to category images for caching
+    try {
+      const ver = await getFoodicsSyncVersion(req.tenantId);
+      if (ver) {
+        for (const c of out) { if (c && c.image) c.image = appendVersionParam(c.image, ver); }
+      }
+    } catch {}
     res.json(out);
   } catch (_e) {
     // DB failed — return empty to avoid showing stale defaults
@@ -1554,6 +1629,13 @@ const stateMem = memDriveThruState.get(req.tenantId) || {};
       .filter(c => c?.active !== false && c?.deleted !== true)
       .map(c => ({ ...c, image: c.image || c.image_url || byCatName.get(c.name) || null }))
       .filter(c => !hiddenIds.includes(String(c.id)));
+    // Append sync version to category images for caching (memory mode)
+    try {
+      const ver = await getFoodicsSyncVersion(req.tenantId);
+      if (ver) {
+        for (const c of out) { if (c && (c.image || c.image_url)) { c.image = appendVersionParam(c.image||c.image_url, ver); } }
+      }
+    } catch {}
     return res.json(out);
   }
   try {
@@ -1579,6 +1661,13 @@ let hiddenIdsDb = [];
     } catch {}
     const out = rows.map(c => ({ ...c, image: c.image_url || byCatId.get(String(c.id)) || byCatName.get(c.name) || null }))
       .filter(c => !hiddenIdsDb.includes(String(c.id)));
+    // Append sync version to category images for caching
+    try {
+      const ver = await getFoodicsSyncVersion(req.tenantId);
+      if (ver) {
+        for (const c of out) { if (c && (c.image || c.image_url)) { const u = c.image_url || c.image; const next = appendVersionParam(u, ver); if (c.image_url != null) c.image_url = next; else c.image = next; } }
+      }
+    } catch {}
     res.json(out);
   } catch (_e) {
     // On DB error, return empty to avoid stale defaults
@@ -1675,6 +1764,17 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
         }
       }
     } catch {}
+    // Append sync version to product images for caching
+    try {
+      const ver = await getFoodicsSyncVersion(req.tenantId);
+      if (ver) {
+        for (const r of rows) {
+          if (r && r.image_url) r.image_url = appendVersionParam(r.image_url, ver);
+          if (r && r.image_white_url) r.image_white_url = appendVersionParam(r.image_white_url, ver);
+          if (r && r.image_beauty_url) r.image_beauty_url = appendVersionParam(r.image_beauty_url, ver);
+        }
+      }
+    } catch {}
     res.json(rows);
   } catch (_e) {
     // DB error — only default tenant gets JSON fallback
@@ -1757,6 +1857,17 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
         }
       }
     } catch {}
+    // Append sync version to product images for caching
+    try {
+      const ver = await getFoodicsSyncVersion(req.tenantId);
+      if (ver) {
+        for (const r of rows) {
+          if (r && r.image_url) r.image_url = appendVersionParam(r.image_url, ver);
+          if (r && r.image_white_url) r.image_white_url = appendVersionParam(r.image_white_url, ver);
+          if (r && r.image_beauty_url) r.image_beauty_url = appendVersionParam(r.image_beauty_url, ver);
+        }
+      }
+    } catch {}
     res.json(rows);
   } catch (_e) {
     res.json([]);
@@ -1777,6 +1888,7 @@ addRoute('get', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdmi
   const statusRaw = String(req.query.status||'all').toLowerCase();
   const status = ['active','inactive','all'].includes(statusRaw) ? statusRaw : 'all';
   const category_name = String(req.query.category_name||'');
+  const group_id = String(req.query.group_id||'').trim();
 
   // In-memory override takes precedence in dev-open mode
   const mem = memCatalogByTenant.get(tenantId);
@@ -1785,6 +1897,7 @@ addRoute('get', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdmi
     if (status === 'active') list = list.filter(p => p.active !== false);
     else if (status === 'inactive') list = list.filter(p => p.active === false);
     if (category_name) list = list.filter(p => String(p.category_name||'') === category_name);
+    // group filter cannot be applied without DB relations; return as-is
     return res.json(list);
   }
   if (!HAS_DB) {
@@ -1797,15 +1910,16 @@ addRoute('get', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdmi
   }
 
   try {
-    // Build WHERE fragments
-    const where = ['p.tenant_id=$1'];
+    // Build conditions and params safely
+    const cond = ['p.tenant_id=$1'];
     const params = [tenantId];
-    if (status === 'active') where.push('coalesce(p.active, true)');
-    else if (status === 'inactive') where.push('coalesce(p.active, true) = false');
-    if (category_name) { where.push('c.name=$' + (params.length+1+ (status==='all'?1:0))); /* placeholder calc not used here */ }
+    let idx = 2;
+    if (status === 'active') cond.push('coalesce(p.active, true)');
+    else if (status === 'inactive') cond.push('coalesce(p.active, true) = false');
+    if (category_name) { cond.push(`c.name=$${idx++}`); params.push(category_name); }
+    if (group_id) { cond.push(`exists (select 1 from product_modifier_groups pmg where pmg.product_id=p.id and pmg.group_id=$${idx++})`); params.push(group_id); }
 
-    // We will not use dynamic placeholder calc above; construct parametrized query carefully
-    const sql = `
+    const baseSelect = `
       select 
         p.id, p.name, p.name_localized, p.description, p.description_localized,
         p.sku, p.barcode,
@@ -1818,20 +1932,52 @@ addRoute('get', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdmi
         p.pos_visible, p.online_visible, p.delivery_visible,
         p.talabat_reference, p.jahez_reference, p.vthru_reference,
         coalesce(p.active, true) as active,
-        -- New fields for Advanced editor
         p.created_at, p.updated_at, p.version, p.last_modified_by,
         p.sort_order, p.is_featured, p.tags, p.diet_flags, p.product_type::text as product_type,
         p.sync_status::text as sync_status, p.published_channels,
         p.internal_notes, p.staff_notes
       from products p
       join categories c on c.id=p.category_id
-      where ${status==='active' ? 'p.tenant_id=$1 and coalesce(p.active,true)'
-             : status==='inactive' ? 'p.tenant_id=$1 and coalesce(p.active,true) = false'
-             : 'p.tenant_id=$1'}
-      ${category_name ? 'and c.name=$2' : ''}
-      order by c.name, p.name
-    `;
-    const rows = await db(sql, category_name ? [tenantId, category_name] : [tenantId]);
+      where ${cond.join(' and ')}
+      order by c.name, p.name`;
+
+    let rows = [];
+    let ok = true;
+    try {
+      rows = await db(baseSelect, params);
+    } catch (_e1) {
+      ok = false;
+    }
+
+    // Fallback: minimal projection (handles schema drift)
+    if (!ok) {
+      try {
+        const fallbackSelect = `
+          select 
+            p.id, p.name, p.name_localized, p.description, p.description_localized,
+            p.sku, p.barcode,
+            p.price, p.cost, null::numeric as packaging_fee,
+            p.category_id, c.name as category_name,
+            p.image_url, null as image_white_url, null as image_beauty_url,
+            p.preparation_time, p.calories, null::numeric as fat_g, null::numeric as carbs_g, null::numeric as protein_g, null::numeric as sugar_g, null::integer as sodium_mg, null::numeric as salt_g, null as serving_size,
+            null as spice_level,
+            p.ingredients_en, p.ingredients_ar, p.allergens,
+            true as pos_visible, true as online_visible, true as delivery_visible,
+            p.talabat_reference, p.jahez_reference, p.vthru_reference,
+            coalesce(p.active, p.is_active, true) as active,
+            p.created_at, p.updated_at, null::integer as version, null::text as last_modified_by,
+            null::integer as sort_order, false as is_featured, null::text[] as tags, null::jsonb as diet_flags, null::text as product_type,
+            null::text as sync_status, null::jsonb as published_channels,
+            null::text as internal_notes, null::text as staff_notes
+          from products p
+          join categories c on c.id=p.category_id
+          where ${cond.join(' and ')}
+          order by c.name, p.name`;
+        rows = await db(fallbackSelect, params);
+      } catch (_e2) {
+        rows = [];
+      }
+    }
 
     // Fill image_url from JSON catalog or PHOTO_MAP as in /api/products
     try {
@@ -2515,6 +2661,42 @@ async function ensureTwilioSecretsLoaded(){
   try { __twilioHydrateOnce = __twilioHydrateOnce || hydrateTwilioSecretsFromGcp().catch(()=>{}); await __twilioHydrateOnce; } catch {}
 }
 
+// ---- Secret hydration (GCP Secret Manager → env) for LiveKit
+let __livekitHydrateOnce = null;
+async function hydrateLivekitSecretsFromGcp(){
+  try {
+    // Skip if already provided via env
+    const hasEnv = (process.env.LIVEKIT_API_KEY||'').trim() && (process.env.LIVEKIT_API_SECRET||'').trim() && (process.env.LIVEKIT_WS_URL||'').trim();
+    const enable = /^(1|true|yes|on)$/i.test(String(process.env.GCP_SECRETS_ENABLE||'1'));
+    if (hasEnv || !enable) return;
+    let sms;
+    try { sms = require('@google-cloud/secret-manager'); } catch { return; }
+    const { SecretManagerServiceClient } = sms;
+    const client = new SecretManagerServiceClient();
+    const project = (process.env.GCP_PROJECT_ID||process.env.GOOGLE_CLOUD_PROJECT||process.env.GCLOUD_PROJECT||'').trim();
+    async function readSecretByEnv(nameEnv){
+      const id = (process.env[nameEnv]||'').trim();
+      if (!id) return null;
+      const full = id.startsWith('projects/') ? id : (project ? `projects/${project}/secrets/${id}/versions/latest` : null);
+      if (!full) return null;
+      try {
+        const [v] = await client.accessSecretVersion({ name: full });
+        const s = (v && v.payload && v.payload.data) ? String(v.payload.data.toString('utf8')||'').trim() : '';
+        return s || null;
+      } catch { return null; }
+    }
+    const ws = (process.env.LIVEKIT_WS_URL||await readSecretByEnv('LIVEKIT_WS_URL_SECRET')||'').trim();
+    const key = (process.env.LIVEKIT_API_KEY||await readSecretByEnv('LIVEKIT_API_KEY_SECRET')||'').trim();
+    const sec = (process.env.LIVEKIT_API_SECRET||await readSecretByEnv('LIVEKIT_API_SECRET_SECRET')||'').trim();
+    if (ws) process.env.LIVEKIT_WS_URL = ws;
+    if (key) process.env.LIVEKIT_API_KEY = key;
+    if (sec) process.env.LIVEKIT_API_SECRET = sec;
+  } catch {}
+}
+async function ensureLivekitSecretsLoaded(){
+  try { __livekitHydrateOnce = __livekitHydrateOnce || hydrateLivekitSecretsFromGcp().catch(()=>{}); await __livekitHydrateOnce; } catch {}
+}
+
 // Fetch Twilio ICE servers (ephemeral) via Tokens API if creds are configured
 async function fetchTwilioIceServers(){
   await ensureTwilioSecretsLoaded();
@@ -2581,6 +2763,7 @@ function getRtcFallbackOrder(){
 addRoute('get', '/webrtc/config', async (_req, res) => {
   // Base config (STUN + any self-hosted TURN from env or ICE_SERVERS_JSON)
   await ensureTwilioSecretsLoaded();
+  await ensureLivekitSecretsLoaded();
   const base = buildIceServers();
   const selfServers = getSelfTurnServersFromEnv();
   let twilioServers = [];
@@ -2609,6 +2792,33 @@ addRoute('get', '/webrtc/config', async (_req, res) => {
 const __rateIp = new Map();
 const __rateKey = new Map();
 function rlCheck(key, map, limit){
+}
+
+// --- Admin: lightweight RTC status (no secrets)
+addRoute('get', '/admin/rtc/status', async (_req, res) => {
+  try {
+    await ensureTwilioSecretsLoaded();
+    await ensureLivekitSecretsLoaded();
+    const order = getRtcFallbackOrder();
+    const ice = buildIceServers();
+    return res.json({
+      providers: {
+        p2p: true,
+        livekit: hasLivekitSecrets(),
+        twilio: hasTwilioVideoSecrets()
+      },
+      fallbackOrder: order,
+      livekit: {
+        urlPresent: !!(process.env.LIVEKIT_WS_URL||'').trim()
+      },
+      iceServersCount: Array.isArray(ice) ? ice.length : 0
+    });
+  } catch (e) {
+    return res.status(500).json({ error: 'status_error' });
+  }
+});
+
+function rlCheck(key, map, limit){
   const now = Date.now();
   let e = map.get(key);
   if (!e || e.resetAt < now) { e = { count: 0, resetAt: now + 60_000 }; }
@@ -2621,6 +2831,7 @@ addRoute('post', '/rtc/token', async (req, res) => {
   try {
     const ip = String(req.headers['x-forwarded-for']||req.socket?.remoteAddress||'').split(',')[0].trim();
     const b = req.body || {};
+    await ensureLivekitSecretsLoaded();
     const basketId = String(b.basketId||'').trim();
     let provider = String(b.provider||'').trim().toLowerCase();
     const role = (String(b.role||'drive').trim().toLowerCase() === 'cashier') ? 'cashier' : 'drive';
@@ -2642,7 +2853,9 @@ addRoute('post', '/rtc/token', async (req, res) => {
       try { LK = await import('livekit-server-sdk'); } catch (e) { return res.status(500).json({ error: 'livekit_sdk_missing' }); }
       try {
         const at = new LK.AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, { identity, ttl: '1h' });
-        at.addGrant({ roomJoin: true, room: basketId, canPublish: true, canSubscribe: true });
+        // Role-based permissions: both roles can publish and subscribe for two-way video
+        const canPublish = true;
+        at.addGrant({ roomJoin: true, room: basketId, canPublish, canSubscribe: true });
         const token = await at.toJwt();
         const url = (process.env.LIVEKIT_WS_URL||'').trim();
         try { await logConnectionEvent('livekit_token_issued', { basketId, role, identity, url }); } catch {}
@@ -3461,6 +3674,22 @@ addRoute('put', '/platform/settings', verifyAuthOpen, requirePlatformAdminOpen, 
   } catch { return res.status(500).json({ error: 'save_failed' }); }
 });
 
+// Diagnostic: whoami for platform admins to inspect caller identity and tenant role
+addRoute('get', '/admin/debug/whoami', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  try {
+    const email = (req.user?.email || '').toLowerCase();
+    const tenant = String(req.query?.tenant || '').trim();
+    let role = null;
+    if (tenant && email) {
+      try { role = await getUserRoleForTenant(email, tenant); } catch { role = null; }
+    }
+    const isPlat = await isPlatformAdmin(req);
+    return res.json({ email, platform_admin: !!isPlat, tenant, role, hasAuth: !!req.user });
+  } catch (_e) {
+    return res.json({ email: '', platform_admin: false, tenant: '', role: null, hasAuth: !!req.user });
+  }
+});
+
 // Admin variant: update Drive‑Thru state for a specific tenant (avoids 401 on /drive-thru/state POST)
 addRoute('post', '/admin/tenants/:id/drive-thru/state', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   const tenantId = String(req.params.id||'').trim();
@@ -3567,12 +3796,49 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
   } catch (_e) { return res.status(500).json({ error: 'server_error' }); }
 });
 
+// Device location (authenticated). Store last location best-effort and always return 200.
+addRoute('post', '/device/location', requireTenant, requireDeviceAuth, async (req, res) => {
+  try {
+    const d = req.device || {};
+    const b = req.body || {};
+    const lat = Number(b.latitude);
+    const lng = Number(b.longitude);
+    const acc = (b.accuracy != null) ? Number(b.accuracy) : null;
+    const alt = (b.altitude != null) ? Number(b.altitude) : null;
+    const spd = (b.speed != null) ? Number(b.speed) : null;
+    const hdg = (b.heading != null) ? Number(b.heading) : null;
+    if (Number.isFinite(lat) && Number.isFinite(lng) && HAS_DB) {
+      const loc = {
+        lat: Math.max(-90, Math.min(90, lat)),
+        lng: Math.max(-180, Math.min(180, lng)),
+        accuracy: Number.isFinite(acc) ? acc : null,
+        altitude: Number.isFinite(alt) ? alt : null,
+        speed: Number.isFinite(spd) ? spd : null,
+        heading: Number.isFinite(hdg) ? hdg : null,
+        at: new Date().toISOString()
+      };
+      // Persist into devices.meta under last_location and update last_seen; also keep a simple text snapshot
+      try {
+        await db(
+          "update devices set meta = jsonb_set(coalesce(meta,'{}'::jsonb), '{last_location}', $2::jsonb, true), location=$3, last_seen=now() where device_id=$1",
+          [d.id, loc, `${loc.lat},${loc.lng}`]
+        );
+      } catch {}
+    }
+    return res.json({ ok: true });
+  } catch {
+    // Always OK to keep clients quiet
+    return res.json({ ok: true });
+  }
+});
+
 // Static: signup and profile pages
 addRoute('get', /^\/signup\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'signup', 'index.html')));
 addRoute('get', /^\/verify-email\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'verify-email', 'index.html')));
 addRoute('get', /^\/profile\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'profile', 'index.html')));
 addRoute('get', /^\/start-trial\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'start-trial', 'index.html')));
 addRoute('get', /^\/admin\/invite\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'admin', 'invite', 'index.html')));
+addRoute('get', /^\/admin\/whoami\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'admin', 'whoami', 'index.html')));
 
 // Super admin: list tenants
 // List built-in roles (no auth required beyond login)
@@ -3686,7 +3952,7 @@ addRoute('get', '/admin/tenants', verifyAuthOpen, requirePlatformAdminOpen, asyn
     // Ensure dependent schema so this route doesn't 500 on fresh DBs
     await ensureLicensingSchema(); // creates branches/devices + adds branch_limit/license_limit
     try { await db("ALTER TABLE IF EXISTS tenants ADD COLUMN IF NOT EXISTS company_id char(6)"); } catch {}
-    const rows = await db("select t.tenant_id as id, t.company_name as name, trim(t.company_id) as code, t.status, t.branch_limit, t.license_limit, (select count(*)::int from branches b where b.tenant_id=t.tenant_id) as branch_count, (select count(*)::int from devices d where d.tenant_id=t.tenant_id and d.status='active') as device_count from tenants t order by t.created_at desc");
+    const rows = await db("select t.tenant_id as id, t.company_name as name, trim(t.company_id) as code, t.status, t.branch_limit, t.license_limit, (select count(*)::int from branches b where b.tenant_id=t.tenant_id) as branch_count, (select count(*)::int from devices d where d.tenant_id=t.tenant_id and (coalesce(cast(d.status as text),'active')='active' or (d.activated_at is not null and (d.revoked_at is null or d.revoked_at > now())))) as device_count from tenants t order by t.created_at desc");
     return res.json(rows);
   } catch (_e) {
     // Minimal fallback (no counts) if schema is incomplete
@@ -4246,13 +4512,72 @@ addRoute('get', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenan
         p.sync_status::text as sync_status, p.published_channels,
         p.internal_notes, p.staff_notes
       from products p
-      join categories c on c.id=p.category_id
+      left join categories c on c.id=p.category_id
       where p.tenant_id=$1 and p.id=$2
       limit 1`;
-    const rows = await db(sql, [tenantId, pid]);
-    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    let rows = await db(sql, [tenantId, pid]);
+
+    if (!rows.length) {
+      // Try relaxed text cast match (in case of driver/type mismatch)
+      try {
+        const sqlTxt = sql.replace('p.id=$2', 'p.id::text=$2');
+        rows = await db(sqlTxt, [tenantId, pid]);
+      } catch {}
+    }
+
+    if (!rows.length) {
+      // Fallback: allow lookup by SKU or barcode if pid is not a UUID/id
+      try {
+        const alt = await db('select id from products where tenant_id=$1 and (sku=$2 or barcode=$2) limit 1', [tenantId, pid]);
+        if (alt && alt.length) {
+          rows = await db(sql, [tenantId, alt[0].id]);
+        }
+      } catch {}
+    }
+
+    if (!rows.length) {
+      // Fallback to minimal projection in case of schema drift
+      try {
+        const sqlMin = `
+          select 
+            p.id, p.tenant_id, p.name, p.name_localized, p.description, p.description_localized,
+            p.sku, p.barcode,
+            p.price, p.cost, null::numeric as packaging_fee,
+            p.category_id, c.name as category_name,
+            p.image_url, null as image_white_url, null as image_beauty_url,
+            p.preparation_time, p.calories, null::numeric as fat_g, null::numeric as carbs_g, null::numeric as protein_g, null::numeric as sugar_g, null::integer as sodium_mg, null::numeric as salt_g, null as serving_size,
+            null as spice_level,
+            p.ingredients_en, p.ingredients_ar, p.allergens,
+            true as pos_visible, true as online_visible, true as delivery_visible,
+            p.talabat_reference, p.jahez_reference, p.vthru_reference,
+            coalesce(p.active, p.is_active, true) as active,
+            p.created_at, p.updated_at, null::integer as version, null::text as last_modified_by,
+            null::integer as sort_order, false as is_featured, null::text[] as tags, null::jsonb as diet_flags, null::text as product_type,
+            null::text as sync_status, null::jsonb as published_channels,
+            null::text as internal_notes, null::text as staff_notes
+          from products p
+          left join categories c on c.id=p.category_id
+          where p.tenant_id=$1 and p.id=$2
+          limit 1`;
+        rows = await db(sqlMin, [tenantId, pid]);
+      } catch {}
+    }
+
+    if (!rows.length) {
+      // Diagnose whether the product exists under another tenant
+      try {
+        const t = await db('select tenant_id from products where id=$1 limit 1', [pid]);
+        if (t && t[0] && t[0].tenant_id && String(t[0].tenant_id) !== String(tenantId)) {
+          try { console.error('[product:get] wrong_tenant', { tenantId, pid, actual: t[0].tenant_id }); } catch {}
+          return res.status(409).json({ error: 'wrong_tenant', tenant_id: t[0].tenant_id });
+        }
+      } catch {}
+      try { console.error('[product:get] not_found', { tenantId, pid }); } catch {}
+      return res.status(404).json({ error: 'not_found' });
+    }
     return res.json(rows[0]);
   } catch (_e) {
+    try { console.error('[product:get] failed', { tenantId, pid }); } catch {}
     return res.status(404).json({ error: 'not_found' });
   }
 });
@@ -4375,58 +4700,61 @@ addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenan
     // ensure product exists
     const ex = await db('select id from products where tenant_id=$1 and id=$2', [tenantId, pid]);
     if (!ex.length) return res.status(404).json({ error: 'not_found' });
+
+    const tryUpdate = async (sql, params) => { try { await db(sql, params); } catch (_e) {} };
+
     if (body.category_id != null) {
       const cid = String(body.category_id);
       const cat = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, cid]);
       if (!cat.length) return res.status(404).json({ error: 'category_not_found' });
-      await db('update products set category_id=$1 where tenant_id=$2 and id=$3', [cid, tenantId, pid]);
+      await tryUpdate('update products set category_id=$1 where tenant_id=$2 and id=$3', [cid, tenantId, pid]);
     }
-    if (body.name != null) await db('update products set name=$1 where tenant_id=$2 and id=$3', [String(body.name), tenantId, pid]);
-    if (body.price != null) await db('update products set price=$1 where tenant_id=$2 and id=$3', [Number(body.price)||0, tenantId, pid]);
-    if (body.cost != null) await db('update products set cost=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:v)(Number(body.cost)), tenantId, pid]);
-    if (body.image_url != null) await db('update products set image_url=$1 where tenant_id=$2 and id=$3', [String(body.image_url), tenantId, pid]);
-    if (body.image_white_url != null) await db('update products set image_white_url=$1 where tenant_id=$2 and id=$3', [String(body.image_white_url), tenantId, pid]);
-    if (body.image_beauty_url != null) await db('update products set image_beauty_url=$1 where tenant_id=$2 and id=$3', [String(body.image_beauty_url), tenantId, pid]);
-    if (body.barcode != null) await db('update products set barcode=$1 where tenant_id=$2 and id=$3', [String(body.barcode), tenantId, pid]);
-    if (body.preparation_time != null) await db('update products set preparation_time=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.preparation_time,10)), tenantId, pid]);
-    if (body.calories != null) await db('update products set calories=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.calories,10)), tenantId, pid]);
-    if (body.is_high_salt != null) await db('update products set is_high_salt=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_high_salt), tenantId, pid]);
-    if (body.is_sold_by_weight != null) await db('update products set is_sold_by_weight=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_sold_by_weight), tenantId, pid]);
-    if (body.is_stock_product != null) await db('update products set is_stock_product=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_stock_product), tenantId, pid]);
-    if (body.name_localized != null) await db('update products set name_localized=$1 where tenant_id=$2 and id=$3', [String(body.name_localized), tenantId, pid]);
-    if (body.description != null) await db('update products set description=$1 where tenant_id=$2 and id=$3', [String(body.description), tenantId, pid]);
-    if (body.description_localized != null) await db('update products set description_localized=$1 where tenant_id=$2 and id=$3', [String(body.description_localized), tenantId, pid]);
-    if (body.tax_group_reference != null) await db('update products set tax_group_reference=$1 where tenant_id=$2 and id=$3', [String(body.tax_group_reference), tenantId, pid]);
-    if (body.packaging_fee != null) await db('update products set packaging_fee=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?0:Number(v))(body.packaging_fee), tenantId, pid]);
-    if (body.ingredients_en != null) await db('update products set ingredients_en=$1 where tenant_id=$2 and id=$3', [String(body.ingredients_en), tenantId, pid]);
-    if (body.ingredients_ar != null) await db('update products set ingredients_ar=$1 where tenant_id=$2 and id=$3', [String(body.ingredients_ar), tenantId, pid]);
-    if (body.allergens != null) await db('update products set allergens=$1 where tenant_id=$2 and id=$3', [JSON.stringify(Array.isArray(body.allergens)?body.allergens:String(body.allergens||'').split(',').map(s=>s.trim()).filter(Boolean)), tenantId, pid]);
-    if (body.fat_g != null) await db('update products set fat_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.fat_g), tenantId, pid]);
-    if (body.carbs_g != null) await db('update products set carbs_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.carbs_g), tenantId, pid]);
-    if (body.protein_g != null) await db('update products set protein_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.protein_g), tenantId, pid]);
-    if (body.sugar_g != null) await db('update products set sugar_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.sugar_g), tenantId, pid]);
-    if (body.sodium_mg != null) await db('update products set sodium_mg=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.sodium_mg,10)), tenantId, pid]);
-    if (body.salt_g != null) await db('update products set salt_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.salt_g), tenantId, pid]);
-    if (body.serving_size != null) await db('update products set serving_size=$1 where tenant_id=$2 and id=$3', [String(body.serving_size), tenantId, pid]);
-    if (body.pos_visible != null) await db('update products set pos_visible=$1 where tenant_id=$2 and id=$3', [Boolean(body.pos_visible), tenantId, pid]);
-    if (body.online_visible != null) await db('update products set online_visible=$1 where tenant_id=$2 and id=$3', [Boolean(body.online_visible), tenantId, pid]);
-    if (body.delivery_visible != null) await db('update products set delivery_visible=$1 where tenant_id=$2 and id=$3', [Boolean(body.delivery_visible), tenantId, pid]);
-    if (body.spice_level != null) await db("update products set spice_level=$1::product_spice_level where tenant_id=$2 and id=$3", [(s=>{ s=String(s||'').toLowerCase(); return ['none','mild','medium','hot','extra_hot'].includes(s)?s:null; })(body.spice_level), tenantId, pid]);
-    if (body.talabat_reference != null) await db('update products set talabat_reference=$1 where tenant_id=$2 and id=$3', [String(body.talabat_reference), tenantId, pid]);
-    if (body.jahez_reference != null) await db('update products set jahez_reference=$1 where tenant_id=$2 and id=$3', [String(body.jahez_reference), tenantId, pid]);
-    if (body.vthru_reference != null) await db('update products set vthru_reference=$1 where tenant_id=$2 and id=$3', [String(body.vthru_reference), tenantId, pid]);
-    if (body.active != null) await db('update products set active=$1 where tenant_id=$2 and id=$3', [Boolean(body.active), tenantId, pid]);
-    if (body.sort_order != null) await db('update products set sort_order=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.sort_order,10)), tenantId, pid]);
-    if (body.is_featured != null) await db('update products set is_featured=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_featured), tenantId, pid]);
-    if (body.tags != null) await db('update products set tags=$1 where tenant_id=$2 and id=$3', [Array.isArray(body.tags)?body.tags:String(body.tags||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
-    if (body.diet_flags != null) await db('update products set diet_flags=$1::diet_flag_enum[] where tenant_id=$2 and id=$3', [Array.isArray(body.diet_flags)?body.diet_flags:String(body.diet_flags||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
-    if (body.type != null || body.product_type != null) await db('update products set product_type=$1::product_type where tenant_id=$2 and id=$3', [(s=>{ s=String((s||'')).toLowerCase(); return ['standard','combo','modifier','digital'].includes(s)?s:null; })(body.type||body.product_type), tenantId, pid]);
-    if (body.sync_status != null) await db('update products set sync_status=$1::sync_status where tenant_id=$2 and id=$3', [(s=>{ s=String(s||'').toLowerCase(); return ['pending','synced','error'].includes(s)?s:null; })(body.sync_status), tenantId, pid]);
-    if (body.published_channels != null) await db('update products set published_channels=$1 where tenant_id=$2 and id=$3', [Array.isArray(body.published_channels)?body.published_channels:String(body.published_channels||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
-    if (body.internal_notes != null) await db('update products set internal_notes=$1 where tenant_id=$2 and id=$3', [String(body.internal_notes||'').trim()||null, tenantId, pid]);
-    if (body.staff_notes != null) await db('update products set staff_notes=$1 where tenant_id=$2 and id=$3', [String(body.staff_notes||'').trim()||null, tenantId, pid]);
+    if (body.name != null) await tryUpdate('update products set name=$1 where tenant_id=$2 and id=$3', [String(body.name), tenantId, pid]);
+    if (body.price != null) await tryUpdate('update products set price=$1 where tenant_id=$2 and id=$3', [Number(body.price)||0, tenantId, pid]);
+    if (body.cost != null) await tryUpdate('update products set cost=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:v)(Number(body.cost)), tenantId, pid]);
+    if (body.image_url != null) await tryUpdate('update products set image_url=$1 where tenant_id=$2 and id=$3', [String(body.image_url), tenantId, pid]);
+    if (body.image_white_url != null) await tryUpdate('update products set image_white_url=$1 where tenant_id=$2 and id=$3', [String(body.image_white_url), tenantId, pid]);
+    if (body.image_beauty_url != null) await tryUpdate('update products set image_beauty_url=$1 where tenant_id=$2 and id=$3', [String(body.image_beauty_url), tenantId, pid]);
+    if (body.barcode != null) await tryUpdate('update products set barcode=$1 where tenant_id=$2 and id=$3', [String(body.barcode), tenantId, pid]);
+    if (body.preparation_time != null) await tryUpdate('update products set preparation_time=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.preparation_time,10)), tenantId, pid]);
+    if (body.calories != null) await tryUpdate('update products set calories=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.calories,10)), tenantId, pid]);
+    if (body.is_high_salt != null) await tryUpdate('update products set is_high_salt=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_high_salt), tenantId, pid]);
+    if (body.is_sold_by_weight != null) await tryUpdate('update products set is_sold_by_weight=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_sold_by_weight), tenantId, pid]);
+    if (body.is_stock_product != null) await tryUpdate('update products set is_stock_product=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_stock_product), tenantId, pid]);
+    if (body.name_localized != null) await tryUpdate('update products set name_localized=$1 where tenant_id=$2 and id=$3', [String(body.name_localized), tenantId, pid]);
+    if (body.description != null) await tryUpdate('update products set description=$1 where tenant_id=$2 and id=$3', [String(body.description), tenantId, pid]);
+    if (body.description_localized != null) await tryUpdate('update products set description_localized=$1 where tenant_id=$2 and id=$3', [String(body.description_localized), tenantId, pid]);
+    if (body.tax_group_reference != null) await tryUpdate('update products set tax_group_reference=$1 where tenant_id=$2 and id=$3', [String(body.tax_group_reference), tenantId, pid]);
+    if (body.packaging_fee != null) await tryUpdate('update products set packaging_fee=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?0:Number(v))(body.packaging_fee), tenantId, pid]);
+    if (body.ingredients_en != null) await tryUpdate('update products set ingredients_en=$1 where tenant_id=$2 and id=$3', [String(body.ingredients_en), tenantId, pid]);
+    if (body.ingredients_ar != null) await tryUpdate('update products set ingredients_ar=$1 where tenant_id=$2 and id=$3', [String(body.ingredients_ar), tenantId, pid]);
+    if (body.allergens != null) await tryUpdate('update products set allergens=$1 where tenant_id=$2 and id=$3', [JSON.stringify(Array.isArray(body.allergens)?body.allergens:String(body.allergens||'').split(',').map(s=>s.trim()).filter(Boolean)), tenantId, pid]);
+    if (body.fat_g != null) await tryUpdate('update products set fat_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.fat_g), tenantId, pid]);
+    if (body.carbs_g != null) await tryUpdate('update products set carbs_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.carbs_g), tenantId, pid]);
+    if (body.protein_g != null) await tryUpdate('update products set protein_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.protein_g), tenantId, pid]);
+    if (body.sugar_g != null) await tryUpdate('update products set sugar_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.sugar_g), tenantId, pid]);
+    if (body.sodium_mg != null) await tryUpdate('update products set sodium_mg=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.sodium_mg,10)), tenantId, pid]);
+    if (body.salt_g != null) await tryUpdate('update products set salt_g=$1 where tenant_id=$2 and id=$3', [(v=>isNaN(v)?null:Number(v))(body.salt_g), tenantId, pid]);
+    if (body.serving_size != null) await tryUpdate('update products set serving_size=$1 where tenant_id=$2 and id=$3', [String(body.serving_size), tenantId, pid]);
+    if (body.pos_visible != null) await tryUpdate('update products set pos_visible=$1 where tenant_id=$2 and id=$3', [Boolean(body.pos_visible), tenantId, pid]);
+    if (body.online_visible != null) await tryUpdate('update products set online_visible=$1 where tenant_id=$2 and id=$3', [Boolean(body.online_visible), tenantId, pid]);
+    if (body.delivery_visible != null) await tryUpdate('update products set delivery_visible=$1 where tenant_id=$2 and id=$3', [Boolean(body.delivery_visible), tenantId, pid]);
+    if (body.spice_level != null) await tryUpdate("update products set spice_level=$1::product_spice_level where tenant_id=$2 and id=$3", [(s=>{ s=String(s||'').toLowerCase(); return ['none','mild','medium','hot','extra_hot'].includes(s)?s:null; })(body.spice_level), tenantId, pid]);
+    if (body.talabat_reference != null) await tryUpdate('update products set talabat_reference=$1 where tenant_id=$2 and id=$3', [String(body.talabat_reference), tenantId, pid]);
+    if (body.jahez_reference != null) await tryUpdate('update products set jahez_reference=$1 where tenant_id=$2 and id=$3', [String(body.jahez_reference), tenantId, pid]);
+    if (body.vthru_reference != null) await tryUpdate('update products set vthru_reference=$1 where tenant_id=$2 and id=$3', [String(body.vthru_reference), tenantId, pid]);
+    if (body.active != null) await tryUpdate('update products set active=$1 where tenant_id=$2 and id=$3', [Boolean(body.active), tenantId, pid]);
+    if (body.sort_order != null) await tryUpdate('update products set sort_order=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.sort_order,10)), tenantId, pid]);
+    if (body.is_featured != null) await tryUpdate('update products set is_featured=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_featured), tenantId, pid]);
+    if (body.tags != null) await tryUpdate('update products set tags=$1 where tenant_id=$2 and id=$3', [Array.isArray(body.tags)?body.tags:String(body.tags||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
+    if (body.diet_flags != null) await tryUpdate('update products set diet_flags=$1::diet_flag_enum[] where tenant_id=$2 and id=$3', [Array.isArray(body.diet_flags)?body.diet_flags:String(body.diet_flags||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
+    if (body.type != null || body.product_type != null) await tryUpdate('update products set product_type=$1::product_type where tenant_id=$2 and id=$3', [(s=>{ s=String((s||'')).toLowerCase(); return ['standard','combo','modifier','digital'].includes(s)?s:null; })(body.type||body.product_type), tenantId, pid]);
+    if (body.sync_status != null) await tryUpdate('update products set sync_status=$1::sync_status where tenant_id=$2 and id=$3', [(s=>{ s=String(s||'').toLowerCase(); return ['pending','synced','error'].includes(s)?s:null; })(body.sync_status), tenantId, pid]);
+    if (body.published_channels != null) await tryUpdate('update products set published_channels=$1 where tenant_id=$2 and id=$3', [Array.isArray(body.published_channels)?body.published_channels:String(body.published_channels||'').split(',').map(s=>s.trim()).filter(Boolean), tenantId, pid]);
+    if (body.internal_notes != null) await tryUpdate('update products set internal_notes=$1 where tenant_id=$2 and id=$3', [String(body.internal_notes||'').trim()||null, tenantId, pid]);
+    if (body.staff_notes != null) await tryUpdate('update products set staff_notes=$1 where tenant_id=$2 and id=$3', [String(body.staff_notes||'').trim()||null, tenantId, pid]);
     // Set last_modified_by best-effort from authenticated user
-    try { await db('update products set last_modified_by=$1 where tenant_id=$2 and id=$3', [(req.user && req.user.email ? String(req.user.email).toLowerCase() : null), tenantId, pid]); } catch {}
+    await tryUpdate('update products set last_modified_by=$1 where tenant_id=$2 and id=$3', [(req.user && req.user.email ? String(req.user.email).toLowerCase() : null), tenantId, pid]);
     return res.json({ ok:true });
   } else {
     const mem = ensureMemCatalog(tenantId);
@@ -4622,6 +4950,8 @@ addRoute('get', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuthOp
               coalesce(pmg.required, mg.required) as required,
               coalesce(pmg.min_select, mg.min_select) as min_select,
               coalesce(pmg.max_select, mg.max_select) as max_select,
+              pmg.default_option_reference as default_option_reference,
+              pmg.unique_options as unique_options,
               (pmg.product_id is not null) as linked
          from modifier_groups mg
     left join product_modifier_groups pmg
@@ -4655,15 +4985,19 @@ addRoute('put', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, 
     const required = it.required != null ? Boolean(it.required) : null;
     const min_select = (n=>Number.isFinite(n)?n:null)(parseInt(it.min_select,10));
     const max_select = (n=>Number.isFinite(n)?n:null)(parseInt(it.max_select,10));
+    const default_option_reference = (it.default_option_reference || it.default_option || it.default_sku || null) ? String(it.default_option_reference || it.default_option || it.default_sku || '').trim() : null;
+    const unique_options = (it.unique_options != null) ? !!it.unique_options : null;
     await db(
-      `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select)
-       values ($1,$2,$3,$4,$5,$6)
+      `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select, default_option_reference, unique_options)
+       values ($1,$2,$3,$4,$5,$6,$7,$8)
        on conflict (product_id, group_id)
        do update set sort_order=excluded.sort_order,
                      required=excluded.required,
                      min_select=excluded.min_select,
-                     max_select=excluded.max_select`,
-      [pid, gid, sort_order, required, min_select, max_select]
+                     max_select=excluded.max_select,
+                     default_option_reference=coalesce(excluded.default_option_reference, product_modifier_groups.default_option_reference),
+                     unique_options=coalesce(excluded.unique_options, product_modifier_groups.unique_options)`,
+      [pid, gid, sort_order, required, min_select, max_select, default_option_reference, unique_options]
     );
   }
   return res.json({ ok: true });
@@ -4683,8 +5017,12 @@ addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuth, req
         required   boolean,
         min_select integer,
         max_select integer,
+        default_option_reference text,
+        unique_options boolean NOT NULL DEFAULT true,
         PRIMARY KEY (product_id, group_id)
       )`);
+    await db("ALTER TABLE IF EXISTS product_modifier_groups ADD COLUMN IF NOT EXISTS default_option_reference text");
+    await db("ALTER TABLE IF EXISTS product_modifier_groups ADD COLUMN IF NOT EXISTS unique_options boolean NOT NULL DEFAULT true");
   } catch {}
 
   const tenantId = req.params.id;
@@ -5227,19 +5565,54 @@ addRoute('delete', '/admin/tenants/:id/integrations/:provider', verifyAuthOpen, 
   if (!HAS_DB) {
     if (!DEV_OPEN_ADMIN) return res.status(503).json({ error: 'DB not configured' });
     const arr = memIntegrationsByTenant.get(tenantId) || [];
+    const now = new Date().toISOString();
+    if (!label) {
+      // Revoke all tokens for this provider
+      for (const it of arr) {
+        if (String(it.provider||'').toLowerCase() === provider && !it.revoked_at) {
+          it.revoked_at = now; it.token_plain = null; it.updated_at = now;
+        }
+      }
+      memIntegrationsByTenant.set(tenantId, arr);
+      return res.json({ ok: true, all: true });
+    }
+    // Revoke a specific label only
     const key = (provider + '::' + (label||''));
     const idx = arr.findIndex(x => (x.provider+'::'+(x.label||'')) === key);
-    if (idx >= 0) { arr[idx].revoked_at = new Date().toISOString(); arr[idx].token_plain = null; arr[idx].updated_at = new Date().toISOString(); }
+    if (idx >= 0) { arr[idx].revoked_at = now; arr[idx].token_plain = null; arr[idx].updated_at = now; }
     memIntegrationsByTenant.set(tenantId, arr);
     return res.json({ ok: true });
   }
   try {
+    if (!label) {
+      // Revoke ALL tokens for this provider when no label is specified (more intuitive UI)
+      await db(`update tenant_api_integrations
+                   set revoked_at=now(), token_encrypted=null, updated_at=now()
+                 where tenant_id=$1 and provider=$2 and revoked_at is null`, [tenantId, provider]);
+      return res.json({ ok: true, all: true });
+    }
     await db(`update tenant_api_integrations
                  set revoked_at=now(), token_encrypted=null, updated_at=now()
                where tenant_id=$1 and provider=$2 and coalesce(label,'')=coalesce($3,'')`, [tenantId, provider, label]);
     return res.json({ ok: true });
   } catch (_e) {
     return res.status(500).json({ error: 'integration_revoke_failed' });
+  }
+});
+
+// Revoke all integration tokens for a provider (all labels)
+addRoute('delete', '/admin/tenants/:id/integrations/:provider/all', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const provider = String(req.params.provider||'').trim().toLowerCase();
+  if (!tenantId || !provider) return res.status(400).json({ error: 'invalid_request' });
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  try {
+    await db(`update tenant_api_integrations
+                 set revoked_at=now(), token_encrypted=null, updated_at=now()
+               where tenant_id=$1 and provider=$2 and revoked_at is null`, [tenantId, provider]);
+    return res.json({ ok: true });
+  } catch (_e) {
+    return res.status(500).json({ error: 'integration_revoke_all_failed' });
   }
 });
 
@@ -5253,7 +5626,15 @@ async function getTenantFoodicsToken(tenantId){
     return it?.token_plain || null;
   }
   try {
-    const rows = await db(`select token_encrypted from tenant_api_integrations where tenant_id=$1 and provider='foodics' and revoked_at is null limit 1`, [tenantId]);
+    const rows = await db(`
+      select token_encrypted
+        from tenant_api_integrations
+       where tenant_id=$1
+         and provider='foodics'
+         and revoked_at is null
+         and token_encrypted is not null
+       order by updated_at desc, created_at desc
+       limit 1`, [tenantId]);
     if (!rows.length) return null;
     const buf = rows[0].token_encrypted;
     const tok = cryptoUtil.decryptFromBuffer(buf);
@@ -5275,30 +5656,115 @@ async function runTenantFoodicsSync(tenantId, opts={}){
   const token = await getTenantFoodicsToken(tenantId);
   if (!token) throw new Error('token_missing');
   const provider = 'foodics';
+  const forceImages = !!(opts.force_images || opts.forceImages || opts.refresh_images || opts.refreshImages);
+  const phase = String(opts.phase || '').toLowerCase(); // '', 'full', 'groups', 'options'
   const { x, y } = hashPair(tenantId, provider);
   // Try advisory lock
   try { await db('select pg_try_advisory_lock($1,$2)', [x, y]); } catch {}
   const [run] = await db('insert into integration_sync_runs (tenant_id, provider, ok, stats) values ($1,$2,null,$3::jsonb) returning id, started_at', [tenantId, provider, JSON.stringify({})]);
   const runId = run.id;
-  const stats = { categories:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, products:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, modifier_groups:{created:0,updated:0,skipped:0}, modifier_options:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, product_modifier_links:{created:0,updated:0,skipped:0}, pages:{categories:0,products:0,modifier_groups:0,modifier_options:0,assignments:0}, rate_limit_hits:0, duration_ms:0 };
+  const stats = { categories:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, products:{created:0,updated:0,deactivated:0,reactivated:0,skipped:0}, modifier_groups:{created:0,updated:0,deleted:0,skipped:0}, modifier_options:{created:0,updated:0,deleted:0,deactivated:0,reactivated:0,skipped:0}, product_modifier_links:{created:0,updated:0,skipped:0}, pages:{categories:0,products:0,modifier_groups:0,modifier_options:0,assignments:0}, rate_limit_hits:0, duration_ms:0 };
   const t0 = Date.now();
   try {
     const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
     if (!client) throw new Error('client_unavailable');
 
-    // Fetch all
-    const [cats, groups, options] = await Promise.all([
-      client.listCategories().catch(()=>({items:[],pages:0})),
-      client.listModifierGroups().catch(()=>({items:[],pages:0})),
-      client.listModifierOptions().catch(()=>({items:[],pages:0})),
-    ]);
-    const prods = await client.listProducts().catch(()=>({items:[],pages:0}));
+    // Fetch upstream resources according to phase (still fetch groups to allow per-group options later)
+    const cats   = (phase && phase !== 'full') ? { items: [], pages: 0 } : await client.listCategories().catch(()=>({items:[],pages:0}));
+    const groups = await client.listModifierGroups().catch(()=>({items:[],pages:0}));
+    const options = await client.listModifierOptions().catch(()=>({items:[],pages:0}));
+    const prods  = (phase === 'groups' || phase === 'options') ? { items: [], pages: 0 } : await client.listProducts().catch(()=>({items:[],pages:0}));
+
+    // Initialize option items from global listing
+    let optionItems = Array.isArray(options?.items) ? options.items.slice() : [];
+
+    try { console.error('[foodics] fetched counts:', { categories: cats?.items?.length||0, groups: groups?.items?.length||0, options: optionItems?.length||0, products: prods?.items?.length||0 }); } catch {}
     const assigns = await client.listProductModifierAssignments().catch(()=>({items:[],pages:0}));
-    stats.pages.categories = cats.pages||0; stats.pages.products = prods.pages||0; stats.pages.modifier_groups = groups.pages||0; stats.pages.modifier_options = options.pages||0; stats.pages.assignments = assigns.pages||0;
+    // Track desired upstream IDs for hard-deletes
+    const __desiredGroupExts = new Set();
+    const __desiredOptionExts = new Set();
+    stats.pages.categories = cats.pages||0; stats.pages.products = prods.pages||0; stats.pages.modifier_groups = groups.pages||0; stats.pages.modifier_options = options.pages||0; stats.pages.assignments = assigns?.pages||0;
+
+    // Debug: log one sample product image-related fields to diagnose missing images
+    try {
+      const first = (prods && Array.isArray(prods.items) && prods.items.length) ? prods.items[0] : null;
+      if (first) {
+        const keys = Object.keys(first||{}).slice(0,50).join(',');
+        console.error('[foodics] sample product keys:', keys);
+        const snap = {
+          image: first?.image ?? null,
+          images: first?.images ?? null,
+          media: first?.media ?? null,
+          photo: first?.photo ?? null,
+          main_image: first?.main_image ?? null,
+          primary_image: first?.primary_image ?? null
+        };
+        try { console.error('[foodics] sample product image fields:', JSON.stringify(snap).slice(0, 2000)); } catch { console.error('[foodics] sample product image fields: <unserializable>'); }
+      }
+    } catch {}
 
     // Upsert helpers
     await ensureCategoryStatusColumns();
     await ensureModifiersSchema();
+
+    // Debug: sample option shape to diagnose mapping issues
+    try {
+      const firstOpt = (options && Array.isArray(options.items) && options.items.length) ? options.items[0] : null;
+      if (firstOpt) {
+        const keys = Object.keys(firstOpt||{}).slice(0,50).join(',');
+        console.error('[foodics] sample option keys:', keys);
+        const snap = {
+          group_id: firstOpt?.group_id ?? null,
+          modifier_group_id: firstOpt?.modifier_group_id ?? null,
+          modifier_id: firstOpt?.modifier_id ?? null,
+          group: firstOpt?.group ?? null,
+          modifier: firstOpt?.modifier ?? null,
+          group_ref: firstOpt?.modifier_group_reference ?? firstOpt?.group_reference ?? null
+        };
+        try { console.error('[foodics] sample option group fields:', JSON.stringify(snap).slice(0, 2000)); } catch { console.error('[foodics] sample option group fields: <unserializable>'); }
+      }
+    } catch {}
+
+    // Helper: robustly pick an image URL from various shapes
+    function looksLikeUrl(s){ try { return /^https?:\/\//i.test(String(s)) || /^data:image\//i.test(String(s)); } catch { return false; } }
+    function pickUrlFromAny(v){
+      try {
+        if (!v) return null;
+        if (typeof v === 'string') return looksLikeUrl(v) ? v : null;
+        if (Array.isArray(v)) { for (const it of v) { const u = pickUrlFromAny(it); if (u) return u; } return null; }
+        if (typeof v === 'object') {
+          const pri = ['url','link','original_url','original','full_url','src','href'];
+          for (const k of pri) { const val = v[k]; if (typeof val === 'string' && looksLikeUrl(val)) return val; }
+          // Some APIs place url under nested objects
+          for (const val of Object.values(v)) { const u = pickUrlFromAny(val); if (u) return u; }
+        }
+        return null;
+      } catch { return null; }
+    }
+    function pickImageUrlFromRecord(rec){
+      try {
+        function normalize(u){
+          if (!u) return null;
+          try {
+            let s = String(u).trim();
+            if (!s) return null;
+            if (s.startsWith('//')) return 'https:' + s; // protocol-relative -> https
+            return s;
+          } catch { return null; }
+        }
+        const fields = ['image','image_url','photo','main_image','primary_image'];
+        for (const f of fields) { const u = pickUrlFromAny(rec?.[f]); const n = normalize(u); if (n) return n; }
+        const arrFields = ['images','gallery','photos','media','__included','included'];
+        for (const f of arrFields) { const u = pickUrlFromAny(rec?.[f]); const n = normalize(u); if (n) return n; }
+        // Fallback: scan shallow keys for any URL-looking string
+        try {
+          for (const [k,v] of Object.entries(rec||{})){
+            if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v;
+          }
+        } catch {}
+        return null;
+      } catch { return null; }
+    }
 
     async function getMapping(entity_type, external_id){
       const rows = await db('select entity_id from tenant_external_mappings where tenant_id=$1 and provider=$2 and entity_type=$3 and external_id=$4', [tenantId, provider, entity_type, String(external_id)]);
@@ -5321,7 +5787,8 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         return s || null;
       } catch { return null; }
     }
-    for (const c of (cats.items||[])){
+    if (!phase || phase === 'full') {
+      for (const c of (cats.items||[])){
       const extId = c.id || c.uuid || c.reference || c.code;
       if (!extId) { stats.categories.skipped++; continue; }
       const ref = (c.reference || c.code || '').toString() || null;
@@ -5333,7 +5800,7 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const active = (String(c.is_active||c.active||'').toLowerCase() === 'yes') || (c.is_active === true) || (c.active === true);
       const name = c.name || c.title || '';
       const name_localized = c.name_localized || c.name_ar || null;
-      const image_url = c.image || c.image_url || null;
+      const image_url = pickImageUrlFromRecord(c);
       const baseSlug = name || ref || String(extId);
       const slug = slugifyCategory(baseSlug) || (`cat-${String(extId).toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,20)}`);
       if (!id) {
@@ -5355,16 +5822,25 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         // Try update including slug; fallback without if column not present
         let ok = true;
         try {
-          await db('update categories set name=coalesce($1,name), slug=coalesce($2,slug), reference=coalesce($3,reference), name_localized=coalesce($4,name_localized), image_url=coalesce($5,image_url), active=$6 where tenant_id=$7 and id=$8', [name||null, slug||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+          if (forceImages) {
+            await db('update categories set name=coalesce($1,name), slug=coalesce($2,slug), reference=coalesce($3,reference), name_localized=coalesce($4,name_localized), image_url=$5, active=$6 where tenant_id=$7 and id=$8', [name||null, slug||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+          } else {
+            await db('update categories set name=coalesce($1,name), slug=coalesce($2,slug), reference=coalesce($3,reference), name_localized=coalesce($4,name_localized), image_url=coalesce($5,image_url), active=$6 where tenant_id=$7 and id=$8', [name||null, slug||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+          }
         } catch (_e) {
           ok = false;
         }
         if (!ok) {
-          await db('update categories set name=coalesce($1,name), reference=coalesce($2,reference), name_localized=coalesce($3,name_localized), image_url=coalesce($4,image_url), active=$5 where tenant_id=$6 and id=$7', [name||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+          if (forceImages) {
+            await db('update categories set name=coalesce($1,name), reference=coalesce($2,reference), name_localized=coalesce($3,name_localized), image_url=$4, active=$5 where tenant_id=$6 and id=$7', [name||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+          } else {
+            await db('update categories set name=coalesce($1,name), reference=coalesce($2,reference), name_localized=coalesce($3,name_localized), image_url=coalesce($4,image_url), active=$5 where tenant_id=$6 and id=$7', [name||null, ref||null, name_localized, image_url, active!==false, tenantId, id]);
+          }
         }
         await setMapping('category', id, extId, ref||null);
         stats.categories.updated++;
       }
+    }
     }
 
     // Build category maps for product linkage
@@ -5419,8 +5895,11 @@ async function runTenantFoodicsSync(tenantId, opts={}){
     }
 
     // Modifier groups
+    // Phase: groups upsert (run in 'full' or explicit 'groups' phase)
+    if (!phase || phase === 'full' || phase === 'groups') {
     for (const g of (groups.items||[])){
       const extId = g.id || g.uuid || g.reference || g.code;
+      try { if (extId != null) __desiredGroupExts.add(String(extId)); } catch {}
       if (!extId) { stats.modifier_groups.skipped++; continue; }
       const ref = (g.reference || g.code || '').toString() || null;
       let id = await getMapping('modifier_group', extId);
@@ -5443,19 +5922,84 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         stats.modifier_groups.updated++;
       }
     }
+    }
 
     // Build group mapping ref->id
-    const groupRows = await db('select id, reference from modifier_groups where tenant_id=$1', [tenantId]);
+    const groupRows = await db('select id, reference, name from modifier_groups where tenant_id=$1', [tenantId]);
     const groupByRef = new Map(groupRows.map(r=>[String(r.reference||''), r.id]));
+    const groupByName = new Map(groupRows.map(r=>[String((r.name||'').toLowerCase()), r.id]));
 
-    // Modifier options
-    for (const o of (options.items||[])){
-      const extId = o.id || o.uuid || o.reference || o.code;
-      if (!extId) { stats.modifier_options.skipped++; continue; }
-      const ref = (o.reference || o.code || o.sku || o.barcode || '').toString() || null;
-      const group_ref = (o.modifier_group_reference || o.group_reference || (o.group?.reference) || '').toString();
-      let group_id = await getMapping('modifier_group', o.group_id || o.modifier_group_id || '') || (group_ref ? groupByRef.get(group_ref) : null);
-      if (!group_id) { stats.modifier_options.skipped++; continue; }
+    // Supplement options per-group after groups are available (run during both groups and options phases)
+    // NOTE: Per-group API calls may not work for all Foodics tenants, falling back to global options with modifier_reference linkage
+    if ((!phase || phase === 'full' || phase === 'groups' || phase === 'options') && Array.isArray(groups?.items) && groups.items.length) {
+      try {
+        for (const g of (groups.items||[])){
+          const ext = g?.id || g?.uuid || g?.reference || g?.code;
+          if (!ext) continue;
+          const localGroupId = await getMapping('modifier_group', ext);
+          if (!localGroupId) continue;
+          const r = await client.listGroupOptions(ext).catch(()=>({items:[]}));
+          const items = Array.isArray(r?.items) ? r.items : [];
+          // Tag each option with both external and local group IDs
+          for (const it of items){ 
+            if (it && typeof it === 'object') {
+              optionItems.push({ ...it, __group_ext_id: ext, __group_id_local: localGroupId }); 
+            }
+          }
+        }
+      } catch (e) { try { console.error('[foodics] per-group option fetch failed', String(e?.message||e)); } catch {} }
+    }
+
+    // Modifier options — pass 1: global/per-group items
+    // Phase: options upsert (run in 'full' or explicit 'options' phase)
+    let __optSkipLogged = 0;
+    if (!phase || phase === 'full' || phase === 'options') {
+    for (const o of (optionItems||[])){
+      // Foodics external id may be missing for some tenants; if absent, we still import the option without mapping
+      const extId = o.id || o.uuid || o.reference || o.code || null;
+      try { if (extId != null) __desiredOptionExts.add(String(extId)); } catch {}
+      // Prefer SKU as the authoritative reference for options (tenant+group+SKU unique)
+      const refRaw = (o.sku || o.reference || o.code || o.barcode || '');
+      const ref = refRaw ? refRaw.toString() : null;
+      // Resolve group mapping using any known Foodics shapes - prioritize modifier_reference field
+      const modifierRef = (o.modifier_reference || '').toString().trim();
+      const groupRefRaw = (o.modifier_group_reference || o.group_reference || (o.group?.reference) || (o.modifier?.reference) || '').toString();
+      const relId = (o?.relationships?.modifier?.data?.id || o?.relationships?.group?.data?.id || '').toString();
+      const groupExtAny = (o?.__group_ext_id || relId || o.group_id || o.modifier_group_id || o.modifier_id || (o.group && (o.group.id || o.group.uuid)) || (o.modifier && (o.modifier.id || o.modifier.uuid)) || '').toString();
+      let group_id = o?.__group_id_local || null;
+      // Try modifier_reference first (this is the key field for this tenant!)
+      if (!group_id && modifierRef) group_id = groupByRef.get(modifierRef) || null;
+      if (!group_id && groupExtAny) group_id = await getMapping('modifier_group', groupExtAny);
+      if (!group_id && groupRefRaw) group_id = groupByRef.get(groupRefRaw) || null;
+      // Try __included payloads for modifier group clues
+      if (!group_id && Array.isArray(o.__included)) {
+        for (const inc of o.__included) {
+          try {
+            const t = String(inc?.type||'').toLowerCase();
+            if (!/modifier/.test(t) && !/group/.test(t)) continue;
+            const cand = (inc?.id || inc?.uuid || inc?.reference || inc?.code || '').toString();
+            if (!cand) continue;
+            const m = await getMapping('modifier_group', cand);
+            if (m) { group_id = m; break; }
+          } catch {}
+        }
+      }
+      // Fallback: match by group/modifier name
+      if (!group_id) {
+        const gname = (o?.group_name || o?.modifier_name || (o?.group&&o.group.name) || (o?.modifier&&o.modifier.name) || '').toString().trim().toLowerCase();
+        if (gname) group_id = groupByName.get(gname) || null;
+      }
+      if (!group_id) {
+        stats.modifier_options.skipped++;
+        if (__optSkipLogged < 5) {
+          try {
+            const nm = o?.name || o?.option_name || '';
+            console.error(`[foodics] opt-skip name=${(nm||'').toString().slice(0,40)} modifierRef='${modifierRef}' groupRef='${groupRefRaw}'`);
+          } catch {}
+          __optSkipLogged++;
+        }
+        continue;
+      }
       let id = await getMapping('modifier_option', extId);
       if (!id) {
         // fallback match by name within group
@@ -5470,16 +6014,74 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       if (!id) {
         const newId = require('crypto').randomUUID();
         await db('insert into modifier_options (id, tenant_id, group_id, name, reference, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing', [newId, tenantId, group_id, name||'Option', ref||null, price, is_active, sort_order]);
-        await setMapping('modifier_option', newId, extId, ref||null);
+        if (extId) { try { await setMapping('modifier_option', newId, extId, ref||null); } catch {} }
         stats.modifier_options.created++;
       } else {
         await db('update modifier_options set group_id=$1, name=$2, reference=$3, price=$4, is_active=$5, sort_order=$6 where tenant_id=$7 and id=$8', [group_id, name||'Option', ref||null, price, is_active, sort_order, tenantId, id]);
-        await setMapping('modifier_option', id, extId, ref||null);
+        if (extId) { try { await setMapping('modifier_option', id, extId, ref||null); } catch {} }
         stats.modifier_options.updated++;
       }
     }
+    }
+
+    // After upserting groups/options, hard-delete Foodics-mapped entities that disappeared upstream (strict mirror)
+    try {
+      // Delete modifier options only when we processed options
+      if ((!phase || phase === 'full' || phase === 'options') && __desiredOptionExts && __desiredOptionExts.size > 0) {
+        const arr = Array.from(__desiredOptionExts);
+        const delOptRows = await db(
+          `delete from modifier_options o
+             using tenant_external_mappings m
+            where o.id = m.entity_id
+              and o.tenant_id = $1
+              and m.tenant_id = $1
+              and m.provider = 'foodics'
+              and m.entity_type = 'modifier_option'
+              and NOT (m.external_id = ANY($2::text[]))
+            returning o.id`,
+          [tenantId, arr]
+        ).catch(()=>[]);
+        try { stats.modifier_options.deleted = (stats.modifier_options.deleted||0) + (delOptRows?.length||0); } catch {}
+        // Clean up stale mappings for options that no longer exist locally
+        try {
+          await db(
+            `delete from tenant_external_mappings m
+               where m.tenant_id=$1 and m.provider='foodics' and m.entity_type='modifier_option'
+                 and not exists (select 1 from modifier_options o where o.id=m.entity_id and o.tenant_id=$1)`,
+            [tenantId]
+          );
+        } catch {}
+      }
+      // Delete modifier groups only when we processed groups
+      if ((!phase || phase === 'full' || phase === 'groups') && __desiredGroupExts && __desiredGroupExts.size > 0) {
+        const arrG = Array.from(__desiredGroupExts);
+        const delGrpRows = await db(
+          `delete from modifier_groups mg
+             using tenant_external_mappings m
+            where mg.id = m.entity_id
+              and mg.tenant_id = $1
+              and m.tenant_id = $1
+              and m.provider = 'foodics'
+              and m.entity_type = 'modifier_group'
+              and NOT (m.external_id = ANY($2::text[]))
+            returning mg.id`,
+          [tenantId, arrG]
+        ).catch(()=>[]);
+        try { stats.modifier_groups.deleted = (stats.modifier_groups.deleted||0) + (delGrpRows?.length||0); } catch {}
+        // Clean up stale mappings for groups that no longer exist locally
+        try {
+          await db(
+            `delete from tenant_external_mappings m
+               where m.tenant_id=$1 and m.provider='foodics' and m.entity_type='modifier_group'
+                 and not exists (select 1 from modifier_groups g where g.id=m.entity_id and g.tenant_id=$1)`,
+            [tenantId]
+          );
+        } catch {}
+      }
+    } catch (e) { try { console.error('[foodics] hard-delete pass failed', e?.message||e); } catch {} }
 
     // Products
+    if (!phase || phase === 'full') {
     function deriveSkuForProduct(p, extId, ref, name){
       try {
         const candidates = [];
@@ -5497,20 +6099,51 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         return sku;
       } catch { return String(extId||'SKU').slice(0,24) || 'SKU'; }
     }
+    let __imgLogCount = 0;
+    let __imgFound = 0, __imgMissing = 0;
     for (const p of (prods.items||[])){
       const extId = p.id || p.uuid || p.reference || p.code;
       if (!extId) { stats.products.skipped++; continue; }
       let id = await getMapping('product', extId);
-      // fallback by sku==reference if supplied
-      const ref = (p.reference || p.code || '').toString() || null;
+      // Fallback match order: SKU (preferred), then reference/code, then barcode
+      const ref = (p.reference || p.code || '').toString().trim() || null;
+      const skuFoodics = (p.sku != null ? String(p.sku).trim() : null);
+      const barcodeFoodics = (p.barcode != null ? String(p.barcode).trim() : null);
+      if (!id && skuFoodics) {
+        const r = await db('select id from products where tenant_id=$1 and sku=$2 limit 1', [tenantId, skuFoodics]);
+        id = r.length ? r[0].id : null;
+      }
       if (!id && ref) {
         const r = await db('select id from products where tenant_id=$1 and sku=$2 limit 1', [tenantId, ref]);
+        id = r.length ? r[0].id : null;
+      }
+      if (!id && barcodeFoodics) {
+        const r = await db('select id from products where tenant_id=$1 and barcode=$2 limit 1', [tenantId, barcodeFoodics]);
         id = r.length ? r[0].id : null;
       }
       const name = p.name || '';
       const active = (p.is_active === true) || (String(p.is_active||p.active||'').toLowerCase()==='yes');
       const price = (v=>Number.isFinite(v)?v:0)(Number(p.price));
-      const image_url = p.image || p.image_url || p.photo || (Array.isArray(p.images) ? (p.images.find(it => it?.url || it?.link)?.url || p.images[0]?.link || null) : null);
+      let image_url = pickImageUrlFromRecord(p);
+      // Enrichment pass: if missing, fetch product detail with rich includes and try again
+      if (!image_url) {
+        try {
+          const ext = p?.id || p?.uuid || p?.reference || p?.code;
+          if (ext) {
+            const det = await client.getProduct(ext, { include: 'image,images,media,category' });
+            const enriched = pickImageUrlFromRecord(det);
+            if (enriched) image_url = enriched;
+          }
+        } catch {}
+      }
+      if (image_url) __imgFound++; else __imgMissing++;
+      if (!image_url && __imgLogCount < 5) {
+        try {
+          const snap = { image: p?.image ?? null, images: p?.images ?? null, media: p?.media ?? null, photo: p?.photo ?? null };
+          console.error('[foodics] no image URL for product:', (p?.name||p?.id||'').toString().slice(0,80), 'fields:', JSON.stringify(snap).slice(0, 1000));
+          __imgLogCount++;
+        } catch {}
+      }
       const cost = (v=>Number.isFinite(v)?v:null)(Number(p.cost));
       const barcode = p.barcode ? String(p.barcode) : null;
       const preparation_time = (n=>Number.isFinite(n)?n:null)(parseInt(p.preparation_time,10));
@@ -5552,28 +6185,86 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         await setMapping('product', newId, extId, ref||null);
         stats.products.created++;
       } else {
-        await db(
-          `update products set
-             name=$1,
-             category_id=coalesce($2, category_id),
-             price=$3,
-             cost=$4,
-             barcode=$5,
-             preparation_time=$6,
-             calories=$7,
-             sku=coalesce($8, sku),
-             image_url=coalesce($9, image_url),
-             active=$10
-           where tenant_id=$11 and id=$12`,
-          [name||'Product', category_id, price, cost, barcode, preparation_time, calories, ref||null, image_url||null, active!==false, tenantId, id]
-        );
+        const skuCandidate = skuFoodics || ref || null;
+        if (forceImages) {
+          await db(
+            `update products set
+               name=$1,
+               category_id=coalesce($2, category_id),
+               price=$3,
+               cost=$4,
+               barcode=$5,
+               preparation_time=$6,
+               calories=$7,
+               sku=coalesce($8, sku),
+               image_url=$9,
+               active=$10
+             where tenant_id=$11 and id=$12`,
+            [name||'Product', category_id, price, cost, barcode, preparation_time, calories, skuCandidate, image_url||null, active!==false, tenantId, id]
+          );
+        } else {
+          await db(
+            `update products set
+               name=$1,
+               category_id=coalesce($2, category_id),
+               price=$3,
+               cost=$4,
+               barcode=$5,
+               preparation_time=$6,
+               calories=$7,
+               sku=coalesce($8, sku),
+               image_url=coalesce($9, image_url),
+               active=$10
+             where tenant_id=$11 and id=$12`,
+            [name||'Product', category_id, price, cost, barcode, preparation_time, calories, skuCandidate, image_url||null, active!==false, tenantId, id]
+          );
+        }
         await setMapping('product', id, extId, ref||null);
         stats.products.updated++;
       }
     }
+    }
 
-    // Product ↔ Modifier links (assignments)
+    // Record image counters
+    try { stats.products.image_found = __imgFound; stats.products.image_missing = __imgMissing; } catch {}
+
+    // Modifier options — pass 2: extract from groups payload if available
+    if (!phase || phase === 'full' || phase === 'options') {
+    try {
+      for (const g of (groups?.items||[])){
+        const gidLocal = await (async ()=>{
+          // resolve local id for this group via mapping or ref
+          const ext = g?.id || g?.uuid || g?.reference || g?.code || null;
+          if (ext){ const m = await getMapping('modifier_group', ext).catch(()=>null); if (m) return m; }
+          const ref = (g?.reference||''); if (ref && groupByRef.get(ref)) return groupByRef.get(ref);
+          const nameKey = String((g?.name||'').toLowerCase()); if (nameKey && groupByName.get(nameKey)) return groupByName.get(nameKey);
+          return null;
+        })();
+        if (!gidLocal) continue;
+        const candidates = [];
+        if (Array.isArray(g?.options)) candidates.push(...g.options);
+        if (Array.isArray(g?.modifier_options)) candidates.push(...g.modifier_options);
+        if (Array.isArray(g?.__included)) candidates.push(...g.__included);
+        for (const raw of candidates){
+          try {
+            if (!raw || typeof raw !== 'object') continue;
+            const name = raw.name || raw.option_name || null; if (!name) continue;
+            const reference = (raw.sku || raw.reference || raw.code || '').toString() || null;
+            const price = (v=>Number.isFinite(v)?v:0)(Number(raw.price ?? raw.delta_price ?? raw.price_kwd));
+            const is_active = raw.is_active != null ? !!raw.is_active : (raw.active != null ? !!raw.active : true);
+            const sort_order = (n=>Number.isFinite(n)?n:null)(parseInt(raw.sort_order ?? raw.position, 10));
+            await db('insert into modifier_options (tenant_id, group_id, name, reference, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing', [tenantId, gidLocal, name||'Option', reference, price, is_active, sort_order]);
+            stats.modifier_options.created = (stats.modifier_options.created||0)+1;
+          } catch {}
+        }
+      }
+    } catch {}
+    }
+
+    // Product ↔ Modifier links (assignments) — only in full sync
     // Each assignment should include product external id and group external id, plus optional settings
+    if (!phase || phase === 'full') {
+    const __desiredByProduct = new Map(); // product_id -> Set(group_id)
     for (const a of (assigns.items||[])){
       const prodExt = a.product_id || a.product_external_id || (a.product && (a.product.id||a.product.reference));
       const groupExt = a.group_id || a.modifier_group_id || a.modifier_group_external_id || (a.group && (a.group.id||a.group.reference));
@@ -5585,17 +6276,79 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const required = a.required != null ? !!a.required : null;
       const min_select = (n=>Number.isFinite(n)?n:null)(parseInt(a.min_select,10));
       const max_select = (n=>Number.isFinite(n)?n:null)(parseInt(a.max_select,10));
+      // Additional assignment fields: default_option_reference (single SKU) and unique_options flag
+      const default_option_reference = (a.default_option_reference || a.default_option_sku || a.default_option || null) ? String(a.default_option_reference || a.default_option_sku || a.default_option || '').trim() : null;
+      const unique_options = (a.unique_options != null) ? !!a.unique_options : null;
       await db(
-        `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select)
-           values ($1,$2,$3,$4,$5,$6)
+        `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select, default_option_reference, unique_options)
+           values ($1,$2,$3,$4,$5,$6,$7,$8)
          on conflict (product_id, group_id)
            do update set sort_order=excluded.sort_order,
                          required=coalesce(excluded.required, product_modifier_groups.required),
                          min_select=coalesce(excluded.min_select, product_modifier_groups.min_select),
-                         max_select=coalesce(excluded.max_select, product_modifier_groups.max_select)`,
-        [product_id, group_id, sort_order, required, min_select, max_select]
+                         max_select=coalesce(excluded.max_select, product_modifier_groups.max_select),
+                         default_option_reference=coalesce(excluded.default_option_reference, product_modifier_groups.default_option_reference),
+                         unique_options=coalesce(excluded.unique_options, product_modifier_groups.unique_options)`,
+        [product_id, group_id, sort_order, required, min_select, max_select, default_option_reference, unique_options]
       );
+      // Track desired state for exact reconciliation
+      let set = __desiredByProduct.get(product_id);
+      if (!set) { set = new Set(); __desiredByProduct.set(product_id, set); }
+      set.add(group_id);
       stats.product_modifier_links.updated++;
+    }
+
+    // Reconcile: delete any existing links for touched products that are not present in Foodics assignments
+    try {
+      for (const [pid, set] of __desiredByProduct.entries()){
+        const gids = Array.from(set);
+        if (gids.length) {
+          await db(
+            `delete from product_modifier_groups pmg
+               using modifier_groups mg
+              where pmg.group_id = mg.id
+                and mg.tenant_id = $1
+                and pmg.product_id = $2
+                and NOT (pmg.group_id = ANY($3::uuid[]))`,
+            [tenantId, pid, gids]
+          );
+        } else {
+          // No desired groups for this product in this sync: remove all tenant-scoped links
+          await db(
+            `delete from product_modifier_groups pmg
+               using modifier_groups mg
+              where pmg.group_id = mg.id
+                and mg.tenant_id = $1
+                and pmg.product_id = $2`,
+            [tenantId, pid]
+          );
+        }
+      }
+    } catch {}
+    }
+
+    // After products are updated, backfill category images from product images when missing (or on forceImages)
+    if (!phase || phase === 'full') {
+    try {
+      const sqlFill = forceImages
+        ? `update categories c set image_url = p.image_url
+             from (
+               select category_id, max(image_url) as image_url
+                 from products
+                where tenant_id=$1 and image_url is not null
+                group by category_id
+             ) p
+            where c.tenant_id=$1 and c.id=p.category_id`
+        : `update categories c set image_url = p.image_url
+             from (
+               select category_id, max(image_url) as image_url
+                 from products
+                where tenant_id=$1 and image_url is not null
+                group by category_id
+             ) p
+            where c.tenant_id=$1 and c.id=p.category_id and c.image_url is null`;
+      await db(sqlFill, [tenantId]);
+    } catch {}
     }
 
     stats.duration_ms = Date.now() - t0;
@@ -5615,8 +6368,12 @@ addRoute('post', '/admin/tenants/:id/integrations/foodics/sync', verifyAuthOpen,
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   const tenantId = String(req.params.id||'').trim();
   if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  // Default to force_images=1 unless explicitly set to 0/false; this helps refresh images for tenants like Koobs
+  const forceRaw = (req.query?.force_images!=null ? String(req.query.force_images) : (req.body?.force_images!=null ? String(req.body.force_images) : '1')).toLowerCase();
+  const forceImages = forceRaw === '1' || forceRaw === 'true' || forceRaw === 'yes';
+  const phase = String(req.query?.phase || req.body?.phase || 'full').toLowerCase();
   try {
-    const result = await runTenantFoodicsSync(tenantId, {});
+    const result = await runTenantFoodicsSync(tenantId, { force_images: forceImages, phase });
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: 'sync_failed', message: e?.message||String(e) });
@@ -5624,6 +6381,162 @@ addRoute('post', '/admin/tenants/:id/integrations/foodics/sync', verifyAuthOpen,
 });
 
 // Sync run history
+addRoute('post', '/admin/tenants/:id/integrations/foodics/rehydrate-product', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const tenantId = String(req.params.id||'').trim();
+  const pid = String(req.body?.product_id || req.query?.product_id || '').trim();
+  const mode = String(req.body?.mode || req.query?.mode || 'image').toLowerCase(); // 'image' or 'data'
+  if (!tenantId || !pid) return res.status(400).json({ error: 'invalid_request' });
+  try {
+    const rows = await db('select id, sku, barcode, name, category_id, image_url from products where tenant_id=$1 and id=$2 limit 1', [tenantId, pid]);
+    if (!rows.length) return res.status(404).json({ error: 'product_not_found' });
+    const prod = rows[0];
+    const token = await getTenantFoodicsToken(tenantId);
+    if (!token) return res.status(409).json({ error: 'token_missing' });
+    const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
+    if (!client) return res.status(503).json({ error: 'client_unavailable' });
+
+    // Helper functions (duplicated from sync for isolation)
+    function looksLikeUrl(s){ try { return /^https?:\/\//i.test(String(s)) || /^data:image\//i.test(String(s)); } catch { return false; } }
+    function pickUrlFromAny(v){
+      try {
+        if (!v) return null;
+        if (typeof v === 'string') return looksLikeUrl(v) ? v : null;
+        if (Array.isArray(v)) { for (const it of v) { const u = pickUrlFromAny(it); if (u) return u; } return null; }
+        if (typeof v === 'object') {
+          const pri = ['url','link','original_url','original','full_url','src','href'];
+          for (const k of pri) { const val = v[k]; if (typeof val === 'string' && looksLikeUrl(val)) return val; }
+          for (const val of Object.values(v)) { const u = pickUrlFromAny(val); if (u) return u; }
+        }
+        return null;
+      } catch { return null; }
+    }
+    function normalize(u){ if (!u) return null; try { let s=String(u).trim(); if(!s) return null; if (s.startsWith('//')) return 'https:'+s; return s; } catch { return null; } }
+    function pickImageUrlFromRecord(rec){
+      try {
+        const fields = ['image','image_url','photo','main_image','primary_image'];
+        for (const f of fields) { const u = pickUrlFromAny(rec?.[f]); const n = normalize(u); if (n) return n; }
+        const arrFields = ['images','gallery','photos','media','__included','included'];
+        for (const f of arrFields) { const u = pickUrlFromAny(rec?.[f]); const n = normalize(u); if (n) return n; }
+        try { for (const [k,v] of Object.entries(rec||{})) { if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v; } } catch {}
+        return null;
+      } catch { return null; }
+    }
+
+    // Try to find external id mapping
+    let extId = null;
+    try {
+      const map = await db("select external_id from tenant_external_mappings where tenant_id=$1 and provider='foodics' and entity_type='product' and entity_id=$2 limit 1", [tenantId, pid]);
+      if (map && map[0] && map[0].external_id) extId = String(map[0].external_id);
+    } catch {}
+
+    let item = null;
+    if (extId) {
+      try { item = await client.getProduct(extId, { include: 'image,images,media,category' }); } catch {}
+    }
+    if (!item) {
+      // Fallback: scan list for sku/barcode match
+      const all = await client.listProducts();
+      const sku = (prod.sku||'').trim().toLowerCase();
+      const barcode = (prod.barcode||'').trim().toLowerCase();
+      const name = (prod.name||'').trim().toLowerCase();
+      for (const it of (all.items||[])){
+        const s = (it.sku||'').toString().trim().toLowerCase();
+        const b = (it.barcode||'').toString().trim().toLowerCase();
+        const n = (it.name||'').toString().trim().toLowerCase();
+        if ((sku && s===sku) || (barcode && b===barcode) || (name && n===name)) { item = it; break; }
+      }
+      // If matched, persist mapping for next time
+      try {
+        if (item && item.id) {
+          await db(`insert into tenant_external_mappings (tenant_id, provider, entity_type, entity_id, external_id)
+                    values ($1,$2,$3,$4,$5)
+                    on conflict (tenant_id, provider, entity_type, external_id)
+                    do update set entity_id=excluded.entity_id`, [tenantId, 'foodics', 'product', pid, String(item.id)]);
+        }
+      } catch {}
+    }
+    if (!item) return res.status(404).json({ error: 'foodics_product_not_found' });
+
+    // Update image
+    let updated = false; let newUrl = null;
+    try {
+      const img = pickImageUrlFromRecord(item);
+      if (img) {
+        newUrl = img;
+        await db('update products set image_url=$1 where tenant_id=$2 and id=$3', [img, tenantId, pid]);
+        updated = true;
+      }
+    } catch {}
+
+    // Optional: update data fields when requested
+    if (mode !== 'image') {
+      try {
+        const nameNew = item?.name || null;
+        const priceNew = Number(item?.price);
+        const barcodeNew = item?.barcode ? String(item.barcode) : null;
+        const fields = [];
+        const params = [];
+        if (nameNew != null) { fields.push('name=$' + (params.length+1)); params.push(nameNew); }
+        if (Number.isFinite(priceNew)) { fields.push('price=$' + (params.length+1)); params.push(priceNew); }
+        if (barcodeNew != null) { fields.push('barcode=$' + (params.length+1)); params.push(barcodeNew); }
+        if (fields.length) {
+          params.push(tenantId, pid);
+          await db(`update products set ${fields.join(', ')} where tenant_id=$${fields.length+1} and id=$${fields.length+2}`, params);
+        }
+      } catch {}
+    }
+
+    // Return refreshed product row
+    let product = null;
+    try {
+      const rows2 = await db(`select 
+        p.id, p.tenant_id, p.name, p.name_localized, p.description, p.description_localized,
+        p.sku, p.barcode,
+        p.price, p.cost, p.packaging_fee,
+        p.category_id,
+        p.image_url, p.image_white_url, p.image_beauty_url,
+        p.preparation_time, p.calories, p.fat_g, p.carbs_g, p.protein_g, p.sugar_g, p.sodium_mg, p.salt_g, p.serving_size,
+        p.spice_level::text as spice_level,
+        p.ingredients_en, p.ingredients_ar, p.allergens,
+        p.pos_visible, p.online_visible, p.delivery_visible,
+        p.talabat_reference, p.jahez_reference, p.vthru_reference,
+        coalesce(p.active, true) as active,
+        p.created_at, p.updated_at, p.version, p.last_modified_by,
+        p.sort_order, p.is_featured, p.tags, p.diet_flags, p.product_type::text as product_type,
+        p.sync_status::text as sync_status, p.published_channels,
+        p.internal_notes, p.staff_notes
+      from products p where p.tenant_id=$1 and p.id=$2`, [tenantId, pid]);
+      if (rows2 && rows2[0]) product = rows2[0];
+    } catch {
+      try {
+        const rowsMin = await db(`select 
+          p.id, p.tenant_id, p.name, p.name_localized, p.description, p.description_localized,
+          p.sku, p.barcode,
+          p.price, p.cost, null::numeric as packaging_fee,
+          p.category_id,
+          p.image_url, null as image_white_url, null as image_beauty_url,
+          p.preparation_time, p.calories, null::numeric as fat_g, null::numeric as carbs_g, null::numeric as protein_g, null::numeric as sugar_g, null::integer as sodium_mg, null::numeric as salt_g, null as serving_size,
+          null as spice_level,
+          p.ingredients_en, p.ingredients_ar, p.allergens,
+          true as pos_visible, true as online_visible, true as delivery_visible,
+          p.talabat_reference, p.jahez_reference, p.vthru_reference,
+          coalesce(p.active, p.is_active, true) as active,
+          p.created_at, p.updated_at, null::integer as version, null::text as last_modified_by,
+          null::integer as sort_order, false as is_featured, null::text[] as tags, null::jsonb as diet_flags, null::text as product_type,
+          null::text as sync_status, null::jsonb as published_channels,
+          null::text as internal_notes, null::text as staff_notes
+        from products p where p.tenant_id=$1 and p.id=$2`, [tenantId, pid]);
+        if (rowsMin && rowsMin[0]) product = rowsMin[0];
+      } catch {}
+    }
+
+    return res.json({ ok: true, updated_image: updated, image_url: newUrl, product });
+  } catch (e) {
+    return res.status(500).json({ error: 'rehydrate_failed', message: e?.message||String(e) });
+  }
+});
+
 addRoute('get', '/admin/tenants/:id/integrations/foodics/sync-runs', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
   const tenantId = String(req.params.id||'').trim();
@@ -5687,6 +6600,12 @@ addRoute('post', '/admin/integrations/foodics/sync-all', verifyAuthOpen, require
     while (inFlight > 0 && (Date.now()-tStart) < 60000) { await new Promise(r=>setTimeout(r,50)); }
     return res.json({ ok:true, triggered, skipped });
   } catch (_e) { return res.status(500).json({ error: 'sync_all_failed' }); }
+});
+
+// Lightweight admin ping to validate admin token auth
+addRoute('get', '/admin/ping', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  try { return res.json({ ok: true, user: (req.user?.email || null) }); }
+  catch { return res.json({ ok: true }); }
 });
 
 // Signed upload URL for assets (logos, product images)
@@ -5865,14 +6784,51 @@ async function ensureModifiersSchema(){
   await db('CREATE INDEX IF NOT EXISTS ix_modifier_groups_tenant_ref ON modifier_groups(tenant_id, reference)');
   await db('CREATE INDEX IF NOT EXISTS ix_modifier_options_group ON modifier_options(group_id)');
   await db('CREATE INDEX IF NOT EXISTS ix_modifier_options_tenant_ref ON modifier_options(tenant_id, reference)');
+  // New optional columns used for Foodics-like option creation
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS tax_group_reference text'); } catch {}
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS costing_method text'); } catch {}
+  // Localized names
+  try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS name_localized text'); } catch {}
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS name_localized text'); } catch {}
 }
 
 // List modifier groups
 addRoute('get', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
   await ensureModifiersSchema();
-  const rows = await db('select id, tenant_id, name, reference, min_select, max_select, required, created_at from modifier_groups where tenant_id=$1 order by name asc', [req.params.id]);
-  res.json({ items: rows });
+  try {
+    const rows = await db(`
+      select mg.id,
+             mg.tenant_id,
+             mg.name,
+             mg.name_localized,
+             mg.reference,
+             mg.min_select,
+             mg.max_select,
+             mg.required,
+             mg.created_at,
+             coalesce(o.cnt,0) as options_count,
+             coalesce(p.cnt,0) as products_count
+        from modifier_groups mg
+   left join (
+             select group_id, count(*)::int as cnt
+               from modifier_options
+              where tenant_id=$1
+              group by group_id
+             ) o on o.group_id=mg.id
+   left join (
+             select group_id, count(*)::int as cnt
+               from product_modifier_groups
+              group by group_id
+             ) p on p.group_id=mg.id
+       where mg.tenant_id=$1
+       order by mg.name asc`, [req.params.id]);
+    return res.json({ items: rows });
+  } catch (_e) {
+    // Fallback to basic projection
+    const rows = await db('select id, tenant_id, name, name_localized, reference, min_select, max_select, required, created_at from modifier_groups where tenant_id=$1 order by name asc', [req.params.id]);
+    return res.json({ items: rows });
+  }
 });
 // Create group
 addRoute('post', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
@@ -5883,8 +6839,9 @@ addRoute('post', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenan
   const min_select = req.body?.min_select != null ? Number(req.body.min_select) : null;
   const max_select = req.body?.max_select != null ? Number(req.body.max_select) : null;
   const required = req.body?.required != null ? Boolean(req.body.required) : false;
+  const name_localized = req.body?.name_localized != null ? String(req.body.name_localized).trim() : null;
   if (!name) return res.status(400).json({ error: 'name_required' });
-  const [row] = await db('insert into modifier_groups (tenant_id, name, reference, min_select, max_select, required) values ($1,$2,$3,$4,$5,$6) returning id, name, reference, min_select, max_select, required', [req.params.id, name, reference, min_select, max_select, required]);
+  const [row] = await db('insert into modifier_groups (tenant_id, name, name_localized, reference, min_select, max_select, required) values ($1,$2,$3,$4,$5,$6,$7) returning id, name, name_localized, reference, min_select, max_select, required', [req.params.id, name, name_localized, reference, min_select, max_select, required]);
   res.json({ ok:true, group: row });
 });
 // Update group
@@ -5894,6 +6851,7 @@ addRoute('put', '/admin/tenants/:id/modifiers/groups/:gid', verifyAuth, requireT
   const id = req.params.id; const gid = req.params.gid;
   const f = req.body||{};
   if (f.name != null) await db('update modifier_groups set name=$1 where tenant_id=$2 and id=$3', [String(f.name), id, gid]);
+  if (f.name_localized != null) await db('update modifier_groups set name_localized=$1 where tenant_id=$2 and id=$3', [String(f.name_localized||''), id, gid]);
   if (f.reference != null) await db('update modifier_groups set reference=$1 where tenant_id=$2 and id=$3', [String(f.reference||''), id, gid]);
   if (f.min_select != null) await db('update modifier_groups set min_select=$1 where tenant_id=$2 and id=$3', [Number(f.min_select), id, gid]);
   if (f.max_select != null) await db('update modifier_groups set max_select=$1 where tenant_id=$2 and id=$3', [Number(f.max_select), id, gid]);
@@ -5913,7 +6871,7 @@ addRoute('get', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTenan
   if (!HAS_DB) return res.json({ items: [] });
   await ensureModifiersSchema();
   const gid = String(req.query.group_id || '').trim();
-  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, g.reference as group_reference, o.name, o.reference, o.price, o.is_active, o.sort_order, o.created_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
+  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, g.reference as group_reference, o.name, o.name_localized, o.reference, o.tax_group_reference, o.costing_method, o.price, o.is_active, o.sort_order, o.created_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
   const params = [req.params.id];
   if (gid) { sql += ' and o.group_id=$2'; params.push(gid); }
   sql += ' order by g.name asc, coalesce(o.sort_order, 999999) asc, o.name asc';
@@ -5927,9 +6885,12 @@ addRoute('post', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTena
   const id = req.params.id; const f = req.body||{};
   const group_id = String(f.group_id||'').trim(); if (!group_id) return res.status(400).json({ error: 'group_id_required' });
   const name = String(f.name||'').trim(); if (!name) return res.status(400).json({ error: 'name_required' });
-  const reference = f.reference != null ? String(f.reference).trim() : null;
+  const name_localized = f.name_localized != null ? String(f.name_localized).trim() : null;
+  const reference = f.reference != null ? String(f.reference).trim() : null; // SKU
+  const tax_group_reference = f.tax_group_reference != null ? String(f.tax_group_reference).trim() : null;
+  const costing_method = f.costing_method != null ? String(f.costing_method).trim() : null; // e.g., 'fixed' | 'from_ingredients'
   const price = Number(f.price||0)||0; const is_active = f.is_active != null ? Boolean(f.is_active) : true; const sort_order = f.sort_order != null ? Number(f.sort_order) : null;
-  const [row] = await db('insert into modifier_options (tenant_id, group_id, name, reference, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7) returning id, group_id, name, reference, price, is_active, sort_order', [id, group_id, name, reference, price, is_active, sort_order]);
+  const [row] = await db('insert into modifier_options (tenant_id, group_id, name, name_localized, reference, tax_group_reference, costing_method, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id, group_id, name, name_localized, reference, tax_group_reference, costing_method, price, is_active, sort_order', [id, group_id, name, name_localized, reference, tax_group_reference, costing_method, price, is_active, sort_order]);
   res.json({ ok:true, option: row });
 });
 // Update option
@@ -5939,7 +6900,10 @@ addRoute('put', '/admin/tenants/:id/modifiers/options/:oid', verifyAuth, require
   const id=req.params.id, oid=req.params.oid; const f=req.body||{};
   if (f.group_id != null) await db('update modifier_options set group_id=$1 where tenant_id=$2 and id=$3', [String(f.group_id), id, oid]);
   if (f.name != null) await db('update modifier_options set name=$1 where tenant_id=$2 and id=$3', [String(f.name), id, oid]);
+  if (f.name_localized != null) await db('update modifier_options set name_localized=$1 where tenant_id=$2 and id=$3', [String(f.name_localized||''), id, oid]);
   if (f.reference != null) await db('update modifier_options set reference=$1 where tenant_id=$2 and id=$3', [String(f.reference||''), id, oid]);
+  if (f.tax_group_reference != null) await db('update modifier_options set tax_group_reference=$1 where tenant_id=$2 and id=$3', [String(f.tax_group_reference||''), id, oid]);
+  if (f.costing_method != null) await db('update modifier_options set costing_method=$1 where tenant_id=$2 and id=$3', [String(f.costing_method||''), id, oid]);
   if (f.price != null) await db('update modifier_options set price=$1 where tenant_id=$2 and id=$3', [Number(f.price)||0, id, oid]);
   if (f.is_active != null) await db('update modifier_options set is_active=$1 where tenant_id=$2 and id=$3', [Boolean(f.is_active), id, oid]);
   if (f.sort_order != null) await db('update modifier_options set sort_order=$1 where tenant_id=$2 and id=$3', [Number(f.sort_order), id, oid]);
@@ -6818,40 +7782,62 @@ addRoute('post', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPa
       }
     }
     if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
-    // upsert user by email
-    let u;
+    // find or create user by email (robust to legacy schemas without unique(email))
+    let u = null;
+    // 0) Try select first (id variant)
     try {
-      [u] = await db(`insert into users (email) values ($1)
-                          on conflict (email) do update set email=excluded.email
-                          returning id, lower(email) as email, created_at`, [email]);
-    } catch (_e) {
-      [u] = await db(`insert into users (email) values ($1)
-                          on conflict (email) do update set email=excluded.email
-                          returning user_id as id, lower(email) as email, created_at`, [email]);
+      const r0 = await db('select id as id, lower(email) as email, created_at from users where lower(email)=lower($1) limit 1', [email]);
+      if (r0 && r0.length) u = r0[0];
+    } catch {}
+    // 0b) Legacy select (user_id variant)
+    if (!u) {
+      try {
+        const r1 = await db('select user_id as id, lower(email) as email, created_at from users where lower(email)=lower($1) limit 1', [email]);
+        if (r1 && r1.length) u = r1[0];
+      } catch {}
     }
+    // 1) Insert if missing (id variant)
+    if (!u) {
+      try {
+        const r2 = await db('insert into users (email) values ($1) returning id, lower(email) as email, created_at', [email]);
+        if (r2 && r2.length) u = r2[0];
+      } catch {}
+    }
+    // 1b) Legacy insert if missing (user_id variant)
+    if (!u) {
+      try {
+        const r3 = await db('insert into users (email) values ($1) returning user_id as id, lower(email) as email, created_at', [email]);
+        if (r3 && r3.length) u = r3[0];
+      } catch {}
+    }
+    // 2) If still null (e.g., unique constraint on email with different casing), select again
+    if (!u) {
+      try {
+        const r4 = await db('select id as id, lower(email) as email, created_at from users where lower(email)=lower($1) limit 1', [email]);
+        if (r4 && r4.length) u = r4[0];
+      } catch {}
+    }
+    if (!u) return res.status(500).json({ error: 'user_upsert_failed' });
+
     // If already a member, report conflict
     try {
       const prev = await db('select role::text as role from tenant_users where tenant_id=$1 and user_id=$2 limit 1', [tenantId, u.id]);
       if (prev && prev.length) return res.status(409).json({ error: 'already_member', user: { id: u.id, email: u.email, role: prev[0].role||'viewer' } });
     } catch {}
     // upsert tenant_users mapping — prefer tenant_role; fallback to user_role; finally plain text
-    let mapped = false;
     try {
       await db(`insert into tenant_users (tenant_id, user_id, role)
                 values ($1,$2,$3::tenant_role)
                 on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
-      mapped = true;
     } catch (_e1) {
       try {
         await db(`insert into tenant_users (tenant_id, user_id, role)
                   values ($1,$2,$3::user_role)
                   on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
-        mapped = true;
       } catch (_e2) {
         await db(`insert into tenant_users (tenant_id, user_id, role)
                   values ($1,$2,$3)
                   on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, u.id, role]);
-        mapped = true;
       }
     }
     cacheDelByPrefix(`adm:users:${tenantId}`);
@@ -7190,7 +8176,7 @@ addRoute('get', '/admin/my/tenants', verifyAuthOpen, async (req, res) => {
       }
     } catch {}
     if (out.length) return res.json(out);
-    return res.json([{ id: DEFAULT_TENANT_ID, name: 'Koobs Café' }]);
+    return res.json([{ id: DEFAULT_TENANT_ID, name: 'Fouz Cafe' }]);
   }
   if (!HAS_DB) return res.json([]);
   try {
@@ -7504,10 +8490,51 @@ app.use('/images/products', express.static(path.join(__dirname, 'images', 'produ
 addRoute('get', '/brand', requireTenant, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
   try {
-    const [row] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
-    // No fallback brand; return empty object if not configured
-    return res.json(row || {});
-  } catch (_e) {
+    const [b] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
+    return res.json(b || {});
+  } catch { return res.json({}); }
+});
+
+// Public: categories for current tenant (minimal shape)
+addRoute('get', '/categories', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+  try {
+    const rows = await db(`
+      select id::text as id,
+             name,
+             coalesce(image_url, NULL) as image
+        from categories
+       where tenant_id=$1
+       order by name asc`, [req.tenantId]);
+    return res.json(rows || []);
+  } catch (e) {
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Public: products for current tenant (optional filter by category_name)
+addRoute('get', '/products', requireTenant, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+  try {
+    const catName = String(req.query?.category_name||'').trim();
+    let sql = `
+      select p.id::text as id,
+             p.name,
+             p.name_localized,
+             coalesce(p.price,0)::float8 as price,
+             p.image_url,
+             p.category_id::text as category_id,
+             (select c.name from categories c where c.id = p.category_id) as category_name
+        from products p
+       where p.tenant_id=$1
+         and coalesce(p.active, true)
+    `;
+    const params = [req.tenantId];
+    if (catName) { sql += ' and exists (select 1 from categories c where c.id=p.category_id and c.name=$2)'; params.push(catName); }
+    sql += ' order by p.name asc';
+    const rows = await db(sql, params);
+    return res.json(rows || []);
+  } catch (e) {
     return res.status(500).json({ error: 'server_error' });
   }
 });
@@ -7530,7 +8557,7 @@ app.use('/kiosk/win', express.static(path.join(__dirname, 'kiosk', 'win')));
 
 // Root admin pages
 addRoute('get', '/products/', (_req, res) => res.sendFile(path.join(__dirname, 'products', 'index.html')));
-addRoute('get', '/products/edit/', (_req, res) => res.sendFile(path.join(__dirname, 'products', 'edit', 'index.html')));
+addRoute('get', '/products/edit/', (_req, res) => { try { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'); res.set('Pragma', 'no-cache'); res.set('Expires', '0'); } catch {} return res.sendFile(path.join(__dirname, 'products', 'edit', 'index.html')); });
 addRoute('get', '/categories/', (_req, res) => res.sendFile(path.join(__dirname, 'categories', 'index.html')));
 addRoute('get', '/modifiers/', (_req, res) => res.sendFile(path.join(__dirname, 'modifiers', 'index.html')));
 addRoute('get', '/orders/',   (_req, res) => res.sendFile(path.join(__dirname, 'orders',   'index.html')));
@@ -7542,12 +8569,22 @@ addRoute('get', '/branches/', (_req, res) => res.sendFile(path.join(__dirname, '
 addRoute('get', '/devices/',  (_req, res) => res.sendFile(path.join(__dirname, 'devices',  'index.html')));
 // New: Platform and Marketing pages
 addRoute('get', '/tenants/', (_req, res) => {
-  // Serve local Tenants UI directly from the container
+  // Serve local Tenants UI directly from the container (no cache to avoid stale admin UI)
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
   try { return res.sendFile(path.join(__dirname, 'tenants', 'index.html')); }
   catch { return res.status(404).end(); }
 });
 addRoute('get', '/tenants/:id', (req, res) => {
   // Serve the Tenant edit UI; the page reads the :id from the URL to load details
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
   try { return res.sendFile(path.join(__dirname, 'tenants', 'edit', 'index.html')); }
   catch { return res.status(404).end(); }
 });
@@ -8035,19 +9072,27 @@ function handleUiShowPreview(ws, msg) {
   const meta = clientMeta.get(ws) || {};
   const basketId = String(msg.basketId || meta.basketId || 'default');
   if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
+  const pid = String(
+    (msg.product_id||msg.productId||msg.sku||msg.id||'') ||
+    ((msg.product&& (msg.product.id||msg.product.product_id||msg.product.productId||msg.product.sku))||'')
+  ).trim();
   const payload = {
     type: 'ui:showPreview',
     basketId,
     product: msg.product || null,
     serverTs: Date.now()
   };
+  if (pid) { payload.product_id = pid; payload.productId = pid; }
   broadcast(basketId, payload);
 }
-
 function handleUiShowOptions(ws, msg) {
   const meta = clientMeta.get(ws) || {};
   const basketId = String(msg.basketId || meta.basketId || 'default');
   if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
+  const pid = String(
+    (msg.product_id||msg.productId||msg.sku||msg.id||'') ||
+    ((msg.product&& (msg.product.id||msg.product.product_id||msg.product.productId||msg.product.sku))||'')
+  ).trim();
   const payload = {
     type: 'ui:showOptions',
     basketId,
@@ -8057,6 +9102,7 @@ function handleUiShowOptions(ws, msg) {
     selection: msg.selection || null,
     serverTs: Date.now()
   };
+  if (pid) { payload.product_id = pid; payload.productId = pid; }
   broadcast(basketId, payload);
 }
 function handleUiOptionsUpdate(ws, msg) {
@@ -8066,11 +9112,33 @@ function handleUiOptionsUpdate(ws, msg) {
   const payload = { type: 'ui:optionsUpdate', basketId, selection: msg.selection || null, serverTs: Date.now() };
   broadcast(basketId, payload);
 }
+function broadcastCloseOverlays(basketId){
+  try {
+    const now = Date.now();
+    broadcast(basketId, { type: 'ui:optionsClose', basketId, serverTs: now });
+    // Belt-and-suspenders: also broadcast clearSelection and a null preview to cover older clients
+    broadcast(basketId, { type: 'ui:clearSelection', basketId, serverTs: now });
+    broadcast(basketId, { type: 'ui:showPreview', basketId, product: null, product_id: '', serverTs: now });
+  } catch {}
+}
 function handleUiOptionsClose(ws, msg) {
   const meta = clientMeta.get(ws) || {};
   const basketId = String(msg.basketId || meta.basketId || 'default');
   if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
-  const payload = { type: 'ui:optionsClose', basketId, serverTs: Date.now() };
+  broadcastCloseOverlays(basketId);
+}
+function handleUiOptionsCancel(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
+  broadcastCloseOverlays(basketId);
+}
+function handleUiScrollTo(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
+  const productId = String(msg.product_id || msg.productId || msg.sku || msg.id || '').trim();
+  const payload = productId ? { type: 'ui:scrollTo', basketId, product_id: productId, serverTs: Date.now() } : { type: 'ui:scrollTo', basketId, serverTs: Date.now() };
   broadcast(basketId, payload);
 }
 function handleUiSelectProduct(ws, msg) {
@@ -8086,6 +9154,14 @@ function handleUiClearSelection(ws, msg) {
   const basketId = String(msg.basketId || meta.basketId || 'default');
   broadcast(basketId, { type: 'ui:clearSelection', basketId, serverTs: Date.now() });
 }
+function handleUiVideoMode(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  if (!__allowUiEvent(ws, basketId)) return; // cashier-priority lock
+  const mode = String(msg.mode || '').toLowerCase(); // 'small' | 'full'
+  if (!mode) return;
+  broadcast(basketId, { type: 'ui:videoMode', basketId, mode, serverTs: Date.now() });
+}
 
 function applyOp(basket, op) {
   const action = op?.action;
@@ -8099,11 +9175,21 @@ function applyOp(basket, op) {
   if (!sku) throw new Error('invalid_sku');
 
   const existing = basket.items.get(sku) || { sku, name: itm.name || '', price: Number(itm.price) || 0, qty: 0 };
+  // Best-effort: carry over image_url if provided on this op
+  try {
+    const img = String(itm.image_url || itm.imageUrl || itm.image || '').trim();
+    if (img) existing.image_url = img;
+  } catch {}
 
   if (action === 'add') {
     const inc = qty || 1;
     existing.name = itm.name ?? existing.name;
     if (itm.price != null) existing.price = Number(itm.price) || existing.price;
+    // On add, also update image if a new one is provided
+    try {
+      const img2 = String(itm.image_url || itm.imageUrl || itm.image || '').trim();
+      if (img2) existing.image_url = img2;
+    } catch {}
     existing.qty = (existing.qty || 0) + inc;
     basket.items.set(sku, existing);
   } else if (action === 'setQty') {
@@ -8143,6 +9229,14 @@ function handleUpdate(ws, msg) {
   };
 
   broadcast(basketId, payload);
+
+  // UX: if this was an add, close any open product/option overlays on peers (cashier/display)
+  try {
+    const action = String(msg?.op?.action||'');
+    if (action === 'add') {
+      broadcastCloseOverlays(basketId);
+    }
+  } catch {}
 }
 
 // RTC heartbeat status per basket
@@ -8186,13 +9280,46 @@ if (msg.type === 'subscribe') return handleSubscribe(ws, msg);
 if (msg.type === 'ui:selectCategory') return handleUiSelectCategory(ws, msg);
     if (msg.type === 'ui:showPreview') return handleUiShowPreview(ws, msg);
     if (msg.type === 'ui:showOptions') return handleUiShowOptions(ws, msg);
-    if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
+if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
     if (msg.type === 'ui:optionsClose') return handleUiOptionsClose(ws, msg);
+    if (msg.type === 'ui:optionsCancel') return handleUiOptionsCancel(ws, msg);
+    if (msg.type === 'ui:scrollTo') return handleUiScrollTo(ws, msg);
     if (msg.type === 'ui:selectProduct') return handleUiSelectProduct(ws, msg);
     if (msg.type === 'ui:clearSelection') return handleUiClearSelection(ws, msg);
+    if (msg.type === 'ui:videoMode') return handleUiVideoMode(ws, msg);
     // Poster status pass-through: cashier <-> display
     if (msg.type === 'poster:query') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:query', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId) }); } catch {}; return; }
     if (msg.type === 'poster:status') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:status', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId), active: !!msg.active }); } catch {}; return; }
+    // RTC provider selection broadcast (cashier -> display)
+    if (msg.type === 'rtc:provider') {
+      try {
+        const meta = clientMeta.get(ws) || {};
+        const bid = String(msg.basketId || meta.basketId || 'default');
+        const provider = String(msg.provider || '').toLowerCase();
+        // Broadcast to the basket (if peers are already subscribed by basketId)
+        broadcast(bid, { type: 'rtc:provider', basketId: bid, provider });
+        // Fallback: also deliver to the Display by device token if basket subscriptions don't match yet
+        (async () => {
+          try {
+            if (!HAS_DB) return;
+            const rows = await db('select device_token from devices where device_id=$1 limit 1', [bid]);
+            const tok = rows && rows[0] && rows[0].device_token ? String(rows[0].device_token) : '';
+            if (tok && __wsByDeviceToken.has(tok)) {
+              const set = __wsByDeviceToken.get(tok) || new Set();
+              for (const c of set) {
+                try {
+                  // Align basketId on the display connection to this bid for subsequent events
+                  const m = clientMeta.get(c) || {};
+                  clientMeta.set(c, { ...m, basketId: bid, role: (m.role || 'display') });
+                  c.send(JSON.stringify({ type: 'rtc:provider', basketId: bid, provider }));
+                } catch {}
+              }
+            }
+          } catch {}
+        })();
+      } catch {}
+      return;
+    }
     // RTC config preference: broadcast to peers so display can apply and restart
     if (msg.type === 'rtc:config') {
       try {
@@ -8254,6 +9381,24 @@ function handleHello(ws, msg){
   const allowed = (role==='cashier'||role==='display'||role==='admin') ? role : null;
   const next = { ...meta, role: allowed, name: name || meta.name, device_id: device_id || meta.device_id };
   clientMeta.set(ws, next);
+  // If this is a display with a valid device token, align its basketId to the server device_id for that token
+  if (allowed === 'display') {
+    (async () => {
+      try {
+        const t = String((clientMeta.get(ws)||{}).token||'').trim() || String(msg.token||'').trim();
+        if (HAS_DB && t) {
+          const rows = await db('select device_id from devices where device_token=$1 limit 1', [t]);
+          const did = rows && rows[0] && rows[0].device_id ? String(rows[0].device_id) : '';
+          if (did) {
+            const cur = clientMeta.get(ws) || {};
+            clientMeta.set(ws, { ...cur, basketId: did });
+            // Notify peers that status may have changed
+            try { broadcastPeerStatus(did); } catch {}
+          }
+        }
+      } catch {}
+    })();
+  }
   if (next.role === 'admin') {
     try { broadcastAdminLive(); } catch {}
   }
@@ -8290,6 +9435,56 @@ function broadcastPeerStatus(basketId){
   } catch {}
   const payload = { type:'peer:status', basketId, status, cashierName, displayName, cashierDeviceId, displayDeviceId, serverTs: Date.now() };
   broadcast(basketId, payload);
+}
+
+// Handle job commands before starting the HTTP server
+const JOB_COMMAND = process.env.JOB_COMMAND;
+if (JOB_COMMAND) {
+  console.log(`🔄 Executing job command: ${JOB_COMMAND}`);
+  
+  try {
+    switch (JOB_COMMAND) {
+      case 'import-foodics-complete':
+        console.log('🚀 Starting Foodics complete import job...');
+        const { importFoodicsData } = require('./scripts/import_foodics_complete.js');
+        await importFoodicsData();
+        console.log('✅ Foodics import job completed successfully');
+        break;
+        
+      case 'import-modifier-groups':
+        console.log('🏷️ Starting modifier groups import job...');
+        const modifierGroupsScript = require('./scripts/import_modifier_groups.js');
+        if (typeof modifierGroupsScript === 'function') {
+          await modifierGroupsScript();
+        } else {
+          console.log('❌ Invalid modifier groups import script');
+        }
+        console.log('✅ Modifier groups import job completed successfully');
+        break;
+        
+      case 'import-product-modifiers':
+        console.log('🔗 Starting product-modifier relationships import job...');
+        const productModifiersScript = require('./scripts/import_product_modifiers.js');
+        if (typeof productModifiersScript === 'function') {
+          await productModifiersScript();
+        } else {
+          console.log('❌ Invalid product-modifiers import script');
+        }
+        console.log('✅ Product-modifiers import job completed successfully');
+        break;
+        
+      default:
+        console.log(`❌ Unknown job command: ${JOB_COMMAND}`);
+        process.exit(1);
+    }
+    
+    console.log('🎉 Job execution completed. Exiting...');
+    process.exit(0);
+    
+  } catch (error) {
+    console.error(`💥 Job ${JOB_COMMAND} failed:`, error);
+    process.exit(1);
+  }
 }
 
 const server = app.listen(PORT, '0.0.0.0', async () => {
