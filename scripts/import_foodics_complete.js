@@ -167,16 +167,14 @@ async function importModifierGroups(pool, tenantId, modifierGroups) {
                 // Insert modifier group
                 await db(pool, `
                     INSERT INTO modifier_groups (
-                        tenant_id, external_id, name, name_localized, reference, created_at, updated_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        tenant_id, external_id, name, reference, created_at
+                    ) VALUES ($1, $2, $3, $4, $5)
                 `, [
                     tenantId,
                     group.id,
                     group.name,
-                    group.name_localized,
                     group.reference,
-                    group.created_at || new Date().toISOString(),
-                    group.updated_at || new Date().toISOString()
+                    group.created_at || new Date().toISOString()
                 ]);
 
                 console.log(`✅ Imported modifier group: ${group.name} (ref: ${group.reference})`);
@@ -231,26 +229,46 @@ async function importModifierOptions(pool, tenantId, modifierOptions) {
                     continue;
                 }
 
-                // We need to find the group_id from our imported modifier groups
-                // For now, we'll create options without group assignment
-                // The relationships will be handled separately
+                // Since Foodics API doesn't provide direct modifier_group_id in options,
+                // we'll need to create a default group or handle this differently.
+                // For now, let's create a default "Ungrouped Options" group for each tenant.
+                
+                let default_group_id;
+                const defaultGroupRows = await db(pool, 
+                    'SELECT id FROM modifier_groups WHERE tenant_id = $1 AND name = $2',
+                    [tenantId, 'Ungrouped Options']
+                );
 
-                // Insert modifier option
+                if (defaultGroupRows.length === 0) {
+                    // Create default group
+                    const newGroupRows = await db(pool, `
+                        INSERT INTO modifier_groups (tenant_id, name, reference, created_at) 
+                        VALUES ($1, $2, $3, $4) RETURNING id
+                    `, [
+                        tenantId,
+                        'Ungrouped Options',
+                        'ungrouped',
+                        new Date().toISOString()
+                    ]);
+                    default_group_id = newGroupRows[0].id;
+                    console.log('✨ Created default "Ungrouped Options" group');
+                } else {
+                    default_group_id = defaultGroupRows[0].id;
+                }
+
+                // Insert modifier option with default group
                 await db(pool, `
                     INSERT INTO modifier_options (
-                        tenant_id, external_id, name, name_localized, sku, price, 
-                        active, created_at, updated_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        tenant_id, external_id, group_id, name, price, is_active, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 `, [
                     tenantId,
                     option.id,
+                    default_group_id,
                     option.name,
-                    option.name_localized,
-                    option.sku,
                     option.price || 0,
                     option.is_active !== false,
-                    option.created_at || new Date().toISOString(),
-                    option.updated_at || new Date().toISOString()
+                    option.created_at || new Date().toISOString()
                 ]);
 
                 console.log(`✅ Imported modifier option: ${option.name} (${option.sku})`);
