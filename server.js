@@ -9442,49 +9442,54 @@ const JOB_COMMAND = process.env.JOB_COMMAND;
 if (JOB_COMMAND) {
   console.log(`🔄 Executing job command: ${JOB_COMMAND}`);
   
-  try {
-    switch (JOB_COMMAND) {
-      case 'import-foodics-complete':
-        console.log('🚀 Starting Foodics complete import job...');
-        const { importFoodicsData } = require('./scripts/import_foodics_complete.js');
-        await importFoodicsData();
-        console.log('✅ Foodics import job completed successfully');
-        break;
-        
-      case 'import-modifier-groups':
-        console.log('🏷️ Starting modifier groups import job...');
-        const modifierGroupsScript = require('./scripts/import_modifier_groups.js');
-        if (typeof modifierGroupsScript === 'function') {
-          await modifierGroupsScript();
-        } else {
-          console.log('❌ Invalid modifier groups import script');
-        }
-        console.log('✅ Modifier groups import job completed successfully');
-        break;
-        
-      case 'import-product-modifiers':
-        console.log('🔗 Starting product-modifier relationships import job...');
-        const productModifiersScript = require('./scripts/import_product_modifiers.js');
-        if (typeof productModifiersScript === 'function') {
-          await productModifiersScript();
-        } else {
-          console.log('❌ Invalid product-modifiers import script');
-        }
-        console.log('✅ Product-modifiers import job completed successfully');
-        break;
-        
-      default:
-        console.log(`❌ Unknown job command: ${JOB_COMMAND}`);
-        process.exit(1);
+  (async () => {
+    try {
+      switch (JOB_COMMAND) {
+        case 'import-foodics-complete':
+          console.log('🚀 Starting Foodics complete import job...');
+          const { importFoodicsData } = require('./scripts/import_foodics_complete.js');
+          await importFoodicsData();
+          console.log('✅ Foodics import job completed successfully');
+          break;
+          
+        case 'import-modifier-groups':
+          console.log('🏷️ Starting modifier groups import job...');
+          const modifierGroupsScript = require('./scripts/import_modifier_groups.js');
+          if (typeof modifierGroupsScript === 'function') {
+            await modifierGroupsScript();
+          } else {
+            console.log('❌ Invalid modifier groups import script');
+          }
+          console.log('✅ Modifier groups import job completed successfully');
+          break;
+          
+        case 'import-product-modifiers':
+          console.log('🔗 Starting product-modifier relationships import job...');
+          const productModifiersScript = require('./scripts/import_product_modifiers.js');
+          if (typeof productModifiersScript === 'function') {
+            await productModifiersScript();
+          } else {
+            console.log('❌ Invalid product-modifiers import script');
+          }
+          console.log('✅ Product-modifiers import job completed successfully');
+          break;
+          
+        default:
+          console.log(`❌ Unknown job command: ${JOB_COMMAND}`);
+          process.exit(1);
+      }
+      
+      console.log('🎉 Job execution completed. Exiting...');
+      process.exit(0);
+      
+    } catch (error) {
+      console.error(`💥 Job ${JOB_COMMAND} failed:`, error);
+      process.exit(1);
     }
-    
-    console.log('🎉 Job execution completed. Exiting...');
-    process.exit(0);
-    
-  } catch (error) {
-    console.error(`💥 Job ${JOB_COMMAND} failed:`, error);
-    process.exit(1);
-  }
+  })();
+  
+  // Return early to prevent server startup
+  return;
 }
 
 const server = app.listen(PORT, '0.0.0.0', async () => {
