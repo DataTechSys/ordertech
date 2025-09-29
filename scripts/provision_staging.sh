@@ -14,17 +14,20 @@
 #   - Does NOT print secrets; prompts for DB password securely if DB_PASS not set
 #   - You can pass an existing image via --image (e.g., me-central1-docker.pkg.dev/PROJECT/smart-order/ordertech:TAG)
 
-set -euo pipefail
+set -Eeuo pipefail
+. "$(dirname "$0")/_lib.sh"
+ensure_repo_root
+load_env config/prod.env
 
 # --- parse args
-REGION="me-central1"
+STAGE_REGION="$REGION"
 IMAGE=""
 ASSETS_BUCKET_DEFAULT="smart-order-assets-me-central1-715493130630"
 ASSETS_BUCKET=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --region) REGION="$2"; shift 2;;
+    --region) STAGE_REGION="$2"; shift 2;;
     --image) IMAGE="$2"; shift 2;;
     --assets-bucket) ASSETS_BUCKET="$2"; shift 2;;
     *) echo "Unknown arg: $1" >&2; exit 2;;
@@ -32,35 +35,28 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- prerequisites
-for cmd in gcloud node; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "ERROR: $cmd is required." >&2
-    exit 1
-  fi
-done
+need gcloud
+need node
 
-PROJECT_ID="$(gcloud config get-value project --quiet 2>/dev/null || true)"
-if [[ -z "$PROJECT_ID" ]]; then
-  echo "ERROR: gcloud project is not set. Run: gcloud config set project <PROJECT_ID>" >&2
-  exit 1
-fi
+# --- validate environment (project and region)
+validate_gcloud_env_region "$STAGE_REGION"
 
 # --- resources
 STAGING_INSTANCE="ordertech-stg-sql"
 STAGING_DB="smart_order_stg"
 DB_USER="ordertech"
 SECRET_NAME="DATABASE_URL_STAGING"
-SERVICE_PROD="ordertech"
+SERVICE_PROD="$SERVICE_NAME"
 SERVICE_STAGING="ordertech-staging"
 JOB_STAGING="migrate-smart-order-staging"
 
 # --- ensure Cloud SQL instance
 if ! gcloud sql instances describe "$STAGING_INSTANCE" --project="$PROJECT_ID" >/dev/null 2>&1; then
-  echo "Creating Cloud SQL instance $STAGING_INSTANCE in $REGION..." >&2
+  echo "Creating Cloud SQL instance $STAGING_INSTANCE in $STAGE_REGION..." >&2
   gcloud sql instances create "$STAGING_INSTANCE" \
     --project="$PROJECT_ID" \
     --database-version=POSTGRES_15 \
-    --region="$REGION" \
+    --region="$STAGE_REGION" \
     --tier=db-custom-2-7680 \
     --storage-auto-increase || {
       echo "ERROR: Cloud SQL instance creation failed." >&2; exit 1; }
@@ -79,7 +75,6 @@ fi
 # --- ensure DB user
 if ! gcloud sql users list --instance="$STAGING_INSTANCE" --project="$PROJECT_ID" --format='value(name)' | grep -qx "$DB_USER"; then
   if [[ -z "${DB_PASS:-}" ]]; then
-    # Prompt securely (no echo). This script itself is non-interactive for CI, but safe for human-operated terminals.
     read -s -p "Set password for staging DB user '$DB_USER' (hidden): " DB_PASS; echo
   fi
   gcloud sql users create "$DB_USER" \
@@ -106,9 +101,8 @@ else
 fi
 
 # --- grant runtime SA access
-RUNTIME_SA="$(gcloud run services describe "$SERVICE_PROD" --project="$PROJECT_ID" --region="$REGION" --format='value(spec.template.spec.serviceAccountName)' 2>/dev/null || true)"
+RUNTIME_SA="$(gcloud run services describe "$SERVICE_PROD" --project="$PROJECT_ID" --region="$STAGE_REGION" --format='value(spec.template.spec.serviceAccountName)' 2>/dev/null || true)"
 if [[ -z "$RUNTIME_SA" ]]; then
-  # Fallback to default compute SA
   PROJ_NUM="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
   RUNTIME_SA="${PROJ_NUM}-compute@developer.gserviceaccount.com"
 fi
@@ -126,7 +120,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 # --- choose image for staging
 if [[ -z "$IMAGE" ]]; then
-  IMAGE="$(gcloud run services describe "$SERVICE_PROD" --project="$PROJECT_ID" --region="$REGION" --format="value(spec.template.spec.containers[0].image)" 2>/dev/null || true)"
+  IMAGE="$(gcloud run services describe "$SERVICE_PROD" --project="$PROJECT_ID" --region="$STAGE_REGION" --format="value(spec.template.spec.containers[0].image)" 2>/dev/null || true)"
 fi
 if [[ -z "$IMAGE" ]]; then
   echo "No image specified and unable to infer from prod. You can pass --image <ref> or run Cloud Build to produce an image." >&2
@@ -136,9 +130,9 @@ fi
 echo "Using image: $IMAGE" >&2
 
 # --- create or update staging migration job and execute
-if gcloud run jobs describe "$JOB_STAGING" --project="$PROJECT_ID" --region="$REGION" >/dev/null 2>&1; then
+if gcloud run jobs describe "$JOB_STAGING" --project="$PROJECT_ID" --region="$STAGE_REGION" >/dev/null 2>&1; then
   gcloud run jobs update "$JOB_STAGING" \
-    --project="$PROJECT_ID" --region="$REGION" \
+    --project="$PROJECT_ID" --region="$STAGE_REGION" \
     --image "$IMAGE" \
     --command node --args scripts/migrate.js \
     --set-secrets DATABASE_URL=${SECRET_NAME}:latest \
@@ -147,7 +141,7 @@ if gcloud run jobs describe "$JOB_STAGING" --project="$PROJECT_ID" --region="$RE
     --service-account "$RUNTIME_SA"
 else
   gcloud run jobs create "$JOB_STAGING" \
-    --project="$PROJECT_ID" --region="$REGION" \
+    --project="$PROJECT_ID" --region="$STAGE_REGION" \
     --image "$IMAGE" \
     --command node --args scripts/migrate.js \
     --set-secrets DATABASE_URL=${SECRET_NAME}:latest \
@@ -157,13 +151,13 @@ else
 fi
 
 echo "Running staging migrations..." >&2
-gcloud run jobs execute "$JOB_STAGING" --project="$PROJECT_ID" --region="$REGION" --wait
+gcloud run jobs execute "$JOB_STAGING" --project="$PROJECT_ID" --region="$STAGE_REGION" --wait
 
 echo "Deploying Cloud Run service $SERVICE_STAGING ..." >&2
 if [[ -z "$ASSETS_BUCKET" ]]; then ASSETS_BUCKET="$ASSETS_BUCKET_DEFAULT"; fi
 
 gcloud run deploy "$SERVICE_STAGING" \
-  --project="$PROJECT_ID" --region="$REGION" \
+  --project="$PROJECT_ID" --region="$STAGE_REGION" \
   --image "$IMAGE" \
   --platform managed \
   --port 8080 \
@@ -173,5 +167,5 @@ gcloud run deploy "$SERVICE_STAGING" \
   --service-account "$RUNTIME_SA" \
   --no-allow-unauthenticated
 
-URL="$(gcloud run services describe "$SERVICE_STAGING" --project="$PROJECT_ID" --region="$REGION" --format='value(status.url)')"
+URL="$(gcloud run services describe "$SERVICE_STAGING" --project="$PROJECT_ID" --region="$STAGE_REGION" --format='value(status.url)')"
 echo "Staging is ready: $URL"

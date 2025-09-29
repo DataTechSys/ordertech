@@ -31,7 +31,7 @@ function uuid(){ return crypto.randomUUID(); }
 function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 
 async function main(){
-  const tenantId = String(arg('tenant', process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae')).trim();
+  const tenantId = String(arg('tenant', process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6')).trim();
   if (!tenantId) throw new Error('tenant id required');
 
   // Load JSON catalog (same file server uses)

@@ -23,7 +23,7 @@ function buildConfig(){
 
 async function main(){
   const email = String(arg('email')).trim().toLowerCase();
-  const tenant = String(arg('tenant','3feff9a3-4721-4ff2-a716-11eb93873fae')).trim();
+  const tenant = String(arg('tenant','56ac557e-589d-4602-bc9b-946b201fb6f6')).trim();
   const role = String(arg('role','owner')).trim().toLowerCase();
   if (!email || !/.+@.+\..+/.test(email)) throw new Error('Invalid --email');
   if (!tenant) throw new Error('Missing --tenant');

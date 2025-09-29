@@ -56,6 +56,8 @@ async function main(){
   const pool = new Pool(cfg);
   const c = await pool.connect();
   try {
+    // Prefer schemas with existing alias columns first (when present)
+    try { await c.query('SET search_path TO catalog, saas, public'); } catch (_) {}
     await c.query('BEGIN');
     await c.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -71,7 +73,80 @@ async function main(){
         id uuid PRIMARY KEY,
         name text NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now()
-      )
+      );
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'role') THEN
+          CREATE TYPE role AS ENUM ('user', 'admin');
+        END IF;
+      END$$;
+    `);
+
+    // Preflight shim: add tenants.id alias when legacy tenants.tenant_id exists
+    await c.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='tenants' AND column_name='tenant_id'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='tenants' AND column_name='id'
+        ) THEN
+          ALTER TABLE tenants ADD COLUMN id uuid;
+          UPDATE tenants SET id = tenant_id WHERE id IS NULL;
+          BEGIN
+            ALTER TABLE tenants ADD CONSTRAINT tenants_id_unique UNIQUE (id);
+          EXCEPTION WHEN duplicate_object THEN
+            NULL;
+          END;
+          CREATE OR REPLACE FUNCTION tenants_id_sync()
+          RETURNS trigger AS $BODY$
+          BEGIN
+            NEW.id := NEW.tenant_id;
+            RETURN NEW;
+          END
+          $BODY$ LANGUAGE plpgsql;
+          BEGIN
+            CREATE TRIGGER tenants_id_sync_tr
+            BEFORE INSERT OR UPDATE OF tenant_id ON tenants
+            FOR EACH ROW EXECUTE FUNCTION tenants_id_sync();
+          EXCEPTION WHEN duplicate_object THEN
+            NULL;
+          END;
+        END IF;
+
+        -- Ensure devices.id alias when legacy devices.device_id exists
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='devices' AND column_name='device_id'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='devices' AND column_name='id'
+        ) THEN
+          ALTER TABLE devices ADD COLUMN id uuid;
+          UPDATE devices SET id = device_id WHERE id IS NULL;
+          BEGIN
+            ALTER TABLE devices ADD CONSTRAINT devices_id_unique UNIQUE (id);
+          EXCEPTION WHEN duplicate_object THEN
+            NULL;
+          END;
+          CREATE OR REPLACE FUNCTION devices_id_sync()
+          RETURNS trigger AS $BODY$
+          BEGIN
+            NEW.id := NEW.device_id;
+            RETURN NEW;
+          END
+          $BODY$ LANGUAGE plpgsql;
+          BEGIN
+            CREATE TRIGGER devices_id_sync_tr
+            BEFORE INSERT OR UPDATE OF device_id ON devices
+            FOR EACH ROW EXECUTE FUNCTION devices_id_sync();
+          EXCEPTION WHEN duplicate_object THEN
+            NULL;
+          END;
+        END IF;
+      END $$;
     `);
 
     // Commit preflight separately to guarantee visibility to subsequent migration statements

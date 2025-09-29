@@ -1,0 +1,30 @@
+-- Danger: wipe all tenant-scoped data (catalog, orders, devices, branches, associations, tenants)
+-- Use only in non-production or when a full reset is intended.
+BEGIN;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rtc_session_stats') THEN DELETE FROM rtc_session_stats; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rtc_sessions') THEN DELETE FROM rtc_sessions; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'device_events') THEN DELETE FROM device_events; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'paid_orders') THEN DELETE FROM paid_orders; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'order_items') THEN DELETE FROM order_items; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'orders') THEN DELETE FROM orders; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'product_modifier_groups') THEN DELETE FROM product_modifier_groups; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'product_branch_availability') THEN DELETE FROM product_branch_availability; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'modifier_options') THEN DELETE FROM modifier_options; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'modifier_groups') THEN DELETE FROM modifier_groups; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'products') THEN DELETE FROM products; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'categories') THEN DELETE FROM categories; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'drive_thru_state') THEN DELETE FROM drive_thru_state; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'device_activation_codes') THEN DELETE FROM device_activation_codes; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'webrtc_rooms') THEN DELETE FROM webrtc_rooms; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'devices') THEN DELETE FROM devices; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'branches') THEN DELETE FROM branches; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_users_deleted') THEN DELETE FROM tenant_users_deleted; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_users') THEN DELETE FROM tenant_users; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_api_integrations') THEN DELETE FROM tenant_api_integrations; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_domains') THEN DELETE FROM tenant_domains; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_settings') THEN DELETE FROM tenant_settings; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenant_brand') THEN DELETE FROM tenant_brand; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invites') THEN DELETE FROM invites; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'admin_activity_logs') THEN DELETE FROM admin_activity_logs; END IF; END $$;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tenants') THEN DELETE FROM tenants; END IF; END $$;
+COMMIT;

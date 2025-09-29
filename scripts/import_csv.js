@@ -12,7 +12,7 @@ function yn(v){ const s = String(v||'').trim().toLowerCase(); return s === 'yes'
 function toInt(v){ const n = parseInt(String(v||'').trim(), 10); return Number.isFinite(n) ? n : null; }
 function toNum(v){ const n = Number(String(v||'').trim()); return Number.isFinite(n) ? n : null; }
 
-const TENANT_ID = process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae';
+const TENANT_ID = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   console.error('DATABASE_URL not set. Aborting import.');
@@ -40,14 +40,15 @@ async function ensureTables(client) {
   await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
   await client.query(`
     CREATE TABLE IF NOT EXISTS tenants (
-      id uuid PRIMARY KEY,
-      name text NOT NULL,
+      tenant_id uuid PRIMARY KEY,
+      company_name text NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now()
-    )`);
+    )
+  `);
   await client.query(`
     CREATE TABLE IF NOT EXISTS categories (
       id uuid PRIMARY KEY,
-      tenant_id uuid NOT NULL REFERENCES tenants(id),
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id),
       name text NOT NULL,
       reference text,
       name_localized text,
@@ -64,7 +65,7 @@ async function ensureTables(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS products (
       id uuid PRIMARY KEY,
-      tenant_id uuid NOT NULL REFERENCES tenants(id),
+      tenant_id uuid NOT NULL REFERENCES tenants(tenant_id),
       category_id uuid NOT NULL REFERENCES categories(id),
       category_reference text,
       name text NOT NULL,
@@ -136,6 +137,18 @@ async function ensureTables(client) {
     )`);
   await client.query("CREATE INDEX IF NOT EXISTS ix_modifier_groups_tenant_ref ON modifier_groups(tenant_id, reference)");
   await client.query("CREATE INDEX IF NOT EXISTS ix_modifier_options_group ON modifier_options(group_id)");
+  // Product ↔ Modifier groups link table (idempotent)
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS product_modifier_groups (
+      product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      group_id   uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
+      sort_order integer,
+      required   boolean,
+      min_select integer,
+      max_select integer,
+      PRIMARY KEY (product_id, group_id)
+    )
+  `);
 }
 
 function imageExtFromUrl(url) {
@@ -174,9 +187,9 @@ async function downloadImage(url, outPath) {
     await ensureTables(c);
 
     await c.query(
-      `INSERT INTO tenants (id, name) VALUES ($1,$2)
-       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name`,
-      [TENANT_ID, 'Koobs Café']
+      `INSERT INTO tenants (tenant_id, company_name) VALUES ($1,$2)
+       ON CONFLICT (tenant_id) DO UPDATE SET company_name=EXCLUDED.company_name`,
+      [TENANT_ID, 'Fouz Cafe']
     );
 
     // Insert categories and build reference -> id map
@@ -202,6 +215,13 @@ async function downloadImage(url, outPath) {
     // Ensure images dir
     const imgDir = path.join(process.cwd(), 'public', 'images');
     fs.mkdirSync(imgDir, { recursive: true });
+
+    // Build map of modifier group references -> id
+    const modRefToId = new Map();
+    try {
+      const { rows } = await c.query('select id, reference from modifier_groups where tenant_id=$1', [TENANT_ID]);
+      for (const r of (rows||[])) { if (r.reference) modRefToId.set(String(r.reference).toLowerCase(), String(r.id)); }
+    } catch {}
 
     // Insert products
     for (const p of prods) {
@@ -272,6 +292,34 @@ async function downloadImage(url, outPath) {
         const out = path.join(imgDir, `${id}.${ext}`);
         const ok = await downloadImage(imgUrl, out);
         if (!ok) console.warn('Image download failed for', id);
+      }
+
+      // Link product to modifier groups using CSV columns if provided
+      try {
+        // Accept any of these columns: modifier_groups, modifier_group_refs, modifier_refs, modifiers
+        const raw = String(p.modifier_groups || p.modifier_group_refs || p.modifier_refs || p.modifiers || '').trim();
+        const refs = raw ? raw.split(/[;,]/).map(s => String(s||'').trim()).filter(Boolean) : [];
+        if (refs.length) {
+          // Resolve references to group IDs
+          const items = refs
+            .map(r => modRefToId.get(r.toLowerCase()))
+            .filter(Boolean)
+            .map((gid, idx) => ({ gid, sort: idx }));
+          if (items.length) {
+            // Replace links for this product
+            await c.query('DELETE FROM product_modifier_groups WHERE product_id=$1', [id]);
+            for (const it of items) {
+              await c.query(
+                `INSERT INTO product_modifier_groups (product_id, group_id, sort_order)
+                 VALUES ($1,$2,$3)
+                 ON CONFLICT (product_id, group_id) DO UPDATE SET sort_order=EXCLUDED.sort_order`,
+                [id, it.gid, it.sort]
+              );
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Linking modifiers failed for product', id, e?.message||e);
       }
     }
 

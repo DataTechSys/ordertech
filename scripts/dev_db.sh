@@ -43,6 +43,7 @@ DB_URL_SECRET="${DB_URL_SECRET:-}"
 # Internal
 PID_DIR="/tmp"
 PID_FILE="$PID_DIR/cloud-sql-proxy.ordertech.pid"
+LOG_FILE="$PID_DIR/cloud-sql-proxy.ordertech.log"
 
 _die(){ echo "[dev_db] $*" >&2; return 1; }
 _info(){ echo "[dev_db] $*"; }
@@ -80,30 +81,90 @@ _start_proxy(){
   fi
   _info "Starting Cloud SQL Auth Proxy on 127.0.0.1:$PROXY_PORT for $conn"
   # shellcheck disable=SC2086
-  cloud-sql-proxy "$conn" --port "$PROXY_PORT" 1>/dev/null 2>&1 &
+  cloud-sql-proxy "$conn" --address 127.0.0.1 --port "$PROXY_PORT" >> "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
-  sleep 0.5
+  sleep 0.8
   if ! _is_running; then
-    _die "Failed to start cloud-sql-proxy"
+    _die "Failed to start cloud-sql-proxy (see $LOG_FILE)"
   fi
 }
 
 _export_env(){
   _need_sourced "start"
   if [ -n "$DB_URL_SECRET" ]; then
-    # Fetch full DATABASE_URL from Secret Manager, rewrite host:port to localhost:PROXY_PORT
+    # Fetch full DATABASE_URL from Secret Manager, rewrite to localhost:PROXY_PORT using Python (robust)
     local raw_url
     raw_url="$(gcloud secrets versions access latest --secret="$DB_URL_SECRET" 2>/dev/null || true)"
-    [ -n "$raw_url" ] || _die "Could not fetch DATABASE_URL from Secret Manager: $DB_URL_SECRET"
-    # Parse url safely with node (available in this repo)
-    local local_url
-    local_url=$(node -e 'try{const u=new URL(process.env.RAW_URL);u.hostname="127.0.0.1";u.port=String(process.env.PROXY_PORT||5432);u.protocol="postgres:";console.log(u.toString())}catch(e){process.exit(1)}' RAW_URL="$raw_url" PROXY_PORT="$PROXY_PORT" || true)
-    [ -n "$local_url" ] || _die "Failed to rewrite DATABASE_URL for localhost"
-    export DATABASE_URL="$local_url"
-    export REQUIRE_DB=1
-    _info "Env set via DB_URL_SECRET: REQUIRE_DB=1 and DATABASE_URL → 127.0.0.1:${PROXY_PORT}"
-    return 0
+    if [ -n "$raw_url" ]; then
+      # Sanitize (strip CR/LF, surrounding quotes, and leading VARIABLE= prefix like DATABASE_URL=...)
+      raw_url="$(printf "%s" "$raw_url" | tr -d '\r' | tr -d '\n')"
+      raw_url="${raw_url#DATABASE_URL=}"
+      raw_url="${raw_url%\n}"
+      case "$raw_url" in
+        \"*\") raw_url="${raw_url#\"}"; raw_url="${raw_url%\"}";;
+        "'*'") raw_url="${raw_url#\'}"; raw_url="${raw_url%\'}";;
+      esac
+      # Use Python to parse and emit a local TCP URL for the proxy, preserving url-encoded credentials
+      local local_url
+      local_url=$(python3 - "$PROXY_PORT" <<'PY'
+import os, sys, json
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode, quote
+
+raw = sys.stdin.read().strip()
+if not raw:
+  sys.exit(1)
+# Support JSON payloads that may contain a DATABASE_URL field
+if raw and raw[0] in '{[':
+  try:
+    j = json.loads(raw)
+    for k in ('uri','url','DATABASE_URL','connectionString'):
+      if isinstance(j, dict) and k in j and j[k]:
+        raw = str(j[k]).strip()
+        break
+  except Exception:
+    pass
+if not raw:
+  sys.exit(1)
+# Ensure scheme present
+if '://' not in raw:
+  raw = 'postgresql://' + raw
+# Make parseable if it has @/ or @?
+patched = raw.replace('@/', '@localhost/').replace('@?', '@localhost?')
+
+u = urlparse(patched)
+# Derive db name
+db = (u.path or '/').lstrip('/')
+# Percent-encode user/pass exactly once
+user = '' if u.username is None else quote(u.username, safe='')
+pwd  = None if u.password is None else quote(u.password, safe='')
+userinfo = user + ((":" + pwd) if pwd is not None else '')
+if userinfo:
+  userinfo += '@'
+
+host = '127.0.0.1'
+port = sys.argv[1] if len(sys.argv) > 1 else '5432'
+netloc = f"{userinfo}{host}:{port}"
+# Drop cloudsql socket host + ssl flags; keep others
+q = dict(parse_qsl(u.query, keep_blank_values=True))
+q.pop('host', None)
+q.pop('sslmode', None)
+
+newu = ('postgresql', netloc, '/' + db if db else '/', '', urlencode(q), '')
+print(urlunparse(newu))
+PY
+      <<< "$raw_url" 2>/dev/null)
+      if [ -n "$local_url" ]; then
+        export DATABASE_URL="$local_url"
+        export REQUIRE_DB=1
+        _info "Env set via DB_URL_SECRET: REQUIRE_DB=1 and DATABASE_URL → 127.0.0.1:${PROXY_PORT}"
+        return 0
+      fi
+      _info "DATABASE_URL secret present but rewrite failed; falling back to DB_PASSWORD_SECRET if available"
+    else
+      _info "DATABASE_URL secret not accessible; falling back to DB_PASSWORD_SECRET if available"
+    fi
   fi
+
   if [ -z "$DB_USER" ] || [ -z "$DB_NAME" ] || [ -z "$DB_PASSWORD_SECRET" ]; then
     _die "Set DB_URL_SECRET or DB_USER, DB_NAME, DB_PASSWORD_SECRET (see scripts/dev_db.env.example)"
   fi

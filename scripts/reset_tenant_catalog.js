@@ -9,7 +9,7 @@ function arg(name, def=null){ const a = process.argv.find(s => s.startsWith(`--$
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) { console.error('DATABASE_URL not set. Aborting reset.'); process.exit(1); }
 
-const TENANT_ID = arg('tenant', process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae');
+const TENANT_ID = arg('tenant', process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6');
 if (!TENANT_ID) { console.error('TENANT_ID missing. Provide --tenant=<UUID> or set DEFAULT_TENANT_ID.'); process.exit(1); }
 
 (async () => {

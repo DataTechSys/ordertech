@@ -21,7 +21,7 @@ async function main(){
   const cfg = buildConfig();
   const pool = new Pool(cfg);
   const client = await pool.connect();
-  const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '3feff9a3-4721-4ff2-a716-11eb93873fae';
+  const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
   try {
     const out = {};
     const q = async (key, sql, params=[]) => {

@@ -30,6 +30,6 @@ gcloud run deploy "$SERVICE" \
   --source . \
   --quiet \
   --add-cloudsql-instances "$DB_INSTANCE" \
-  --set-secrets "DATABASE_URL=DATABASE_URL:latest,LIVEKIT_API_KEY=livekit-api-key:latest,LIVEKIT_API_SECRET=livekit-api-secret:latest" \
-  --update-env-vars "PGHOST=/cloudsql/$DB_INSTANCE,REQUIRE_DB=true,SKIP_DEFAULT_TENANT=1,DEFAULT_TENANT_ID=56ac557e-589d-4602-bc9b-946b201fb6f6,RTC_FALLBACK_ORDER=p2p,API_BASE_URL=https://app.ordertech.me" \
+  --set-secrets "DATABASE_URL=DATABASE_URL:latest,LIVEKIT_WS_URL=livekit-ws-url:latest,LIVEKIT_API_KEY=livekit-api-key:latest,LIVEKIT_API_SECRET=livekit-api-secret:latest,ENCRYPTION_KEY=encryption-key:latest" \
+  --update-env-vars "PGHOST=/cloudsql/$DB_INSTANCE,REQUIRE_DB=true,SKIP_DEFAULT_TENANT=1,DEFAULT_TENANT_ID=56ac557e-589d-4602-bc9b-946b201fb6f,RTC_FALLBACK_ORDER=p2p,API_BASE_URL=https://app.ordertech.me" \
   --allow-unauthenticated
