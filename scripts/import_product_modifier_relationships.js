@@ -129,17 +129,17 @@ async function createProductModifierRelationship(pool, productId, modifierGroupI
     const minOptions = parseInt(relationshipData.minimum_options) || 0;
     const maxOptions = parseInt(relationshipData.maximum_options) || 0;
     const required = minOptions > 0;
-    const uniqueOptions = relationshipData.unique_options === 'Yes';
+    
+    console.log(`    💾 Creating relationship: product=${productId}, modifier=${modifierGroupId}, required=${required}, min=${minOptions}, max=${maxOptions}`);
     
     await db(pool, `
-        INSERT INTO product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select, unique_options)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (product_id, group_id) DO UPDATE SET
             required = EXCLUDED.required,
             min_select = EXCLUDED.min_select,
-            max_select = EXCLUDED.max_select,
-            unique_options = EXCLUDED.unique_options
-    `, [productId, modifierGroupId, 0, required, minOptions, maxOptions, uniqueOptions]);
+            max_select = EXCLUDED.max_select
+    `, [productId, modifierGroupId, 0, required, minOptions, maxOptions]);
 }
 
 // Sleep helper
