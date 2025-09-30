@@ -13,12 +13,16 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     private let manager = CLLocationManager()
     private var env: EnvironmentStore?
     private var client: HttpClient?
+    private var timer: Timer?
+    private var lastSentAt: Date? = nil
+    private let minInterval: TimeInterval = 15 * 60 // 15 minutes
     
     func configure(env: EnvironmentStore) {
         self.env = env
         self.client = HttpClient(env: env)
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        manager.distanceFilter = 100 // meters
     }
     
     func startUpdating() {
@@ -28,16 +32,29 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         }
         #endif
         manager.startUpdatingLocation()
+        // Also request a location every 15 minutes to guarantee cadence even if stationary
+        if timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: minInterval, repeats: true) { [weak self] _ in
+                self?.manager.requestLocation()
+            }
+            if let t = timer { RunLoop.main.add(t, forMode: .common) }
+        }
     }
     
     func stopUpdating() {
         manager.stopUpdatingLocation()
+        timer?.invalidate(); timer = nil
     }
     
     // CLLocationManagerDelegate
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         lastLocation = location
+        let now = Date()
+        if let last = lastSentAt, now.timeIntervalSince(last) < minInterval {
+            return // throttle
+        }
+        lastSentAt = now
         Task { await sendLocationToServer(location: location) }
     }
     
@@ -50,6 +67,13 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         #else
         manager.startUpdatingLocation()
         #endif
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("[LocationManager] Failed to get location: \(error)")
+        if let err = error as? CLError, err.code == .denied {
+            manager.stopUpdatingLocation()
+        }
     }
     
     func sendLocationToServer(location: CLLocation) async {
@@ -78,25 +102,49 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var presentedActivationOnce = false
     @StateObject private var sessionStoreHolder = SessionHolder()
-    #if canImport(CoreLocation)
+#if canImport(CoreLocation)
     @StateObject private var locationManager = LocationManager()
+    @AppStorage("OT.display.shareLocation") private var shareLocation: Bool = true
     #endif
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 8) {
-                // Always show header; badge will indicate activation state
-                header
+            VStack(spacing: 0) {
+                
                 content
             }
+.overlay(alignment: .topTrailing) {
+                SettingsHotCorner(size: 64, trigger: .longPress(0.6)) { showSettings = true }
+                    .padding(.trailing, 8)
+                    .padding(.top, 8)
+            }
+            .overlay(alignment: .topLeading) {
+                Color.black.opacity(0.001)
+                    .frame(width: 72, height: 72)
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(true)
+                    .gesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in showSettings = true })
+                    .zIndex(1000)
+            }
+            .background(
+                Group {
+                    #if canImport(UIKit)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        HomeIndicatorHider().ignoresSafeArea()
+                    }
+                    #endif
+                }
+            )
             .onAppear {
                 Task { @MainActor in sessionStoreHolder.ensure(env: env, app: app) }
                 // Start activation manager in all builds
                 activation.start(env: env, app: app)
                 #if canImport(CoreLocation)
                 locationManager.configure(env: env)
-                if env.deviceToken != nil {
+                if env.deviceToken != nil && shareLocation {
                     locationManager.startUpdating()
+                } else {
+                    locationManager.stopUpdating()
                 }
                 #endif
                 // Present activation inline instead of auto-opening Settings
@@ -115,16 +163,32 @@ struct RootView: View {
                     locationManager.stopUpdating()
                 } else {
                     locationManager.configure(env: env)
-                    locationManager.startUpdating()
+                    if shareLocation {
+                        locationManager.startUpdating()
+                    } else {
+                        locationManager.stopUpdating()
+                    }
                 }
                 #endif
                 if env.deviceToken == nil { /* keep activation page visible */ } else { showSettings = false }
+            }
+            .onChange(of: shareLocation) { enabled in
+                #if canImport(CoreLocation)
+                if env.deviceToken != nil {
+                    enabled ? locationManager.startUpdating() : locationManager.stopUpdating()
+                } else {
+                    locationManager.stopUpdating()
+                }
+                #endif
             }
             .onDisappear {
                 Task { @MainActor in sessionStoreHolder.stop() }
                 #if canImport(CoreLocation)
                 locationManager.stopUpdating()
                 #endif
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .displayOpenSettings)) { _ in
+                showSettings = true
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
@@ -144,12 +208,9 @@ struct RootView: View {
                     .background(Capsule().fill(Color.orange.opacity(0.2)))
                 #endif
             }
-            if let s = sessionStoreHolder.store {
-                Circle()
-                    .fill(s.peersConnected ? Color.green : (s.connected ? Color.orange : Color.gray))
-                    .frame(width: 10, height: 10)
-            }
-            Button(action: { showSettings = true }) { Image(systemName: "gearshape") }
+            // Connection status chip (dot-only) similar to Cashier
+            StatusChipView(status: statusChipText, compact: true, dotOnly: true)
+            // Removed gear icon to keep screen clean
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -161,9 +222,11 @@ struct RootView: View {
             if let s = sessionStoreHolder.store, env.deviceToken != nil {
                 #if canImport(WebRTC)
                 DisplayHomeView(store: s)
+                    .environmentObject(s)
                     .environmentObject(s.webRTCService)
                 #else
                 DisplayHomeView(store: s)
+                    .environmentObject(s)
                 #endif
             } else if env.deviceToken == nil {
                 InlineActivationPageView()
@@ -183,6 +246,61 @@ struct RootView: View {
             }
         }
     }
+
+    private var statusChipText: String {
+        if env.deviceToken == nil { return "UNPAIRED" }
+        if let s = sessionStoreHolder.store, s.peersConnected { return "CONNECTED" }
+        return "READY"
+    }
 }
 
-// ... (rest of your file unchanged)
+private enum HotCornerTrigger {
+    case tap
+    case doubleTap
+    case longPress(Double)
+}
+
+private struct SettingsHotCorner: View {
+    let size: CGFloat
+    let trigger: HotCornerTrigger
+    let onTap: () -> Void
+
+    init(size: CGFloat = 64, trigger: HotCornerTrigger = .longPress(0.6), onTap: @escaping () -> Void) {
+        self.size = size
+        self.trigger = trigger
+        self.onTap = onTap
+    }
+
+    @ViewBuilder
+    var body: some View {
+        let base = Color.clear
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
+        switch trigger {
+        case .tap:
+            base.onTapGesture(perform: onTap)
+        case .doubleTap:
+            base.onTapGesture(count: 2, perform: onTap)
+        case .longPress(let duration):
+            base.gesture(LongPressGesture(minimumDuration: duration).onEnded { _ in onTap() })
+        }
+    }
+}
+
+#if canImport(UIKit)
+private struct HomeIndicatorHider: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> HiderVC { HiderVC() }
+    func updateUIViewController(_ uiViewController: HiderVC, context: Context) {}
+    final class HiderVC: UIViewController {
+        override var prefersHomeIndicatorAutoHidden: Bool { true }
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            setNeedsUpdateOfHomeIndicatorAutoHidden()
+        }
+    }
+}
+#endif
+
+extension Notification.Name {
+    static let displayOpenSettings = Notification.Name("OT.Display.OpenSettings")
+}

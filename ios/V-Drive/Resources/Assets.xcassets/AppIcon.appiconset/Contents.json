@@ -1,37 +1,37 @@
 {
   "images" : [
     {
-      "filename" : "ordertech-1024x1024 3.png",
+      "filename" : "ordertech-40x40.png",
       "idiom" : "iphone",
       "scale" : "2x",
       "size" : "20x20"
     },
     {
-      "filename" : "ordertech-1024x1024 4.png",
+      "filename" : "ordertech-60x60.png",
       "idiom" : "iphone",
       "scale" : "3x",
       "size" : "20x20"
     },
     {
-      "filename" : "ordertech-167x167 1.png",
+      "filename" : "ordertech-58x58.png",
       "idiom" : "iphone",
       "scale" : "2x",
       "size" : "29x29"
     },
     {
-      "filename" : "ordertech-1024x1024 5.png",
+      "filename" : "ordertech-87x87.png",
       "idiom" : "iphone",
       "scale" : "3x",
       "size" : "29x29"
     },
     {
-      "filename" : "ordertech-167x167 3.png",
+      "filename" : "ordertech-80x80.png",
       "idiom" : "iphone",
       "scale" : "2x",
       "size" : "40x40"
     },
     {
-      "filename" : "ordertech-167x167 2.png",
+      "filename" : "ordertech-120x120-2.png",
       "idiom" : "iphone",
       "scale" : "3x",
       "size" : "40x40"
@@ -49,19 +49,19 @@
       "size" : "60x60"
     },
     {
-      "filename" : "ordertech-1024x1024 8.png",
+      "filename" : "ordertech-40x40.png",
       "idiom" : "ipad",
       "scale" : "2x",
       "size" : "20x20"
     },
     {
-      "filename" : "ordertech-1024x1024 7.png",
+      "filename" : "ordertech-58x58.png",
       "idiom" : "ipad",
       "scale" : "2x",
       "size" : "29x29"
     },
     {
-      "filename" : "ordertech-1024x1024 6.png",
+      "filename" : "ordertech-80x80.png",
       "idiom" : "ipad",
       "scale" : "2x",
       "size" : "40x40"

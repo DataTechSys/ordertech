@@ -157,8 +157,6 @@ struct InlineActivationPageView: View {
                     let payload: [String: Any] = [
                         "code": code,
                         "role": "display",
-                        "name": app.friendlyName,
-                        "branch": app.branchName,
                         "tenant_id": company
                     ]
                     reg.httpBody = try JSONSerialization.data(withJSONObject: payload)
@@ -190,8 +188,6 @@ struct InlineActivationPageView: View {
                     let payload: [String: Any] = [
                         "code": code,
                         "role": "display",
-                        "name": app.friendlyName,
-                        "branch": app.branchName,
                         "tenant_id": company
                     ]
                     reg.httpBody = try JSONSerialization.data(withJSONObject: payload)

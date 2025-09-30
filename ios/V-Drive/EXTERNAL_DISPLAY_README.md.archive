@@ -1,0 +1,203 @@
+# External Display HDMI Rotation Feature
+
+This document describes the HDMI rotation and screen-filling functionality for the V-Drive iPad display app.
+
+## Overview
+
+The external display feature allows the V-Drive app to:
+- **Detect HDMI connections** automatically when an iPad is connected to an external display
+- **Rotate and scale content** to fill external landscape displays completely 
+- **Maintain portrait orientation** on the main iPad device
+- **Toggle functionality** via Settings with user control
+- **Fallback to system mirroring** when the feature is disabled
+
+## Architecture
+
+### Key Components
+
+1. **ExternalDisplayManager** - Singleton that manages external screen detection and window creation
+2. **ExternalDisplayRootView** - SwiftUI view that handles rotation and scaling math
+3. **SceneDelegate** - Controls the main app's orientation lock to portrait
+4. **PortraitHostingController** - UIHostingController subclass that enforces portrait orientation
+
+### File Structure
+
+```
+Sources/
+├── App/
+│   ├── SceneDelegate.swift          # Scene management and orientation control
+│   └── SettingsView.swift           # User toggle for the feature
+└── ExternalDisplay/
+    ├── ExternalDisplayManager.swift  # Main manager class
+    └── ExternalDisplayRootView.swift # Rotation and scaling view
+```
+
+## Configuration Requirements
+
+### Info.plist Changes
+
+The following changes were made to support external display functionality:
+
+```xml
+<!-- Allow landscape orientations for external display flexibility -->
+<key>UISupportedInterfaceOrientations~ipad</key>
+<array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
+
+<!-- Scene delegate configuration -->
+<key>UIApplicationSceneManifest</key>
+<dict>
+    <key>UIApplicationSupportsMultipleScenes</key>
+    <false/>
+    <key>UISceneConfigurations</key>
+    <dict>
+        <key>UIWindowSceneSessionRoleApplication</key>
+        <array>
+            <dict>
+                <key>UISceneConfigurationName</key>
+                <string>Default Configuration</string>
+                <key>UISceneDelegateClassName</key>
+                <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+            </dict>
+        </array>
+    </dict>
+</dict>
+```
+
+### User Defaults Key
+
+The feature uses the following UserDefaults key:
+- `OT.display.externalDisplayRotationEnabled` (Boolean, default: false)
+
+## How It Works
+
+### Rotation and Scaling Logic
+
+When the feature is enabled and an external display is connected:
+
+1. **Screen Detection**: `ExternalDisplayManager` detects external screens via `UIScreen` notifications
+2. **Window Creation**: Creates a custom `UIWindow` attached to the external screen
+3. **Content Rotation**: Rotates the mirrored app content 90 degrees clockwise  
+4. **Scale-to-Fill**: Calculates scale factor to fill the external display completely:
+   ```swift
+   let scaleX = containerSize.width / rotatedSize.width
+   let scaleY = containerSize.height / rotatedSize.height
+   let scaleFactor = max(scaleX, scaleY) // Fill completely, may crop
+   ```
+5. **Black Background**: Uses black background to avoid letterboxing artifacts
+
+### Edge Cases Handled
+
+- **Portrait External Displays**: Only rotates when external display is landscape (width > height)
+- **Screen Mode Changes**: Recalculates scaling when resolution/refresh rate changes
+- **App Backgrounding**: Ensures external window visibility on foreground return
+- **TV Overscan**: Sets `screen.overscanCompensation = .scale` to avoid clipping
+- **Multiple Screens**: Uses the first detected external screen
+
+## User Experience
+
+### Settings Interface
+
+The feature is controlled via a toggle in the app's Settings:
+- **Location**: Settings → Device section
+- **Label**: "Rotate and fill external HDMI display"
+- **Default**: OFF (uses system mirroring)
+
+### Behavior States
+
+| Setting | HDMI Connected | Result |
+|---------|----------------|---------|
+| OFF | Yes | System mirroring (portrait, likely pillarboxed) |
+| ON | Yes | Custom rotated window (landscape, fills screen) |
+| OFF/ON | No | Normal iPad usage (portrait) |
+
+## Testing Guidelines
+
+### Required Hardware
+- iPad running iPadOS 16+ 
+- Apple Digital AV Adapter (Lightning or USB-C to HDMI)
+- External monitor/TV (1080p or 4K recommended)
+
+### Test Scenarios
+
+1. **Launch with HDMI connected, setting OFF**
+   - Expected: System mirroring, portrait content with pillarboxing
+   
+2. **Toggle setting ON while connected**
+   - Expected: Switch to custom window, landscape-rotated, fills screen
+   
+3. **Toggle setting OFF while connected**
+   - Expected: Return to system mirroring
+   
+4. **Connect HDMI while app running, setting ON**
+   - Expected: Immediate custom window creation
+   
+5. **Disconnect HDMI**
+   - Expected: Clean teardown, no crashes
+   
+6. **Change display resolution while connected**
+   - Expected: Content rescales to new resolution
+
+### Visual Validation
+
+- ✅ No letterboxing when setting is ON
+- ✅ Content is right-side-up (not upside-down)
+- ✅ Text remains crisp after scaling
+- ✅ Main iPad stays portrait regardless of external display
+- ✅ Black background fills any gaps
+
+## Known Limitations
+
+### When Setting is OFF
+- Uses standard iOS system mirroring
+- Portrait content will be pillarboxed on landscape displays
+- No rotation or custom scaling applied
+
+### When Setting is ON  
+- Creates custom external window (no longer uses system mirroring)
+- Content is cropped to fill the screen (may cut off edges)
+- Requires manual toggle - not automatic based on display detection
+
+### Compatibility
+- Compatible with Stage Manager and multiple windows
+- Works with various HDMI adapters and display resolutions
+- Dynamic Type scaling preserved on external display
+
+## Troubleshooting
+
+### Common Issues
+
+**External display not detected:**
+- Verify HDMI adapter is properly connected
+- Check that external display is powered on and set to correct input
+- Look for debug logs: `[ExternalDisplayManager] External screen connected`
+
+**Rotation not working:**
+- Confirm setting is enabled in Settings → Device
+- Check logs for window creation: `[ExternalDisplayManager] Creating external window`
+- Verify external display is landscape (width > height)
+
+**Content appears wrong:**
+- Disconnect and reconnect HDMI to reset
+- Toggle setting OFF and back ON
+- Check for mode change logs during resolution switches
+
+### Debug Logging
+
+The implementation includes comprehensive logging with `[ExternalDisplayManager]` prefix:
+- Screen connection/disconnection events
+- Window creation and teardown
+- Setting changes and mode switches
+- Error conditions and fallbacks
+
+## Future Enhancements
+
+Potential improvements for future versions:
+- Automatic rotation based on display aspect ratio
+- User-selectable rotation angles (90°, 180°, 270°)
+- Per-display settings for multiple external screens
+- Custom scaling modes (fit vs fill vs stretch)
+- Rotation animation transitions

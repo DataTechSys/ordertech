@@ -1,0 +1,289 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp-primary.dia",
+    "emit-module-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp-primary-emit-module.dia",
+    "pch" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp-primary.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Activation/ActivationManager.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationManager~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Activation/ActivationPersistence.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ActivationPersistence~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Activation/InActiveIndicator.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InActiveIndicator~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Activation/InlineActivationPageView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/BrandLogoView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/BrandLogoView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/DisplayApp.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayApp~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/DisplayHomeView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayHomeView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/RootView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RootView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/SettingsView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/StatusChipView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/StatusChipView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Catalog/CatalogModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/CatalogModels~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Catalog/ProductDetailSheetView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ProductDetailSheetView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Core/Networking/HttpClient+Endpoints.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Design/SquareAsyncImage.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SquareAsyncImage~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Design/Tokens.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/Tokens~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Persistence/LocalCache.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LocalCache~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/LiveKitRTC.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitRTC~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/LiveKitVideoViews.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LiveKitVideoViews~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/LoopingVideoView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/LoopingVideoView~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/P2PRTC.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/P2PRTC~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/PreconnectLocalPreview.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/PreconnectLocalPreview~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/RTCProvider.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCProvider~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/RTCVideoViews.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/RTCVideoViews~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/WebRTCService.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/WebRTCService~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Session/DisplaySessionStore.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Session/DisplayUIModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/DisplayUIModels~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Session/SessionHolder.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/SessionHolder~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Utils/ImageDiskCache.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.dia",
+    "index-unit-output-path" : "/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/build/DisplayApp.build/Debug-iphoneos/DisplayApp.build/Objects-normal/arm64/ImageDiskCache~partial.swiftmodule"
+  }
+}

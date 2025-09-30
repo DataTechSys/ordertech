@@ -1,5 +1,6 @@
 import SwiftUI
 import OrderTechCore
+import UIKit
 
 @main
 struct DisplayApp: App {
@@ -8,16 +9,20 @@ struct DisplayApp: App {
     @StateObject private var activationManager = ActivationManager()
 
     init() {
-        // Disable shared URL cache globally
-        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
+        // Enable a modest shared URL cache to improve image loading and prefetching
+        let mem = 32 * 1024 * 1024 // 32 MB
+        let disk = 200 * 1024 * 1024 // 200 MB
+        URLCache.shared = URLCache(memoryCapacity: mem, diskCapacity: disk, diskPath: nil)
     }
+    
 
     var body: some Scene {
         WindowGroup {
-RootView()
+            RootView()
                 .environmentObject(env)
                 .environmentObject(appModel)
                 .environmentObject(activationManager)
+                .statusBar(hidden: UIDevice.current.userInterfaceIdiom == .phone)
         }
     }
 }

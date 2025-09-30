@@ -24,8 +24,11 @@ final class ActivationManager: ObservableObject {
         if let loaded: ActivationInfo = try? LocalCache.loadJSON(ActivationInfo.self, from: activationFilename) {
             self.info = loaded
         }
-        // Immediate check
-        checkAndEnforceExpiry(env: env)
+        // Refresh from server first, then enforce expiry using fresh data
+        Task {
+            await self.updateFromManifest(env: env, app: app)
+            await MainActor.run { self.checkAndEnforceExpiry(env: env) }
+        }
         // Ensure daily check if token exists
         if env.deviceToken != nil { scheduleDailyExpiryCheck(env: env, app: app) }
     }
@@ -40,11 +43,12 @@ final class ActivationManager: ObservableObject {
             stop()
             _ = try? LocalCache.delete("activation.json")
             _ = try? LocalCache.delete("tenant.json")
+            self.info = nil
         } else {
-            if info == nil {
-                // If we don't have info yet, try to populate from manifest lazily
-                Task { await updateFromManifest(env: env, app: app) }
-            }
+            // Treat as a fresh activation: drop any stale cached info to avoid carrying old expiry
+            _ = try? LocalCache.delete("activation.json")
+            self.info = nil
+            Task { await updateFromManifest(env: env, app: app) }
             scheduleDailyExpiryCheck(env: env, app: app)
         }
     }
@@ -101,31 +105,51 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
                 data = try await getManifestManual(env: env)
             }
             let parsed = try? JSONSerialization.jsonObject(with: data, options: [])
-            let details = extractDetails(from: parsed)
+            let base = extractDetails(from: parsed)
+            // Start with manifest-provided values
+            var companyName = base.companyName
+            var displayName = base.displayName
+            var branchName = base.branchName
+            var shortId = base.shortId
+            var expiresFromServer = base.expiresAt
 
-            // Resolve tenant host from short code if we don't have one yet
-            if (env.tenantHostOverride ?? "").isEmpty, let short = details.shortId, !short.isEmpty {
-                struct DomainResp: Decodable { let host: String?; let suggestion: String? }
-                if let mapping: DomainResp = try? await http.request("/tenant/by-code/\(short)/domain", fresh: true) {
-                    let host = (mapping.host ?? mapping.suggestion) ?? ""
-                    if !host.isEmpty { env.setTenantHostOverride(host) }
+            // Fallback: if display name missing, fetch /device/profile
+            if displayName == nil || displayName!.isEmpty {
+                if let prof: DeviceProfile = try? await http.fetchDeviceProfile() {
+                    if let dn = prof.display_name?.trimmingCharacters(in: .whitespacesAndNewlines), !dn.isEmpty { displayName = dn }
+                    if (branchName == nil || branchName!.isEmpty), let br = prof.branch?.trimmingCharacters(in: .whitespacesAndNewlines), !br.isEmpty { branchName = br }
+                    if shortId == nil, let sc = prof.short_code?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        let digits = sc.filter { $0.isNumber }; if digits.count == 6 { shortId = digits }
+                    }
                 }
             }
 
-            // Preserve the original activation date if already set
-            let activatedAt = self.info?.activatedAt ?? Date()
-            // Default expiry is 1 week from the original activation date
+            // Resolve tenant host from short code if we don't have one yet
+            if (env.tenantHostOverride ?? "").isEmpty, let short = shortId, !short.isEmpty {
+                struct DomainResp: Decodable { let host: String?; let suggestion: String? }
+                if let mapping: DomainResp = try? await http.request("/tenant/by-code/\(short)/domain", fresh: true) {
+                    let host = (mapping.host ?? mapping.suggestion)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    // Ignore localhost/.local suggestions to avoid unreachable hosts in production builds
+                    let lower = host.lowercased()
+                    let isInvalid = lower.contains("localhost") || lower.hasSuffix(".local") || lower == "127.0.0.1"
+                    if !host.isEmpty && !isInvalid { env.setTenantHostOverride(host) }
+                }
+            }
+
+            // Use current time as activation date whenever info is missing (fresh activation) or token just changed.
+            let activatedAt = Date()
+            // Default expiry is 1 week from now if server doesn't provide one
             let defaultExpiry = Calendar.current.date(byAdding: .day, value: 7, to: activatedAt) ?? activatedAt.addingTimeInterval(7*24*60*60)
-            // If Admin provides an explicit expiry, honor it; otherwise keep the previously stored expiry or default
-            let expiresAt = details.expiresAt ?? self.info?.expiresAt ?? defaultExpiry
+            // If Admin provides an explicit expiry, honor it; otherwise default to 7 days from now
+            let expiresAt = expiresFromServer ?? defaultExpiry
 
             let tenantId = env.tenantId ?? ""
             let info = ActivationInfo(
                 tenantId: tenantId,
-                companyName: details.companyName,
-                branchName: details.branchName,
-                displayName: details.displayName,
-                tenantShortId: details.shortId,
+                companyName: companyName,
+                branchName: branchName,
+                displayName: displayName,
+                tenantShortId: shortId,
                 activatedAt: activatedAt,
                 expiresAt: expiresAt
             )
@@ -133,13 +157,13 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
             _ = try? LocalCache.saveJSON(info, to: activationFilename)
 
             // Update AppModel local fields for UI consistency
-            if let dn = details.displayName, !dn.isEmpty { app.friendlyName = dn; UserDefaults.standard.set(dn, forKey: "OT.display.friendlyName") }
-            if let br = details.branchName, !br.isEmpty { app.branchName = br; UserDefaults.standard.set(br, forKey: "OT.display.branchName") }
+            if let dn = displayName, !dn.isEmpty { app.friendlyName = dn; UserDefaults.standard.set(dn, forKey: "OT.display.friendlyName") }
+            if let br = branchName, !br.isEmpty { app.branchName = br; UserDefaults.standard.set(br, forKey: "OT.display.branchName") }
 
             // Persist minimal tenant.json for quick access elsewhere
             if !tenantId.isEmpty {
                 // Persist only server-provided display name; keep it empty until data is imported post-activation
-                let tinfo = TenantInfo(tenant_id: tenantId, branch: details.branchName ?? app.branchName, display_name: details.displayName)
+let tinfo = TenantInfo(tenant_id: tenantId, branch: (branchName ?? app.branchName), display_name: displayName)
                 _ = try? LocalCache.saveJSON(tinfo, to: "tenant.json")
             }
         } catch {
@@ -165,15 +189,20 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
         }
         let companyName = nonEmpty(profile?["tenant_name"]) ?? nonEmpty(brand?["display_name"]) ?? nonEmpty(brand?["name"]) ?? nonEmpty(dict["tenant_name"]) ?? nil
         // Prefer device name from Admin profile; accept common variants
-        let displayName =
-            nonEmpty(profile?["display_name"]) ??
-            nonEmpty(profile?["name"]) ??
-            nonEmpty(profile?["device_name"]) ??
-            nonEmpty(profile?["deviceName"]) ??
-            nonEmpty(dict["display_name"]) ??
-            nonEmpty(dict["name"]) ??
-            nonEmpty(dict["device_name"]) ??
-            nonEmpty(dict["deviceName"]) ?? nil
+        // Break up complex nil-coalescing chain to help the compiler
+        let displayName: String? = {
+            let candidates: [String?] = [
+                nonEmpty(profile?["display_name"]),
+                nonEmpty(profile?["name"]),
+                nonEmpty(profile?["device_name"]),
+                nonEmpty(profile?["deviceName"]),
+                nonEmpty(dict["display_name"]),
+                nonEmpty(dict["name"]),
+                nonEmpty(dict["device_name"]),
+                nonEmpty(dict["deviceName"])
+            ]
+            return candidates.compactMap { $0 }.first
+        }()
         let branchName = nonEmpty(profile?["branch"]) ?? nil
         let shortId = onlyDigits6(nonEmpty(profile?["short_code"]) ?? nonEmpty(brand?["short_code"]) ?? nonEmpty(brand?["code"]))
 

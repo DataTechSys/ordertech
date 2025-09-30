@@ -11,68 +11,6 @@ import AppKit
 private typealias PlatformImage = NSImage
 #endif
 
-// Disk-backed image cache used by display image views & prefetcher
-final class ImageDiskCache {
-    static let shared = ImageDiskCache()
-
-    private let folderURL: URL
-    private let fm = FileManager.default
-
-    private init() {
-        let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        folderURL = caches.appendingPathComponent("ImageCache", conformingTo: .directory)
-        try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
-    }
-
-    func hasImage(for url: URL) -> Bool {
-        fm.fileExists(atPath: path(for: url).path)
-    }
-
-    func image(for url: URL) -> Image? {
-        guard let data = try? Data(contentsOf: path(for: url)) else { return nil }
-        #if canImport(UIKit)
-        guard let ui = PlatformImage(data: data) else { return nil }
-        return Image(uiImage: ui)
-        #elseif canImport(AppKit)
-        guard let ns = PlatformImage(data: data) else { return nil }
-        return Image(nsImage: ns)
-        #else
-        return nil
-        #endif
-    }
-
-    func store(data: Data, for url: URL) {
-        let p = path(for: url)
-        do { try data.write(to: p, options: .atomic) } catch { }
-    }
-
-    func cachedDataFromURLCache(url: URL) -> Data? {
-        let req = URLRequest(url: url)
-        return URLCache.shared.cachedResponse(for: req)?.data
-    }
-
-    func storeFromURLCacheOrDownload(url: URL) async {
-        if hasImage(for: url) { return }
-        if let data = cachedDataFromURLCache(url: url) {
-            store(data: data, for: url)
-            return
-        }
-        var req = URLRequest(url: url)
-        req.cachePolicy = .reloadIgnoringLocalCacheData
-        req.timeoutInterval = 20
-        if let (data, _) = try? await URLSession.shared.data(for: req) {
-            store(data: data, for: url)
-        }
-    }
-
-    private func path(for url: URL) -> URL {
-        let key = url.absoluteString
-        let hash = SHA256.hash(data: Data(key.utf8))
-        let hex = hash.compactMap { String(format: "%02x", $0) }.joined()
-        let ext = (url.pathExtension.isEmpty ? "img" : url.pathExtension)
-        return folderURL.appendingPathComponent(hex).appendingPathExtension(ext)
-    }
-}
 
 struct TenantInfo: Codable { let tenant_id: String; let branch: String?; let display_name: String? }
 
@@ -300,7 +238,7 @@ final class CatalogStore: ObservableObject {
         await withTaskGroup(of: Void.self) { group in
             let lock = NSLock(); var i = 0
             func next() -> URL? { lock.lock(); defer { lock.unlock() }; guard i < unique.count else { return nil }; let u = unique[i]; i += 1; return u }
-            for _ in 0..<max(1, min(concurrency, 2)) { // cap concurrency to 2 to reduce load
+            for _ in 0..<max(1, min(concurrency, 4)) { // cap concurrency to 4 for faster warm-up
                 group.addTask {
                     while let u = next() {
                         // If already cached on disk, skip
@@ -404,6 +342,8 @@ final class CatalogStore: ObservableObject {
         // 3) Normalize and persist whatever we ended up with
         normalizeProductCategories()
         saveToCache()
+        // 4) Prefetch product images to disk so they are available quickly and offline
+        await prefetchImages(env: env)
     }
 
     func products(inCategoryName name: String?, env: EnvironmentStore) -> [Product] {

@@ -1,0 +1,69 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-primary.dia",
+    "emit-module-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-primary-emit-module.dia",
+    "pch" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/OrderTechCore-primary.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/Core~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsCacheStore.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsCacheStore~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsClient.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsClient~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsModels~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsRelations.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsRelations~partial.swiftmodule"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsSyncer.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.dia",
+    "index-unit-output-path" : "/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.o",
+    "llvm-bc" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.bc",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer.swiftdeps",
+    "swiftmodule" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/build/OrderTechCore.build/Debug-iphoneos/OrderTechCore.build/Objects-normal/arm64/FoodicsSyncer~partial.swiftmodule"
+  }
+}
