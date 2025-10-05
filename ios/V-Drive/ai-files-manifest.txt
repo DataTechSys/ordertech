@@ -1,0 +1,12 @@
+Sources/AI
+Sources/App/AIServices.swift
+Sources/App/AIToolHandlers.swift
+Sources/App/AIConversationManager.swift
+Sources/App/AIModeStore.swift
+Sources/App/OpenAIClient.swift
+Sources/App/SpeechService.swift
+Sources/App/TTSService.swift
+Sources/App/ExternalTTSProviders.swift
+Sources/App/VoiceOverlayView.swift
+Sources/App/Services/SpeechService.swift
+Sources/App/Views/VoiceOverlayView.swift

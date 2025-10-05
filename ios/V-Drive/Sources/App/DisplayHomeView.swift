@@ -6,6 +6,7 @@ import AVFoundation
 struct DisplayHomeView: View {
     @EnvironmentObject var env: EnvironmentStore
     @ObservedObject var store: DisplaySessionStore
+    @StateObject private var localMode = LocalModeManager()
     @State private var brandPrimaryColor: Color? = nil
     @State private var showBasketSheet: Bool = false
     @StateObject private var catalog = CatalogStore()
@@ -14,6 +15,9 @@ struct DisplayHomeView: View {
     @State private var editLineId: String? = nil
     @State private var editQty: Int = 1
     @State private var editLine: BasketLineUI? = nil
+    // Product detail popup state - moved to main view for full-screen coverage
+    @State private var selectedProduct: Product? = nil
+    @State private var showDisconnectConfirmation: Bool = false
 
     // Layout ratios to mirror Cashier
     private let topHeightFractionPhone: CGFloat = 0.30
@@ -30,107 +34,235 @@ struct DisplayHomeView: View {
     }
 
 
+    // Extract main content as computed property to reduce complexity
+    @ViewBuilder
+    private func mainContent(geo: GeometryProxy) -> some View {
+        let totalW = geo.size.width
+        let totalH = geo.size.height
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+
+        // Drive layout using same spacing conventions as Cashier
+        let hPad: CGFloat = 0
+        let contentW = max(0, totalW - (hPad * 2))
+
+        let topHF: CGFloat = isPad ? topHeightFractionPad : topHeightFractionPhone
+        let camWF: CGFloat = camWidthFraction
+        let billWF: CGFloat = 1.0 - camWF
+
+        let topH = totalH * topHF
+        let bottomH = max(0, totalH - topH)
+
+        // Inner padding to align top row with bottom menu
+        let innerPad: CGFloat = 0
+        let innerContentW = max(0, contentW - (innerPad * 2))
+        let sharedInner = max(0, innerContentW - hGap)
+        let camW = max(0, (sharedInner * camWF).rounded(.down))
+        let billW = max(0, (sharedInner * billWF).rounded(.down))
+
+        ZStack(alignment: .topLeading) {
+            (brandPrimaryColor ?? DT.bg).ignoresSafeArea()
+            VStack(spacing: hGap) {
+                // TOP ROW: [ Camera | Bill ]
+                topRowView(camW: camW, billW: billW, topH: topH, contentW: contentW, innerPad: innerPad, isPad: isPad)
+                
+                // BOTTOM: Catalog (categories + products)
+                CategoriesBoxView(
+                    selectedProduct: $selectedProduct,
+                    preview: store.preview, 
+                    poster: store.poster
+                )
+                    .environmentObject(catalog)
+                    .environmentObject(localMode)
+                    .frame(width: contentW, height: bottomH)
+                    .frame(height: bottomH)
+            }
+            .frame(width: contentW, height: totalH)
+            .padding(.horizontal, hPad)
+            .padding(.top, isPad ? 16 : 0)
+            .padding(.bottom, 0)
+        }
+        
+        // Local mode checkout button overlay
+        if localMode.isLocalMode && !localMode.localBasketLines.isEmpty {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    LocalCheckoutButton(
+                        basketTotal: localMode.localBasketTotals.total,
+                        itemCount: localMode.localBasketLines.reduce(0) { $0 + $1.qty },
+                        onTap: {
+                            localMode.startCheckout()
+                        }
+                    )
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .transition(.scale.combined(with: .opacity))
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: localMode.isLocalMode)
+        }
+    }
+
+    @ViewBuilder
+    private func topRowView(camW: CGFloat, billW: CGFloat, topH: CGFloat, contentW: CGFloat, innerPad: CGFloat, isPad: Bool) -> some View {
+        HStack(spacing: hGap) {
+            CameraBoxView(peersConnected: store.peersConnected)
+                .frame(width: camW, height: topH)
+            BillBoxView(
+                lines: localMode.isLocalMode ? localMode.localBasketLines : store.basketLines,
+                totals: localMode.isLocalMode ? localMode.localBasketTotals : store.basketTotals,
+                textScale: isPad ? 1.0 : 0.6,
+                onTapTotal: { showBasketSheet = true },
+                onTapLine: { line in
+                    // Map basket line id back to a catalog product and mirror to peers
+                    let candidates = alternateIds(from: line.id)
+                    if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
+                        store.pendingEditSku = line.id
+                        store.sendShowProduct(id: p.id)
+                    }
+                },
+                onEditLine: { line in
+                    let candidates = alternateIds(from: line.id)
+                    if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
+                        store.pendingEditSku = line.id
+                        store.sendShowProduct(id: p.id)
+                    }
+                },
+                onDeleteLine: { line in
+                    if localMode.isLocalMode {
+                        localMode.removeFromLocalBasket(lineId: line.id)
+                    } else {
+                        let candidates = alternateIds(from: line.id)
+                        if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
+                            store.removeFromBasket(sku: p.id)
+                        } else {
+                            store.removeFromBasket(sku: line.id)
+                        }
+                    }
+                }
+            )
+                .environmentObject(env)
+                .environmentObject(catalog)
+                .frame(width: billW, height: topH)
+                .overlay(alignment: .topTrailing) {
+                    HStack(spacing: 8) {
+                        LocalModeIndicator(isActive: localMode.isLocalMode)
+                            .environmentObject(store)
+                        InActiveIndicator()
+                        StatusChipView(status: statusText, compact: true, dotOnly: true, onTap: {
+                            showDisconnectConfirmation = true
+                        })
+                        // Debug gestures removed - using working backup configuration
+                    }
+                    .padding(.top, 6)
+                    .padding(.trailing, 6)
+                }
+        }
+        .padding(.horizontal, innerPad)
+        .frame(width: contentW, height: topH)
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let totalW = geo.size.width
-            let totalH = geo.size.height
-            let isPad = UIDevice.current.userInterfaceIdiom == .pad
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-
-            // Drive layout using same spacing conventions as Cashier
-            let hPad: CGFloat = 0
-            let contentW = max(0, totalW - (hPad * 2))
-
-            let topHF: CGFloat = isPad ? topHeightFractionPad : topHeightFractionPhone
-            let camWF: CGFloat = camWidthFraction
-            let billWF: CGFloat = 1.0 - camWF
-
-            let topH = totalH * topHF
-            let bottomH = max(0, totalH - topH)
-
-            // Inner padding to align top row with bottom menu
-            let innerPad: CGFloat = 0
-            let innerContentW = max(0, contentW - (innerPad * 2))
-            let sharedInner = max(0, innerContentW - hGap)
-            let camW = max(0, (sharedInner * camWF).rounded(.down))
-            let billW = max(0, (sharedInner * billWF).rounded(.down))
-
-            ZStack(alignment: .topLeading) {
-                (brandPrimaryColor ?? DT.bg).ignoresSafeArea()
-                VStack(spacing: hGap) {
-                    // TOP ROW: [ Camera | Bill ]
-                    HStack(spacing: hGap) {
-                        CameraBoxView(peersConnected: store.peersConnected)
-                            .frame(width: camW, height: topH)
-                        BillBoxView(
-                            lines: store.basketLines,
-                            totals: store.basketTotals,
-                            textScale: 0.6,
-                            onTapTotal: { showBasketSheet = true },
-                            onTapLine: { line in
-                                // Map basket line id back to a catalog product and mirror to peers
-                                let candidates = alternateIds(from: line.id)
-                                if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
-                                    store.pendingEditSku = line.id
-                                    store.sendShowProduct(id: p.id)
-                                }
-                            },
-                            onEditLine: { line in
-                                let candidates = alternateIds(from: line.id)
-                                if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
-                                    store.pendingEditSku = line.id
-                                    store.sendShowProduct(id: p.id)
-                                }
-                            },
-                            onDeleteLine: { line in
-                                let candidates = alternateIds(from: line.id)
-                                if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
-                                    store.removeFromBasket(sku: p.id)
-                                } else {
-                                    store.removeFromBasket(sku: line.id)
-                                }
-                            }
-                        )
-                            .environmentObject(env)
-                            .environmentObject(catalog)
-                            .frame(width: billW, height: topH)
-                            .overlay(alignment: .topTrailing) {
-                                HStack(spacing: 8) {
-                                    InActiveIndicator()
-                                    StatusChipView(status: statusText, compact: true, dotOnly: true)
-                                        .onTapGesture(count: 2) {
-                                            // Double-tap status chip to test mute functionality
-                                            print("[DisplayHomeView] Double-tap detected on status chip - triggering mute test")
-                                            store.testMuteFunction()
-                                        }
-                                }
-                                .padding(.top, 6)
-                                .padding(.trailing, 6)
-                            }
-                    }
-                    .padding(.horizontal, innerPad)
-                    .frame(width: contentW, height: topH)
-
-                    // BOTTOM: Catalog (categories + products)
-                    CategoriesBoxView(preview: store.preview, poster: store.poster)
-                        .environmentObject(catalog)
-                        .frame(width: contentW, height: bottomH)
-                        .frame(height: bottomH)
-
+            mainContent(geo: geo)
+        }
+        .task { 
+            await loadBrand() 
+            await catalog.loadAll(env: env)
+            
+            // Set up LocalModeManager and DisplaySessionStore integration first
+            localMode.configure(with: env, displaySessionStore: store)
+            
+            // Check initial state and activate local mode if needed
+            localMode.checkInitialState(connected: store.connected, peersConnected: store.peersConnected)
+        }
+        .onReceive(store.$connected.combineLatest(store.$peersConnected)) { connected, peersConnected in
+            localMode.updateConnectionStatus(connected: connected, peersConnected: peersConnected)
+        }
+        .onReceive(store.$selectedProductId.removeDuplicates().debounce(for: .milliseconds(100), scheduler: RunLoop.main)) { pid in
+            // Skip remote product selection commands when in local mode
+            guard !localMode.isLocalMode else {
+                print("[DisplayHomeView] Ignoring remote selectedProductId update in local mode: \(pid ?? "nil")")
+                return
+            }
+            
+            // Handle external product selection commands from cashier
+            if let id = pid, !id.isEmpty {
+                if let product = catalog.products.first(where: { $0.id == id }) {
+                    selectedProduct = product
                 }
-                .frame(width: contentW, height: totalH)
-                .padding(.horizontal, hPad)
-                .padding(.top, isPad ? 16 : 0)
-.padding(.bottom, 0)
+            } else {
+                // Clear popup when selectedProductId is set to nil (product options close)
+                selectedProduct = nil
             }
         }
-.task { await loadBrand(); await catalog.loadAll(env: env) }
+        .onChange(of: catalog.products.map { $0.id }) { _ in
+            // If a product id was requested before data loaded, try fulfilling now
+            if let id = store.selectedProductId, let product = catalog.products.first(where: { $0.id == id }) {
+                selectedProduct = product
+            }
+        }
+        .environmentObject(localMode)
+        .overlay {
+            // Local mode checkout overlay
+            if localMode.showCheckoutOverlay {
+                LocalCheckoutOverlay()
+                    .environmentObject(localMode)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .overlay {
+            // Local mode receipt overlay
+            if localMode.showReceipt, let receipt = localMode.lastOrderReceipt {
+                LocalReceiptView(receipt: receipt)
+                    .environmentObject(localMode)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .overlay {
+            // Product detail popup - full screen coverage
+            if let product = selectedProduct {
+                Color.black.opacity(0.01)
+                    .ignoresSafeArea(.all)
+                    .onTapGesture {
+                        selectedProduct = nil
+                    }
+                    .overlay {
+                        ProductDetailPopup(
+                            product: product,
+                            onAddToCart: { product, quantity, modifiers in
+                                handleProductSelection(product: product, quantity: quantity, modifiers: modifiers)
+                            },
+                            onDismiss: {
+                                selectedProduct = nil
+                            }
+                        )
+                        .environmentObject(localMode)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 40)
+                        .padding(.bottom, 20)
+                    }
+                    .zIndex(999)
+            }
+        }
+        .alert("Disconnect from Cashier?", isPresented: $showDisconnectConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Disconnect", role: .destructive) {
+                store.stop() // Disconnect WebSocket and RTC
+                localMode.activateLocalMode() // Switch to local mode immediately
+            }
+        } message: {
+            Text("This will disconnect from the cashier and switch to local mode.")
+        }
         .sheet(isPresented: $showBasketSheet) {
+            let isPad = UIDevice.current.userInterfaceIdiom == .pad
             VStack(spacing: 0) {
-                BillBoxView(
-                    lines: store.basketLines,
-                    totals: store.basketTotals,
-                    textScale: 1.0,
+            BillBoxView(
+                lines: localMode.isLocalMode ? localMode.localBasketLines : store.basketLines,
+                totals: localMode.isLocalMode ? localMode.localBasketTotals : store.basketTotals,
+                textScale: isPad ? 1.2 : 1.0,
                     onTapTotal: nil,
                     onTapLine: { line in
                         // Dismiss basket sheet before mirroring edit to peers
@@ -151,12 +283,16 @@ struct DisplayHomeView: View {
                         }
                     },
                     onDeleteLine: { line in
-                        let candidates = alternateIds(from: line.id)
-                        if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
-                            store.removeFromBasket(sku: p.id)
+                        if localMode.isLocalMode {
+                            localMode.removeFromLocalBasket(lineId: line.id)
                         } else {
-                            // Fallback: try using line.id directly
-                            store.removeFromBasket(sku: line.id)
+                            let candidates = alternateIds(from: line.id)
+                            if let p = catalog.products.first(where: { candidates.contains($0.id) }) {
+                                store.removeFromBasket(sku: p.id)
+                            } else {
+                                // Fallback: try using line.id directly
+                                store.removeFromBasket(sku: line.id)
+                            }
                         }
                     }
                 )
@@ -165,6 +301,26 @@ struct DisplayHomeView: View {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+    
+    // MARK: - Product Selection Handling
+    private func handleProductSelection(product: Product, quantity: Int, modifiers: [String: Any]) {
+        if localMode.isLocalMode {
+            // Add to local basket with modifiers
+            for _ in 0..<quantity {
+                localMode.addToLocalBasket(product: product, qty: 1)
+            }
+            // TODO: Store modifiers information with the basket item if needed
+            // For now, modifiers are ignored in local mode
+        } else {
+            // Send to cashier with product selection
+            store.sendShowProduct(id: product.id)
+            // TODO: Send modifiers information to cashier if needed
+            // For now, modifiers are sent via the regular product selection
+        }
+        
+        // Clear selection to close popup
+        selectedProduct = nil
     }
 }
 
@@ -185,53 +341,13 @@ private struct CameraBoxView: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: 12).fill(Color.black)
-            // Poster removed temporarily while fixing video attach issues
-            // Prefer LiveKit view when active, otherwise fall back to P2P view
-            Group {
-                #if canImport(LiveKit)
-if store.currentLiveKit != nil {
-                    LKRemoteVideoView(cornerRadius: 12, masksToBounds: true)
-                        .id(remoteKey)
-                        .environmentObject(store)
-                        .aspectRatio(9/16, contentMode: .fit)
-                } else {
-                    fallbackView
-                }
-                #else
-                fallbackView
-                #endif
-            }
-            #if canImport(LiveKit)
-            if store.currentLiveKit != nil {
-                GeometryReader { geo in
-                    let pipW: CGFloat = 48
-                    let pipH: CGFloat = pipW * 16.0 / 9.0
-                    let x = geo.size.width - 8 - pipW / 2
-                    let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
-                    ZStack {
-                        #if canImport(AVFoundation)
-                        if !pipLocalReady {
-DisplayPreconnectLocalPreview(controller: preconnectController)
-                                .frame(width: pipW, height: pipH)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-                                .shadow(radius: 1)
-                                .position(x: x, y: y)
-                                .onAppear { preconnectController.start() }
-                                .onDisappear { preconnectController.stop() }
-                        }
-                        #endif
-                        LKLocalVideoView()
-                            .environmentObject(store)
-                            .frame(width: pipW, height: pipH)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-                            .shadow(radius: 3)
-                            .position(x: x, y: y)
-                    }
-                }
-            }
-            #endif
+            
+            // Regular video content
+            videoContent
+            
+            // PIP overlays for video calling
+            videoPIPOverlays
+            
             // Center overlay with link status (text + spinner) until video attaches
             if showLinkStatusOverlay {
                 LinkStatusOverlay(title: linkStatusTitle, subtitle: linkStatusSubtitle)
@@ -240,60 +356,6 @@ DisplayPreconnectLocalPreview(controller: preconnectController)
                     .transition(.opacity)
                     .accessibilityLabel(Text(linkStatusTitle))
             }
-            #if canImport(WebRTC)
-            if store.currentLiveKit == nil {
-                if let local = storeService.localVideoTrack {
-                    GeometryReader { geo in
-                        let pipW: CGFloat = 48
-                        let pipH: CGFloat = pipW * 16.0 / 9.0
-                        let x = geo.size.width - 8 - pipW / 2
-                        let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
-                        RTCLocalVideoView(track: local)
-                            .frame(width: pipW, height: pipH)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-.shadow(radius: 1)
-                            .position(x: x, y: y)
-                    }
-                } else {
-                    #if canImport(AVFoundation)
-                    GeometryReader { geo in
-                        let pipW: CGFloat = 48
-                        let pipH: CGFloat = pipW * 16.0 / 9.0
-                        let x = geo.size.width - 8 - pipW / 2
-                        let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
-DisplayPreconnectLocalPreview(controller: preconnectController)
-                            .frame(width: pipW, height: pipH)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-                            .shadow(radius: 3)
-                            .position(x: x, y: y)
-                            .onAppear { preconnectController.start() }
-                            .onDisappear { preconnectController.stop() }
-                    }
-                    #endif
-                }
-            }
-            #else
-            #if canImport(AVFoundation)
-            if store.currentLiveKit == nil {
-                GeometryReader { geo in
-                    let pipW: CGFloat = 48
-                    let pipH: CGFloat = pipW * 16.0 / 9.0
-                    let x = geo.size.width - 8 - pipW / 2
-                    let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
-                    PreconnectLocalPreview(controller: preconnectController)
-                        .frame(width: pipW, height: pipH)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-                        .shadow(radius: 3)
-                        .position(x: x, y: y)
-                        .onAppear { preconnectController.start() }
-                        .onDisappear { preconnectController.stop() }
-                }
-            }
-            #endif
-            #endif
         }
             .overlay(alignment: .topLeading) {
                 Color.black.opacity(0.001)
@@ -310,7 +372,11 @@ DisplayPreconnectLocalPreview(controller: preconnectController)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.15), lineWidth: 1))
         .compositingGroup()
         .onReceive(NotificationCenter.default.publisher(for: .displayKickVideo)) { _ in
-            remoteKey &+= 1
+            remoteKey += 1
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .displayVideoRefresh)) { _ in
+            print("[CameraBoxView] Received video refresh notification, updating remoteKey")
+            remoteKey += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .displayLocalCameraReady)) { _ in
             pipLocalReady = true
@@ -362,6 +428,123 @@ DisplayPreconnectLocalPreview(controller: preconnectController)
         }
         #endif
         return nil
+    }
+
+    // MARK: Video Content
+    private var videoContent: some View {
+        Group {
+            #if canImport(LiveKit)
+            let currentLiveKit = store.currentLiveKit
+            let hasLiveKit = currentLiveKit != nil
+            let peersConnected = store.peersConnected
+            let _ = print("[CameraBoxView] Rendering decision: currentLiveKit=\(hasLiveKit ? "available" : "nil"), peersConnected=\(peersConnected)")
+            if hasLiveKit {
+                let _ = print("[CameraBoxView] Creating LKRemoteVideoView")
+                LKRemoteVideoView(cornerRadius: 12, masksToBounds: true)
+                    .id("remote_\(remoteKey)")
+                    .environmentObject(store)
+                    .aspectRatio(9/16, contentMode: .fit)
+                    .onAppear {
+                        print("[CameraBoxView] LKRemoteVideoView appeared")
+                    }
+            } else {
+                let _ = print("[CameraBoxView] Using fallbackView - no LiveKit available")
+                fallbackView
+            }
+            #else
+            fallbackView
+            #endif
+        }
+    }
+    
+    private var videoPIPOverlays: some View {
+        Group {
+            #if canImport(LiveKit)
+            if store.currentLiveKit != nil {
+                GeometryReader { geo in
+                    let pipW: CGFloat = 48
+                    let pipH: CGFloat = pipW * 16.0 / 9.0
+                    let x = geo.size.width - 8 - pipW / 2
+                    let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
+                    ZStack {
+                        #if canImport(AVFoundation)
+                        if !pipLocalReady {
+                            DisplayPreconnectLocalPreview(controller: preconnectController)
+                                .frame(width: pipW, height: pipH)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
+                                .shadow(radius: 1)
+                                .position(x: x, y: y)
+                                .onAppear { preconnectController.start() }
+                                .onDisappear { preconnectController.stop() }
+                        }
+                        #endif
+                        LKLocalVideoView()
+                            .environmentObject(store)
+                            .frame(width: pipW, height: pipH)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
+                            .shadow(radius: 3)
+                            .position(x: x, y: y)
+                    }
+                }
+            }
+            #endif
+            #if canImport(WebRTC)
+            if store.currentLiveKit == nil {
+                if let local = storeService.localVideoTrack {
+                    GeometryReader { geo in
+                        let pipW: CGFloat = 48
+                        let pipH: CGFloat = pipW * 16.0 / 9.0
+                        let x = geo.size.width - 8 - pipW / 2
+                        let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
+                        RTCLocalVideoView(track: local)
+                            .frame(width: pipW, height: pipH)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
+                            .shadow(radius: 1)
+                            .position(x: x, y: y)
+                    }
+                } else {
+                    #if canImport(AVFoundation)
+                    GeometryReader { geo in
+                        let pipW: CGFloat = 48
+                        let pipH: CGFloat = pipW * 16.0 / 9.0
+                        let x = geo.size.width - 8 - pipW / 2
+                        let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
+                        DisplayPreconnectLocalPreview(controller: preconnectController)
+                            .frame(width: pipW, height: pipH)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
+                            .shadow(radius: 3)
+                            .position(x: x, y: y)
+                            .onAppear { preconnectController.start() }
+                            .onDisappear { preconnectController.stop() }
+                    }
+                    #endif
+                }
+            }
+            #else
+            #if canImport(AVFoundation)
+            if store.currentLiveKit == nil {
+                GeometryReader { geo in
+                    let pipW: CGFloat = 48
+                    let pipH: CGFloat = pipW * 16.0 / 9.0
+                    let x = geo.size.width - 8 - pipW / 2
+                    let y = min(geo.size.height - 8 - pipH / 2, geo.size.height * 5.0 / 6.0)
+                    PreconnectLocalPreview(controller: preconnectController)
+                        .frame(width: pipW, height: pipH)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
+                        .shadow(radius: 3)
+                        .position(x: x, y: y)
+                        .onAppear { preconnectController.start() }
+                        .onDisappear { preconnectController.stop() }
+                }
+            }
+            #endif
+            #endif
+        }
     }
 
     private var fallbackView: some View {
@@ -435,8 +618,10 @@ private struct BillBoxView: View {
 
 // Order lines (Cashier-style)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(lines) { line in
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(lines.indices, id: \.self) { index in
+                        let line = lines[index]
+                        
                         SwipeableRow(
                             onEdit: { onEditLine?(line) ?? onTapLine?(line) },
                             onDelete: { onDeleteLine?(line) },
@@ -488,6 +673,15 @@ private struct BillBoxView: View {
                             }
                             .contentShape(Rectangle())
                             .onTapGesture { onTapLine?(line) }
+                        }
+                        .padding(.vertical, 4)
+                        
+                        // Add thin divider between items (except after the last item)
+                        if index < lines.count - 1 {
+                            Divider()
+                                .frame(height: 0.5)
+                                .background(Color.gray.opacity(0.3))
+                                .padding(.horizontal, 8)
                         }
                     }
                 }
@@ -620,10 +814,11 @@ private struct CategoriesBoxView: View {
     @EnvironmentObject var env: EnvironmentStore
     @EnvironmentObject var store: DisplaySessionStore
     @EnvironmentObject var catalog: CatalogStore
+    @EnvironmentObject var localMode: LocalModeManager
     @State private var selectedCategory: String? = nil
     @State private var pageIndex: Int = 1
-    @State private var selectedProduct: Product? = nil
-
+    
+    @Binding var selectedProduct: Product?
     let preview: PreviewState?
     let poster: PosterState?
 
@@ -633,11 +828,14 @@ private struct CategoriesBoxView: View {
     @State private var suppressScrollBroadcast: Bool = false
     var body: some View {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        
         VStack(spacing: DT.space) {
             categoryChips
                 .zIndex(2)
+            
             ZStack {
                 productsPager
+                
                 if let p = poster {
                     PosterView(poster: p)
                         .padding(20)
@@ -674,53 +872,12 @@ private struct CategoriesBoxView: View {
             // External (Cashier) requested a category; apply it
             if let n = name, !n.isEmpty { selectedCategory = n }
         }
-.onReceive(store.$selectedProductId.removeDuplicates().debounce(for: .milliseconds(100), scheduler: RunLoop.main)) { pid in
-            print("[DisplayHomeView] selectedProductId changed: \(pid ?? "nil")")
-            // External request to show options for a product id → present detail sheet if found
-            if store.suppressOptionsEcho {
-                print("[DisplayHomeView] suppressOptionsEcho is true, dropping echo")
-                // Drop echo from our own local request and reset suppression
-                store.suppressOptionsEcho = false
-                return
-            }
-            if let id = pid, !id.isEmpty {
-                print("[DisplayHomeView] searching for product with id: \(id)")
-                if let p = catalog.products.first(where: { $0.id == id }) {
-                    print("[DisplayHomeView] found product: \(p.name), setting selectedProduct")
-                    selectedProduct = p
-                    print("[DisplayHomeView] selectedProduct is now: \(selectedProduct?.name ?? "nil")")
-                } else {
-                    print("[DisplayHomeView] product not found in catalog with \(catalog.products.count) products")
-                }
-            } else {
-                // Only log clear commands occasionally to reduce noise
-                if selectedProduct != nil {
-                    print("[DisplayHomeView] clearing selectedProduct")
-                }
-                // When selection is cleared (e.g., ui:optionsClose/optionsCancel), dismiss the sheet
-                selectedProduct = nil
-            }
-        }
-        .onChange(of: catalog.products.map { $0.id }) { _ in
-            // If a product id was requested before data loaded, try fulfilling now
-            if let id = store.selectedProductId, let p = catalog.products.first(where: { $0.id == id }) {
-                selectedProduct = p
-            }
-        }
         .overlay(alignment: .center) {
             if catalog.categories.isEmpty && catalog.products.isEmpty {
                 ProgressView("Loading menu…")
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
             }
-        }
-        .sheet(item: $selectedProduct) { p in
-            // Prefill quantity from the existing basket line for this product, but keep add-style sheet (no remove)
-            let pid = p.id
-            let matched = store.basketLines.first(where: { $0.id == pid || $0.id.hasPrefix(pid + ":") || $0.id.hasPrefix(pid + "#") })
-            ProductDetailSheetView(product: p, lineId: nil, initialQty: matched?.qty, line: nil)
-                .environmentObject(env)
-                .environmentObject(store)
         }
     }
 
@@ -772,7 +929,10 @@ private struct CategoriesBoxView: View {
             let spacing: CGFloat = availableWidth < 430 ? DT.space : DT.space2
             let minColW: CGFloat = isPhone ? 95 : 120
             let maxCols = 4
-            let columnsCount = max(3, min(maxCols, Int(floor((availableWidth + spacing) / (minColW + spacing)))))
+            
+            // Break up complex calculation
+            let colCalculation = (availableWidth + spacing) / (minColW + spacing)
+            let columnsCount = max(3, min(maxCols, Int(floor(colCalculation))))
             let totalSpacing = spacing * CGFloat(columnsCount - 1)
             let colW = floor((availableWidth - totalSpacing) / CGFloat(columnsCount))
 
@@ -792,7 +952,9 @@ private struct CategoriesBoxView: View {
                                 spacing: spacing
                             ) {
                                 ForEach(list) { p in
-                                    ProductTile(product: p, width: colW, onTap: { selectedProduct = p; store.sendShowProduct(id: p.id) })
+                                    ProductTile(product: p, width: colW, onTap: {
+                                        selectedProduct = p
+                                    })
                                         .environmentObject(env)
                                         .id(p.id)
                                         .background(
@@ -827,7 +989,9 @@ private struct CategoriesBoxView: View {
                                     spacing: spacing
                                 ) {
                                     ForEach(list) { p in
-                                        ProductTile(product: p, width: colW, onTap: { selectedProduct = p; store.sendShowProduct(id: p.id) })
+                                        ProductTile(product: p, width: colW, onTap: {
+                                            selectedProduct = p
+                                        })
                                             .environmentObject(env)
                                             .id(p.id)
                                             .background(
@@ -908,6 +1072,7 @@ private struct CategoriesBoxView: View {
         selectedCategory = category
     }
 
+    
     private func onTopVisibleChanged(top: String) {
         if suppressScrollBroadcast { return }
         if top != topVisibleProductId {
@@ -925,21 +1090,216 @@ private struct VisibleProductKey: PreferenceKey {
 }
 
 
-// MARK: - SwipeableRow (left=edit, right=delete)
+// MARK: - Temporary Product Detail Popup (will be moved to separate file)
+struct ProductDetailPopup: View {
+    @EnvironmentObject var localMode: LocalModeManager
+    @Environment(\.dismiss) private var dismiss
+    
+    let product: Product
+    let onAddToCart: (Product, Int, [String: Any]) -> Void
+    let onDismiss: () -> Void
+    
+    @State private var quantity: Int = 1
+    @State private var selectedModifiers: [String: Any] = [:]
+    @State private var isLoading = false
+    
+    var totalPrice: Double {
+        let basePrice = product.price * Double(quantity)
+        return basePrice
+    }
+    
+    var body: some View {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let imageSide: CGFloat = isPad ? 420 : 320
+        
+        VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Product Details")
+                        .font(.system(size: isPad ? 24 : 20, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Button(action: { onDismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(10)
+                            .background(Circle().fill(Color.gray.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                .background(Color.white)
+                
+                // Scrollable content
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Product image section - full width, larger
+                        Group {
+                            if let imageURL = product.image_url, !imageURL.isEmpty {
+                                AsyncImage(url: URL(string: imageURL)) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: imageSide, height: imageSide)
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(width: imageSide, height: imageSide)
+                                        .overlay {
+                                            VStack(spacing: 12) {
+                                                Image(systemName: "photo")
+                                                    .font(.system(size: 50))
+                                                    .foregroundColor(.gray)
+                                                Text("Loading...")
+                                                    .font(.title3)
+                                                    .foregroundColor(.gray)
+                                            }
+                                        }
+                                }
+                            } else {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.gray.opacity(0.15))
+                                    .frame(width: imageSide, height: imageSide)
+                                    .overlay {
+                                        VStack(spacing: 12) {
+                                            Image(systemName: "photo")
+                                                .font(.system(size: 50))
+                                                .foregroundColor(.gray)
+                                            Text(product.name)
+                                                .font(.title2.bold())
+                                                .foregroundColor(.gray)
+                                                .multilineTextAlignment(.center)
+                                        }
+                                    }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        
+                        // Product info
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(product.name)
+                                .font(.system(size: isPad ? 28 : 24, weight: .bold))
+                                .foregroundColor(.primary)
+                            
+                            Text(String(format: "%.3f KWD", product.price))
+                                .font(.system(size: isPad ? 22 : 18, weight: .semibold))
+                                .foregroundColor(.blue)
+                                .monospacedDigit()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        // Quantity selector
+                        VStack(spacing: 20) {
+                            HStack {
+                                Text("Quantity")
+                                    .font(.system(size: isPad ? 20 : 18, weight: .medium))
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                HStack(spacing: 16) {
+                                    Button(action: { 
+                                        if quantity > 1 { quantity -= 1 }
+                                    }) {
+                                        Image(systemName: "minus")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 40, height: 40)
+                                            .background(Circle().fill(quantity > 1 ? Color.blue : Color.gray))
+                                    }
+                                    .disabled(quantity <= 1)
+                                    .buttonStyle(.plain)
+                                    
+                                    Text("\(quantity)")
+                                        .font(.system(size: isPad ? 22 : 20, weight: .bold))
+                                        .foregroundColor(.primary)
+                                        .frame(minWidth: 40)
+                                    
+                                    Button(action: { quantity += 1 }) {
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 40, height: 40)
+                                            .background(Circle().fill(Color.blue))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            
+                            // Add to cart button
+                            Button(action: addToCart) {
+                                HStack(spacing: 16) {
+                                    Image(systemName: localMode.isLocalMode ? "cart.badge.plus" : "paperplane.fill")
+                                        .font(.system(size: 20, weight: .semibold))
+                                    
+                                    Text(localMode.isLocalMode ? "Add to Local Cart" : "Send to Cashier")
+                                        .font(.system(size: isPad ? 20 : 18, weight: .bold))
+                                    
+                                    Spacer()
+                                    
+                                    Text(String(format: "%.3f KWD", totalPrice))
+                                        .font(.system(size: isPad ? 20 : 18, weight: .bold))
+                                        .monospacedDigit()
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, isPad ? 32 : 24)
+                                .padding(.vertical, isPad ? 20 : 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(localMode.isLocalMode ? Color.orange : Color.blue)
+                                        .shadow(color: (localMode.isLocalMode ? Color.orange : Color.blue).opacity(0.3), radius: 12, x: 0, y: 6)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .scaleEffect(isLoading ? 0.95 : 1.0)
+                            .opacity(isLoading ? 0.7 : 1.0)
+                            .disabled(isLoading)
+                            .animation(.easeInOut(duration: 0.1), value: isLoading)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 24)
+                    .padding(.bottom, 40)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
+    }
+    
+    private func addToCart() {
+        isLoading = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            onAddToCart(product, quantity, selectedModifiers)
+            isLoading = false
+        }
+    }
+}
+
+// MARK: - SwipeableRow (left=edit, right=delete, full swipe left = delete)
 private struct SwipeableRow<Content: View>: View {
     @State private var offsetX: CGFloat = 0
     @State private var openSide: Side = .none
+    @State private var isDeletionInProgress: Bool = false
     let onEdit: () -> Void
     let onDelete: () -> Void
     let editColor: Color
     let deleteColor: Color
     let maxReveal: CGFloat = 70
     let threshold: CGFloat = 45
+    let fullSwipeThreshold: CGFloat = 120 // Full swipe threshold for immediate delete
     let content: () -> Content
     enum Side { case none, left, right }
     #if canImport(UIKit)
-    private let impact = UIImpactFeedbackGenerator(style: .light)
-    private let notify = UINotificationFeedbackGenerator()
+    private let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+    private let deleteFeedback = UINotificationFeedbackGenerator()
     #endif
 
     init(onEdit: @escaping () -> Void, onDelete: @escaping () -> Void, editColor: Color = .blue, deleteColor: Color = .red, @ViewBuilder content: @escaping () -> Content) {
@@ -954,77 +1314,164 @@ private struct SwipeableRow<Content: View>: View {
         ZStack {
             // Background actions
             HStack {
-                // Left (edit)
-                HStack { Image(systemName: "square.and.pencil").foregroundColor(.white) }
-                    .frame(width: maxReveal)
-                    .frame(maxHeight: .infinity)
-                    .background(editColor)
+                // Left (reveal on swipe right) - Edit
+                HStack {
+                    Image(systemName: "square.and.pencil")
+                        .foregroundColor(.white)
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .frame(width: maxReveal)
+                .frame(maxHeight: .infinity)
+                .background(editColor)
+                
                 Spacer(minLength: 0)
-                // Right (delete)
-                HStack { Image(systemName: "trash").foregroundColor(.white) }
-                    .frame(width: maxReveal)
-                    .frame(maxHeight: .infinity)
-                    .background(deleteColor)
+                
+                // Right (reveal on swipe left) - Delete
+                HStack {
+                    Image(systemName: "trash")
+                        .foregroundColor(.white)
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .frame(width: max(maxReveal, abs(offsetX)), alignment: .trailing)
+                .frame(maxHeight: .infinity)
+                .background(deleteColor)
+                .clipped()
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            // Foreground row content
+            // Foreground content with deletion animation
             content()
                 .padding(.vertical, 4)
                 .padding(.horizontal, 6)
                 .background(Color.white)
+                .scaleEffect(isDeletionInProgress ? 0.95 : 1.0)
+                .opacity(isDeletionInProgress ? 0.8 : 1.0)
                 .offset(x: offsetX)
                 .gesture(drag)
-                .animation(.spring(response: 0.25, dampingFraction: 0.86, blendDuration: 0.2), value: offsetX)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8, blendDuration: 0.1), value: offsetX)
+                .animation(.easeInOut(duration: 0.2), value: isDeletionInProgress)
+                // Tappable action areas when revealed
                 .overlay(alignment: .leading) {
                     if openSide == .left {
                         Button(action: {
                             #if canImport(UIKit)
-                            impact.impactOccurred()
+                            impactFeedback.impactOccurred()
                             #endif
                             onEdit(); close()
-                        }) { Color.clear.frame(width: maxReveal, height: 1) }
-                            .frame(maxHeight: .infinity)
+                        }) {
+                            Color.clear.frame(width: maxReveal, height: 1)
+                        }
+                        .frame(maxHeight: .infinity)
                     }
                 }
                 .overlay(alignment: .trailing) {
                     if openSide == .right {
                         Button(action: {
-                            #if canImport(UIKit)
-                            notify.notificationOccurred(.success)
-                            #endif
-                            onDelete(); close()
-                        }) { Color.clear.frame(width: maxReveal, height: 1) }
-                            .frame(maxHeight: .infinity)
+                            performDelete()
+                        }) {
+                            Color.clear.frame(width: maxReveal, height: 1)
+                        }
+                        .frame(maxHeight: .infinity)
                     }
                 }
         }
     }
 
     private var drag: some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+        DragGesture(minimumDistance: 8, coordinateSpace: .local)
             .onChanged { value in
+                guard !isDeletionInProgress else { return }
+                
                 let t = value.translation.width
-                if openSide == .none { offsetX = clamp(t, -maxReveal, maxReveal) }
-                else if openSide == .left { offsetX = clamp(maxReveal + t, -maxReveal, maxReveal) }
-                else if openSide == .right { offsetX = clamp(-maxReveal + t, -maxReveal, maxReveal) }
+                let velocity = value.predictedEndTranslation.width - value.translation.width
+                
+                if openSide == .none {
+                    // Allow extended swipe for full delete
+                    let maxOffset = abs(t) > fullSwipeThreshold ? -200 : maxReveal
+                    offsetX = clamp(t, -maxOffset, maxReveal)
+                    
+                    // Provide haptic feedback when crossing full swipe threshold
+                    if abs(t) > fullSwipeThreshold && abs(offsetX) <= fullSwipeThreshold {
+                        #if canImport(UIKit)
+                        impactFeedback.impactOccurred()
+                        #endif
+                    }
+                } else if openSide == .left { // left opened (edit), allow close or switch
+                    offsetX = clamp(maxReveal + t, -maxReveal, maxReveal)
+                } else if openSide == .right { // right opened (delete)
+                    let maxOffset = abs(t) > fullSwipeThreshold ? -200 : maxReveal
+                    offsetX = clamp(-maxReveal + t, -maxOffset, maxReveal)
+                }
             }
             .onEnded { value in
+                guard !isDeletionInProgress else { return }
+                
                 let t = value.translation.width
+                let velocity = value.predictedEndTranslation.width - value.translation.width
+                
                 if openSide == .none {
-                    if t > threshold { open(.left) }
-                    else if t < -threshold { open(.right) }
-                    else { close() }
+                    // Check for full swipe delete (swipe left past threshold)
+                    if t < -fullSwipeThreshold || (t < -threshold && velocity < -50) {
+                        performDelete()
+                    } else if t > threshold {
+                        open(.left)
+                    } else if t < -threshold {
+                        open(.right)
+                    } else {
+                        close()
+                    }
                 } else if openSide == .left {
                     if t < -threshold { close() } else { open(.left) }
                 } else if openSide == .right {
-                    if t > threshold { close() } else { open(.right) }
+                    // Check for full swipe delete from revealed state
+                    if t < -fullSwipeThreshold || (t < -threshold && velocity < -50) {
+                        performDelete()
+                    } else if t > threshold {
+                        close()
+                    } else {
+                        open(.right)
+                    }
                 }
             }
     }
-    private func open(_ side: Side) { openSide = side; offsetX = (side == .left) ? maxReveal : -maxReveal }
-    private func close() { openSide = .none; offsetX = 0 }
-    private func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(max(v, lo), hi) }
+    
+    private func performDelete() {
+        guard !isDeletionInProgress else { return }
+        
+        isDeletionInProgress = true
+        
+        #if canImport(UIKit)
+        deleteFeedback.notificationOccurred(.success)
+        #endif
+        
+        // Animate off screen then delete
+        withAnimation(.easeInOut(duration: 0.3)) {
+            offsetX = -400
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            onDelete()
+            // Reset state in case the item isn't immediately removed from the list
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isDeletionInProgress = false
+                close()
+            }
+        }
+    }
+
+    private func open(_ side: Side) {
+        openSide = side
+        offsetX = (side == .left) ? maxReveal : (side == .right ? -maxReveal : 0)
+    }
+    
+    private func close() {
+        openSide = .none
+        offsetX = 0
+    }
+    
+    private func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
+        min(max(v, lo), hi)
+    }
 }
 
 // MARK: - Product tile adapted from Cashier
@@ -1188,6 +1635,7 @@ private func alternateIds(from id: String) -> [String] {
 private struct ProductDetailSheetView: View {
     @EnvironmentObject var env: EnvironmentStore
     @EnvironmentObject var store: DisplaySessionStore
+    @EnvironmentObject var localMode: LocalModeManager
     @Environment(\.dismiss) private var dismiss
 
     let product: Product
@@ -1288,10 +1736,18 @@ private struct ProductDetailSheetView: View {
             // Single add-style control. If an edit was initiated, set exact qty on that line; else add.
             Button {
                 if let sku = store.pendingEditSku, !sku.isEmpty {
-                    store.setLineQty(sku: sku, qty: qty)
+                    if localMode.isLocalMode {
+                        localMode.setLocalLineQty(lineId: sku, qty: qty)
+                    } else {
+                        store.setLineQty(sku: sku, qty: qty)
+                    }
                     store.pendingEditSku = nil
                 } else {
-                    store.addToBasket(product: product, qty: qty)
+                    if localMode.isLocalMode {
+                        localMode.addToLocalBasket(product: product, qty: qty)
+                    } else {
+                        store.addToBasket(product: product, qty: qty)
+                    }
                 }
                 if store.selectedProductId != nil { store.sendOptionsClose() }
                 dismiss()
@@ -1400,6 +1856,7 @@ final class PrePreviewView: UIView {
     var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 }
 #endif
+
 
 // MARK: - Helper Shapes
 struct AsymmetricRoundedRect: Shape {

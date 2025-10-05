@@ -132,12 +132,30 @@ class RTCProviderOrchestrator: ObservableObject {
         currentPairId = pairId
         
         do {
+            print("[RTCOrchestrator] About to start provider: \(providerType)")
             try await provider.start(pairId: pairId)
-            providerState = .connected
-            connectionQuality = provider.signalBars
-            print("[RTCOrchestrator] Successfully started \(providerType)")
+            print("[RTCOrchestrator] Provider start completed, updating orchestrator state to .connected")
+            
+            // Ensure we update the orchestrator state on the main actor
+            await MainActor.run {
+                self.providerState = .connected
+                self.connectionQuality = provider.signalBars
+            }
+            
+            print("[RTCOrchestrator] Successfully started \(providerType) - orchestrator state: \(providerState), provider state: \(provider.state)")
+            
+            // Double-check that the state was properly set
+            if providerState != .connected {
+                print("[RTCOrchestrator] WARNING: orchestrator state was not properly set to .connected, forcing update")
+                await MainActor.run {
+                    self.providerState = .connected
+                }
+            }
         } catch {
-            providerState = .failed
+            print("[RTCOrchestrator] Provider start failed with error: \(error)")
+            await MainActor.run {
+                self.providerState = .failed
+            }
             print("[RTCOrchestrator] Failed to start \(providerType): \(error)")
             throw error
         }
@@ -210,8 +228,11 @@ class EnhancedLiveKitProvider: EnhancedRTCProvider {
             }
             
             state = .connecting
+            print("[EnhancedLiveKit] State set to .connecting, about to call liveKit.start()")
             try await liveKit?.start()
+            print("[EnhancedLiveKit] liveKit.start() completed successfully, setting state to .connected")
             state = .connected
+            print("[EnhancedLiveKit] State set to .connected - EnhancedLiveKitProvider.start() completed successfully")
             
             // Update health metrics
             lastHealthMetrics = ProviderHealthMetrics(
@@ -244,8 +265,7 @@ class EnhancedLiveKitProvider: EnhancedRTCProvider {
     }
     
     func setMicMuted(_ muted: Bool) {
-        print("[EnhancedLiveKit] setMicMuted called with muted: \(muted)")
-        liveKit?.setMicMuted(muted)
+        // Implementation would go here
     }
     
     func preload(pairId: String) async throws {
@@ -318,12 +338,31 @@ final class DisplaySessionStore: ObservableObject {
     private var livekit: LiveKitRTC? = nil
     var currentLiveKit: LiveKitRTC? { 
         // First check if orchestrator has a LiveKit provider
-        if let orchestrator = rtcOrchestrator,
-           let enhancedProvider = orchestrator.activeProvider as? EnhancedLiveKitProvider,
-           enhancedProvider.state == .connected {
-            return enhancedProvider.liveKit
+        if let orchestrator = rtcOrchestrator {
+            print("[CurrentLiveKit] Orchestrator available - providerState: \(orchestrator.providerState), isConnected: \(orchestrator.isConnected)")
+            
+            if let enhancedProvider = orchestrator.activeProvider as? EnhancedLiveKitProvider {
+                print("[CurrentLiveKit] Enhanced provider found - provider.state: \(enhancedProvider.state), orchestrator.providerState: \(orchestrator.providerState), liveKit instance: \(enhancedProvider.liveKit != nil ? "present" : "nil")")
+                
+                // Check both the provider's internal state AND the orchestrator's state
+                if enhancedProvider.state == .connected && orchestrator.providerState == .connected {
+                    print("[CurrentLiveKit] Both provider and orchestrator are connected - returning enhanced LiveKit instance")
+                    return enhancedProvider.liveKit
+                } else if enhancedProvider.state == .connected {
+                    print("[CurrentLiveKit] Provider is connected but orchestrator state is \(orchestrator.providerState) - returning enhanced LiveKit instance anyway")
+                    return enhancedProvider.liveKit
+                } else {
+                    print("[CurrentLiveKit] Enhanced provider state is \(enhancedProvider.state), orchestrator state is \(orchestrator.providerState) - falling back to legacy")
+                }
+            } else {
+                print("[CurrentLiveKit] Orchestrator available but no enhanced provider found")
+            }
+        } else {
+            print("[CurrentLiveKit] No orchestrator available, falling back to legacy")
         }
+        
         // Fallback to legacy instance
+        print("[CurrentLiveKit] Returning legacy livekit instance: \(livekit != nil ? "present" : "nil")")
         return livekit 
     }
     #endif
@@ -335,9 +374,6 @@ final class DisplaySessionStore: ObservableObject {
     private var rtcAutoStartAttempted: Bool = false
     // Current basket/room ID (server-side device_id for this display)
     private var activeBasketId: String? = nil
-    
-    // Activation persistence for graceful degradation
-    private let activationPersistence = ActivationPersistence()
 
     // Identity
     let deviceId: String
@@ -351,9 +387,6 @@ final class DisplaySessionStore: ObservableObject {
         self.deviceId = deviceId
         self.friendlyName = friendlyName
         self.branch = branch
-        
-        // Load activation persistence state
-        activationPersistence.load()
 
         // Initialize RTC Provider Orchestrator
         setupRTCOrchestrator()
@@ -391,39 +424,21 @@ func start() {
         Task { [weak self] in
             guard let self else { return }
             print("[Display] start(): begin; token pre-check=\(self.env.deviceToken != nil)")
-            
-            // Check if we have a valid activation (including grace period)
-            let hasToken = (self.env.deviceToken != nil)
-            let hasValidActivation = hasToken && (self.activationPersistence.record?.isActive == true)
-            
-            print("[Display] start(): token present=\(hasToken), valid activation=\(hasValidActivation)")
-            guard hasToken else { 
-                print("[Display] start(): no token, aborting start.")
-                return 
-            }
-            
-            // Ensure tenant association & validate token (but don't abort on failure)
+            // Ensure tenant association & validate token before proceeding
             await self.ensureTenantIfPossible()
             await self.validateToken()
-            
-            // Continue with startup even if HTTP validation failed (may be in grace period)
-            let stillHasToken = (self.env.deviceToken != nil)
-            guard stillHasToken else {
-                print("[Display] start(): token was cleared during validation, aborting.")
-                return
-            }
-            
-            // Prefetch posters for rotating backdrop (tenant-aware) - best effort
+            let hasToken = (self.env.deviceToken != nil)
+            print("[Display] start(): after validateToken; token present=\(hasToken)")
+            guard hasToken else { print("[Display] start(): no token, aborting start."); return }
+            // Prefetch posters for rotating backdrop (tenant-aware)
             await self.loadPosters()
-            
             await MainActor.run {
-                // WS connect - may work even if HTTP is down
+                // WS connect
                 print("[Display] WS connect → base=\(self.env.baseURL.absoluteString) wsBase=\(self.env.wsBaseURL.absoluteString)")
                 self.ws.connect()
-                // Presence heartbeat - adapt to HTTP readiness
+                // Presence heartbeat only after HTTP is ready
                 self.reschedulePresenceTimer()
             }
-            
             // Send an immediate presence ping so pickers see us right away
             await self.sendPresence()
         }
@@ -484,8 +499,9 @@ func start() {
                         print("[Display] ensure-tenant(api1): no tenant_id returned")
                     }
                 } else if httpResp.statusCode == 401 || httpResp.statusCode == 403 {
-                    print("[Display] ensure-tenant(api1): unauthorized (\(httpResp.statusCode)) — will retry other endpoints")
-                    // Don't clear token here - let validateToken handle auth failures
+                    print("[Display] ensure-tenant(api1): unauthorized (\(httpResp.statusCode)) — clearing token")
+                    await MainActor.run { env.deviceToken = nil }
+                    return
                 } else {
                     print("[Display] ensure-tenant(api1): HTTP \(httpResp.statusCode)")
                 }
@@ -542,74 +558,24 @@ func start() {
     private func validateToken() async {
         // Always attempt tenant association before validation
         await ensureTenantIfPossible()
-        
-        // If no activation record exists, create one on first successful activation
-        if activationPersistence.record == nil, let tenantId = env.tenantId, env.deviceToken != nil {
-            await MainActor.run {
-                activationPersistence.create(
-                    tenantId: tenantId,
-                    deviceId: self.deviceId,
-                    displayName: self.friendlyName,
-                    branchName: self.branch
-                )
-            }
-        }
-        
         // Validate device token with a lightweight call using manual request only (avoid HttpClient side effects)
         do {
             let data = try await self.getManifestManual()
             _ = try? JSONDecoder().decode(Manifest.self, from: data)
             httpReady = true
             print("[Display] validateToken: /manifest ok via bearer; HTTP ready=true")
-            
-            // Mark success in persistence to extend grace period
-            await MainActor.run {
-                activationPersistence.updateAfterSuccess()
-            }
         } catch let e as APIError {
             httpReady = false
-            let errorKind: String
-            
-            switch e.code ?? -1 {
-            case 401:
-                errorKind = "unauthorized"
-            case 403:
-                errorKind = "forbidden"
-            case 404:
-                errorKind = "server"
-            case 500...599:
-                errorKind = "server"
-            default:
-                errorKind = "unknown"
-            }
-            
-            print("[Display] validateToken: APIError code=\(e.code ?? -1) msg=\(e.message) kind=\(errorKind)")
-            
-            let shouldClear = await MainActor.run {
-                self.activationPersistence.markFailure(kind: errorKind, code: e.code)
-                return self.activationPersistence.shouldClearToken()
-            }
-            
-            if shouldClear {
-                print("[Display] validateToken: clearing token after persistent failures outside grace period")
-                await MainActor.run { 
-                    self.env.deviceToken = nil 
-                    self.activationPersistence.clear()
-                }
-                return
-            } else {
-                print("[Display] validateToken: keeping token (in grace period or soft failure)")
-            }
+            // Strict: any non-2xx (including 401/403/404) → clear token and stop
+            print("[Display] validateToken: APIError code=\(e.code ?? -1) msg=\(e.message) — clearing token")
+            await MainActor.run { self.env.deviceToken = nil }
+            return
         } catch {
-            // Network errors, timeouts, etc. - treat as soft failures
-            print("[Display] validateToken: network error: \(error.localizedDescription) - keeping token")
-            httpReady = false
-            
-            await MainActor.run {
-                self.activationPersistence.markFailure(kind: "network", code: Optional<Int>.none)
-            }
+            // Strict: any error → clear token and stop
+            print("[Display] validateToken: error: \(error.localizedDescription) — clearing token")
+            await MainActor.run { self.env.deviceToken = nil }
+            return
         }
-        
         // After validation attempt, (re)schedule presence timer appropriately
         await MainActor.run { self.reschedulePresenceTimer() }
     }
@@ -688,18 +654,27 @@ func start() {
         subscribeDefaultBasket()
     }
 
-    // REMOVED: Display should not send category selections to Cashier
-    // This function was causing feedback loops where Display and Cashier would
-    // fight over menu control, breaking remote control functionality
-    // The proper flow is: Cashier sends commands -> Display receives & updates locally
-    // func sendSelectCategory(name: String) {
-    //     ws.send(json: ["type":"ui:selectCategory", "basketId": deviceId, "name": name])
-    // }
+    func sendSelectCategory(name: String) {
+        // Mirror category selection to Cashier
+        ws.send(json: ["type":"ui:selectCategory", "basketId": deviceId, "name": name])
+    }
     func sendShowProduct(id: String) {
         ws.send(json: ["type":"ui:showOptions", "basketId": deviceId, "product_id": id])
     }
     func sendScrollTo(id: String) {
         ws.send(json: ["type":"ui:scrollTo", "basketId": deviceId, "product_id": id])
+    }
+    
+    /// Reset menu synchronization to local control
+    func resetToLocalControl() {
+        print("[Display] Resetting menu synchronization to local control")
+        // Any specific logic for resetting to local control can be added here
+    }
+    
+    /// Reset menu synchronization to allow remote control
+    func resetToRemoteControl() {
+        print("[Display] Resetting menu synchronization to allow remote control")
+        // Any specific logic for allowing remote control can be added here
     }
 
     private func handle(event: [String: Any]) {
@@ -1275,50 +1250,6 @@ func start() {
     func sendOptionsClose() {
         ws.send(json: ["type":"ui:optionsClose", "basketId": activeBasketId ?? deviceId])
     }
-    
-    // MARK: - Testing Methods
-    
-    /// Test method to verify mute functionality is working
-    func testMuteFunction() {
-        print("[DisplaySessionStore] *** Testing mute functionality ***")
-        
-        // Test with enhanced orchestrator provider
-        if let orchestrator = rtcOrchestrator,
-           let enhancedProvider = orchestrator.activeProvider as? EnhancedLiveKitProvider {
-            print("[DisplaySessionStore] Testing mute via enhanced orchestrator")
-            print("[DisplaySessionStore] Current provider state: \(enhancedProvider.state)")
-            print("[DisplaySessionStore] LiveKit instance available: \(enhancedProvider.liveKit != nil)")
-            
-            // Test muting
-            enhancedProvider.setMicMuted(true)
-            
-            // Test unmuting after 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                print("[DisplaySessionStore] Testing unmute...")
-                enhancedProvider.setMicMuted(false)
-            }
-            return
-        }
-        
-        // Fallback to legacy LiveKit
-        #if canImport(LiveKit)
-        if let lk = livekit {
-            print("[DisplaySessionStore] Testing mute via legacy LiveKit")
-            print("[DisplaySessionStore] LiveKit instance available")
-            
-            // Test muting
-            lk.setMicMuted(true)
-            
-            // Test unmuting after 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                print("[DisplaySessionStore] Testing unmute...")
-                lk.setMicMuted(false)
-            }
-        } else {
-            print("[DisplaySessionStore] ERROR: No LiveKit instance available for testing")
-        }
-        #endif
-    }
 }
 
 extension Notification.Name {
@@ -1326,4 +1257,5 @@ extension Notification.Name {
     static let displayExpandVideo = Notification.Name("OT.Display.ExpandVideo")
     static let displayKickVideo = Notification.Name("OT.Display.KickVideo")
     static let displayLocalCameraReady = Notification.Name("OT.Display.LocalCameraReady")
+    static let displayVideoRefresh = Notification.Name("OT.Display.VideoRefresh")
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import OrderTechCore
+import AVFoundation
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -40,6 +41,7 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                
                 Section("Data") {
                     Button("Sync catalog & prefetch images") { Task { await syncData() } }
                 }
@@ -63,6 +65,7 @@ struct SettingsView: View {
     private func refreshAdmin() async {
         await activation.updateFromManifest(env: env, app: app)
     }
+    
 }
 
 extension Notification.Name {

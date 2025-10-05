@@ -27,6 +27,9 @@
 		A01F3AEA5C5395E216FF3451 /* LoopingVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14EBAC3987957CD70DE4A26 /* LoopingVideoView.swift */; };
 		A1138FFD39C9AD654BC25555 /* SessionHolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5716B8D26F2BEECE20AF5500 /* SessionHolder.swift */; };
 		A1552E81D9B132D36D75FCCF /* LocalCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F318DE12D60FF335B796515C /* LocalCache.swift */; };
+		MENUSYNC987654321FEDCBA /* MenuSyncProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = MENUSYNC123456789ABCDEF /* MenuSyncProtocol.swift */; };
+		LMM12345678901234567890 /* LocalModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = LMM98765432109876543210 /* LocalModeManager.swift */; };
+		LCO12345678901234567890 /* LocalCheckoutOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = LCO98765432109876543210 /* LocalCheckoutOverlay.swift */; };
 		AE03B5E171387CA8C199DDD1 /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D65BAA1BFA20A78345C326 /* Tokens.swift */; };
 		B7E3A19E3A1DEAA1CEE0A533 /* DisplayHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9875A0B56240B67554D023AC /* DisplayHomeView.swift */; };
 		C30FB778F81EB003A148B21D /* ActivationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4399C7718A6A86660C9EF78F /* ActivationManager.swift */; };
@@ -41,6 +44,7 @@
 		E67B367D73B92A3D41C2AEC4 /* SquareAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6E840C73E816E1DA16DEA0 /* SquareAsyncImage.swift */; };
 		FE4E2CFE3E67E9BECBCECF05 /* ImageDiskCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDA6383A0440F2BF7A6D80F /* ImageDiskCache.swift */; };
 		ASSETS123456789ABCDEF012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4E2C3BE401335E86B9229826 /* Assets.xcassets */; };
+		LKROOM12345678901234567 /* LiveKitRoomService.swift in Sources */ = {isa = PBXBuildFile; fileRef = LKROOM9876543210987654 /* LiveKitRoomService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -71,6 +75,7 @@
 /* Begin PBXFileReference section */
 		11850C8C8241FB19F1E5DAFE /* RTCVideoViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTCVideoViews.swift; sourceTree = "<group>"; };
 		18761E88FB20A7A41E27C9A6 /* DisplaySessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaySessionStore.swift; sourceTree = "<group>"; };
+		MENUSYNC123456789ABCDEF /* MenuSyncProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuSyncProtocol.swift; sourceTree = "<group>"; };
 		1D95C5150A6C58A5E4C8C8D7 /* LiveKitRTC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitRTC.swift; sourceTree = "<group>"; };
 		2F6E840C73E816E1DA16DEA0 /* SquareAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SquareAsyncImage.swift; sourceTree = "<group>"; };
 		31B080FA05FCBDA40E7554F0 /* P2PRTC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PRTC.swift; sourceTree = "<group>"; };
@@ -102,8 +107,11 @@
 		DBF2BF707FEDEC4392B96964 /* HttpClient+Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HttpClient+Endpoints.swift"; sourceTree = "<group>"; };
 		EBCA828726D9E55F8B54F695 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
 		F318DE12D60FF335B796515C /* LocalCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCache.swift; sourceTree = "<group>"; };
+		LMM98765432109876543210 /* LocalModeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModeManager.swift; sourceTree = "<group>"; };
+		LCO98765432109876543210 /* LocalCheckoutOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCheckoutOverlay.swift; sourceTree = "<group>"; };
 		F6C7379D72A521B4DDAF08A0 /* CatalogModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogModels.swift; sourceTree = "<group>"; };
 		FF014F717DBF2DB78EBE8E0F /* loop-ipad.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "loop-ipad.mp4"; sourceTree = "<group>"; };
+		LKROOM9876543210987654 /* LiveKitRoomService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitRoomService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +132,7 @@
 			isa = PBXGroup;
 			children = (
 				1D95C5150A6C58A5E4C8C8D7 /* LiveKitRTC.swift */,
+				LKROOM9876543210987654 /* LiveKitRoomService.swift */,
 				9B5755463C047BEED8F0D1FB /* LiveKitVideoViews.swift */,
 				B14EBAC3987957CD70DE4A26 /* LoopingVideoView.swift */,
 				31B080FA05FCBDA40E7554F0 /* P2PRTC.swift */,
@@ -166,6 +175,8 @@
 				4568F529F66EC06397D5BAED /* BrandLogoView.swift */,
 				58241179FAE3C926C196CA1E /* DisplayApp.swift */,
 				9875A0B56240B67554D023AC /* DisplayHomeView.swift */,
+				LCO98765432109876543210 /* LocalCheckoutOverlay.swift */,
+				LMM98765432109876543210 /* LocalModeManager.swift */,
 				5115E64AA8238E5D8CC46DB9 /* RootView.swift */,
 				A4F8F2283711B9DC63DC539E /* SettingsView.swift */,
 				680FD8C54CE28717D6623512 /* StatusChipView.swift */,
@@ -276,6 +287,7 @@
 			children = (
 				18761E88FB20A7A41E27C9A6 /* DisplaySessionStore.swift */,
 				35CB56BB7F56536DF1CD4842 /* DisplayUIModels.swift */,
+				MENUSYNC123456789ABCDEF /* MenuSyncProtocol.swift */,
 				5716B8D26F2BEECE20AF5500 /* SessionHolder.swift */,
 			);
 			path = Session;
@@ -355,8 +367,12 @@
 				FE4E2CFE3E67E9BECBCECF05 /* ImageDiskCache.swift in Sources */,
 				D2863DCEA73DDBCEB2E1BCB7 /* InlineActivationPageView.swift in Sources */,
 				5840387B5F145239C1D81229 /* LiveKitRTC.swift in Sources */,
+				LKROOM12345678901234567 /* LiveKitRoomService.swift in Sources */,
 				72CADDD9CC4A97F354475BC0 /* LiveKitVideoViews.swift in Sources */,
 				A1552E81D9B132D36D75FCCF /* LocalCache.swift in Sources */,
+				LCO12345678901234567890 /* LocalCheckoutOverlay.swift in Sources */,
+				LMM12345678901234567890 /* LocalModeManager.swift in Sources */,
+				MENUSYNC987654321FEDCBA /* MenuSyncProtocol.swift in Sources */,
 				A01F3AEA5C5395E216FF3451 /* LoopingVideoView.swift in Sources */,
 				1A92809F6E72FCD2AEFC2F6B /* P2PRTC.swift in Sources */,
 				4882BAE3A3209C38E21B858D /* PreconnectLocalPreview.swift in Sources */,
@@ -444,7 +460,7 @@
 					"\"../V-Cashier/SourcePackages/artifacts/webrtc/WebRTC\"",
 				);
 				INFOPLIST_FILE = Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -468,7 +484,7 @@
 					"\"../V-Cashier/SourcePackages/artifacts/webrtc/WebRTC\"",
 				);
 				INFOPLIST_FILE = Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

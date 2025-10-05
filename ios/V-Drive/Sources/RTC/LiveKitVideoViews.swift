@@ -21,12 +21,15 @@ private final class LKDisplayHostView: UIView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func configure(with lk: LiveKitRTC?) {
+        print("[LKDisplayHostView] configure called with lk: \(lk != nil ? "not nil" : "nil")")
         self.lk = lk
         videoView.frame = bounds
         // Attach once; VideoView handles resizing internally
         if let lk = lk {
             print("[LKDisplayHostView] Configuring with LiveKit instance: \(lk)")
+            print("[LKDisplayHostView] Calling setRemoteVideoView on LiveKit instance")
             lk.setRemoteVideoView(videoView)
+            print("[LKDisplayHostView] setRemoteVideoView completed")
         } else {
             print("[LKDisplayHostView] No LiveKit instance available yet")
         }
@@ -51,6 +54,11 @@ struct LKRemoteVideoView: UIViewRepresentable {
     var cornerRadius: CGFloat = 0
     var masksToBounds: Bool = false
     func makeUIView(context: Context) -> UIView {
+        let currentLiveKit = store.currentLiveKit
+        print("[LKRemoteVideoView] makeUIView called, currentLiveKit: \(currentLiveKit != nil ? "not nil" : "nil")")
+        if let lk = currentLiveKit {
+            print("[LKRemoteVideoView] LiveKit instance available: \(lk)")
+        }
         let host = LKDisplayHostView()
         host.isUserInteractionEnabled = false
         host.clipsToBounds = false
@@ -59,17 +67,27 @@ struct LKRemoteVideoView: UIViewRepresentable {
         // Also round the actual video layer to prevent Metal spill
         host.videoView.layer.cornerRadius = cornerRadius
         host.videoView.layer.masksToBounds = masksToBounds
-        host.configure(with: store.currentLiveKit)
+        print("[LKRemoteVideoView] About to call configure in makeUIView with: \(currentLiveKit != nil ? "valid LiveKit" : "nil")")
+        host.configure(with: currentLiveKit)
+        print("[LKRemoteVideoView] makeUIView completed")
         return host
     }
     func updateUIView(_ uiView: UIView, context: Context) {
         if let host = uiView as? LKDisplayHostView {
+            let currentLiveKit = store.currentLiveKit
             host.layer.cornerRadius = cornerRadius
             host.layer.masksToBounds = masksToBounds
             host.videoView.layer.cornerRadius = cornerRadius
             host.videoView.layer.masksToBounds = masksToBounds
-            print("[LKRemoteVideoView] Updating with currentLiveKit: \(store.currentLiveKit != nil ? "available" : "nil")")
-            host.configure(with: store.currentLiveKit)
+            print("[LKRemoteVideoView] updateUIView called with currentLiveKit: \(currentLiveKit != nil ? "available" : "nil")")
+            if let lk = currentLiveKit {
+                print("[LKRemoteVideoView] LiveKit instance available in updateUIView: \(lk)")
+            }
+            print("[LKRemoteVideoView] About to call configure in updateUIView")
+            host.configure(with: currentLiveKit)
+            print("[LKRemoteVideoView] updateUIView completed")
+        } else {
+            print("[LKRemoteVideoView] updateUIView: could not cast to LKDisplayHostView")
         }
     }
 }

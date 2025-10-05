@@ -5,7 +5,8 @@ struct StatusChipView: View {
     let provider: String? = nil // P2P | Live | Twilio
     var compact: Bool = false
     var dotOnly: Bool = false // dot only (green when connected, orange otherwise)
-
+    var onTap: (() -> Void)? = nil
+    
     var body: some View {
         Group {
             if dotOnly {
@@ -20,6 +21,10 @@ struct StatusChipView: View {
                             .font(.system(size: compact ? 11 : 13, weight: .bold))
                             .foregroundColor(.white)
                     }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTap?()
                 }
             } else {
                 HStack(spacing: compact ? 4 : 6) {
@@ -42,6 +47,10 @@ struct StatusChipView: View {
                         .fill(bgColor)
                 )
                 .foregroundColor(.white)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTap?()
+                }
             }
         }
     }

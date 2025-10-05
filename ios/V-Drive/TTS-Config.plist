@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>GoogleCloudTTS</key>
+	<dict>
+		<key>APIKey</key>
+		<string>AIzaSyDqGMFPOgwrKuVVoGsU53RxwpngdjzoPFo</string>
+		<key>Enabled</key>
+		<true/>
+		<key>DefaultVoice</key>
+		<dict>
+			<key>English</key>
+			<string>en-US-Neural2-A</string>
+			<key>Arabic</key>
+			<string>ar-XA-Wavenet-A</string>
+		</dict>
+	</dict>
+	<key>OpenAITTS</key>
+	<dict>
+		<key>APIKey</key>
+		<string>YOUR_OPENAI_API_KEY_HERE</string>
+		<key>Enabled</key>
+		<false/>
+		<key>DefaultVoice</key>
+		<string>nova</string>
+	</dict>
+</dict>
+</plist>

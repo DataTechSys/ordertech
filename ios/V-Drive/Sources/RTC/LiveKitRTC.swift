@@ -33,15 +33,39 @@ final class SharedLiveKitHost {
 
 #if canImport(LiveKit)
 final class SharedLiveKitHostImpl {
-    let videoView = VideoView()
+    private var _videoView: VideoView?
+    var videoView: VideoView {
+        if let view = _videoView {
+            return view
+        }
+        // Ensure VideoView is created on main thread
+        if Thread.isMainThread {
+            let view = VideoView()
+            configureVideoView(view)
+            _videoView = view
+            return view
+        } else {
+            var view: VideoView!
+            DispatchQueue.main.sync {
+                view = VideoView()
+                self.configureVideoView(view)
+            }
+            _videoView = view
+            return view
+        }
+    }
     
-    // Enhanced debouncing to prevent attachment loops
+    // Simplified debouncing to prevent attachment loops
     private var lastAttachTime: Date = Date.distantPast
-    private let attachDebounceInterval: TimeInterval = 0.5 // 500ms debounce
+    private let attachDebounceInterval: TimeInterval = 1.0 // Increased to 1 second debounce
     private var attachTimer: Timer?
     private var currentLiveKit: LiveKitRTC?
     
     init() {
+        // VideoView creation is now deferred until first access and guaranteed on main thread
+    }
+    
+    private func configureVideoView(_ videoView: VideoView) {
         videoView.contentMode = .scaleAspectFill
         videoView.layer.isOpaque = true
         videoView.isUserInteractionEnabled = false
@@ -81,8 +105,8 @@ final class SharedLiveKitHostImpl {
         // Cancel any existing timer
         attachTimer?.invalidate()
         
-        // Set up exponential backoff retries for connection issues
-        scheduleRetryAttach(livekit: livekit, delay: 0.05, maxRetries: 7, currentRetry: 0)
+        // Set up simplified retry for connection issues
+        scheduleRetryAttach(livekit: livekit, delay: 0.5, maxRetries: 3, currentRetry: 0)
     }
     
     private func scheduleRetryAttach(livekit: LiveKitRTC, delay: TimeInterval, maxRetries: Int, currentRetry: Int) {
@@ -99,13 +123,8 @@ final class SharedLiveKitHostImpl {
                 return
             }
             
-            let nextDelay: TimeInterval
-            switch currentRetry {
-            case 0: nextDelay = 0.15
-            case 1: nextDelay = 0.35
-            case 2: nextDelay = 0.7
-            default: nextDelay = min(delay * 1.5, 2.0) // Cap at 2 seconds
-            }
+            // Simplified linear delay progression
+            let nextDelay: TimeInterval = min(delay + 0.5, 2.0) // Linear increase, cap at 2 seconds
             
             print("[SharedLiveKitHost] deferred re-attach attempt \(String(format: "%.2f", nextDelay))s - hasRemoteVideo: \(livekit.hasRemoteVideo)")
             
@@ -121,7 +140,18 @@ final class SharedLiveKitHostImpl {
         attachTimer?.invalidate()
         attachTimer = nil
         currentLiveKit = nil
-        videoView.track = nil
+        
+        // Clear video view track on main thread
+        if let view = _videoView {
+            if Thread.isMainThread {
+                view.track = nil
+            } else {
+                DispatchQueue.main.async {
+                    view.track = nil
+                }
+            }
+        }
+        
         lastAttachTime = Date.distantPast
         print("[SharedLiveKitHost] cleared all attachments and timers")
     }
@@ -146,61 +176,41 @@ func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () asy
 #if canImport(LiveKit)
 import Combine
 
-// PRODUCTION LiveKit configuration with hardcoded credentials
-// This bypasses server token request to avoid HTTP 503 errors
-struct LiveKitConfig {
-    static let websocketURL = "wss://ordertech-eemfrfsw.livekit.cloud"
-    static let apiKey = "APIbYms65fpqX3f"
-    static let apiSecret = "Lz3Ye8hHfP1M2qp8FfGSkIaYGeGPVqDaKf1YLymCyZ5C"
-    
-    static func generateToken(room: String, identity: String) -> String {
-        // Define JWT claims according to LiveKit requirements
-        let header = ["alg": "HS256", "typ": "JWT"]
+// MARK: - Server-based LiveKit Token Response
+struct RtcTokenResponse: Decodable {
+    let provider: String
+    let room: String
+    let token: String
+    let url: String
+}
+
+// MARK: - LiveKit Token Fetching
+struct LiveKitTokenFetcher {
+    static func fetchLiveKitToken(basketId: String, role: String) async throws -> RtcTokenResponse {
+        var req = URLRequest(url: URL(string: "https://ordertech-715493130630.me-central1.run.app/rtc/token")!)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Calculate expiration time (24 hours from now)
-        let expirationTime = Int(Date().timeIntervalSince1970) + 86400
-        
-        // Create claims dictionary
-        let claims: [String: Any] = [
-            "exp": expirationTime,
-            "iss": apiKey,
-            "nbf": Int(Date().timeIntervalSince1970),
-            "sub": identity,
-            "video": ["room": room, "roomJoin": true, "canPublish": true, "canSubscribe": true]
+        let requestBody = [
+            "provider": "livekit",
+            "basketId": basketId,
+            "role": role
         ]
         
-        // Encode header and claims to base64url
-        let jsonEncoder = JSONEncoder()
-        guard let headerData = try? jsonEncoder.encode(header),
-              let claimsData = try? JSONSerialization.data(withJSONObject: claims) else {
-            return "" // Return empty string on encoding failure
+        req.httpBody = try JSONEncoder().encode(requestBody)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        
+        guard let httpResponse = resp as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            print("[LiveKitTokenFetcher] HTTP error: \((resp as? HTTPURLResponse)?.statusCode ?? -1)")
+            throw URLError(.badServerResponse)
         }
         
-        let base64Header = headerData.base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        
-        let base64Claims = claimsData.base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        
-        // Create the signature input
-        let signatureInput = "\(base64Header).\(base64Claims)"
-        
-        // Create HMAC-SHA256 signature
-        let key = SymmetricKey(data: apiSecret.data(using: .utf8)!)
-        let signature = HMAC<SHA256>.authenticationCode(for: signatureInput.data(using: .utf8)!, using: key)
-        let signatureBase64 = Data(signature).base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        
-        // Combine to create JWT token
-        return "\(signatureInput).\(signatureBase64)"
+        return try JSONDecoder().decode(RtcTokenResponse.self, from: data)
     }
 }
+
+// All LiveKit configuration now comes from server-based token fetching
+// No hardcoded credentials needed - everything is managed by the backend
 
 final class LiveKitRTC: ObservableObject {
     enum LinkStatus: Equatable {
@@ -212,6 +222,7 @@ final class LiveKitRTC: ObservableObject {
         case localPublishing
         case remotePending
         case remoteAttached
+        case stopping
         case error(String)
 
         var text: String {
@@ -224,6 +235,7 @@ final class LiveKitRTC: ObservableObject {
             case .localPublishing: return "Publishing local video…"
             case .remotePending: return "Waiting for remote video…"
             case .remoteAttached: return "Connected"
+            case .stopping: return "Stopping…"
             case .error(let m): return m.isEmpty ? "Connection error" : m
             }
         }
@@ -239,6 +251,10 @@ final class LiveKitRTC: ObservableObject {
     var hasRemoteVideo: Bool { remoteTrack != nil }
     private var remoteViews: [WeakVideoView] = []
     
+    // State management for preventing concurrent operations - using actor-safe approach
+    @MainActor private var isStarting: Bool = false
+    @MainActor private var isStopping: Bool = false
+    
     // Debouncing for attachIfAvailable to reduce excessive calls
     private var lastAttachTime: Date = Date.distantPast
     private let attachDebounceInterval: TimeInterval = 0.5 // 500ms debounce
@@ -246,6 +262,31 @@ final class LiveKitRTC: ObservableObject {
     init(pairId: String, http: HttpClient) { self.pairId = pairId; self.http = http }
 
     func start() async throws {
+        // Prevent concurrent start operations using MainActor
+        let currentStarting = await MainActor.run { self.isStarting }
+        let currentStopping = await MainActor.run { self.isStopping }
+        
+        guard !currentStarting && !currentStopping else {
+            let currentState = currentStarting ? "starting" : "stopping"
+            print("[LiveKitRTC] start(): already \(currentState), ignoring duplicate request")
+            throw APIError(message: "LiveKit is already \(currentState)")
+        }
+        
+        guard linkStatus == .idle || linkStatus == .error("*") else {
+            print("[LiveKitRTC] start(): invalid state \(linkStatus), must be idle or error")
+            throw APIError(message: "LiveKit not in idle state for starting")
+        }
+        
+        await MainActor.run { self.isStarting = true }
+        
+        defer { 
+            Task {
+                await MainActor.run {
+                    self.isStarting = false
+                }
+            }
+        }
+        
         // Clear any stale state from previous connections
         print("[LiveKitRTC] start(): cleared all cached video state and debounce tasks")
         self.remoteTrack = nil
@@ -266,27 +307,40 @@ final class LiveKitRTC: ObservableObject {
         audio.unlockForConfiguration()
         #endif
         
-        print("[LiveKitRTC] start() for pairId=\(pairId): generating local token…")
+        print("[LiveKitRTC] start() for pairId=\(pairId): fetching token from server…")
         await MainActor.run { self.linkStatus = .tokenRequested }
         
-        // Generate token locally using hardcoded LiveKit credentials
-        // This bypasses server token request to avoid HTTP 503 errors
-        let participantName = "display-" + String(UUID().uuidString.prefix(8))
-        let token = LiveKitConfig.generateToken(room: pairId, identity: participantName)
-        let baseURL = LiveKitConfig.websocketURL
+        // Fetch LiveKit token from server
+        let tokenResponse: RtcTokenResponse
+        do {
+            tokenResponse = try await LiveKitTokenFetcher.fetchLiveKitToken(
+                basketId: pairId,
+                role: "display"
+            )
+        } catch {
+            print("[LiveKitRTC] Failed to fetch token: \(error)")
+            await MainActor.run { self.linkStatus = .error("Token fetch failed") }
+            throw APIError(message: "livekit_token_fetch_failed")
+        }
         
-        print("[Display][LiveKit] Local token generated for room: \(pairId), participant: \(participantName)")
+        let token = tokenResponse.token
+        let baseURL = tokenResponse.url
+        
+        print("[Display][LiveKit] Server token received for room: \(tokenResponse.room)")
         await MainActor.run { self.linkStatus = .tokenReceived }
         
-        // Phase A: Reuse room if available, otherwise create new
-        let room: Room
+        // Always create a fresh room for clean state - no reuse to avoid stale connection issues
+        let room = Room()
+        
+        // Clear any existing room reference to prevent conflicts
         if let existingRoom = self.room {
-            room = existingRoom
-        } else {
-            room = Room()
-            self.room = room
-            room.add(delegate: self)
+            print("[LiveKitRTC] Clearing existing room reference for fresh start")
+            // Don't await disconnect here to avoid blocking - just clear reference
+            self.room = nil
         }
+        
+        self.room = room
+        room.add(delegate: self)
         
         // Phase A: Optimized connection options for faster setup
         let connectOptions = ConnectOptions(
@@ -310,30 +364,111 @@ final class LiveKitRTC: ObservableObject {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .notDetermined {
             let granted = await AVCaptureDevice.requestAccess(for: .video)
-            if !granted { /* no camera access */ }
+            if !granted { 
+                print("[Display][LiveKit] ERROR: Camera access denied")
+                await MainActor.run { self.linkStatus = .error("Camera access denied") }
+                throw APIError(message: "Camera access required for video streaming")
+            }
+        } else if status == .denied {
+            print("[Display][LiveKit] ERROR: Camera access previously denied")
+            await MainActor.run { self.linkStatus = .error("Camera access denied") }
+            throw APIError(message: "Camera access required for video streaming")
         }
         #endif
         #if canImport(LiveKit)
         // Display role: enable local video/audio so Cashier can see Display
         await MainActor.run { self.linkStatus = .localPublishing }
-        let cam = CameraCaptureOptions(position: .front, dimensions: .h360_43, fps: 15)
-        _ = try? await lp.setCamera(enabled: true, captureOptions: cam)
-        _ = try? await lp.setMicrophone(enabled: true)
+        
+        // Reduced delay for faster initial connection - only wait for room to stabilize
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Validate camera availability before attempting to initialize
+        #if canImport(AVFoundation)
+        let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+        let backCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+        
+        guard frontCamera != nil || backCamera != nil else {
+            print("[Display][LiveKit] ERROR: No camera devices available")
+            await MainActor.run { self.linkStatus = .error("No camera available") }
+            throw APIError(message: "No camera capture devices available")
+        }
+        
+        print("[Display][LiveKit] Camera availability validated - front: \(frontCamera != nil), back: \(backCamera != nil)")
+        #endif
+        
+        // CRITICAL: Display app must ALWAYS use front camera for PiP consistency
+        // Never fall back to back camera as this causes the PiP issue reported
+        let preferredPosition: AVCaptureDevice.Position = .front
+        
+        // Only proceed with front camera if it's available
+        guard frontCamera != nil else {
+            print("[Display][LiveKit] ERROR: Front camera not available - this is required for Display role")
+            await MainActor.run { self.linkStatus = .error("Front camera required") }
+            throw APIError(message: "Display app requires front camera for PiP functionality")
+        }
+        
+        let cam = CameraCaptureOptions(position: preferredPosition, dimensions: .h720_169, fps: 30)
+        
+        do {
+            let cameraResult = try await lp.setCamera(enabled: true, captureOptions: cam)
+            print("[Display][LiveKit] Camera enabled successfully with front camera: \(cameraResult)")
+        } catch {
+            print("[Display][LiveKit] ERROR: Failed to enable front camera: \(error.localizedDescription)")
+            await MainActor.run { self.linkStatus = .error("Failed to enable front camera") }
+            throw error
+        }
+        
+        do {
+            let micResult = try await lp.setMicrophone(enabled: true)
+            print("[Display][LiveKit] Microphone enabled successfully: \(micResult)")
+        } catch {
+            print("[Display][LiveKit] ERROR: Failed to enable microphone: \(error.localizedDescription)")
+            // Continue without microphone - not critical for display role
+        }
         print("[Display][LiveKit] local publishing enabled for Display role")
         #endif
         await MainActor.run { self.linkStatus = .remotePending }
         
-        // Phase A: Aggressive track subscription for faster remote video
-        await subscribeAllRemoteVideosAggressive()
-        attachIfAvailable()
+        // Phase A: Aggressive track subscription for faster remote video (non-blocking)
+        Task {
+            await subscribeAllRemoteVideosAggressive()
+            attachIfAvailable()
+        }
+        
+        print("[LiveKitRTC] start() completed successfully - enhanced provider should now be in connected state")
     }
 
     func stop() {
+        // Prevent concurrent stop operations using MainActor (non-async version)
+        Task {
+            let currentStopping = await MainActor.run { self.isStopping }
+            guard !currentStopping else {
+                print("[LiveKitRTC] stop(): already stopping, ignoring duplicate request")
+                return
+            }
+            
+            let currentStarting = await MainActor.run { self.isStarting }
+            if currentStarting {
+                print("[LiveKitRTC] stop(): start in progress, marking for stop after completion")
+                await MainActor.run { self.isStopping = true }
+                return
+            }
+            
+            await MainActor.run { self.isStopping = true }
+            await performStopCleanup()
+        }
+    }
+    
+    private func performStopCleanup() async {
+        
         print("[LiveKitRTC] stop(): begin")
+        DispatchQueue.main.async {
+            self.linkStatus = .stopping
+        }
+        
         #if canImport(LiveKit)
         // Clear any UI bindings immediately on main thread
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+        if Thread.isMainThread {
             // Clear all video view tracks
             self.localView?.track = nil
             self.remoteView?.track = nil
@@ -341,6 +476,17 @@ final class LiveKitRTC: ObservableObject {
                 weakView.view?.track = nil
             }
             print("[LiveKitRTC] stop(): cleared all VideoView tracks (main thread)")
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                // Clear all video view tracks
+                self.localView?.track = nil
+                self.remoteView?.track = nil
+                for weakView in self.remoteViews {
+                    weakView.view?.track = nil
+                }
+                print("[LiveKitRTC] stop(): cleared all VideoView tracks (main thread)")
+            }
         }
         
         // Clear SharedLiveKitHost state to stop retry loops
@@ -353,6 +499,10 @@ final class LiveKitRTC: ObservableObject {
         self.remoteView = nil
         self.lastAttachTime = Date.distantPast // Reset debounce timer
         self.linkStatus = .idle
+        
+        // Reset stopping flag
+        await MainActor.run { self.isStopping = false }
+        
         print("[LiveKitRTC] stop(): end")
         
         // Perform async cleanup in background
@@ -383,13 +533,16 @@ final class LiveKitRTC: ObservableObject {
                     }
                 }
                 
-                // Disable local tracks
+                // Disable local tracks more aggressively
                 let lp = room.localParticipant
-                try? await lp.setMicrophone(enabled: false)
+                print("[Display][LiveKit] Disabling local camera and microphone...")
                 try? await lp.setCamera(enabled: false)
+                try? await lp.setMicrophone(enabled: false)
                 
-                // Wait a bit for tracks to clean up
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                // Note: Local tracks are automatically unpublished when camera/mic are disabled
+                
+                // Wait longer for tracks to clean up properly
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
                 
                 // Disconnect room
                 try await room.disconnect()
@@ -454,26 +607,49 @@ final class LiveKitRTC: ObservableObject {
 
     func setRemoteVideoView(_ view: VideoView) {
         print("[LiveKitRTC] setRemoteVideoView called, hasRemoteTrack: \(remoteTrack != nil), linkStatus: \(linkStatus)")
-        self.remoteView = view
-        remoteViews = remoteViews.filter { $0.view != nil }
-        if !remoteViews.contains(where: { $0.view === view }) {
-            remoteViews.append(WeakVideoView(view))
-        }
+        print("[LiveKitRTC] setRemoteVideoView: view = \(view), current remoteViews count: \(remoteViews.count)")
         
-        // Immediately attach if we have a cached remote track
-        if let track = remoteTrack {
-            DispatchQueue.main.async {
+        // Ensure view manipulation happens on main thread
+        if Thread.isMainThread {
+            self.remoteView = view
+            remoteViews = remoteViews.filter { $0.view != nil }
+            if !remoteViews.contains(where: { $0.view === view }) {
+                remoteViews.append(WeakVideoView(view))
+            }
+            
+            // Immediately attach if we have a cached remote track
+            if let track = remoteTrack {
                 view.track = track
                 print("[LiveKitRTC] Immediately attached cached remote track to new view")
             }
-        }
-        
-        // Check if we have an inconsistent state (track available but status is remotePending)
-        if remoteTrack != nil && linkStatus == .remotePending {
-            print("[LiveKitRTC] hasRemoteVideo inconsistency: hasTrack=true linkStatus=\(linkStatus)")
-            // Force state update to remoteAttached since we clearly have a track
-            DispatchQueue.main.async {
+            
+            // Check if we have an inconsistent state (track available but status is remotePending)
+            if remoteTrack != nil && linkStatus == .remotePending {
+                print("[LiveKitRTC] hasRemoteVideo inconsistency: hasTrack=true linkStatus=\(linkStatus)")
+                // Force state update to remoteAttached since we clearly have a track
                 self.linkStatus = .remoteAttached
+            }
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.remoteView = view
+                self.remoteViews = self.remoteViews.filter { $0.view != nil }
+                if !self.remoteViews.contains(where: { $0.view === view }) {
+                    self.remoteViews.append(WeakVideoView(view))
+                }
+                
+                // Immediately attach if we have a cached remote track
+                if let track = self.remoteTrack {
+                    view.track = track
+                    print("[LiveKitRTC] Immediately attached cached remote track to new view")
+                }
+                
+                // Check if we have an inconsistent state (track available but status is remotePending)
+                if self.remoteTrack != nil && self.linkStatus == .remotePending {
+                    print("[LiveKitRTC] hasRemoteVideo inconsistency: hasTrack=true linkStatus=\(self.linkStatus)")
+                    // Force state update to remoteAttached since we clearly have a track
+                    self.linkStatus = .remoteAttached
+                }
             }
         }
         
@@ -481,6 +657,12 @@ final class LiveKitRTC: ObservableObject {
         attachIfAvailable()
     }
     func setLocalVideoView(_ view: VideoView) { self.localView = view; attachIfAvailable() }
+    
+    /// Public method to force video attachment refresh for diagnostic purposes
+    func refreshVideoAttachment() {
+        print("[LiveKitRTC] refreshVideoAttachment called - forcing video track re-attachment")
+        attachIfAvailable()
+    }
 
     private func attachIfAvailable() {
         // Debounce to prevent excessive calls
@@ -566,31 +748,48 @@ final class LiveKitRTC: ObservableObject {
     private func subscribeAllRemoteVideosAggressive() async {
         guard let r = room else { return }
         
-        // Subscribe to existing remote participants immediately
+        // Subscribe to existing remote participants immediately with timeout
         let subscriptionTasks = r.remoteParticipants.compactMap { (_, rp) in
             Task {
                 for pub in rp.videoTracks {
                     if let p = pub as? RemoteTrackPublication {
                         do {
-                            try await p.set(subscribed: true)
+                            // Add timeout to individual subscription to prevent hanging
+                            try await withTimeout(seconds: 5.0) {
+                                try await p.set(subscribed: true)
+                            }
                             print("[Display][LiveKit] Aggressively subscribed to video track from \(rp.identity?.stringValue ?? "unknown")")
                         } catch {
                             print("[Display][LiveKit] Failed to subscribe to video track: \(error)")
                         }
                     }
                 }
-                // Also subscribe to audio for better sync
+                // Also subscribe to audio for better sync with timeout
                 for pub in rp.audioTracks {
                     if let p = pub as? RemoteTrackPublication {
-                        _ = try? await p.set(subscribed: true)
+                        do {
+                            try await withTimeout(seconds: 3.0) {
+                                try await p.set(subscribed: true)
+                            }
+                        } catch {
+                            // Ignore audio subscription failures
+                        }
                     }
                 }
             }
         }
         
-        // Wait for all subscriptions to complete
-        for task in subscriptionTasks {
-            await task.value
+        // Wait for all subscriptions to complete with overall timeout
+        do {
+            try await withTimeout(seconds: 8.0) {
+                for task in subscriptionTasks {
+                    await task.value
+                }
+            }
+            print("[Display][LiveKit] All remote track subscriptions completed successfully")
+        } catch {
+            print("[Display][LiveKit] Remote track subscription timeout - continuing anyway: \(error)")
+            // Don't throw - continue with connection even if some subscriptions timeout
         }
     }
 }
@@ -635,9 +834,18 @@ extension LiveKitRTC: RoomDelegate {
     }
     // Local track published — attach to local PiP
     func room(_ room: Room, localParticipant: LocalParticipant, didPublishTrack track: Track, publication: LocalTrackPublication) {
-        print("[Display][LiveKit] local track published: \(track.kind)")
+        print("[Display][LiveKit] *** LOCAL TRACK PUBLISHED ***")
+        print("[Display][LiveKit] Track kind: \(track.kind)")
+        print("[Display][LiveKit] Publication SID: \(publication.sid)")
+        
+        if track.kind == .video {
+            print("[Display][LiveKit] *** VIDEO TRACK PUBLISHED - This should be visible to Cashier app ***")
+        }
+        
         guard let ltrack = track as? LocalVideoTrack, let lv = self.localView else {
-            print("[Display][LiveKit] local video track published but no local view bound yet")
+            if track.kind == .video {
+                print("[Display][LiveKit] local video track published but no local view bound yet")
+            }
             return
         }
         DispatchQueue.main.async {
@@ -650,8 +858,47 @@ extension LiveKitRTC: RoomDelegate {
     }
     
     func room(_ room: Room, didConnectParticipant participant: RemoteParticipant) {
-        print("[Display][LiveKit] remote participant connected: \(participant.identity?.stringValue ?? "unknown") with \(participant.videoTracks.count) video tracks")
+        print("[LiveKitRTC] remote participant connected: \(participant.identity?.stringValue ?? "unknown") with \(participant.videoTracks.count) video tracks")
+        
+        // Subscribe immediately to any existing tracks
         subscribeAllRemoteVideos()
+        
+        // Multiple retry strategy for better first-connection reliability
+        Task {
+            // First retry after short delay
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 second delay
+            print("[LiveKitRTC] performing first delayed subscription retry for \(participant.identity?.stringValue ?? "unknown")")
+            
+            for pub in participant.videoTracks {
+                if let p = pub as? RemoteTrackPublication {
+                    do {
+                        try await p.set(subscribed: true)
+                        print("[LiveKitRTC] first retry subscription successful for video track from \(participant.identity?.stringValue ?? "unknown")")
+                        // If successful on first retry, trigger attachment check
+                        DispatchQueue.main.async { self.attachIfAvailable() }
+                    } catch {
+                        print("[LiveKitRTC] first retry subscription failed: \(error)")
+                    }
+                }
+            }
+            
+            // Second retry after longer delay for any remaining tracks
+            try? await Task.sleep(nanoseconds: 500_000_000) // additional 0.5 second delay
+            print("[LiveKitRTC] performing second delayed subscription retry for \(participant.identity?.stringValue ?? "unknown")")
+            
+            for pub in participant.videoTracks {
+                if let p = pub as? RemoteTrackPublication {
+                    do {
+                        try await p.set(subscribed: true)
+                        print("[LiveKitRTC] second retry subscription successful for video track from \(participant.identity?.stringValue ?? "unknown")")
+                        // Force attachment check after second attempt
+                        DispatchQueue.main.async { self.attachIfAvailable() }
+                    } catch {
+                        print("[LiveKitRTC] second retry subscription failed: \(error)")
+                    }
+                }
+            }
+        }
     }
     
     func room(_ room: Room, didDisconnectParticipant participant: RemoteParticipant) {
@@ -659,14 +906,22 @@ extension LiveKitRTC: RoomDelegate {
     }
     
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
-        print("[Display][LiveKit] remote participant \(participant.identity?.stringValue ?? "unknown") published \(publication.kind) track")
+        print("[LiveKitRTC] *** REMOTE TRACK PUBLISHED ***")
+        print("[LiveKitRTC] Participant: \(participant.identity?.stringValue ?? "unknown")")
+        print("[LiveKitRTC] Track kind: \(publication.kind)")
+        print("[LiveKitRTC] Track SID: \(publication.sid)")
+        print("[LiveKitRTC] Current linkStatus: \(linkStatus)")
+        
         if publication.kind == .video {
+            print("[LiveKitRTC] *** VIDEO TRACK PUBLISHED BY REMOTE - Attempting subscription ***")
             Task {
                 do {
                     try await publication.set(subscribed: true)
-                    print("[Display][LiveKit] subscribed to remote video track from \(participant.identity?.stringValue ?? "unknown")")
+                    print("[LiveKitRTC] *** SUCCESSFULLY SUBSCRIBED TO REMOTE VIDEO ***")
+                    print("[LiveKitRTC] Video track should now be available for display")
+                    print("[LiveKitRTC] Subscription completed - waiting for didSubscribeTrack callback...")
                 } catch {
-                    print("[Display][LiveKit] failed to subscribe to remote video: \(error.localizedDescription)")
+                    print("[LiveKitRTC] *** FAILED TO SUBSCRIBE TO REMOTE VIDEO: \(error.localizedDescription) ***")
                 }
             }
         }

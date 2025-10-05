@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct BasketLineUI: Identifiable, Equatable {
+struct BasketLineUI: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let qty: Int
@@ -11,7 +11,7 @@ struct BasketLineUI: Identifiable, Equatable {
     var imageURL: String? = nil
 }
 
-struct BasketTotalsUI: Equatable {
+struct BasketTotalsUI: Equatable, Codable {
     var subtotal: Double
     var tax: Double
     var total: Double
