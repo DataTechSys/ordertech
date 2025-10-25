@@ -63,7 +63,6 @@
 		EA9471EABC4D4F6BBD4DD6C5 /* WebSocketManager+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FFF45694B86405B3A5BDE4A /* WebSocketManager+Extensions.swift */; };
 		EDAD52D82BEF6456BC08D33F /* ActivationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6922B69B061BC3B64A6E754 /* ActivationManager.swift */; };
 		EEBE2DF0CF8DC4BE513B0718 /* ImageDiskCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71CC13ED181559AAFEF1EEE /* ImageDiskCache.swift */; };
-		F3BF1C811819782AA649A09C /* Pods_OrderTech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C526D45C27DA0CC99F9B79E5 /* Pods_OrderTech.framework */; };
 		FD83931267A9AD1BABA4B9B2 /* ModifierReferenceTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1DE61BD110498F8611A643 /* ModifierReferenceTable.swift */; };
 /* End PBXBuildFile section */
 
@@ -129,7 +128,6 @@
 		B71CC13ED181559AAFEF1EEE /* ImageDiskCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDiskCache.swift; sourceTree = "<group>"; };
 		BD599EE1E1289CBDA2FE3DA9 /* HttpClient+Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HttpClient+Endpoints.swift"; sourceTree = "<group>"; };
 		BEC56948D294E61420732B14 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		C526D45C27DA0CC99F9B79E5 /* Pods_OrderTech.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OrderTech.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C672046834C3082F0C51C7E4 /* PreconnectLocalPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreconnectLocalPreview.swift; sourceTree = "<group>"; };
 		C8BCEF18F12DF7F42094828D /* ActivationStatusBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationStatusBanner.swift; sourceTree = "<group>"; };
 		D16891BA658475F0C0B310FB /* DisplayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayApp.swift; sourceTree = "<group>"; };
@@ -153,7 +151,6 @@
 			files = (
 				5094D696D3471E9D854C141B /* LiveKit in Frameworks */,
 				97BEA1E1B2DBA0AD27889A31 /* OrderTechCore in Frameworks */,
-				F3BF1C811819782AA649A09C /* Pods_OrderTech.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -323,7 +320,6 @@
 		9643E422AAF4444F44330636 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				C526D45C27DA0CC99F9B79E5 /* Pods_OrderTech.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -702,7 +698,6 @@
 		};
 		77DA86258F84A5DBA5786F20 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9ED0D4DF53DA3D277A2548FB /* Pods-OrderTech.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -726,7 +721,6 @@
 		};
 		B7BD79528162FB4DB5DBD348 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4EB7906E3A04E3A8CC788D6D /* Pods-OrderTech.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
