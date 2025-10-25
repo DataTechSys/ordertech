@@ -363,25 +363,32 @@ async function importFoodicsData() {
         console.log(`   - Modifier Groups: ${modifierGroupsResult.items.length}`);
         console.log(`   - Modifier Options: ${modifierOptionsResult.items.length}`);
 
-        // Filter out deleted items for active import
+        // Import ALL items (including deleted ones) to match Foodics exactly
+        const allProducts = productsResult.items; // Import all products
+        const allModifierGroups = modifierGroupsResult.items; // Import all groups
+        const allModifierOptions = modifierOptionsResult.items; // Import all options
+
         const activeProducts = productsResult.items.filter(p => !p.deleted_at && p.is_active);
-        const activeModifierGroups = modifierGroupsResult.items.filter(g => !g.deleted_at);
-        const activeModifierOptions = modifierOptionsResult.items.filter(o => !o.deleted_at);
+        const deletedProducts = productsResult.items.filter(p => p.deleted_at);
+        const activeGroups = modifierGroupsResult.items.filter(g => !g.deleted_at);
+        const deletedGroups = modifierGroupsResult.items.filter(g => g.deleted_at);
+        const activeOptions = modifierOptionsResult.items.filter(o => !o.deleted_at);
+        const deletedOptions = modifierOptionsResult.items.filter(o => o.deleted_at);
 
-        console.log(`\n📋 Active items to import:`);
-        console.log(`   - Products: ${activeProducts.length}`);
-        console.log(`   - Modifier Groups: ${activeModifierGroups.length}`);
-        console.log(`   - Modifier Options: ${activeModifierOptions.length}`);
+        console.log(`\n📋 Items to import (including deleted):`);
+        console.log(`   - Products: ${allProducts.length} (${activeProducts.length} active, ${deletedProducts.length} deleted)`);
+        console.log(`   - Modifier Groups: ${allModifierGroups.length} (${activeGroups.length} active, ${deletedGroups.length} deleted)`);
+        console.log(`   - Modifier Options: ${allModifierOptions.length} (${activeOptions.length} active, ${deletedOptions.length} deleted)`);
 
-        // Import in sequence: groups first, then options, then products
-        const groupResults = await importModifierGroups(pool, DEFAULT_TENANT_ID, activeModifierGroups);
-        const optionResults = await importModifierOptions(pool, DEFAULT_TENANT_ID, activeModifierOptions);
-        const productResults = await importProducts(pool, DEFAULT_TENANT_ID, activeProducts);
+        // Import in sequence: groups first, then options, then products (ALL items including deleted)
+        const groupResults = await importModifierGroups(pool, DEFAULT_TENANT_ID, allModifierGroups);
+        const optionResults = await importModifierOptions(pool, DEFAULT_TENANT_ID, allModifierOptions);
+        const productResults = await importProducts(pool, DEFAULT_TENANT_ID, allProducts);
 
-        // Create external mappings for Foodics integration
-        await createExternalMappings(pool, DEFAULT_TENANT_ID, 'modifier_group', activeModifierGroups);
-        await createExternalMappings(pool, DEFAULT_TENANT_ID, 'modifier_option', activeModifierOptions); 
-        await createExternalMappings(pool, DEFAULT_TENANT_ID, 'product', activeProducts);
+        // Create external mappings for Foodics integration (ALL items including deleted)
+        await createExternalMappings(pool, DEFAULT_TENANT_ID, 'modifier_group', allModifierGroups);
+        await createExternalMappings(pool, DEFAULT_TENANT_ID, 'modifier_option', allModifierOptions); 
+        await createExternalMappings(pool, DEFAULT_TENANT_ID, 'product', allProducts);
 
         // Final summary
         console.log('\n' + '='.repeat(80));

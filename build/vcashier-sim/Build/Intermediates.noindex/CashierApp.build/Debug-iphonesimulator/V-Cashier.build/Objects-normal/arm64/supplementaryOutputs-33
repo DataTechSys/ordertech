@@ -1,0 +1,30 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/App/ContentView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ContentView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ContentView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Catalog/CatalogStore.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CatalogStore.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CatalogStore.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CatalogStore.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CatalogStore.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CatalogStore.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Catalog/CategoriesView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CategoriesView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CategoriesView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CategoriesView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CategoriesView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CategoriesView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Shared/DisplayPickerView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/DisplayPickerView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/DisplayPickerView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/DisplayPickerView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/DisplayPickerView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/DisplayPickerView.swiftdeps"
+  }
+}

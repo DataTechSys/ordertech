@@ -1,0 +1,30 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Catalog/ProductTileView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ProductTileView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ProductTileView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ProductTileView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ProductTileView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/ProductTileView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Pairing/PairingOverlayView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/PairingOverlayView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/PairingOverlayView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/PairingOverlayView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/PairingOverlayView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/PairingOverlayView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Shared/NetBarsView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/NetBarsView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/NetBarsView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/NetBarsView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/NetBarsView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/NetBarsView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/RTC/P2PRTC.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/P2PRTC.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/P2PRTC.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/P2PRTC.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/P2PRTC.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/P2PRTC.swiftdeps"
+  }
+}

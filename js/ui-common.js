@@ -13,8 +13,8 @@ export function renderBillList(containerId, items){
   for (const i of items){
     const li = document.createElement('li');
     const img = document.createElement('img');
-    img.src = i.thumb || '/images/products/placeholder.jpg';
-    img.onerror = () => { img.src = '/images/products/placeholder.jpg'; };
+    img.src = i.thumb || '/images/placeholder.png';
+    img.onerror = () => { img.src = '/images/placeholder.png'; };
 
     const info = document.createElement('div');
     const t = document.createElement('div'); t.textContent = `${i.name} × ${i.qty}`;

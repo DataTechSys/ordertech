@@ -2,13 +2,8 @@
 (function(){
   const $  = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
-  try {
-    // Force dev-open mode on localhost for seamless local development
-    const hn = (window.location && window.location.hostname) || '';
-    if (/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(hn) || /\.local$/i.test(hn) || /\.localhost$/i.test(hn)) {
-      window.devOpenAdmin = true;
-    }
-  } catch {}
+  // Note: Automatic localhost bypass has been removed for security.
+  // Development bypass is now controlled server-side only via DEV_OPEN_ADMIN environment variable.
 
   const STATE = {
     isSuperAdmin: false,
@@ -16,7 +11,9 @@
     selectedTenantName: '',
     tenants: [],
     // Optional user identity hint for UI when Firebase auth object isn't ready yet
-    userEmail: ''
+    userEmail: '',
+    userName: '',
+    authInitialized: false
   };
 
   function setSelectedTenant(id, name){
@@ -26,9 +23,36 @@
     const crumb = document.getElementById('tenantNameCrumb'); if (crumb) crumb.textContent = name || '—';
     const sel = document.getElementById('tenantSelect'); if (sel && id) sel.value = id;
     try { window.__refreshCompanyIdSidebar && window.__refreshCompanyIdSidebar(); } catch {}
+    
+    // Dispatch event to notify that a tenant has been selected
+    try {
+      console.log('Dispatching tenantSelected event, tenant:', id, name);
+      const event = new CustomEvent('tenantSelected', { 
+        detail: { tenantId: id, tenantName: name } 
+      });
+      document.dispatchEvent(event); 
+    } catch {}
   }
 
-  function getIdToken(){ try { return localStorage.getItem('ID_TOKEN') || ''; } catch { return ''; } }
+  function getIdToken(){ 
+    try { 
+      let token = localStorage.getItem('ID_TOKEN') || '';
+      // If main token is missing, try backup
+      if (!token) {
+        token = sessionStorage.getItem('ID_TOKEN_BACKUP') || '';
+        if (token) {
+          console.log('[DEBUG] getIdToken: Main token missing, using backup');
+          // Restore main token from backup
+          localStorage.setItem('ID_TOKEN', token);
+        }
+      }
+      console.log('[DEBUG] getIdToken called, token:', token ? 'present (' + token.substring(0, 20) + '...)' : 'missing');
+      return token;
+    } catch { 
+      console.log('[DEBUG] getIdToken error accessing localStorage');
+      return ''; 
+    } 
+  }
   function getAdminToken(){
     try {
       const fromLs = (localStorage.getItem('ADMIN_TOKEN') || '').trim();
@@ -37,6 +61,10 @@
       const q = (u.searchParams.get('adminToken') || '').trim();
       if (q) return q;
       if (window.Admin && typeof window.Admin.adminToken === 'string') return window.Admin.adminToken.trim();
+      // For local development, use the test admin token
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'test-admin-token';
+      }
     } catch {}
     return '';
   }
@@ -91,8 +119,19 @@
   async function api(path, { method='GET', body, headers={}, tenantId, query } = {}){
     // Determine API base (supports split-console/api domains). Fallback to current origin.
     const baseOrigin = (() => {
-      try { const b = String(window.apiBase||'').trim(); if (b) return b; } catch {}
-      try { const c = window.location.origin; if (c) return c; } catch {}
+      try { 
+        const b = String(window.apiBase||'').trim(); 
+        console.log('[DEBUG] window.apiBase:', window.apiBase);
+        if (b) {
+          console.log('[DEBUG] Using window.apiBase:', b);
+          return b; 
+        }
+      } catch {}
+      try { 
+        const c = window.location.origin; 
+        console.log('[DEBUG] Using window.location.origin:', c);
+        if (c) return c; 
+      } catch {}
       return '';
     })();
     // Accept absolute or relative paths
@@ -104,15 +143,52 @@
     async function doFetch(withFreshToken){
       const reqHeaders = { 'Content-Type': 'application/json', Accept: 'application/json', ...headers };
       let tok = getIdToken();
-      if (!tok) { await ensureAuthReady(); tok = getIdToken(); }
+      console.log('[DEBUG] Initial token from localStorage:', tok ? 'present' : 'missing');
+      if (!tok) { 
+        console.log('[DEBUG] No stored token, ensuring auth ready...');
+        await ensureAuthReady(); 
+        tok = getIdToken(); 
+        console.log('[DEBUG] Token after ensureAuthReady:', tok ? 'present' : 'missing');
+      }
       if (withFreshToken) {
+        console.log('[DEBUG] Refreshing token from Firebase...');
         try {
           const fb = ensureFirebaseApp();
-          if (fb?.auth && fb.auth().currentUser) { tok = await fb.auth().currentUser.getIdToken(true); localStorage.setItem('ID_TOKEN', tok); }
-        } catch {}
+          if (fb?.auth && fb.auth().currentUser) { 
+            console.log('[DEBUG] Firebase user is available, getting fresh token');
+            tok = await fb.auth().currentUser.getIdToken(true); 
+            localStorage.setItem('ID_TOKEN', tok);
+            console.log('[DEBUG] Fresh token stored');
+          } else {
+            console.log('[DEBUG] No Firebase user available for fresh token, waiting...');
+            // Wait for Firebase auth state to initialize
+            await new Promise((resolve) => {
+              const unsubscribe = fb?.auth?.().onAuthStateChanged((user) => {
+                if (user || Date.now() - startTime > 3000) { // Max 3 second wait
+                  unsubscribe?.();
+                  resolve();
+                }
+              }) || resolve;
+              const startTime = Date.now();
+              setTimeout(() => { unsubscribe?.(); resolve(); }, 3000);
+            });
+            // Try again after waiting
+            if (fb?.auth && fb.auth().currentUser) {
+              console.log('[DEBUG] Firebase user now available after wait');
+              tok = await fb.auth().currentUser.getIdToken(true);
+              localStorage.setItem('ID_TOKEN', tok);
+              console.log('[DEBUG] Fresh token stored after wait');
+            } else {
+              console.log('[DEBUG] Still no Firebase user available');
+            }
+          }
+        } catch (e) {
+          console.log('[DEBUG] Error getting fresh token:', e.message);
+        }
       }
       if (tok) reqHeaders['Authorization'] = 'Bearer ' + tok;
       const admTok = getAdminToken(); if (admTok) reqHeaders['x-admin-token'] = admTok;
+      console.log('[DEBUG] Final request headers:', { Authorization: tok ? 'Bearer [token]' : 'none', 'x-admin-token': admTok || 'none' });
       const tid = tenantId || STATE.selectedTenantId; if (tid) reqHeaders['x-tenant-id'] = tid;
       const res = await fetch(url.toString(), { method, headers: reqHeaders, body: body ? JSON.stringify(body) : undefined, credentials: 'include' });
       return res;
@@ -231,45 +307,99 @@
     return null;
   }
 
+  let _fetchTenantsPromise = null;
+
   async function fetchTenants(){
-    // 1) Load the user's tenant memberships (preferred for dropdown)
-    let my = [];
-    try {
-      const rows = await api('/admin/my/tenants', { tenantId: null });
-      my = Array.isArray(rows) ? rows : [];
-    } catch {}
-
-    // 2) Probe platform-admin capability by calling the server-protected list.
-    // If authorized (by email env or admin token), mark isSuperAdmin=true.
-    let adminList = [];
-    let isSuper = false;
-    try {
-      const rows = await api('/admin/tenants', { tenantId: null });
-      adminList = Array.isArray(rows) ? rows : [];
-      if (adminList.length >= 0) isSuper = true; // any 200 indicates platform admin
-    } catch {}
-
-    STATE.isSuperAdmin = isSuper;
-    // For platform admins, show union of memberships + all tenants; otherwise show memberships only
-    if (isSuper) {
-      const ids = new Set((my || []).map(t => String(t.id)));
-      STATE.tenants = [...(my || []), ...adminList.filter(t => !ids.has(String(t.id)))];
-    } else {
-      STATE.tenants = my;
+    // Debounce multiple concurrent tenant fetches
+    if (_fetchTenantsPromise) {
+      return _fetchTenantsPromise;
     }
+    
+    _fetchTenantsPromise = (async () => {
+      try {
+        // 1) Load the user's tenant memberships (preferred for dropdown)
+        let my = [];
+        try {
+          const rows = await api('/admin/my/tenants', { tenantId: null });
+          my = Array.isArray(rows) ? rows : [];
+        } catch {}
 
-    // Notify shell to refresh Platform section visibility now that isSuperAdmin may be known
-    try { if (typeof window !== 'undefined' && window.__updateSidebarPlatformVisibility) window.__updateSidebarPlatformVisibility(); } catch {}
+        // 2) Probe platform-admin capability by calling the server-protected list.
+        // If authorized (by email env or admin token), mark isSuperAdmin=true.
+        let adminList = [];
+        let isSuper = false;
+        try {
+          const rows = await api('/admin/tenants', { tenantId: null });
+          adminList = Array.isArray(rows) ? rows : [];
+          if (adminList.length >= 0) isSuper = true; // any 200 indicates platform admin
+        } catch {}
+
+        STATE.isSuperAdmin = isSuper;
+        // For platform admins, show union of memberships + all tenants; otherwise show memberships only
+        if (isSuper) {
+          const ids = new Set((my || []).map(t => String(t.id)));
+          STATE.tenants = [...(my || []), ...adminList.filter(t => !ids.has(String(t.id)))];
+        } else {
+          STATE.tenants = my;
+        }
+
+        // Notify shell to refresh Platform section visibility now that isSuperAdmin may be known
+        try { if (typeof window !== 'undefined' && window.__updateSidebarPlatformVisibility) window.__updateSidebarPlatformVisibility(); } catch {}
+        
+        // Dispatch event to notify that tenants are loaded
+        try { 
+          console.log('Dispatching tenantsLoaded event, tenant count:', STATE.tenants?.length);
+          const event = new CustomEvent('tenantsLoaded', { detail: { tenants: STATE.tenants } });
+          document.dispatchEvent(event); 
+        } catch {}
+      } finally {
+        // Reset promise so future calls can make new requests
+        _fetchTenantsPromise = null;
+      }
+    })();
+    
+    return _fetchTenantsPromise;
   }
 
-  function populateTenantSelect(){
-    const sel = document.getElementById('tenantSelect'); if (!sel) return;
+  let _lastPopulateTime = 0;
+  function populateTenantSelect(force = false){
+    // Throttle to prevent rapid re-population that causes blinking
+    const now = Date.now();
+    if (!force && (now - _lastPopulateTime) < 1000) {
+      return; // Skip if called within 1000ms
+    }
+    _lastPopulateTime = now;
+    
+    const sel = document.getElementById('tenantSelect'); 
+    if (!sel) {
+      console.log('populateTenantSelect: tenantSelect element not found');
+      return;
+    }
+    
+    console.log('populateTenantSelect called:', { force, tenantCount: STATE.tenants?.length, selectedTenantId: STATE.selectedTenantId });
+    
     sel.classList.add('sm');
     // Remove visual frame from dropdown within topbar
     try { sel.style.border='none'; sel.style.background='transparent'; sel.style.boxShadow='none'; sel.style.outline='none'; } catch {}
-    sel.innerHTML = '';
-
+    
+    // Only clear and repopulate if the content would actually change
+    const currentOptions = Array.from(sel.options).map(o => o.value);
     const list = Array.isArray(STATE.tenants) ? STATE.tenants : [];
+    const newOptions = list.map(t => t.id != null ? String(t.id) : '');
+    
+    if (JSON.stringify(currentOptions.sort()) === JSON.stringify(newOptions.sort()) && sel.options.length > 0) {
+      // Options haven't changed, preserve current user selection unless STATE has changed
+      const currentSelection = sel.value;
+      if (STATE.selectedTenantId && STATE.selectedTenantId !== currentSelection) {
+        // Only update if STATE has actually changed (not just a re-population)
+        if (Array.from(sel.options).some(o => o.value === STATE.selectedTenantId)) {
+          sel.value = STATE.selectedTenantId;
+        }
+      }
+      return;
+    }
+    
+    sel.innerHTML = '';
 
     // Always show the tenant selector, even when 0–1 tenants
     try { sel.style.display = ''; } catch {}
@@ -287,7 +417,9 @@
         const o = document.createElement('option');
         const id = t.id != null ? String(t.id) : '';
         o.value = id;
-        o.textContent = t.name || id || '';
+        // Ensure we always show tenant name if available, never show UUID
+        const tenantName = (t.name || '').trim();
+        o.textContent = tenantName || `Tenant ${id.substring(0, 8)}...` || 'Unknown Tenant';
         sel.appendChild(o);
       }
       // Preserve current selection when possible
@@ -324,6 +456,16 @@
   }
 
 function bootstrapAuth(after){
+    console.log('[DEBUG] bootstrapAuth called');
+    
+    // Prevent duplicate initialization
+    if (STATE.authInitialized) {
+      console.log('[DEBUG] Auth already initialized, skipping');
+      if (after) after();
+      return;
+    }
+    STATE.authInitialized = true;
+    
     captureAdminTokenFromQuery();
 
     // Early, best-effort user identity fallback (updates STATE.userEmail for header label)
@@ -334,23 +476,75 @@ function bootstrapAuth(after){
 
     // Development bypass: if server indicates DEV_OPEN_ADMIN, skip Firebase auth and proceed
     if (window.devOpenAdmin) {
+      console.log('[DEBUG] Using dev bypass mode');
       initTenancy().then(()=> after && after()).catch(()=> after && after());
       return;
     }
+    
+    // Fallback for development: if we have stored auth tokens (from login.html), try to proceed
+    const authToken = localStorage.getItem('AUTH_TOKEN');
+    const idToken = localStorage.getItem('ID_TOKEN');
+    const hasStoredAuth = !!authToken || !!idToken;
+    console.log('[DEBUG] Stored auth tokens:', { AUTH_TOKEN: !!authToken, ID_TOKEN: !!idToken });
+    if (hasStoredAuth) {
+      console.log('[DEBUG] Found stored auth, ensuring Firebase is ready first');
+      // Ensure Firebase is initialized before proceeding
+      ensureAuthReady().then(async () => {
+        try {
+          // Wait a bit for Firebase auth state to settle
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log('[DEBUG] Firebase ready, attempting tenancy init');
+          await initTenancy();
+          console.log('[DEBUG] Tenancy init succeeded with stored auth');
+          if (after) after();
+        } catch (error) {
+          console.warn('[DEBUG] Stored auth failed, redirecting to login:', error);
+          // Clear invalid tokens and redirect
+          try {
+            localStorage.removeItem('AUTH_TOKEN');
+            localStorage.removeItem('ID_TOKEN');
+          } catch {}
+          window.location.href = '/login/';
+        }
+      }).catch((error) => {
+        console.warn('[DEBUG] Firebase initialization failed:', error);
+        window.location.href = '/login/';
+      });
+      return;
+    }
+    console.log('[DEBUG] Initializing Firebase app for auth state monitoring');
     const fb = ensureFirebaseApp();
     if (!fb?.auth) {
-      // Always route to login to establish a proper session; avoid running tenancy bootstrap on a stale token
+      console.log('[DEBUG] Firebase auth not available, redirecting to login');
       window.location.href = '/login/';
       return;
     }
+    console.log('[DEBUG] Firebase auth available, setting up auth state change listener');
     fb.auth().onAuthStateChanged(async (user) => {
+      console.log('[DEBUG] Auth state changed, user:', user ? user.email : 'none');
       // If not signed in, always go to login; do not rely on any stale local token
-      if (!user) { window.location.href = '/login/'; return; }
+      if (!user) { 
+        console.log('[DEBUG] No authenticated user, redirecting to login');
+        window.location.href = '/login/'; 
+        return; 
+      }
       // Persist token and update identity hint for header
-      try { const t = await user.getIdToken(/*forceRefresh*/ true); localStorage.setItem('ID_TOKEN', t); } catch {}
+      try { 
+        console.log('[DEBUG] Getting fresh ID token for authenticated user');
+        const t = await user.getIdToken(/*forceRefresh*/ true); 
+        localStorage.setItem('ID_TOKEN', t);
+        // Also store backup in case localStorage gets cleared
+        sessionStorage.setItem('ID_TOKEN_BACKUP', t);
+        console.log('[DEBUG] ID token stored in localStorage and sessionStorage');
+      } catch (e) {
+        console.log('[DEBUG] Error getting/storing ID token:', e.message);
+      }
       try { STATE.userEmail = (user?.email || STATE.userEmail || ''); } catch {}
       try { STATE.userName = (user?.displayName || computeDisplayNameFromEmail(user?.email||'') || STATE.userName || ''); } catch {}
-      await initTenancy(); after && after();
+      console.log('[DEBUG] Initializing tenancy for authenticated user');
+      await initTenancy(); 
+      console.log('[DEBUG] Tenancy initialized, calling after callback');
+      after && after();
     });
     fb.auth().onIdTokenChanged(async (user) => {
       if (user) {
@@ -362,16 +556,63 @@ function bootstrapAuth(after){
   }
 
   async function initTenancy(){
+    console.log('[DEBUG] initTenancy called');
+    
+    // Ensure Firebase is ready and user is authenticated before fetching tenants
+    try {
+      await ensureAuthReady();
+      const fb = ensureFirebaseApp();
+      if (fb?.auth) {
+        // Wait for auth state to be determined (max 5 seconds)
+        await new Promise((resolve) => {
+          const currentUser = fb.auth().currentUser;
+          if (currentUser) {
+            console.log('[DEBUG] Firebase user already available:', currentUser.email);
+            resolve();
+            return;
+          }
+          
+          const startTime = Date.now();
+          const unsubscribe = fb.auth().onAuthStateChanged((user) => {
+            if (user || (Date.now() - startTime) > 5000) {
+              console.log('[DEBUG] Firebase auth state resolved:', user ? user.email : 'no user');
+              unsubscribe();
+              resolve();
+            }
+          });
+          
+          // Fallback timeout
+          setTimeout(() => {
+            console.log('[DEBUG] Firebase auth state timeout');
+            unsubscribe();
+            resolve();
+          }, 5000);
+        });
+      }
+    } catch (e) {
+      console.log('[DEBUG] Firebase auth preparation failed:', e.message);
+    }
+    
     const pinned = parseTenantFromUrl();
     await fetchTenants();
     let chosen = null;
     if (pinned) { chosen = { id: pinned, name: '' }; }
     else {
       let wantedId = null; try { wantedId = localStorage.getItem('SELECTED_TENANT_ID') || null; } catch {}
-      if (wantedId) chosen = STATE.tenants.find(x => x.id === wantedId) || null;
-      if (!chosen && STATE.tenants.length) chosen = STATE.tenants[0];
+      if (wantedId) {
+        chosen = STATE.tenants.find(x => x.id === wantedId) || null;
+        // Safety check: if tenant found but has no name, populate from STATE.tenants data
+        if (chosen && !chosen.name) {
+          const fullTenantData = STATE.tenants.find(x => x.id === chosen.id);
+          if (fullTenantData && fullTenantData.name) {
+            chosen = { ...chosen, name: fullTenantData.name };
+          }
+        }
+      }
+      // Only default to first tenant if no tenant was previously selected (initial load)
+      if (!chosen && !STATE.selectedTenantId && STATE.tenants.length) chosen = STATE.tenants[0];
       // If still no choice (no memberships) try resolving tenant from current host (public endpoint)
-      if (!chosen) {
+      if (!chosen && !STATE.selectedTenantId) {
         try {
           const r = await api('/tenant/resolve', { tenantId: null });
           if (r && r.id) { chosen = { id: String(r.id), name: String(r.name||'') }; }
@@ -379,21 +620,154 @@ function bootstrapAuth(after){
       }
     }
     if (chosen) setSelectedTenant(chosen.id, chosen.name || '');
-    populateTenantSelect();
+    // populateTenantSelect() is now called via tenantsLoaded event to prevent race conditions
     try { window.__refreshCompanyIdSidebar && window.__refreshCompanyIdSidebar(); } catch {}
 
     // Do not auto-redirect users without tenant membership.
     // Rationale: platform-admin detection may be delayed (e.g., auth/domain differences),
     // so auto-redirects can wrongly send owners to the trial page.
     // Show the admin shell even with zero tenants; provide explicit navigation to /start-trial/ when desired.
-    const isAuthed = !!(window.firebase && window.firebase.auth && window.firebase.auth().currentUser);
+    let isAuthed = false;
+    try {
+      const fb = ensureFirebaseApp();
+      isAuthed = !!(fb && fb.auth && fb.auth().currentUser);
+      console.log('[DEBUG] Firebase auth check in initTenancy:', isAuthed);
+    } catch (e) {
+      console.log('[DEBUG] Firebase auth check failed in initTenancy:', e.message);
+      isAuthed = false;
+    }
     if (isAuthed && !STATE.selectedTenantId) {
       // no-op: render admin with 0 tenants (CTA elsewhere)
     }
   }
 
-  window.Admin = {
-    $, $$, STATE, setSelectedTenant, api, toast, bootstrapAuth, createProgressBar
+  // Helper functions for compatibility
+  function getCurrentTenantId() {
+    return STATE.selectedTenantId;
+  }
+  
+  function apiCall(path, options = {}) {
+    return api(path, options);
+  }
+
+  // Progress Bar Utilities
+  const ProgressBar = {
+    currentOverlay: null,
+    
+    show(title = 'Processing...', status = 'Starting...') {
+      this.hide(); // Remove any existing progress bar
+      
+      const overlay = document.createElement('div');
+      overlay.className = 'progress-overlay';
+      overlay.innerHTML = `
+        <div class="progress-modal">
+          <div class="progress-title">${title}</div>
+          <div class="progress-status">${status}</div>
+          <div class="progress-percentage">0%</div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" style="width: 0%"></div>
+          </div>
+          <div class="progress-details"></div>
+        </div>
+      `;
+      
+      document.body.appendChild(overlay);
+      this.currentOverlay = overlay;
+      
+      // Prevent background scrolling
+      document.body.style.overflow = 'hidden';
+      
+      return this;
+    },
+    
+    update(progress, status = '', details = '') {
+      if (!this.currentOverlay) return this;
+      
+      const percentage = Math.max(0, Math.min(100, Math.round(progress)));
+      const progressBar = this.currentOverlay.querySelector('.progress-bar');
+      const progressPercentage = this.currentOverlay.querySelector('.progress-percentage');
+      const progressStatus = this.currentOverlay.querySelector('.progress-status');
+      const progressDetails = this.currentOverlay.querySelector('.progress-details');
+      
+      if (progressBar) progressBar.style.width = `${percentage}%`;
+      if (progressPercentage) progressPercentage.textContent = `${percentage}%`;
+      if (progressStatus && status) progressStatus.textContent = status;
+      if (progressDetails) progressDetails.textContent = details;
+      
+      return this;
+    },
+    
+    setSuccess(message = 'Completed successfully!') {
+      if (!this.currentOverlay) return this;
+      
+      const progressBar = this.currentOverlay.querySelector('.progress-bar');
+      const progressStatus = this.currentOverlay.querySelector('.progress-status');
+      
+      if (progressBar) {
+        progressBar.classList.add('success');
+        progressBar.style.width = '100%';
+      }
+      if (progressStatus) progressStatus.textContent = message;
+      
+      this.update(100, message);
+      
+      // Auto-hide after 2 seconds
+      setTimeout(() => this.hide(), 2000);
+      
+      return this;
+    },
+    
+    setError(message = 'An error occurred') {
+      if (!this.currentOverlay) return this;
+      
+      const progressBar = this.currentOverlay.querySelector('.progress-bar');
+      const progressStatus = this.currentOverlay.querySelector('.progress-status');
+      
+      if (progressBar) progressBar.classList.add('error');
+      if (progressStatus) progressStatus.textContent = message;
+      
+      return this;
+    },
+    
+    hide() {
+      if (this.currentOverlay) {
+        document.body.removeChild(this.currentOverlay);
+        this.currentOverlay = null;
+      }
+      
+      // Restore background scrolling
+      document.body.style.overflow = '';
+      
+      return this;
+    },
+    
+    // Simulate progress for operations without detailed progress
+    simulateProgress(duration = 3000, onComplete = null) {
+      let progress = 0;
+      const increment = 100 / (duration / 100);
+      
+      const interval = setInterval(() => {
+        progress += increment;
+        
+        if (progress >= 100) {
+          clearInterval(interval);
+          this.update(100);
+          if (onComplete) onComplete();
+        } else {
+          this.update(progress);
+        }
+      }, 100);
+      
+      return interval;
+    }
   };
+
+  window.Admin = {
+    $, $$, STATE, setSelectedTenant, api, toast, bootstrapAuth, createProgressBar, populateTenantSelect, ProgressBar
+  };
+  
+  // Expose helper functions globally for backward compatibility
+  window.getCurrentTenantId = getCurrentTenantId;
+  window.apiCall = apiCall;
 })();
 

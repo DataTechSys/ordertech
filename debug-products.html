@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Products Debug</title>
+</head>
+<body>
+    <h1>Products Debug</h1>
+    <div id="debug-info"></div>
+    
+    <script>
+        // Copy the statusOfProduct function
+        function statusOfProduct(p){ 
+            if(!p) return 'active'; 
+            const st=(p.status||'').toLowerCase(); 
+            if(st==='deleted')return 'deleted'; 
+            if(st==='inactive')return 'inactive'; 
+            if(p.deleted===true)return 'deleted'; 
+            if(p.active===false)return 'inactive'; 
+            return 'active'; 
+        }
+
+        // Test with sample data like we got from API
+        const testProducts = [
+            { id: "1", name: "Test Product 1", active: true, status: null, deleted: null },
+            { id: "2", name: "Test Product 2", active: false, status: null, deleted: null },
+            { id: "3", name: "Test Product 3", active: true, status: "inactive", deleted: null },
+            { id: "4", name: "Test Product 4", active: true, status: null, deleted: true }
+        ];
+
+        const debugEl = document.getElementById('debug-info');
+        let html = '<h2>Status Classification Test:</h2>';
+        
+        testProducts.forEach(p => {
+            const computedStatus = statusOfProduct(p);
+            html += `<p><strong>${p.name}</strong>: active=${p.active}, status=${p.status}, deleted=${p.deleted} → <em>${computedStatus}</em></p>`;
+        });
+
+        // Test filtering
+        html += '<h2>Filter Test:</h2>';
+        const activeProducts = testProducts.filter(p => statusOfProduct(p) === 'active');
+        const inactiveProducts = testProducts.filter(p => statusOfProduct(p) === 'inactive');
+        const deletedProducts = testProducts.filter(p => statusOfProduct(p) === 'deleted');
+
+        html += `<p>Active products: ${activeProducts.length} (${activeProducts.map(p => p.name).join(', ')})</p>`;
+        html += `<p>Inactive products: ${inactiveProducts.length} (${inactiveProducts.map(p => p.name).join(', ')})</p>`;
+        html += `<p>Deleted products: ${deletedProducts.length} (${deletedProducts.map(p => p.name).join(', ')})</p>`;
+        
+        debugEl.innerHTML = html;
+
+        // Now test with real API
+        async function testRealAPI() {
+            try {
+                html += '<h2>Real API Test:</h2>';
+                const response = await fetch('/admin/tenants');
+                const tenants = await response.json();
+                if (tenants.length > 0) {
+                    const tenantId = tenants[0].id;
+                    const productsResponse = await fetch(`/admin/tenants/${encodeURIComponent(tenantId)}/products`);
+                    const products = await productsResponse.json();
+                    
+                    html += `<p>Total products from API: ${products.length}</p>`;
+                    
+                    const statusBreakdown = {
+                        active: products.filter(p => statusOfProduct(p) === 'active').length,
+                        inactive: products.filter(p => statusOfProduct(p) === 'inactive').length,
+                        deleted: products.filter(p => statusOfProduct(p) === 'deleted').length
+                    };
+                    
+                    html += `<p>Status breakdown: Active: ${statusBreakdown.active}, Inactive: ${statusBreakdown.inactive}, Deleted: ${statusBreakdown.deleted}</p>`;
+                    
+                    // Show first few products
+                    html += '<h3>First 3 products:</h3>';
+                    products.slice(0, 3).forEach(p => {
+                        const computedStatus = statusOfProduct(p);
+                        html += `<p><strong>${p.name}</strong>: active=${p.active}, status=${p.status}, deleted=${p.deleted} → <em>${computedStatus}</em></p>`;
+                    });
+                    
+                    debugEl.innerHTML = html;
+                }
+            } catch (error) {
+                html += `<p style="color: red;">Error: ${error.message}</p>`;
+                debugEl.innerHTML = html;
+            }
+        }
+        
+        testRealAPI();
+    </script>
+</body>
+</html>

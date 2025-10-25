@@ -1,0 +1,30 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/DisplayApp.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayApp.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayApp.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayApp.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayApp.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayApp.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/DisplayHomeView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayHomeView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Catalog/CatalogModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/CatalogModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/CatalogModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/CatalogModels.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/CatalogModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/CatalogModels.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Session/DisplaySessionStore.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplaySessionStore.swiftdeps"
+  }
+}

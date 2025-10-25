@@ -1,0 +1,25 @@
+name: OrderTech
+options:
+  bundleIdPrefix: com.ordertech
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  OrderTech:
+    type: application
+    platform: iOS
+    sources:
+      - OrderTech
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.ordertech.app
+      SWIFT_VERSION: "5.0"
+    info:
+      path: OrderTech/Info.plist
+      properties:
+        CFBundleDisplayName: OrderTech
+        UILaunchStoryboardName: LaunchScreen
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate

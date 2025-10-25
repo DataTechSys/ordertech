@@ -1,0 +1,133 @@
+ current_database | current_user |             search_path             
+------------------+--------------+-------------------------------------
+ ordertech        | ordertech    | saas, catalog, audit, media, public
+(1 row)
+
+ schema  
+---------
+ audit
+ catalog
+ media
+ public
+ saas
+ staging
+(6 rows)
+
+ table_schema | tables 
+--------------+--------
+ audit        |      1
+ catalog      |     39
+ media        |      2
+ public       |     30
+ saas         |     23
+ staging      |     12
+(6 rows)
+
+         table_name          |        schemas        | copies 
+-----------------------------+-----------------------+--------
+ admin_activity_logs         | {catalog,public,saas} |      3
+ branches                    | {catalog,saas}        |      2
+ device_activation_codes     | {catalog,public}      |      2
+ device_events               | {catalog,public}      |      2
+ devices                     | {catalog,saas}        |      2
+ drive_thru_state            | {catalog,public,saas} |      3
+ integration_sync_runs       | {catalog,public,saas} |      3
+ invites                     | {catalog,public,saas} |      3
+ modifier_groups             | {catalog,public}      |      2
+ modifier_options            | {catalog,public}      |      2
+ paid_order_counters         | {catalog,public,saas} |      3
+ paid_orders                 | {catalog,public,saas} |      3
+ platform_admin_roles        | {catalog,public}      |      2
+ platform_admin_tenants      | {catalog,public}      |      2
+ platform_admins             | {catalog,public}      |      2
+ platform_permissions        | {catalog,public}      |      2
+ platform_role_permissions   | {catalog,public}      |      2
+ platform_roles              | {catalog,public}      |      2
+ platform_settings           | {catalog,public,saas} |      3
+ product_branch_availability | {catalog,public}      |      2
+ product_modifier_groups     | {catalog,public,saas} |      3
+ rtc_session_stats           | {catalog,public,saas} |      3
+ rtc_sessions                | {catalog,public}      |      2
+ schema_migrations           | {catalog,public,saas} |      3
+ tenant_api_integrations     | {catalog,public}      |      2
+ tenant_brand                | {catalog,public}      |      2
+ tenant_domains              | {catalog,public}      |      2
+ tenant_external_mappings    | {catalog,public,saas} |      3
+ tenant_permissions          | {catalog,public}      |      2
+ tenant_settings             | {catalog,public,saas} |      3
+ tenant_users                | {catalog,public,saas} |      3
+ tenants                     | {catalog,saas}        |      2
+ users                       | {catalog,saas}        |      2
+ webrtc_rooms                | {catalog,public,saas} |      3
+(34 rows)
+
+     rel      | rows 
+--------------+------
+ saas.tenants |    2
+(1 row)
+
+      rel      | rows 
+---------------+------
+ saas.branches |    6
+(1 row)
+
+    rel     | rows 
+------------+------
+ saas.users |    3
+(1 row)
+
+    rel     | rows 
+------------+------
+ saas.roles |   10
+(1 row)
+
+       rel        | rows 
+------------------+------
+ saas.permissions |   14
+(1 row)
+
+          rel          | rows 
+-----------------------+------
+ saas.role_permissions |   88
+(1 row)
+
+     rel      | rows 
+--------------+------
+ saas.devices |    3
+(1 row)
+
+        rel         | rows 
+--------------------+------
+ saas.subscriptions |    0
+(1 row)
+
+       rel        | rows 
+------------------+------
+ audit.audit_logs |    0
+(1 row)
+
+        rel         | rows 
+--------------------+------
+ catalog.categories |   24
+(1 row)
+
+       rel        | rows 
+------------------+------
+ catalog.products |  154
+(1 row)
+
+ schema  |                 archived                 
+---------+------------------------------------------
+ archive | public__audit_logs__20250920065220
+ archive | public__branches__20250920065220
+ archive | public__categories__20250920064751
+ archive | public__devices__20250920065220
+ archive | public__permissions__20250920065220
+ archive | public__products__20250920064751
+ archive | public__role_permissions__20250920065220
+ archive | public__roles__20250920065220
+ archive | public__subscriptions__20250920065220
+ archive | public__tenants__20250920065220
+ archive | public__users__20250920065220
+(11 rows)
+

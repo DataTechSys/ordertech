@@ -1,0 +1,10 @@
+# IMPORTANT: OrderTech Cloud Run Region Configuration
+# 
+# 🌍 CORRECT REGION: me-central1 (Middle East Central)
+# ❌ WRONG REGION: us-central1 (US Central)
+#
+# Always use: --region me-central1
+#
+# This file serves as a reminder for deployments and operations.
+CLOUD_RUN_REGION=me-central1
+PROJECT_ID=smart-order-469705

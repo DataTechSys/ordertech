@@ -1,0 +1,30 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Core/Networking/WebSocketClient.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketClient.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketClient.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketClient.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketClient.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketClient.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Core/Networking/WebSocketManager.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketManager.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketManager.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketManager.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketManager.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebSocketManager.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/RTC/WebRTCService.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebRTCService.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebRTCService.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebRTCService.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebRTCService.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/WebRTCService.swiftdeps"
+  }
+}

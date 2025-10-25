@@ -1,0 +1,3 @@
+Field Name,Type,Description
+role_id,UUID (FK),Linked role
+permission_id,UUID (FK),Linked permission

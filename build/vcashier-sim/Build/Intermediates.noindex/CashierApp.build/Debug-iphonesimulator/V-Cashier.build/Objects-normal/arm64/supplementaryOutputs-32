@@ -1,0 +1,37 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/App/CashierApp.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierApp.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierApp.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierApp.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierApp.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierApp.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Basket/BasketStore.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketStore.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketStore.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketStore.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketStore.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketStore.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Basket/BasketSummaryView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketSummaryView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketSummaryView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketSummaryView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketSummaryView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketSummaryView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Basket/BasketView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/BasketView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Home/CashierHomeView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierHomeView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierHomeView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierHomeView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierHomeView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/CashierHomeView.swiftdeps"
+  }
+}

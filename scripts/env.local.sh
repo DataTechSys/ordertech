@@ -6,7 +6,7 @@
 #
 # Usage:
 #   . scripts/env.local.sh
-#   PORT=3000 npm start
+#   PORT=8080 npm start
 
 set -euo pipefail
 

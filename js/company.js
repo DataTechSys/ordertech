@@ -26,6 +26,7 @@
     if (!img) return;
     const fallbacks = [
       url,
+      '/images/placeholder.png',
       '/images/placeholder%202.jpg',
       '/images/placeholder.jpg',
       '/images/placeholder.svg'
@@ -95,6 +96,25 @@
     }
   }
 
+  async function refreshCompanyId(){
+    const tid = STATE.selectedTenantId; if (!tid) return;
+    try {
+      const data = await api(`/admin/tenants/${encodeURIComponent(tid)}/public`, { tenantId: null });
+      const raw = (data && data.code) ? String(data.code) : '';
+      const code = raw.replace(/\D/g, '');
+      const el = document.getElementById('companyIdFixed');
+      if (!el) return;
+      el.style.whiteSpace = 'nowrap';
+      if (code && code.length === 6) { el.textContent = `ID: ${code}`; el.style.display = ''; }
+      else { el.textContent = 'ID: —'; el.style.display = ''; }
+    } catch {
+      try {
+        const el = document.getElementById('companyIdFixed');
+        if (el) { el.textContent = 'ID: —'; el.style.display = ''; }
+      } catch {}
+    }
+  }
+
   // Extract two colors from an image URL (best-effort). Falls back to light/dark variants.
   async function extractBrandColorsFromImage(url){
     return new Promise((resolve) => {
@@ -148,7 +168,9 @@
         tenantId: tid
       });
       if (!sig?.url || !sig?.method) throw new Error('sign_failed');
-      const putRes = await fetch(sig.url, { method: sig.method, headers: { 'Content-Type': type }, body: file });
+      const headers = { 'Content-Type': type };
+      if (sig.cacheControl) headers['Cache-Control'] = sig.cacheControl;
+      const putRes = await fetch(sig.url, { method: sig.method, headers, body: file });
       if (!putRes.ok) {
         const txt = await putRes.text().catch(()=>'\u0000');
         throw new Error(`upload_failed:${putRes.status}:${txt||''}`);
@@ -240,7 +262,7 @@
     } catch(e) { toast('Save failed'); const st=document.getElementById('status'); if (st) st.textContent='Failed'; }
   }
 
-  window.onTenantChanged = function(){ loadSettings().catch(()=>{}); };
+  window.onTenantChanged = function(){ loadSettings().catch(()=>{}); refreshCompanyId().catch(()=>{}); };
 
   async function populateCountries(preferName){
     try {
@@ -319,7 +341,11 @@
     sh?.addEventListener('input', ()=>{ const v = normalizeHex(sh.value); if (sc) sc.value = v; });
     Admin.bootstrapAuth(()=>{ loadSettings().then(()=>{
       try { const cfg = JSON.parse(JSON.stringify(STATE || {})); } catch {}
-    }).catch(()=>{}); });
+    }).catch(()=>{});
+      refreshCompanyId().catch(()=>{});
+      setTimeout(()=>refreshCompanyId().catch(()=>{}), 1000);
+      setTimeout(()=>refreshCompanyId().catch(()=>{}), 2500);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

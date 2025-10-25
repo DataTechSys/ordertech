@@ -5,19 +5,82 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "bash -lc '. scripts/env.local.sh && PORT=${PORT:-8080} node server.js'",
+    "dev:tcp": "bash -lc '. scripts/env.local.tcp.sh && PORT=${PORT:-8080} node server.js'",
+    "dev:api": "source dev/.env.local && NODE_ENV=development PORT=8080 node server.js",
+    "dev:stack:start": "./dev/scripts/dev-start.sh",
+    "dev:stack:stop": "./dev/scripts/dev-stop.sh",
+    "dev:sync:down": "./dev/scripts/sync-from-cloud.sh",
+    "dev:deploy": "./dev/scripts/deploy-to-cloud.sh",
     "seed": "node scripts/seed.js",
     "migrate": "node scripts/migrate.js",
-    "import:csv": "node scripts/import_csv.js data/categories.csv data/products.csv"
+    "import:csv": "node scripts/import_csv.js data/categories.csv data/products.csv",
+    "etl:old": "node scripts/etl_from_old.js",
+    "dashboard:dev": "nodemon server/dashboard-server.js",
+    "dashboard:start": "node server/dashboard-server.js",
+    "dashboard:prod": "DASHBOARD_PORT=80 sudo -E node server/dashboard-server.js",
+    "dashboard:migrate": "cd server && npx knex migrate:latest",
+    "dashboard:seed": "cd server && npx knex seed:run",
+    "dashboard:setup": "npm run dashboard:migrate && npm run dashboard:seed"
   },
   "dependencies": {
-    "@google-cloud/storage": "^7.11.2",
+    "@google-cloud/run": "^3.0.0",
+    "@google-cloud/secret-manager": "^5.6.0",
+    "@google-cloud/sql": "^0.21.0",
+    "@google-cloud/storage": "^7.17.2",
+    "bcrypt": "^6.0.0",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parse": "^5.6.0",
+    "csv-parser": "^3.2.0",
+    "dockerode": "^4.0.9",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
     "firebase": "^12.1.0",
     "firebase-admin": "^12.6.0",
-    "pg": "^8.12.0",
+    "google-auth-library": "^10.4.0",
+    "helmet": "^8.1.0",
+    "js-yaml": "^4.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
+    "livekit-client": "^2.4.0",
+    "livekit-server-sdk": "^2.3.2",
+    "minio": "^8.0.6",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.1.0",
+    "pg": "^8.16.3",
+    "pino": "^10.0.0",
+    "pino-http": "^11.0.0",
+    "puppeteer": "^24.23.0",
+    "redis": "^5.8.3",
+    "socket.io": "^4.8.1",
+    "twilio": "^5.2.3",
     "uuid": "^11.1.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DataTechSys/ordertech.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DataTechSys/ordertech/issues"
+  },
+  "homepage": "https://github.com/DataTechSys/ordertech#readme",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.10",
+    "pino-pretty": "^13.1.1",
+    "supertest": "^7.1.4"
   }
 }

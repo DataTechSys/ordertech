@@ -1,0 +1,6 @@
+Field Name,Type,Description
+role_id,UUID,Primary key
+tenant_id,UUID (FK),Linked to tenant
+role_name,VARCHAR(50),"E.g. Admin, Staff"
+description,TEXT,Role description
+created_at,TIMESTAMP,Record created

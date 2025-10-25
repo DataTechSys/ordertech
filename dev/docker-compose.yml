@@ -1,0 +1,139 @@
+name: ordertech-dev
+
+networks:
+  infra:
+    driver: bridge
+
+services:
+  # Redis (local development cache/session store)
+  redis:
+    image: redis:7-alpine
+    container_name: ordertech-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./volumes/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks: [infra]
+    restart: unless-stopped
+
+  # Redis Commander (Redis admin UI)
+  redis-ui:
+    image: rediscommander/redis-commander:latest
+    container_name: ordertech-redis-ui
+    environment:
+      - REDIS_HOSTS=local:ordertech-redis:6379
+      - HTTP_USER=${REDIS_UI_USER:-}
+      - HTTP_PASSWORD=${REDIS_UI_PASSWORD:-}
+      - PORT=8081
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    networks: [infra]
+    restart: unless-stopped
+
+  # MinIO (S3-compatible local storage that mirrors Cloud Storage)
+  minio:
+    image: minio/minio:latest
+    container_name: ordertech-minio
+    command: server --console-address ":9001" /data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-ordertech-dev}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-ordertech-dev-secret}
+      - MINIO_BROWSER_REDIRECT_URL=https://storage.localhost
+      - MINIO_SERVER_URL=https://s3.localhost
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Console
+    volumes:
+      - ./volumes/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks: [infra]
+    restart: unless-stopped
+
+  # LiveKit Server (local dev instance)
+  # Temporarily commented out to speed up initial setup
+  # livekit:
+  #   image: livekit/livekit-server:latest
+  #   container_name: ordertech-livekit
+  #   command: --dev --bind 0.0.0.0
+  #   ports:
+  #     - "7880:7880"     # HTTP/WS
+  #     - "7881:7881"     # TCP
+  #     - "7882:7882/udp" # UDP
+  #   environment:
+  #     - LIVEKIT_KEYS=devkey:secret
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7880/"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 10
+  #     start_period: 10s
+  #   networks: [infra]
+  #   restart: unless-stopped
+
+  # LiveKit Console (admin UI for LiveKit)
+  # Temporarily commented out due to registry access issues
+  # livekit-console:
+  #   image: ghcr.io/livekit/console:latest
+  #   container_name: ordertech-livekit-console
+  #   environment:
+  #     - PORT=3001
+  #     - LIVEKIT_URL=https://livekit-ws.localhost
+  #     - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+  #     - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-secret}
+  #     - NEXT_PUBLIC_LIVEKIT_URL=wss://livekit-ws.localhost
+  #   depends_on:
+  #     livekit:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3001:3001"
+  #   networks: [infra]
+  #   restart: unless-stopped
+
+  # pgAdmin (database admin UI - connects to both local Postgres and Cloud SQL)
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: ordertech-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@ordertech.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-devpassword}
+      - PGADMIN_LISTEN_PORT=5050
+      - PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION=True
+      - PGADMIN_CONFIG_LOGIN_BANNER="OrderTech Development - Connect to 127.0.0.1:6555 (Cloud SQL) or 127.0.0.1:5432 (Local)"
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./volumes/pgadmin:/var/lib/pgadmin
+    networks: [infra]
+    restart: unless-stopped
+    user: "5050:5050"
+
+  # Optional: Cloud SQL Proxy (if you want to containerize it)
+  # Uncomment if you prefer Docker instead of your current process
+  # cloud-sql-proxy:
+  #   image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.4
+  #   container_name: ordertech-cloud-sql-proxy
+  #   command: >
+  #     --address 0.0.0.0 --port 6555
+  #     --credentials-file /secrets/service-account.json
+  #     smart-order-469705:me-central1:ordertech-db
+  #   ports:
+  #     - "6555:6555"
+  #   volumes:
+  #     - ${GOOGLE_APPLICATION_CREDENTIALS}:/secrets/service-account.json:ro
+  #   networks: [infra]
+  #   restart: unless-stopped

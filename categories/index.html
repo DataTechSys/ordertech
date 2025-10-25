@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>OrderTech — Categories</title>
-    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="stylesheet" href="/css/admin.css?v=20250908-1" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
     <script src="/config.js"></script>
@@ -27,6 +27,7 @@
               <button id="btnCatNew" class="btn primary"><span class="icon ri ri-add-line"></span><span>New Category</span></button>
               <button id="btnCatImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import</span></button>
               <button id="btnCatExport" class="btn"><span class="icon ri ri-upload-2-line"></span><span>Export CSV</span></button>
+              <button id="btnCatSync" class="btn"><span class="icon ri ri-refresh-line"></span><span>Sync</span></button>
             </div>
             <div class="spacer"></div>
             <div id="catBulkBar" class="flex hidden">
@@ -80,6 +81,9 @@
                 <option value="create-missing" selected>Create missing</option>
               </select>
             </label>
+          </div>
+          <div class="row">
+            <label class="checkbox-row" style="gap:8px"><input id="catImportUpdateExisting" type="checkbox" /> <span>Update existing categories (fill missing fields only)</span></label>
           </div>
           <div class="stack" style="gap:8px;">
             <div class="muted">Preview (first 20 rows)</div>
@@ -164,10 +168,10 @@
       </div>
     </div>
 
-    <script src="/js/admin-common.js?v=20250905-2"></script>
-    <script src="/js/admin-shell.js?v=20250905-2"></script>
-    <script src="/js/importer.js?v=20250905-2"></script>
-    <script src="/js/categories.js?v=20250905-2"></script>
+    <script src="/js/admin-common.js?v=20250908-1"></script>
+    <script src="/js/admin-shell.js?v=20250908-1"></script>
+    <script src="/js/importer.js?v=20250908-1"></script>
+    <script src="/js/categories.js?v=20250908-1"></script>
   </body>
 </html>
 

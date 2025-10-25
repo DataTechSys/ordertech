@@ -4,8 +4,6 @@
   // Device Activation Overlay for cashier/display pages
   const SCRIPT = document.currentScript || (function(){ const s=document.querySelector('script[src*="device-activation.js"]'); return s; })();
   const ROLE = (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.role) || (location.pathname.includes('drive') ? 'display' : 'cashier');
-  // Disable activation overlay for cashier role to avoid UI conflicts with pairing flows
-  if (ROLE === 'cashier') return;
   const LEGACY_TOKEN_KEY = 'DEVICE_TOKEN';
   const TOKEN_KEY = ROLE === 'cashier' ? 'DEVICE_TOKEN_CASHIER' : 'DEVICE_TOKEN_DISPLAY';
   const TENANT_KEY = 'DEVICE_TENANT_ID';
@@ -17,6 +15,14 @@
   function setToken(v){ try { localStorage.setItem(TOKEN_KEY, v); localStorage.removeItem(LEGACY_TOKEN_KEY); } catch{} }
   function removeToken(){ try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(LEGACY_TOKEN_KEY); } catch{} }
   function hasToken(){ return !!getToken(); }
+
+  function setTenantFromQueryIfPresent(){
+    try {
+      const u = new URL(window.location.href);
+      const t = (u.searchParams.get('tenant')||'').trim();
+      if (t) { localStorage.setItem(TENANT_KEY, t); }
+    } catch {}
+  }
 
   function el(tag, attrs={}, children=[]) {
     const e = document.createElement(tag);
@@ -122,8 +128,11 @@
       const code = getLocalCode();
       const name = localStorage.getItem(DEVICE_NAME_KEY) || localStorage.getItem('DEVICE_NAME') || '';
       const branch = localStorage.getItem(BRANCH_KEY) || '';
+      const tid = (function(){ try { return localStorage.getItem(TENANT_KEY) || ''; } catch { return ''; } })();
+      const headers = { 'content-type':'application/json' };
+      if (tid) headers['x-tenant-id'] = tid;
       await fetch('/device/pair/register', {
-        method:'POST', headers:{ 'content-type':'application/json' },
+        method:'POST', headers,
         body: JSON.stringify({ code, role: ROLE, name, branch })
       });
     } catch {}
@@ -200,6 +209,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
+    // Capture tenant from query early so register/validate can include it
+    setTenantFromQueryIfPresent();
     if (!hasToken()) {
       // unify or create a 6-digit code and register it, then show overlay
       let codeNow = '';

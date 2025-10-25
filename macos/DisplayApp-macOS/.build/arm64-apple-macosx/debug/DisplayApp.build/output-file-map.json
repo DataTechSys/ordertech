@@ -1,0 +1,40 @@
+{
+  "": {
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/master.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/Sources/App/RootView.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/RootView.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/RootView.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/RootView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/RootView.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/RootView.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/Sources/DisplayApp.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/DisplayApp.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/DisplayApp.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/DisplayApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/DisplayApp.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/DisplayApp.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/Sources/ExternalDisplay/ExternalDisplayManager.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/ExternalDisplayManager.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/ExternalDisplayManager.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/ExternalDisplayManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/ExternalDisplayManager.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/ExternalDisplayManager.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/Sources/Settings/SettingsView.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/SettingsView.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/SettingsView.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/SettingsView~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/SettingsView.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/SettingsView.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/Sources/main.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/main.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/main.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/main.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/macos/DisplayApp-macOS/.build/arm64-apple-macosx/debug/DisplayApp.build/main.dia"
+  }
+}

@@ -75,9 +75,12 @@
       const items = (rows && rows.items) || rows || [];
       ST.items = items;
       renderTable(items);
-      // pager state
-      $('#logsPrev').disabled = (ST.page<=1);
-      $('#logsNext').disabled = (items.length < ST.pageSize);
+      // pager state and visibility
+      const hasPrev = (ST.page>1);
+      const hasNext = (items.length >= ST.pageSize);
+      $('#logsPrev').disabled = !hasPrev;
+      $('#logsNext').disabled = !hasNext;
+      const container = document.getElementById('logsPagination'); if (container) container.style.display = (hasPrev || hasNext) ? '' : 'none';
     } catch { toast('Load failed'); renderTable([]); }
   }
 

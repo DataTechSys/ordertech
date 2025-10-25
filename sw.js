@@ -1,14 +1,15 @@
 /* OrderTech Drive — offline caching Service Worker */
-const CACHE_NAME = 'ot-drive-v2';
+const CACHE_NAME = 'ot-drive-v5';
 const CORE_ASSETS = [
   // HTML and core UI assets (versioned URLs to match actual requests)
   '/drive/',
   '/css/base.css?v=1.0.0',
   '/css/design-tokens.css?v=1.0.0',
-  '/css/style.css?v=1.0.3',
-  '/js/drive-thru.js?v=1.0.27',
+  '/css/style.css?v=1.0.5',
+  '/js/drive-thru.js?v=1.0.46',
   '/js/common.js?v=1.0.14',
   '/js/ui-common.js',
+  '/images/placeholder.png',
   '/images/products/placeholder.jpg',
   '/images/OrderTech.png',
   '/poster.png',
@@ -94,7 +95,7 @@ self.addEventListener('fetch', (event) => {
         try { await cache.put(request, net.clone()); } catch {}
         return net;
       } catch {
-        return await cache.match('/images/products/placeholder.jpg') || new Response('', { status: 504 });
+        return await cache.match('/images/placeholder.png') || await cache.match('/images/products/placeholder.jpg') || new Response('', { status: 504 });
       }
     })());
     return;
@@ -111,7 +112,7 @@ self.addEventListener('fetch', (event) => {
         try { await cache.put(request, net.clone()); } catch {}
         return net;
       } catch {
-        return await cache.match('/images/products/placeholder.jpg') || new Response('', { status: 504 });
+        return await cache.match('/images/placeholder.png') || await cache.match('/images/products/placeholder.jpg') || new Response('', { status: 504 });
       }
     })());
     return;
@@ -148,4 +149,5 @@ self.addEventListener('fetch', (event) => {
     })());
   }
 }
+);
 

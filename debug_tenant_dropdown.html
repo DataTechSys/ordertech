@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Tenant Dropdown</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { margin: 5px; padding: 8px 16px; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        select { margin: 10px 0; padding: 5px; min-width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Tenant Dropdown</h1>
+    
+    <div class="section">
+        <h2>Storage Actions</h2>
+        <button onclick="clearStorage()">Clear All Storage</button>
+        <button onclick="showStorage()">Show Storage Contents</button>
+        <pre id="storageContent"></pre>
+    </div>
+
+    <div class="section">
+        <h2>API Tests</h2>
+        <button onclick="testMyTenantsAPI()">Test /admin/my/tenants</button>
+        <button onclick="testAdminTenantsAPI()">Test /admin/tenants</button>
+        <pre id="apiResults"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Tenant Dropdown Test</h2>
+        <select id="testTenantSelect">
+            <option value="">Loading...</option>
+        </select>
+        <button onclick="loadTenantDropdown()">Load Dropdown</button>
+        <pre id="dropdownLogs"></pre>
+    </div>
+
+    <script src="/config.js"></script>
+    <script>
+        function clearStorage() {
+            const keys = ['ID_TOKEN', 'AUTH_TOKEN', 'SELECTED_TENANT_ID', 'USER_EMAIL', 'ACCOUNT_NUMBER', 'ADMIN_TOKEN'];
+            keys.forEach(key => {
+                try {
+                    localStorage.removeItem(key);
+                    console.log(`Cleared ${key}`);
+                } catch (e) {
+                    console.error(`Error clearing ${key}:`, e);
+                }
+            });
+            document.getElementById('storageContent').textContent = 'Storage cleared!';
+        }
+
+        function showStorage() {
+            const keys = ['ID_TOKEN', 'AUTH_TOKEN', 'SELECTED_TENANT_ID', 'USER_EMAIL', 'ACCOUNT_NUMBER', 'ADMIN_TOKEN'];
+            const storage = {};
+            keys.forEach(key => {
+                try {
+                    storage[key] = localStorage.getItem(key) || 'null';
+                } catch (e) {
+                    storage[key] = `Error: ${e.message}`;
+                }
+            });
+            document.getElementById('storageContent').textContent = JSON.stringify(storage, null, 2);
+        }
+
+        async function api(path, options = {}) {
+            const baseOrigin = window.apiBase || window.location.origin;
+            const url = new URL(path, baseOrigin);
+            
+            const headers = { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'x-admin-token': 'debug_admin_token'
+            };
+
+            const response = await fetch(url, {
+                method: options.method || 'GET',
+                headers,
+                credentials: 'include'
+            });
+
+            const text = await response.text();
+            let data = null;
+            try {
+                data = text ? JSON.parse(text) : null;
+            } catch {
+                data = { raw: text };
+            }
+
+            return { ok: response.ok, status: response.status, data };
+        }
+
+        async function testMyTenantsAPI() {
+            const result = await api('/admin/my/tenants');
+            const output = `Status: ${result.status}\nOK: ${result.ok}\nData: ${JSON.stringify(result.data, null, 2)}`;
+            document.getElementById('apiResults').textContent = output;
+        }
+
+        async function testAdminTenantsAPI() {
+            const result = await api('/admin/tenants');
+            const output = `Status: ${result.status}\nOK: ${result.ok}\nData: ${JSON.stringify(result.data, null, 2)}`;
+            document.getElementById('apiResults').textContent = output;
+        }
+
+        async function loadTenantDropdown() {
+            const logs = [];
+            const select = document.getElementById('testTenantSelect');
+            
+            try {
+                logs.push('Fetching my tenants...');
+                const myResult = await api('/admin/my/tenants');
+                const myTenants = myResult.ok ? (Array.isArray(myResult.data) ? myResult.data : []) : [];
+                logs.push(`My tenants: ${JSON.stringify(myTenants, null, 2)}`);
+
+                logs.push('Fetching admin tenants...');
+                const adminResult = await api('/admin/tenants');
+                const adminTenants = adminResult.ok ? (Array.isArray(adminResult.data) ? adminResult.data : []) : [];
+                logs.push(`Admin tenants: ${JSON.stringify(adminTenants, null, 2)}`);
+
+                // Merge logic similar to admin-common.js
+                const isSuper = adminResult.ok && adminTenants.length >= 0;
+                let finalTenants;
+                
+                if (isSuper) {
+                    const ids = new Set(myTenants.map(t => String(t.id)));
+                    finalTenants = [...myTenants, ...adminTenants.filter(t => !ids.has(String(t.id)))];
+                    logs.push(`Super admin - merged list: ${JSON.stringify(finalTenants, null, 2)}`);
+                } else {
+                    finalTenants = myTenants;
+                    logs.push(`Regular user - my tenants only: ${JSON.stringify(finalTenants, null, 2)}`);
+                }
+
+                // Populate dropdown
+                select.innerHTML = '';
+                if (!finalTenants.length) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = 'No tenants';
+                    opt.disabled = true;
+                    select.appendChild(opt);
+                } else {
+                    for (const t of finalTenants) {
+                        logs.push(`Creating option for: id=${t.id}, name="${t.name}"`);
+                        const opt = document.createElement('option');
+                        opt.value = t.id || '';
+                        opt.textContent = t.name || t.id || '';
+                        logs.push(`Option text set to: "${opt.textContent}"`);
+                        select.appendChild(opt);
+                    }
+                }
+
+            } catch (error) {
+                logs.push(`Error: ${error.message}`);
+                logs.push(`Stack: ${error.stack}`);
+            }
+
+            document.getElementById('dropdownLogs').textContent = logs.join('\n\n');
+        }
+
+        // Load initial state
+        showStorage();
+    </script>
+</body>
+</html>

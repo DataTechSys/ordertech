@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>OrderTech — Products</title>
-    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="stylesheet" href="/css/admin.css?v=20250919-2" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
     <style>
@@ -50,10 +50,12 @@
         <div class="body">
           <div class="toolbar">
             <div id="prodBulkBar" class="flex hidden">
-              <select id="prodBulkAction" class="select" style="max-width:220px">
+              <select id="prodBulkAction" class="select" style="max-width:260px">
                 <option value="delete">Delete</option>
                 <option value="inactivate">Inactivate</option>
                 <option value="activate">Activate</option>
+                <option value="refresh_image">Refresh Image (Foodics)</option>
+                <option value="refresh_data">Refresh Data+Image (Foodics)</option>
               </select>
               <button id="prodBulkApply" class="btn danger">Apply</button>
             </div>
@@ -62,18 +64,13 @@
               <span>New Product</span>
             </button>
             <div class="flex" style="gap:8px; margin-left:8px;">
-<button id="btnProdImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import</span></button>
+              <button id="btnProdImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import</span></button>
+              <button id="btnProdModsImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import Modifiers</span></button>
+              <input id="prodModsFile" type="file" accept=".csv,text/csv" style="display:none"/>
               <button id="btnProdExport" class="btn"><span class="icon ri ri-upload-2-line"></span><span>Export CSV</span></button>
+              <button id="btnProdSync" class="btn"><span class="icon ri ri-refresh-line"></span><span>Sync</span></button>
             </div>
             <div class="spacer"></div>
-            <div class="flex center" id="pageSizeWrap" style="gap:8px;">
-              <span class="label" style="white-space: nowrap;">Page size</span>
-              <select id="prodPageSize" class="select sm">
-                <option value="20" selected>20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
           </div>
           <div class="tabs" id="prodTabs">
             <button class="tab active" data-tab="active">Active</button>
@@ -81,12 +78,21 @@
             <button class="tab" data-tab="deleted">Deleted</button>
           </div>
           <div id="productTableWrap"></div>
-          <div class="flex between mt-2">
-            <div id="prodPageInfo" class="chip">—</div>
+          <div id="prodPagination" class="toolbar" style="margin-top:12px; display:none;">
             <div class="btn-group">
               <button id="prodPrev" class="btn">Prev</button>
               <button id="prodNext" class="btn">Next</button>
             </div>
+            <span class="spacer"></span>
+            <div class="flex center" id="prodPageSizeWrap" style="gap:8px;">
+              <span class="label" style="white-space: nowrap;">Page size</span>
+              <select id="prodPageSize" class="select sm">
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <div id="prodPageInfo" class="chip">—</div>
           </div>
         </div>
       </section>
@@ -119,6 +125,13 @@
               <small class="muted">If Local is selected, new products will use a placeholder image by default.</small>
             </label>
           </div>
+          <div class="row">
+            <div class="grid" style="gap:6px;">
+              <label class="checkbox-row" style="gap:8px"><input id="prodImportUpdateExisting" type="checkbox" /> <span>Update existing products (fill missing fields only)</span></label>
+              <label class="checkbox-row" style="gap:8px"><input id="prodImportReactivate" type="checkbox" /> <span>Reactivate if inactive</span></label>
+              <small class="muted">Existing products matched by SKU (preferred) or Name will be patched with only the empty/null fields. Reactivate sets them to Active.</small>
+            </div>
+          </div>
           <div class="stack" style="gap:8px;">
             <div class="muted">Preview (first 20 rows)</div>
             <div id="prodImportPreview"></div>
@@ -133,305 +146,34 @@
       </div>
     </div>
 
-    <!-- Product Modal -->
-    <div id="productModal" class="modal-backdrop" aria-hidden="true">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+    <!-- Sync Confirmation Modal -->
+    <div id="prodSyncModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="prodSyncTitle">
         <div class="header">
-          <div class="title" id="productModalTitle">Product</div>
-          <button id="productModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+          <div class="title" id="prodSyncTitle">Sync with Foodics</div>
+          <button id="prodSyncClose" class="btn icon ghost" aria-label="Close">✕</button>
         </div>
         <div class="content">
-          <div class="box">
-            <div class="box-title-row">
-              <div class="box-title">Master</div>
-              <label class="switch-row"><span class="label">Active</span>
-                <input id="prodFormActive" type="checkbox" class="switch"/>
-              </label>
-            </div>
-          <div class="row cols-2">
-            <label class="grid">
-              <span class="label">Name (EN)</span>
-              <input id="prodFormName" class="input"/>
-            </label>
-            <label class="grid">
-              <span class="label">الاسم (AR)</span>
-              <input id="prodFormNameLocalized" class="input"/>
-            </label>
-          </div>
-          <table class="grid-table compact">
-            <tr>
-              <td>
-                <span class="label">Category</span>
-                <select id="prodFormCategory" class="select sm"></select>
-              </td>
-              <td>
-                <span class="label">Price (KWD)</span>
-                <input id="prodFormPrice" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-              <td>
-                <span class="label">Cost (KWD)</span>
-                <input id="prodFormCost" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-              <td>
-                <span class="label">Tax Group Ref</span>
-                <input id="prodFormTax" class="input sm"/>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <span class="label">SKU</span>
-                <input id="prodFormSku" class="input sm" placeholder="Unique SKU (defaults to generated)"/>
-              </td>
-              <td>
-                <span class="label">Barcode</span>
-                <input id="prodFormBarcode" class="input sm"/>
-              </td>
-              <td>
-                <span class="label">Packaging Fee (KWD)</span>
-                <input id="prodFormPackagingFee" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-              <td>
-                <span class="label">Prep Time (min)</span>
-                <input id="prodFormPrepTime" type="number" step="1" min="0" class="input sm"/>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <span class="label">Spice Level</span>
-                <select id="prodFormSpiceLevel" class="select sm">
-                  <option value="">(none)</option>
-                  <option value="none">None</option>
-                  <option value="mild">Mild</option>
-                  <option value="medium">Medium</option>
-                  <option value="hot">Hot</option>
-                  <option value="extra_hot">Extra Hot</option>
-                </select>
-              </td>
-              <td>
-                <span class="label">—</span>
-              </td>
-              <td>
-                <span class="label">—</span>
-              </td>
-              <td>
-                <span class="label">—</span>
-              </td>
-            </tr>
-          </table>
-
-          <!-- Descriptions -->
-          <div class="muted" style="font-weight:600; text-transform:uppercase; font-size:12px; letter-spacing:.02em; margin:12px 0 6px;">Descriptions</div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Description (EN)</span>
-              <textarea id="prodFormDescription" class="textarea" placeholder="Product description in English"></textarea>
-            </label>
-            <label class="grid"><span class="label">الوصف (AR)</span>
-              <textarea id="prodFormDescriptionLocalized" class="textarea" placeholder="الوصف باللغة العربية"></textarea>
-            </label>
-          </div>
-
-          </div>
-          <div class="box">
-            <div class="box-title">Media</div>
-            <style>
-              #productModal .media-trio { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
-              #productModal .media-card { border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-              #productModal .media-card .title { font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--subtle, #6b7280); }
-              #productModal .media-card .preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; background: var(--chip, #f1f5f9); border: 1px solid var(--border, #e5e7eb); border-radius: 10px; overflow: hidden; }
-              #productModal .media-card .preview img, #productModal .media-card .preview video { width: 100%; height: 100%; object-fit: cover; }
-            </style>
-            <div class="media-trio">
-              <div class="media-card">
-                <div class="title">Menu</div>
-                <div class="preview"><img id="prodMenuPreview" alt="Menu"/></div>
-                <div class="flex center">
-                  <input id="prodMenuFile" type="file" accept="image/*" style="display:none" />
-                  <button id="prodMenuUpload" class="btn">Upload</button>
-                  <input id="prodMenuCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
-                  <button id="prodMenuFromCsv" class="btn ghost">From CSV</button>
-                </div>
-              </div>
-              <div class="media-card">
-                <div class="title">Beauty</div>
-                <div class="preview"><img id="prodBeautyPreview" alt="Beauty"/></div>
-                <div class="flex center">
-                  <input id="prodBeautyFile" type="file" accept="image/*" style="display:none" />
-                  <button id="prodBeautyUpload" class="btn">Upload</button>
-                  <input id="prodBeautyCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
-                  <button id="prodBeautyFromCsv" class="btn ghost">From CSV</button>
-                </div>
-              </div>
-              <div class="media-card">
-                <div class="title">Video</div>
-                <div class="preview">
-                  <video id="prodVideoPreview" controls playsinline preload="metadata" poster="/placeholder.jpg"></video>
-                </div>
-                <div class="flex center">
-                  <input id="prodVideoFile" type="file" accept="video/*" style="display:none" />
-                  <button id="prodVideoUpload" class="btn">Upload</button>
-                </div>
-                <small class="muted">Recommended ≤ 20 MB, up to ~10 seconds.</small>
-              </div>
-            </div>
-            <!-- Hidden fields for persistence -->
-            <input id="prodFormImageUrl" type="hidden" />
-            <input id="prodFormImageBeauty" type="hidden" />
-            <input id="prodFormImageWhite" type="hidden" />
-            <input id="prodFormVideoUrl" type="hidden" />
-
-            <div class="row">
-              <label class="grid"><span class="label">Additional Images (URLs)</span>
-                <div id="prodFormExtraImages" class="grid">
-                  <div id="prodFormExtraImagesTags" class="tags"></div>
-                  <div class="flex" style="gap:8px; align-items:center;">
-                    <input id="prodFormExtraImagesInput" class="input" placeholder="Paste URL and click Add"/>
-                    <button id="prodFormExtraImagesAdd" class="btn">Add</button>
-                  </div>
-                  <small class="muted">Use complete URLs (https://...). Add multiple images as needed.</small>
-                </div>
-              </label>
-            </div>
-
-          </div>
-          <div class="box">
-            <div class="box-title">Ingredients</div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Ingredients (EN)</span>
-              <textarea id="prodFormIngredientsEn" class="textarea" placeholder="Comma-separated or paragraph"></textarea>
-            </label>
-            <label class="grid"><span class="label">المكونات (AR)</span>
-              <textarea id="prodFormIngredientsAr" class="textarea" placeholder="قائمة المكونات"></textarea>
-            </label>
-          </div>
-          <div class="row cols-2">
-            <label class="grid"><span class="label">Allergens</span>
-              <input id="prodFormAllergens" class="input" placeholder="e.g., milk, eggs, nuts"/>
-              <small class="muted">Comma-separated list</small>
-            </label>
-            <label class="grid"><span class="label">Serving Size</span>
-              <input id="prodFormServingSize" class="input" placeholder="e.g., 250ml / 1 piece"/>
-            </label>
-          </div>
-
-          </div>
-          <div class="box">
-            <div class="box-title">Nutrition</div>
-          <table class="grid-table compact" id="prodNutritionTable">
-            <tr>
-              <td><span class="label">Calories</span>
-                <input id="prodFormCalories" type="number" step="1" min="0" class="input sm"/>
-              </td>
-              <td><span class="label">Fat (g)</span>
-                <input id="prodFormFat" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-              <td><span class="label">Carbs (g)</span>
-                <input id="prodFormCarbs" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-              <td><span class="label">Protein (g)</span>
-                <input id="prodFormProtein" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-            </tr>
-            <tr>
-              <td><span class="label">Sugar (g)</span>
-                <input id="prodFormSugar" type="number" step="0.001" min="0" class="input sm"/>
-              </td>
-              <td><span class="label">Sodium (mg)</span>
-                <input id="prodFormSodium" type="number" step="1" min="0" class="input sm"/>
-              </td>
-              <td><span class="label">Salt (g)</span>
-                <input id="prodFormSalt" type="number" step="0.001" min="0" class="input sm" placeholder="auto" />
-              </td>
-              <td><span class="label">Walk Minutes</span>
-                <input id="prodFormWalkMins" type="number" step="1" min="0" class="input sm"/>
-              </td>
-            </tr>
-          </table>
-          <div class="row">
-            <div class="grid">
-              <span class="label">Nutrition per Serving</span>
-              <div id="prodNutritionSummary" class="muted" style="padding:8px 0;">—</div>
-            </div>
-          </div>
-          </div>
-
-          </div>
-          <div class="box">
-            <div class="box-title">Flags & Visibility</div>
-          <div class="row cols-3">
-            <label class="switch-row"><span class="label">Sold by Weight</span>
-              <input id="prodFormSoldByWeight" type="checkbox" class="switch"/>
-            </label>
-            <label class="switch-row"><span class="label">Stock Product</span>
-              <input id="prodFormStockProduct" type="checkbox" class="switch"/>
-            </label>
-            <label class="switch-row"><span class="label">High Salt</span>
-              <input id="prodFormHighSalt" type="checkbox" class="switch"/>
-            </label>
-          </div>
-          <div class="row cols-3">
-            <label class="switch-row"><span class="label">Visible (POS)</span>
-              <input id="prodFormPosVisible" type="checkbox" class="switch"/>
-            </label>
-            <label class="switch-row"><span class="label">Visible (Online)</span>
-              <input id="prodFormOnlineVisible" type="checkbox" class="switch"/>
-            </label>
-            <label class="switch-row"><span class="label">Visible (Delivery)</span>
-              <input id="prodFormDeliveryVisible" type="checkbox" class="switch"/>
-            </label>
-          </div>
-          </div>
-          <div class="box">
-            <div class="box-title">External References</div>
-          <div class="row cols-3">
-            <label class="grid"><span class="label">Talabat Ref</span>
-              <input id="prodFormTalabatRef" class="input"/>
-            </label>
-            <label class="grid"><span class="label">Jahez Ref</span>
-              <input id="prodFormJahezRef" class="input"/>
-            </label>
-            <label class="grid"><span class="label">V-thru Ref</span>
-              <input id="prodFormVthruRef" class="input"/>
-            </label>
-          </div>
-
-          </div>
-          <div class="box">
-            <div class="box-title">Per-Branch Availability</div>
-          <div class="row">
-            <div class="grid">
-              <div id="prodFormBranchAvailability" class="list"></div>
-              <small class="muted">Uncheck to hide at a branch; optionally set price/packaging fee overrides.</small>
-            </div>
-          </div>
-          </div>
-          <div class="box">
-            <div class="box-title">Modifier Groups</div>
-          <div class="row">
-            <div class="grid">
-              <div class="flex" style="gap:8px; align-items:center;">
-                <select id="prodFormModifierGroupSelect" class="select" style="min-width:220px"></select>
-                <button id="prodFormModifierGroupAdd" class="btn">Add Group</button>
-              </div>
-              <div id="prodFormModifierGroupsTags" class="tags mt-1"></div>
-            </div>
-          </div>
+          <div class="stack" style="gap:8px;">
+            <div class="muted">This will fetch categories and products from Foodics and upsert them by SKU/reference. Existing items are updated; new items are created. Nothing is deleted.</div>
+            <label class="checkbox-row" style="gap:8px"><input id="prodSyncWithImages" type="checkbox" checked /> <span>With Images (overwrite product/category images from Foodics)</span></label>
           </div>
         </div>
         <div class="footer">
-          <button id="productModalDelete" class="btn danger hidden">Delete</button>
-          <button id="productModalActivate" class="btn hidden">Activate</button>
+          <span id="prodSyncStatus" class="muted">—</span>
           <span class="spacer"></span>
-          <button id="productModalCancel" class="btn">Cancel</button>
-          <button id="productModalSave" class="btn primary">Save</button>
+          <button id="prodSyncCancel" class="btn">Cancel</button>
+          <button id="prodSyncConfirm" class="btn primary">Proceed</button>
         </div>
       </div>
     </div>
 
-    <script src="/js/admin-common.js?v=20250905-1"></script>
-    <script src="/js/admin-shell.js?v=20250905-1"></script>
-    <script src="/js/importer.js?v=20250905-1"></script>
-    <script src="/js/products.js?v=20250905-1"></script>
-    <script src="/js/products-extended.js?v=20250905-1"></script>
+
+    <script src="/js/admin-common.js?v=20250919-2"></script>
+    <script src="/js/admin-shell.js?v=20250919-2"></script>
+    <script src="/js/importer.js?v=20250919-2"></script>
+    <script src="/js/products.js?v=20250919-2"></script>
+    <script src="/js/products-extended.js?v=20250919-2"></script>
   </body>
 </html>
 

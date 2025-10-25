@@ -1,0 +1,740 @@
+         table_name          | table_schema |      column_name       | ordinal_position |        data_type         | is_nullable |                     column_default                     
+-----------------------------+--------------+------------------------+------------------+--------------------------+-------------+--------------------------------------------------------
+ admin_activity_logs         | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ admin_activity_logs         | catalog      | ts                     |                2 | timestamp with time zone | NO          | now()
+ admin_activity_logs         | catalog      | level                  |                3 | text                     | NO          | 'info'::text
+ admin_activity_logs         | catalog      | scope                  |                4 | text                     | NO          | 
+ admin_activity_logs         | catalog      | tenant_id              |                5 | uuid                     | YES         | 
+ admin_activity_logs         | catalog      | actor                  |                6 | text                     | YES         | 
+ admin_activity_logs         | catalog      | action                 |                7 | text                     | YES         | 
+ admin_activity_logs         | catalog      | path                   |                8 | text                     | YES         | 
+ admin_activity_logs         | catalog      | method                 |                9 | text                     | YES         | 
+ admin_activity_logs         | catalog      | status                 |               10 | integer                  | YES         | 
+ admin_activity_logs         | catalog      | duration_ms            |               11 | integer                  | YES         | 
+ admin_activity_logs         | catalog      | ip                     |               12 | text                     | YES         | 
+ admin_activity_logs         | catalog      | user_agent             |               13 | text                     | YES         | 
+ admin_activity_logs         | catalog      | meta                   |               14 | jsonb                    | YES         | 
+ admin_activity_logs         | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ admin_activity_logs         | public       | ts                     |                2 | timestamp with time zone | NO          | now()
+ admin_activity_logs         | public       | level                  |                3 | text                     | NO          | 'info'::text
+ admin_activity_logs         | public       | scope                  |                4 | text                     | NO          | 
+ admin_activity_logs         | public       | tenant_id              |                5 | uuid                     | YES         | 
+ admin_activity_logs         | public       | actor                  |                6 | text                     | YES         | 
+ admin_activity_logs         | public       | action                 |                7 | text                     | YES         | 
+ admin_activity_logs         | public       | path                   |                8 | text                     | YES         | 
+ admin_activity_logs         | public       | method                 |                9 | text                     | YES         | 
+ admin_activity_logs         | public       | status                 |               10 | integer                  | YES         | 
+ admin_activity_logs         | public       | duration_ms            |               11 | integer                  | YES         | 
+ admin_activity_logs         | public       | ip                     |               12 | text                     | YES         | 
+ admin_activity_logs         | public       | user_agent             |               13 | text                     | YES         | 
+ admin_activity_logs         | public       | meta                   |               14 | jsonb                    | YES         | 
+ admin_activity_logs         | saas         | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ admin_activity_logs         | saas         | ts                     |                2 | timestamp with time zone | NO          | now()
+ admin_activity_logs         | saas         | level                  |                3 | text                     | NO          | 'info'::text
+ admin_activity_logs         | saas         | scope                  |                4 | text                     | NO          | 
+ admin_activity_logs         | saas         | tenant_id              |                5 | uuid                     | YES         | 
+ admin_activity_logs         | saas         | actor                  |                6 | text                     | YES         | 
+ admin_activity_logs         | saas         | action                 |                7 | text                     | YES         | 
+ admin_activity_logs         | saas         | path                   |                8 | text                     | YES         | 
+ admin_activity_logs         | saas         | method                 |                9 | text                     | YES         | 
+ admin_activity_logs         | saas         | status                 |               10 | integer                  | YES         | 
+ admin_activity_logs         | saas         | duration_ms            |               11 | integer                  | YES         | 
+ admin_activity_logs         | saas         | ip                     |               12 | text                     | YES         | 
+ admin_activity_logs         | saas         | user_agent             |               13 | text                     | YES         | 
+ admin_activity_logs         | saas         | meta                   |               14 | jsonb                    | YES         | 
+ branches                    | catalog      | branch_id              |                1 | uuid                     | NO          | gen_random_uuid()
+ branches                    | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ branches                    | catalog      | branch_name            |                3 | text                     | NO          | 
+ branches                    | catalog      | created_at             |                4 | timestamp with time zone | NO          | now()
+ branches                    | catalog      | id                     |                5 | uuid                     | YES         | 
+ branches                    | saas         | branch_id              |                1 | uuid                     | NO          | gen_random_uuid()
+ branches                    | saas         | tenant_id              |                2 | uuid                     | NO          | 
+ branches                    | saas         | branch_name            |                3 | character varying        | NO          | 
+ branches                    | saas         | location               |                4 | character varying        | YES         | 
+ branches                    | saas         | expiry_date            |                5 | date                     | YES         | 
+ branches                    | saas         | is_active              |                6 | boolean                  | NO          | true
+ branches                    | saas         | created_at             |                7 | timestamp with time zone | NO          | now()
+ branches                    | saas         | updated_at             |                8 | timestamp with time zone | NO          | now()
+ branches                    | saas         | deleted_at             |                9 | timestamp with time zone | YES         | 
+ device_activation_codes     | catalog      | code                   |                1 | text                     | NO          | 
+ device_activation_codes     | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ device_activation_codes     | catalog      | created_at             |                3 | timestamp with time zone | NO          | now()
+ device_activation_codes     | catalog      | expires_at             |                4 | timestamp with time zone | NO          | 
+ device_activation_codes     | catalog      | claimed_at             |                5 | timestamp with time zone | YES         | 
+ device_activation_codes     | catalog      | device_id              |                6 | uuid                     | YES         | 
+ device_activation_codes     | catalog      | meta                   |                7 | jsonb                    | NO          | '{}'::jsonb
+ device_activation_codes     | catalog      | status                 |                8 | USER-DEFINED             | NO          | 'pending'::device_activation_status
+ device_activation_codes     | catalog      | role                   |                9 | USER-DEFINED             | YES         | 
+ device_activation_codes     | public       | code                   |                1 | text                     | NO          | 
+ device_activation_codes     | public       | tenant_id              |                2 | uuid                     | NO          | 
+ device_activation_codes     | public       | created_at             |                3 | timestamp with time zone | NO          | now()
+ device_activation_codes     | public       | expires_at             |                4 | timestamp with time zone | NO          | 
+ device_activation_codes     | public       | claimed_at             |                5 | timestamp with time zone | YES         | 
+ device_activation_codes     | public       | device_id              |                6 | uuid                     | YES         | 
+ device_activation_codes     | public       | meta                   |                7 | jsonb                    | NO          | '{}'::jsonb
+ device_activation_codes     | public       | status                 |                8 | USER-DEFINED             | NO          | 'pending'::device_activation_status
+ device_activation_codes     | public       | role                   |                9 | USER-DEFINED             | YES         | 
+ device_events               | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ device_events               | catalog      | device_id              |                2 | uuid                     | NO          | 
+ device_events               | catalog      | tenant_id              |                3 | uuid                     | NO          | 
+ device_events               | catalog      | event_type             |                4 | text                     | NO          | 
+ device_events               | catalog      | meta                   |                5 | jsonb                    | NO          | '{}'::jsonb
+ device_events               | catalog      | created_at             |                6 | timestamp with time zone | NO          | now()
+ device_events               | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ device_events               | public       | device_id              |                2 | uuid                     | NO          | 
+ device_events               | public       | tenant_id              |                3 | uuid                     | NO          | 
+ device_events               | public       | event_type             |                4 | text                     | NO          | 
+ device_events               | public       | meta                   |                5 | jsonb                    | NO          | '{}'::jsonb
+ device_events               | public       | created_at             |                6 | timestamp with time zone | NO          | now()
+ devices                     | catalog      | device_id              |                1 | uuid                     | NO          | gen_random_uuid()
+ devices                     | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ devices                     | catalog      | device_name            |                3 | text                     | YES         | 
+ devices                     | catalog      | role                   |                4 | USER-DEFINED             | NO          | 
+ devices                     | catalog      | status                 |                5 | USER-DEFINED             | NO          | 'active'::device_status
+ devices                     | catalog      | branch                 |                6 | text                     | YES         | 
+ devices                     | catalog      | device_token           |                7 | text                     | NO          | 
+ devices                     | catalog      | activated_at           |                8 | timestamp with time zone | YES         | 
+ devices                     | catalog      | revoked_at             |                9 | timestamp with time zone | YES         | 
+ devices                     | catalog      | last_seen              |               10 | timestamp with time zone | YES         | 
+ devices                     | catalog      | meta                   |               11 | jsonb                    | NO          | '{}'::jsonb
+ devices                     | catalog      | branch_id              |               12 | uuid                     | YES         | 
+ devices                     | catalog      | location               |               13 | text                     | YES         | 
+ devices                     | catalog      | short_code             |               14 | character                | YES         | 
+ devices                     | catalog      | id                     |               15 | uuid                     | YES         | 
+ devices                     | saas         | device_id              |                1 | uuid                     | NO          | gen_random_uuid()
+ devices                     | saas         | tenant_id              |                2 | uuid                     | NO          | 
+ devices                     | saas         | branch_id              |                3 | uuid                     | YES         | 
+ devices                     | saas         | device_name            |                4 | character varying        | NO          | 
+ devices                     | saas         | uuid                   |                5 | uuid                     | NO          | gen_random_uuid()
+ devices                     | saas         | activation_token       |                6 | character varying        | YES         | 
+ devices                     | saas         | status                 |                7 | character varying        | NO          | 'active'::character varying
+ devices                     | saas         | expiry_date            |                8 | date                     | YES         | 
+ devices                     | saas         | last_checkin           |                9 | timestamp with time zone | YES         | 
+ devices                     | saas         | created_at             |               10 | timestamp with time zone | NO          | now()
+ devices                     | saas         | updated_at             |               11 | timestamp with time zone | NO          | now()
+ devices                     | saas         | deleted_at             |               12 | timestamp with time zone | YES         | 
+ drive_thru_state            | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ drive_thru_state            | catalog      | state                  |                2 | jsonb                    | NO          | '{}'::jsonb
+ drive_thru_state            | catalog      | updated_at             |                3 | timestamp with time zone | NO          | now()
+ drive_thru_state            | public       | tenant_id              |                1 | uuid                     | NO          | 
+ drive_thru_state            | public       | state                  |                2 | jsonb                    | NO          | '{}'::jsonb
+ drive_thru_state            | public       | updated_at             |                3 | timestamp with time zone | NO          | now()
+ drive_thru_state            | saas         | tenant_id              |                1 | uuid                     | NO          | 
+ drive_thru_state            | saas         | state                  |                2 | jsonb                    | NO          | '{}'::jsonb
+ drive_thru_state            | saas         | updated_at             |                3 | timestamp with time zone | NO          | now()
+ integration_sync_runs       | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ integration_sync_runs       | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ integration_sync_runs       | catalog      | provider               |                3 | text                     | NO          | 
+ integration_sync_runs       | catalog      | started_at             |                4 | timestamp with time zone | NO          | now()
+ integration_sync_runs       | catalog      | finished_at            |                5 | timestamp with time zone | YES         | 
+ integration_sync_runs       | catalog      | ok                     |                6 | boolean                  | YES         | 
+ integration_sync_runs       | catalog      | error                  |                7 | text                     | YES         | 
+ integration_sync_runs       | catalog      | stats                  |                8 | jsonb                    | YES         | 
+ integration_sync_runs       | catalog      | created_at             |                9 | timestamp with time zone | NO          | now()
+ integration_sync_runs       | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ integration_sync_runs       | public       | tenant_id              |                2 | uuid                     | NO          | 
+ integration_sync_runs       | public       | provider               |                3 | text                     | NO          | 
+ integration_sync_runs       | public       | started_at             |                4 | timestamp with time zone | NO          | now()
+ integration_sync_runs       | public       | finished_at            |                5 | timestamp with time zone | YES         | 
+ integration_sync_runs       | public       | ok                     |                6 | boolean                  | YES         | 
+ integration_sync_runs       | public       | error                  |                7 | text                     | YES         | 
+ integration_sync_runs       | public       | stats                  |                8 | jsonb                    | YES         | 
+ integration_sync_runs       | public       | created_at             |                9 | timestamp with time zone | NO          | now()
+ integration_sync_runs       | saas         | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ integration_sync_runs       | saas         | tenant_id              |                2 | uuid                     | NO          | 
+ integration_sync_runs       | saas         | provider               |                3 | text                     | NO          | 
+ integration_sync_runs       | saas         | started_at             |                4 | timestamp with time zone | NO          | now()
+ integration_sync_runs       | saas         | finished_at            |                5 | timestamp with time zone | YES         | 
+ integration_sync_runs       | saas         | ok                     |                6 | boolean                  | YES         | 
+ integration_sync_runs       | saas         | error                  |                7 | text                     | YES         | 
+ integration_sync_runs       | saas         | stats                  |                8 | jsonb                    | YES         | 
+ integration_sync_runs       | saas         | created_at             |                9 | timestamp with time zone | NO          | now()
+ invites                     | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ invites                     | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ invites                     | catalog      | email                  |                3 | text                     | NO          | 
+ invites                     | catalog      | role                   |                4 | USER-DEFINED             | NO          | 'viewer'::tenant_role
+ invites                     | catalog      | token                  |                5 | text                     | NO          | 
+ invites                     | catalog      | created_at             |                6 | timestamp with time zone | NO          | now()
+ invites                     | catalog      | expires_at             |                7 | timestamp with time zone | NO          | 
+ invites                     | catalog      | redeemed_at            |                8 | timestamp with time zone | YES         | 
+ invites                     | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ invites                     | public       | tenant_id              |                2 | uuid                     | NO          | 
+ invites                     | public       | email                  |                3 | text                     | NO          | 
+ invites                     | public       | role                   |                4 | USER-DEFINED             | NO          | 'viewer'::tenant_role
+ invites                     | public       | token                  |                5 | text                     | NO          | 
+ invites                     | public       | created_at             |                6 | timestamp with time zone | NO          | now()
+ invites                     | public       | expires_at             |                7 | timestamp with time zone | NO          | 
+ invites                     | public       | redeemed_at            |                8 | timestamp with time zone | YES         | 
+ invites                     | saas         | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ invites                     | saas         | tenant_id              |                2 | uuid                     | NO          | 
+ invites                     | saas         | email                  |                3 | text                     | NO          | 
+ invites                     | saas         | role                   |                4 | USER-DEFINED             | NO          | 'viewer'::tenant_role
+ invites                     | saas         | token                  |                5 | text                     | NO          | 
+ invites                     | saas         | created_at             |                6 | timestamp with time zone | NO          | now()
+ invites                     | saas         | expires_at             |                7 | timestamp with time zone | NO          | 
+ invites                     | saas         | redeemed_at            |                8 | timestamp with time zone | YES         | 
+ modifier_groups             | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ modifier_groups             | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ modifier_groups             | catalog      | name                   |                3 | text                     | NO          | 
+ modifier_groups             | catalog      | reference              |                4 | text                     | YES         | 
+ modifier_groups             | catalog      | min_select             |                5 | integer                  | YES         | 
+ modifier_groups             | catalog      | max_select             |                6 | integer                  | YES         | 
+ modifier_groups             | catalog      | required               |                7 | boolean                  | NO          | false
+ modifier_groups             | catalog      | created_at             |                8 | timestamp with time zone | NO          | now()
+ modifier_groups             | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ modifier_groups             | public       | tenant_id              |                2 | uuid                     | NO          | 
+ modifier_groups             | public       | name                   |                3 | text                     | NO          | 
+ modifier_groups             | public       | reference              |                4 | text                     | YES         | 
+ modifier_groups             | public       | min_select             |                5 | integer                  | YES         | 
+ modifier_groups             | public       | max_select             |                6 | integer                  | YES         | 
+ modifier_groups             | public       | required               |                7 | boolean                  | NO          | false
+ modifier_groups             | public       | created_at             |                8 | timestamp with time zone | NO          | now()
+ modifier_options            | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ modifier_options            | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ modifier_options            | catalog      | group_id               |                3 | uuid                     | NO          | 
+ modifier_options            | catalog      | name                   |                4 | text                     | NO          | 
+ modifier_options            | catalog      | price                  |                5 | numeric                  | NO          | 0
+ modifier_options            | catalog      | is_active              |                6 | boolean                  | NO          | true
+ modifier_options            | catalog      | sort_order             |                7 | integer                  | YES         | 
+ modifier_options            | catalog      | created_at             |                8 | timestamp with time zone | NO          | now()
+ modifier_options            | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ modifier_options            | public       | tenant_id              |                2 | uuid                     | NO          | 
+ modifier_options            | public       | group_id               |                3 | uuid                     | NO          | 
+ modifier_options            | public       | name                   |                4 | text                     | NO          | 
+ modifier_options            | public       | price                  |                5 | numeric                  | NO          | 0
+ modifier_options            | public       | is_active              |                6 | boolean                  | NO          | true
+ modifier_options            | public       | sort_order             |                7 | integer                  | YES         | 
+ modifier_options            | public       | created_at             |                8 | timestamp with time zone | NO          | now()
+ modifier_options            | public       | reference              |                9 | text                     | YES         | 
+ paid_order_counters         | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ paid_order_counters         | catalog      | branch_id              |                2 | uuid                     | NO          | 
+ paid_order_counters         | catalog      | current                |                3 | bigint                   | NO          | 0
+ paid_order_counters         | public       | tenant_id              |                1 | uuid                     | NO          | 
+ paid_order_counters         | public       | branch_id              |                2 | uuid                     | NO          | 
+ paid_order_counters         | public       | current                |                3 | bigint                   | NO          | 0
+ paid_order_counters         | saas         | tenant_id              |                1 | uuid                     | NO          | 
+ paid_order_counters         | saas         | branch_id              |                2 | uuid                     | NO          | 
+ paid_order_counters         | saas         | current                |                3 | bigint                   | NO          | 0
+ paid_orders                 | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ paid_orders                 | catalog      | ticket_no              |                2 | bigint                   | NO          | nextval('catalog.paid_orders_ticket_no_seq'::regclass)
+ paid_orders                 | catalog      | tenant_id              |                3 | uuid                     | NO          | 
+ paid_orders                 | catalog      | branch_id              |                4 | uuid                     | YES         | 
+ paid_orders                 | catalog      | basket_id              |                5 | text                     | NO          | 
+ paid_orders                 | catalog      | osn                    |                6 | text                     | YES         | 
+ paid_orders                 | catalog      | ref                    |                7 | text                     | YES         | 
+ paid_orders                 | catalog      | branch_ticket_no       |                8 | bigint                   | YES         | 
+ paid_orders                 | catalog      | cashier_device_id      |                9 | uuid                     | YES         | 
+ paid_orders                 | catalog      | cashier_name           |               10 | text                     | YES         | 
+ paid_orders                 | catalog      | display_device_id      |               11 | uuid                     | YES         | 
+ paid_orders                 | catalog      | customer_name          |               12 | text                     | YES         | 
+ paid_orders                 | catalog      | source                 |               13 | text                     | YES         | 
+ paid_orders                 | catalog      | location               |               14 | text                     | YES         | 
+ paid_orders                 | catalog      | branch                 |               15 | text                     | YES         | 
+ paid_orders                 | catalog      | items                  |               16 | jsonb                    | NO          | '[]'::jsonb
+ paid_orders                 | catalog      | total                  |               17 | numeric                  | NO          | 0
+ paid_orders                 | catalog      | currency               |               18 | text                     | NO          | 'KWD'::text
+ paid_orders                 | catalog      | paid_at                |               19 | timestamp with time zone | NO          | now()
+ paid_orders                 | catalog      | sent_to_foodics_at     |               20 | timestamp with time zone | YES         | 
+ paid_orders                 | catalog      | foodics_status         |               21 | text                     | YES         | 
+ paid_orders                 | catalog      | foodics_order_id       |               22 | text                     | YES         | 
+ paid_orders                 | catalog      | meta                   |               23 | jsonb                    | NO          | '{}'::jsonb
+ paid_orders                 | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ paid_orders                 | public       | ticket_no              |                2 | bigint                   | NO          | nextval('public.paid_orders_ticket_no_seq'::regclass)
+ paid_orders                 | public       | tenant_id              |                3 | uuid                     | NO          | 
+ paid_orders                 | public       | branch_id              |                4 | uuid                     | YES         | 
+ paid_orders                 | public       | basket_id              |                5 | text                     | NO          | 
+ paid_orders                 | public       | osn                    |                6 | text                     | YES         | 
+ paid_orders                 | public       | ref                    |                7 | text                     | YES         | 
+ paid_orders                 | public       | branch_ticket_no       |                8 | bigint                   | YES         | 
+ paid_orders                 | public       | cashier_device_id      |                9 | uuid                     | YES         | 
+ paid_orders                 | public       | cashier_name           |               10 | text                     | YES         | 
+ paid_orders                 | public       | display_device_id      |               11 | uuid                     | YES         | 
+ paid_orders                 | public       | customer_name          |               12 | text                     | YES         | 
+ paid_orders                 | public       | source                 |               13 | text                     | YES         | 
+ paid_orders                 | public       | location               |               14 | text                     | YES         | 
+ paid_orders                 | public       | branch                 |               15 | text                     | YES         | 
+ paid_orders                 | public       | items                  |               16 | jsonb                    | NO          | '[]'::jsonb
+ paid_orders                 | public       | total                  |               17 | numeric                  | NO          | 0
+ paid_orders                 | public       | currency               |               18 | text                     | NO          | 'KWD'::text
+ paid_orders                 | public       | paid_at                |               19 | timestamp with time zone | NO          | now()
+ paid_orders                 | public       | sent_to_foodics_at     |               20 | timestamp with time zone | YES         | 
+ paid_orders                 | public       | foodics_status         |               21 | text                     | YES         | 
+ paid_orders                 | public       | foodics_order_id       |               22 | text                     | YES         | 
+ paid_orders                 | public       | meta                   |               23 | jsonb                    | NO          | '{}'::jsonb
+ paid_orders                 | saas         | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ paid_orders                 | saas         | ticket_no              |                2 | bigint                   | NO          | nextval('paid_orders_ticket_no_seq'::regclass)
+ paid_orders                 | saas         | tenant_id              |                3 | uuid                     | NO          | 
+ paid_orders                 | saas         | branch_id              |                4 | uuid                     | YES         | 
+ paid_orders                 | saas         | basket_id              |                5 | text                     | NO          | 
+ paid_orders                 | saas         | osn                    |                6 | text                     | YES         | 
+ paid_orders                 | saas         | ref                    |                7 | text                     | YES         | 
+ paid_orders                 | saas         | branch_ticket_no       |                8 | bigint                   | YES         | 
+ paid_orders                 | saas         | cashier_device_id      |                9 | uuid                     | YES         | 
+ paid_orders                 | saas         | cashier_name           |               10 | text                     | YES         | 
+ paid_orders                 | saas         | display_device_id      |               11 | uuid                     | YES         | 
+ paid_orders                 | saas         | customer_name          |               12 | text                     | YES         | 
+ paid_orders                 | saas         | source                 |               13 | text                     | YES         | 
+ paid_orders                 | saas         | location               |               14 | text                     | YES         | 
+ paid_orders                 | saas         | branch                 |               15 | text                     | YES         | 
+ paid_orders                 | saas         | items                  |               16 | jsonb                    | NO          | '[]'::jsonb
+ paid_orders                 | saas         | total                  |               17 | numeric                  | NO          | 0
+ paid_orders                 | saas         | currency               |               18 | text                     | NO          | 'KWD'::text
+ paid_orders                 | saas         | paid_at                |               19 | timestamp with time zone | NO          | now()
+ paid_orders                 | saas         | sent_to_foodics_at     |               20 | timestamp with time zone | YES         | 
+ paid_orders                 | saas         | foodics_status         |               21 | text                     | YES         | 
+ paid_orders                 | saas         | foodics_order_id       |               22 | text                     | YES         | 
+ paid_orders                 | saas         | meta                   |               23 | jsonb                    | NO          | '{}'::jsonb
+ platform_admin_roles        | catalog      | admin_id               |                1 | uuid                     | NO          | 
+ platform_admin_roles        | catalog      | role_id                |                2 | uuid                     | NO          | 
+ platform_admin_roles        | public       | admin_id               |                1 | uuid                     | NO          | 
+ platform_admin_roles        | public       | role_id                |                2 | uuid                     | NO          | 
+ platform_admin_tenants      | catalog      | admin_id               |                1 | uuid                     | NO          | 
+ platform_admin_tenants      | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ platform_admin_tenants      | catalog      | created_at             |                3 | timestamp with time zone | NO          | now()
+ platform_admin_tenants      | public       | admin_id               |                1 | uuid                     | NO          | 
+ platform_admin_tenants      | public       | tenant_id              |                2 | uuid                     | NO          | 
+ platform_admin_tenants      | public       | created_at             |                3 | timestamp with time zone | NO          | now()
+ platform_admins             | catalog      | email                  |                1 | text                     | NO          | 
+ platform_admins             | catalog      | status                 |                2 | text                     | NO          | 'active'::text
+ platform_admins             | public       | admin_id               |                1 | uuid                     | NO          | gen_random_uuid()
+ platform_admins             | public       | email                  |                2 | text                     | NO          | 
+ platform_admins             | public       | full_name              |                3 | text                     | YES         | 
+ platform_admins             | public       | status                 |                4 | text                     | NO          | 'active'::text
+ platform_admins             | public       | created_at             |                5 | timestamp with time zone | NO          | now()
+ platform_permissions        | catalog      | code                   |                1 | text                     | NO          | 
+ platform_permissions        | catalog      | description            |                2 | text                     | YES         | 
+ platform_permissions        | public       | code                   |                1 | text                     | NO          | 
+ platform_permissions        | public       | description            |                2 | text                     | YES         | 
+ platform_role_permissions   | catalog      | role_id                |                1 | uuid                     | NO          | 
+ platform_role_permissions   | catalog      | code                   |                2 | text                     | NO          | 
+ platform_role_permissions   | public       | role_id                |                1 | uuid                     | NO          | 
+ platform_role_permissions   | public       | code                   |                2 | text                     | NO          | 
+ platform_roles              | catalog      | role_id                |                1 | uuid                     | NO          | gen_random_uuid()
+ platform_roles              | catalog      | role_name              |                2 | text                     | NO          | 
+ platform_roles              | catalog      | description            |                3 | text                     | YES         | 
+ platform_roles              | catalog      | created_at             |                4 | timestamp with time zone | NO          | now()
+ platform_roles              | public       | role_id                |                1 | uuid                     | NO          | gen_random_uuid()
+ platform_roles              | public       | role_name              |                2 | text                     | NO          | 
+ platform_roles              | public       | description            |                3 | text                     | YES         | 
+ platform_roles              | public       | created_at             |                4 | timestamp with time zone | NO          | now()
+ platform_settings           | catalog      | id                     |                1 | text                     | NO          | 
+ platform_settings           | catalog      | settings               |                2 | jsonb                    | NO          | '{}'::jsonb
+ platform_settings           | catalog      | updated_at             |                3 | timestamp with time zone | NO          | now()
+ platform_settings           | public       | id                     |                1 | text                     | NO          | 
+ platform_settings           | public       | settings               |                2 | jsonb                    | NO          | '{}'::jsonb
+ platform_settings           | public       | updated_at             |                3 | timestamp with time zone | NO          | now()
+ platform_settings           | saas         | id                     |                1 | text                     | NO          | 
+ platform_settings           | saas         | settings               |                2 | jsonb                    | NO          | '{}'::jsonb
+ platform_settings           | saas         | updated_at             |                3 | timestamp with time zone | NO          | now()
+ product_branch_availability | catalog      | product_id             |                1 | uuid                     | NO          | 
+ product_branch_availability | catalog      | branch_id              |                2 | uuid                     | NO          | 
+ product_branch_availability | catalog      | available              |                3 | boolean                  | NO          | true
+ product_branch_availability | catalog      | price_override         |                4 | numeric                  | YES         | 
+ product_branch_availability | catalog      | packaging_fee_override |                5 | numeric                  | YES         | 
+ product_branch_availability | public       | product_id             |                1 | uuid                     | NO          | 
+ product_branch_availability | public       | branch_id              |                2 | uuid                     | NO          | 
+ product_branch_availability | public       | available              |                3 | boolean                  | NO          | true
+ product_branch_availability | public       | price_override         |                4 | numeric                  | YES         | 
+ product_branch_availability | public       | packaging_fee_override |                5 | numeric                  | YES         | 
+ product_modifier_groups     | catalog      | product_id             |                1 | uuid                     | NO          | 
+ product_modifier_groups     | catalog      | group_id               |                2 | uuid                     | NO          | 
+ product_modifier_groups     | catalog      | sort_order             |                3 | integer                  | YES         | 
+ product_modifier_groups     | catalog      | required               |                4 | boolean                  | YES         | 
+ product_modifier_groups     | catalog      | min_select             |                5 | integer                  | YES         | 
+ product_modifier_groups     | catalog      | max_select             |                6 | integer                  | YES         | 
+ product_modifier_groups     | public       | product_id             |                1 | uuid                     | NO          | 
+ product_modifier_groups     | public       | group_id               |                2 | uuid                     | NO          | 
+ product_modifier_groups     | public       | sort_order             |                3 | integer                  | YES         | 
+ product_modifier_groups     | public       | required               |                4 | boolean                  | YES         | 
+ product_modifier_groups     | public       | min_select             |                5 | integer                  | YES         | 
+ product_modifier_groups     | public       | max_select             |                6 | integer                  | YES         | 
+ product_modifier_groups     | saas         | product_id             |                1 | uuid                     | NO          | 
+ product_modifier_groups     | saas         | group_id               |                2 | uuid                     | NO          | 
+ product_modifier_groups     | saas         | sort_order             |                3 | integer                  | YES         | 
+ product_modifier_groups     | saas         | required               |                4 | boolean                  | YES         | 
+ product_modifier_groups     | saas         | min_select             |                5 | integer                  | YES         | 
+ product_modifier_groups     | saas         | max_select             |                6 | integer                  | YES         | 
+ rtc_session_stats           | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ rtc_session_stats           | catalog      | session_id             |                2 | uuid                     | NO          | 
+ rtc_session_stats           | catalog      | side                   |                3 | text                     | NO          | 
+ rtc_session_stats           | catalog      | ts                     |                4 | timestamp with time zone | NO          | now()
+ rtc_session_stats           | catalog      | metrics                |                5 | jsonb                    | NO          | 
+ rtc_session_stats           | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ rtc_session_stats           | public       | session_id             |                2 | uuid                     | NO          | 
+ rtc_session_stats           | public       | side                   |                3 | text                     | NO          | 
+ rtc_session_stats           | public       | ts                     |                4 | timestamp with time zone | NO          | now()
+ rtc_session_stats           | public       | metrics                |                5 | jsonb                    | NO          | 
+ rtc_session_stats           | saas         | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ rtc_session_stats           | saas         | session_id             |                2 | uuid                     | NO          | 
+ rtc_session_stats           | saas         | side                   |                3 | text                     | NO          | 
+ rtc_session_stats           | saas         | ts                     |                4 | timestamp with time zone | NO          | now()
+ rtc_session_stats           | saas         | metrics                |                5 | jsonb                    | NO          | 
+ rtc_sessions                | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ rtc_sessions                | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ rtc_sessions                | catalog      | basket_id              |                3 | text                     | YES         | 
+ rtc_sessions                | catalog      | cashier_device_id      |                4 | uuid                     | YES         | 
+ rtc_sessions                | catalog      | display_device_id      |                5 | uuid                     | YES         | 
+ rtc_sessions                | catalog      | provider               |                6 | text                     | YES         | 
+ rtc_sessions                | catalog      | started_at             |                7 | timestamp with time zone | NO          | now()
+ rtc_sessions                | catalog      | ended_at               |                8 | timestamp with time zone | YES         | 
+ rtc_sessions                | catalog      | summary                |                9 | jsonb                    | YES         | 
+ rtc_sessions                | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ rtc_sessions                | public       | tenant_id              |                2 | uuid                     | NO          | 
+ rtc_sessions                | public       | basket_id              |                3 | text                     | YES         | 
+ rtc_sessions                | public       | cashier_device_id      |                4 | uuid                     | YES         | 
+ rtc_sessions                | public       | display_device_id      |                5 | uuid                     | YES         | 
+ rtc_sessions                | public       | provider               |                6 | text                     | YES         | 
+ rtc_sessions                | public       | started_at             |                7 | timestamp with time zone | NO          | now()
+ rtc_sessions                | public       | ended_at               |                8 | timestamp with time zone | YES         | 
+ rtc_sessions                | public       | summary                |                9 | jsonb                    | YES         | 
+ schema_migrations           | catalog      | id                     |                1 | text                     | NO          | 
+ schema_migrations           | catalog      | applied_at             |                2 | timestamp with time zone | NO          | now()
+ schema_migrations           | public       | id                     |                1 | text                     | NO          | 
+ schema_migrations           | public       | applied_at             |                2 | timestamp with time zone | NO          | now()
+ schema_migrations           | saas         | id                     |                1 | text                     | NO          | 
+ schema_migrations           | saas         | applied_at             |                2 | timestamp with time zone | NO          | now()
+ tenant_api_integrations     | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ tenant_api_integrations     | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_api_integrations     | catalog      | provider               |                3 | text                     | NO          | 
+ tenant_api_integrations     | catalog      | label                  |                4 | text                     | YES         | 
+ tenant_api_integrations     | catalog      | token_encrypted        |                5 | bytea                    | YES         | 
+ tenant_api_integrations     | catalog      | meta                   |                6 | jsonb                    | NO          | '{}'::jsonb
+ tenant_api_integrations     | catalog      | status                 |                7 | text                     | YES         | 
+ tenant_api_integrations     | catalog      | last_used_at           |                8 | timestamp with time zone | YES         | 
+ tenant_api_integrations     | catalog      | created_at             |                9 | timestamp with time zone | NO          | now()
+ tenant_api_integrations     | catalog      | updated_at             |               10 | timestamp with time zone | NO          | now()
+ tenant_api_integrations     | catalog      | revoked_at             |               11 | timestamp with time zone | YES         | 
+ tenant_api_integrations     | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ tenant_api_integrations     | public       | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_api_integrations     | public       | provider               |                3 | text                     | NO          | 
+ tenant_api_integrations     | public       | label                  |                4 | text                     | YES         | 
+ tenant_api_integrations     | public       | token_encrypted        |                5 | bytea                    | YES         | 
+ tenant_api_integrations     | public       | meta                   |                6 | jsonb                    | NO          | '{}'::jsonb
+ tenant_api_integrations     | public       | status                 |                7 | text                     | YES         | 
+ tenant_api_integrations     | public       | last_used_at           |                8 | timestamp with time zone | YES         | 
+ tenant_api_integrations     | public       | created_at             |                9 | timestamp with time zone | NO          | now()
+ tenant_api_integrations     | public       | updated_at             |               10 | timestamp with time zone | NO          | now()
+ tenant_api_integrations     | public       | revoked_at             |               11 | timestamp with time zone | YES         | 
+ tenant_brand                | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_brand                | catalog      | display_name           |                2 | text                     | YES         | 
+ tenant_brand                | catalog      | logo_url               |                3 | text                     | YES         | 
+ tenant_brand                | catalog      | color_primary          |                4 | text                     | YES         | 
+ tenant_brand                | catalog      | color_secondary        |                5 | text                     | YES         | 
+ tenant_brand                | catalog      | address                |                6 | text                     | YES         | 
+ tenant_brand                | catalog      | website                |                7 | text                     | YES         | 
+ tenant_brand                | catalog      | contact_phone          |                8 | text                     | YES         | 
+ tenant_brand                | catalog      | contact_email          |                9 | text                     | YES         | 
+ tenant_brand                | public       | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_brand                | public       | display_name           |                2 | text                     | YES         | 
+ tenant_brand                | public       | logo_url               |                3 | text                     | YES         | 
+ tenant_brand                | public       | color_primary          |                4 | text                     | YES         | 
+ tenant_brand                | public       | color_secondary        |                5 | text                     | YES         | 
+ tenant_brand                | public       | address                |                6 | text                     | YES         | 
+ tenant_brand                | public       | website                |                7 | text                     | YES         | 
+ tenant_brand                | public       | contact_phone          |                8 | text                     | YES         | 
+ tenant_brand                | public       | contact_email          |                9 | text                     | YES         | 
+ tenant_domains              | catalog      | host                   |                1 | text                     | NO          | 
+ tenant_domains              | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_domains              | catalog      | verified_at            |                3 | timestamp with time zone | YES         | 
+ tenant_domains              | public       | host                   |                1 | text                     | NO          | 
+ tenant_domains              | public       | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_domains              | public       | verified_at            |                3 | timestamp with time zone | YES         | 
+ tenant_external_mappings    | catalog      | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ tenant_external_mappings    | catalog      | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_external_mappings    | catalog      | provider               |                3 | text                     | NO          | 
+ tenant_external_mappings    | catalog      | entity_type            |                4 | text                     | NO          | 
+ tenant_external_mappings    | catalog      | entity_id              |                5 | uuid                     | NO          | 
+ tenant_external_mappings    | catalog      | external_id            |                6 | text                     | NO          | 
+ tenant_external_mappings    | catalog      | external_ref           |                7 | text                     | YES         | 
+ tenant_external_mappings    | catalog      | created_at             |                8 | timestamp with time zone | NO          | now()
+ tenant_external_mappings    | catalog      | updated_at             |                9 | timestamp with time zone | NO          | now()
+ tenant_external_mappings    | public       | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ tenant_external_mappings    | public       | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_external_mappings    | public       | provider               |                3 | text                     | NO          | 
+ tenant_external_mappings    | public       | entity_type            |                4 | text                     | NO          | 
+ tenant_external_mappings    | public       | entity_id              |                5 | uuid                     | NO          | 
+ tenant_external_mappings    | public       | external_id            |                6 | text                     | NO          | 
+ tenant_external_mappings    | public       | external_ref           |                7 | text                     | YES         | 
+ tenant_external_mappings    | public       | created_at             |                8 | timestamp with time zone | NO          | now()
+ tenant_external_mappings    | public       | updated_at             |                9 | timestamp with time zone | NO          | now()
+ tenant_external_mappings    | saas         | id                     |                1 | uuid                     | NO          | gen_random_uuid()
+ tenant_external_mappings    | saas         | tenant_id              |                2 | uuid                     | NO          | 
+ tenant_external_mappings    | saas         | provider               |                3 | text                     | NO          | 
+ tenant_external_mappings    | saas         | entity_type            |                4 | text                     | NO          | 
+ tenant_external_mappings    | saas         | entity_id              |                5 | uuid                     | NO          | 
+ tenant_external_mappings    | saas         | external_id            |                6 | text                     | NO          | 
+ tenant_external_mappings    | saas         | external_ref           |                7 | text                     | YES         | 
+ tenant_external_mappings    | saas         | created_at             |                8 | timestamp with time zone | NO          | now()
+ tenant_external_mappings    | saas         | updated_at             |                9 | timestamp with time zone | NO          | now()
+ tenant_permissions          | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_permissions          | catalog      | user_id                |                2 | uuid                     | NO          | 
+ tenant_permissions          | catalog      | permissions            |                3 | jsonb                    | NO          | '{}'::jsonb
+ tenant_permissions          | public       | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_permissions          | public       | user_id                |                2 | uuid                     | NO          | 
+ tenant_permissions          | public       | permissions            |                3 | jsonb                    | NO          | '{}'::jsonb
+ tenant_settings             | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_settings             | catalog      | slug                   |                2 | text                     | YES         | 
+ tenant_settings             | catalog      | default_locale         |                3 | text                     | YES         | 
+ tenant_settings             | catalog      | currency               |                4 | text                     | YES         | 
+ tenant_settings             | catalog      | timezone               |                5 | text                     | YES         | 
+ tenant_settings             | catalog      | features               |                6 | jsonb                    | NO          | '{}'::jsonb
+ tenant_settings             | public       | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_settings             | public       | slug                   |                2 | text                     | YES         | 
+ tenant_settings             | public       | default_locale         |                3 | text                     | YES         | 
+ tenant_settings             | public       | currency               |                4 | text                     | YES         | 
+ tenant_settings             | public       | timezone               |                5 | text                     | YES         | 
+ tenant_settings             | public       | features               |                6 | jsonb                    | NO          | '{}'::jsonb
+ tenant_settings             | saas         | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_settings             | saas         | slug                   |                2 | text                     | YES         | 
+ tenant_users                | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_users                | catalog      | user_id                |                2 | uuid                     | NO          | 
+ tenant_users                | catalog      | role                   |                3 | USER-DEFINED             | NO          | 'viewer'::tenant_role
+ tenant_users                | catalog      | created_at             |                4 | timestamp with time zone | NO          | now()
+ tenant_users                | public       | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_users                | public       | user_id                |                2 | uuid                     | NO          | 
+ tenant_users                | public       | invited_at             |                3 | timestamp with time zone | YES         | 
+ tenant_users                | public       | accepted_at            |                4 | timestamp with time zone | YES         | 
+ tenant_users                | public       | role                   |                5 | USER-DEFINED             | NO          | 'viewer'::tenant_role
+ tenant_users                | public       | created_at             |                6 | timestamp with time zone | NO          | now()
+ tenant_users                | saas         | tenant_id              |                1 | uuid                     | NO          | 
+ tenant_users                | saas         | user_id                |                2 | uuid                     | NO          | 
+ tenant_users                | saas         | role                   |                3 | USER-DEFINED             | NO          | 'viewer'::tenant_role
+ tenant_users                | saas         | created_at             |                4 | timestamp with time zone | NO          | now()
+ tenants                     | catalog      | tenant_id              |                1 | uuid                     | NO          | 
+ tenants                     | catalog      | company_name           |                2 | text                     | NO          | 
+ tenants                     | catalog      | created_at             |                3 | timestamp with time zone | NO          | now()
+ tenants                     | catalog      | license_limit          |                4 | integer                  | NO          | 1
+ tenants                     | catalog      | branch_limit           |                5 | integer                  | NO          | 3
+ tenants                     | catalog      | short_code             |                6 | character                | YES         | 
+ tenants                     | catalog      | id                     |                7 | uuid                     | YES         | 
+ tenants                     | catalog      | subdomain              |                8 | text                     | YES         | 
+ tenants                     | catalog      | email                  |                9 | text                     | YES         | 
+ tenants                     | catalog      | status                 |               10 | text                     | NO          | 'active'::text
+ tenants                     | catalog      | start_date             |               11 | date                     | YES         | 
+ tenants                     | catalog      | renewal_date           |               12 | date                     | YES         | 
+ tenants                     | catalog      | plan_type              |               13 | text                     | YES         | 
+ tenants                     | catalog      | company_id             |               14 | character                | YES         | 
+ tenants                     | saas         | tenant_id              |                1 | uuid                     | NO          | gen_random_uuid()
+ tenants                     | saas         | company_name           |                2 | character varying        | NO          | 
+ tenants                     | saas         | subdomain              |                3 | character varying        | NO          | 
+ tenants                     | saas         | domain                 |                4 | text                     | YES         | 
+ tenants                     | saas         | email                  |                5 | character varying        | NO          | 
+ tenants                     | saas         | status                 |                6 | character varying        | NO          | 'active'::character varying
+ tenants                     | saas         | start_date             |                7 | date                     | YES         | 
+ tenants                     | saas         | renewal_date           |                8 | date                     | YES         | 
+ tenants                     | saas         | plan_type              |                9 | character varying        | YES         | 
+ tenants                     | saas         | timezone               |               10 | text                     | NO          | 'UTC'::text
+ tenants                     | saas         | created_at             |               11 | timestamp with time zone | NO          | now()
+ tenants                     | saas         | updated_at             |               12 | timestamp with time zone | NO          | now()
+ tenants                     | saas         | deleted_at             |               13 | timestamp with time zone | YES         | 
+ tenants                     | saas         | company_id             |               14 | character                | YES         | 
+ tenants                     | saas         | license_limit          |               15 | integer                  | NO          | 1
+ tenants                     | saas         | branch_limit           |               16 | integer                  | NO          | 3
+ users                       | catalog      | user_id                |                1 | uuid                     | NO          | gen_random_uuid()
+ users                       | catalog      | email                  |                2 | text                     | NO          | 
+ users                       | catalog      | created_at             |                3 | timestamp with time zone | NO          | now()
+ users                       | catalog      | photo_url              |                4 | text                     | YES         | 
+ users                       | saas         | user_id                |                1 | uuid                     | NO          | gen_random_uuid()
+ users                       | saas         | tenant_id              |                2 | uuid                     | NO          | 
+ users                       | saas         | branch_id              |                3 | uuid                     | YES         | 
+ users                       | saas         | email                  |                4 | character varying        | NO          | 
+ users                       | saas         | password_hash          |                5 | text                     | NO          | 
+ users                       | saas         | name                   |                6 | character varying        | YES         | 
+ users                       | saas         | role_id                |                7 | uuid                     | YES         | 
+ users                       | saas         | status                 |                8 | character varying        | NO          | 'active'::character varying
+ users                       | saas         | last_login             |                9 | timestamp with time zone | YES         | 
+ users                       | saas         | created_at             |               10 | timestamp with time zone | NO          | now()
+ users                       | saas         | updated_at             |               11 | timestamp with time zone | NO          | now()
+ users                       | saas         | deleted_at             |               12 | timestamp with time zone | YES         | 
+ webrtc_rooms                | catalog      | pair_id                |                1 | text                     | NO          | 
+ webrtc_rooms                | catalog      | offer                  |                2 | text                     | YES         | 
+ webrtc_rooms                | catalog      | answer                 |                3 | text                     | YES         | 
+ webrtc_rooms                | catalog      | ice_cashier_queued     |                4 | jsonb                    | NO          | '[]'::jsonb
+ webrtc_rooms                | catalog      | ice_display_queued     |                5 | jsonb                    | NO          | '[]'::jsonb
+ webrtc_rooms                | catalog      | updated_at             |                6 | timestamp with time zone | NO          | now()
+ webrtc_rooms                | public       | pair_id                |                1 | text                     | NO          | 
+ webrtc_rooms                | public       | offer                  |                2 | text                     | YES         | 
+ webrtc_rooms                | public       | answer                 |                3 | text                     | YES         | 
+ webrtc_rooms                | public       | ice_cashier_queued     |                4 | jsonb                    | NO          | '[]'::jsonb
+ webrtc_rooms                | public       | ice_display_queued     |                5 | jsonb                    | NO          | '[]'::jsonb
+ webrtc_rooms                | public       | updated_at             |                6 | timestamp with time zone | NO          | now()
+ webrtc_rooms                | saas         | pair_id                |                1 | text                     | NO          | 
+ webrtc_rooms                | saas         | offer                  |                2 | text                     | YES         | 
+ webrtc_rooms                | saas         | answer                 |                3 | text                     | YES         | 
+ webrtc_rooms                | saas         | ice_cashier_queued     |                4 | jsonb                    | NO          | '[]'::jsonb
+ webrtc_rooms                | saas         | ice_display_queued     |                5 | jsonb                    | NO          | '[]'::jsonb
+ webrtc_rooms                | saas         | updated_at             |                6 | timestamp with time zone | NO          | now()
+(564 rows)
+
+ schema  |            table            |             pk_name              |        pk_cols        
+---------+-----------------------------+----------------------------------+-----------------------
+ catalog | admin_activity_logs         | admin_activity_logs_pkey         | id
+ public  | admin_activity_logs         | admin_activity_logs_pkey         | id
+ saas    | admin_activity_logs         | admin_activity_logs_pkey         | id
+ catalog | branches                    | branches_pkey                    | branch_id
+ saas    | branches                    | branches_pkey                    | branch_id
+ catalog | device_activation_codes     | device_activation_codes_pkey     | code
+ public  | device_activation_codes     | device_activation_codes_pkey     | code
+ catalog | device_events               | device_events_pkey               | id
+ public  | device_events               | device_events_pkey               | id
+ catalog | devices                     | devices_pkey                     | device_id
+ saas    | devices                     | devices_pkey                     | device_id
+ catalog | drive_thru_state            | drive_thru_state_pkey            | tenant_id
+ public  | drive_thru_state            | drive_thru_state_pkey            | tenant_id
+ saas    | drive_thru_state            | drive_thru_state_pkey            | tenant_id
+ catalog | integration_sync_runs       | integration_sync_runs_pkey       | id
+ public  | integration_sync_runs       | integration_sync_runs_pkey       | id
+ saas    | integration_sync_runs       | integration_sync_runs_pkey       | id
+ catalog | invites                     | invites_pkey                     | id
+ public  | invites                     | invites_pkey                     | id
+ saas    | invites                     | invites_pkey                     | id
+ catalog | modifier_groups             | modifier_groups_pkey             | id
+ public  | modifier_groups             | modifier_groups_pkey             | id
+ catalog | modifier_options            | modifier_options_pkey            | id
+ public  | modifier_options            | modifier_options_pkey            | id
+ catalog | paid_order_counters         | paid_order_counters_pkey         | tenant_id, branch_id
+ public  | paid_order_counters         | paid_order_counters_pkey         | tenant_id, branch_id
+ saas    | paid_order_counters         | paid_order_counters_pkey         | tenant_id, branch_id
+ catalog | paid_orders                 | paid_orders_pkey                 | id
+ public  | paid_orders                 | paid_orders_pkey                 | id
+ saas    | paid_orders                 | paid_orders_pkey                 | id
+ catalog | platform_admin_roles        | platform_admin_roles_pkey        | admin_id, role_id
+ public  | platform_admin_roles        | platform_admin_roles_pkey        | admin_id, role_id
+ catalog | platform_admin_tenants      | platform_admin_tenants_pkey      | admin_id, tenant_id
+ public  | platform_admin_tenants      | platform_admin_tenants_pkey      | admin_id, tenant_id
+ catalog | platform_admins             | platform_admins_pkey             | email
+ public  | platform_admins             | platform_admins_pkey             | admin_id
+ catalog | platform_permissions        | platform_permissions_pkey        | code
+ public  | platform_permissions        | platform_permissions_pkey        | code
+ catalog | platform_role_permissions   | platform_role_permissions_pkey   | role_id, code
+ public  | platform_role_permissions   | platform_role_permissions_pkey   | role_id, code
+ catalog | platform_roles              | platform_roles_pkey              | role_id
+ public  | platform_roles              | platform_roles_pkey              | role_id
+ catalog | platform_settings           | platform_settings_pkey           | id
+ public  | platform_settings           | platform_settings_pkey           | id
+ saas    | platform_settings           | platform_settings_pkey           | id
+ catalog | product_branch_availability | product_branch_availability_pkey | product_id, branch_id
+ public  | product_branch_availability | product_branch_availability_pkey | product_id, branch_id
+ catalog | product_modifier_groups     | product_modifier_groups_pkey     | product_id, group_id
+ public  | product_modifier_groups     | product_modifier_groups_pkey     | product_id, group_id
+ saas    | product_modifier_groups     | product_modifier_groups_pkey     | product_id, group_id
+ catalog | rtc_session_stats           | rtc_session_stats_pkey           | id
+ public  | rtc_session_stats           | rtc_session_stats_pkey           | id
+ saas    | rtc_session_stats           | rtc_session_stats_pkey           | id
+ catalog | rtc_sessions                | rtc_sessions_pkey                | id
+ public  | rtc_sessions                | rtc_sessions_pkey                | id
+ catalog | schema_migrations           | schema_migrations_pkey           | id
+ public  | schema_migrations           | schema_migrations_pkey           | id
+ saas    | schema_migrations           | schema_migrations_pkey           | id
+ catalog | tenant_api_integrations     | tenant_api_integrations_pkey     | id
+ public  | tenant_api_integrations     | tenant_api_integrations_pkey     | id
+ catalog | tenant_brand                | tenant_brand_pkey                | tenant_id
+ public  | tenant_brand                | tenant_brand_pkey                | tenant_id
+ catalog | tenant_domains              | tenant_domains_pkey              | host
+ public  | tenant_domains              | tenant_domains_pkey              | host
+ catalog | tenant_external_mappings    | tenant_external_mappings_pkey    | id
+ public  | tenant_external_mappings    | tenant_external_mappings_pkey    | id
+ saas    | tenant_external_mappings    | tenant_external_mappings_pkey    | id
+ catalog | tenant_permissions          | tenant_permissions_pkey          | tenant_id, user_id
+ public  | tenant_permissions          | tenant_permissions_pkey          | tenant_id, user_id
+ catalog | tenant_settings             | tenant_settings_pkey             | tenant_id
+ public  | tenant_settings             | tenant_settings_pkey             | tenant_id
+ saas    | tenant_settings             | tenant_settings_pkey             | tenant_id
+ catalog | tenant_users                | tenant_users_pkey                | tenant_id, user_id
+ public  | tenant_users                | tenant_users_pkey                | tenant_id, user_id
+ saas    | tenant_users                | tenant_users_pkey                | tenant_id, user_id
+ catalog | tenants                     | tenants_pkey                     | tenant_id
+ saas    | tenants                     | tenants_pkey                     | tenant_id
+ catalog | users                       | users_pkey                       | user_id
+ saas    | users                       | users_pkey                       | user_id
+ catalog | webrtc_rooms                | webrtc_rooms_pkey                | pair_id
+ public  | webrtc_rooms                | webrtc_rooms_pkey                | pair_id
+ saas    | webrtc_rooms                | webrtc_rooms_pkey                | pair_id
+(82 rows)
+
+ schema  |            table            | pk_indexes | non_pk_indexes 
+---------+-----------------------------+------------+----------------
+ catalog | admin_activity_logs         |          1 |              3
+ public  | admin_activity_logs         |          1 |              3
+ saas    | admin_activity_logs         |          1 |              3
+ catalog | branches                    |          1 |              3
+ saas    | branches                    |          1 |              2
+ catalog | device_activation_codes     |          1 |              2
+ public  | device_activation_codes     |          1 |              2
+ catalog | device_events               |          1 |              3
+ public  | device_events               |          1 |              3
+ catalog | devices                     |          1 |              9
+ saas    | devices                     |          1 |              6
+ catalog | drive_thru_state            |          1 |              0
+ public  | drive_thru_state            |          1 |              0
+ saas    | drive_thru_state            |          1 |              0
+ catalog | integration_sync_runs       |          1 |              0
+ public  | integration_sync_runs       |          1 |              1
+ saas    | integration_sync_runs       |          1 |              0
+ catalog | invites                     |          1 |              2
+ public  | invites                     |          1 |              2
+ saas    | invites                     |          1 |              2
+ catalog | modifier_groups             |          1 |              2
+ public  | modifier_groups             |          1 |              2
+ catalog | modifier_options            |          1 |              1
+ public  | modifier_options            |          1 |              2
+ catalog | paid_order_counters         |          1 |              0
+ public  | paid_order_counters         |          1 |              0
+ saas    | paid_order_counters         |          1 |              0
+ catalog | paid_orders                 |          1 |              4
+ public  | paid_orders                 |          1 |              4
+ saas    | paid_orders                 |          1 |              4
+ catalog | platform_admin_roles        |          1 |              0
+ public  | platform_admin_roles        |          1 |              0
+ catalog | platform_admin_tenants      |          1 |              2
+ public  | platform_admin_tenants      |          1 |              2
+ catalog | platform_admins             |          1 |              0
+ public  | platform_admins             |          1 |              1
+ catalog | platform_permissions        |          1 |              0
+ public  | platform_permissions        |          1 |              0
+ catalog | platform_role_permissions   |          1 |              0
+ public  | platform_role_permissions   |          1 |              0
+ catalog | platform_roles              |          1 |              1
+ public  | platform_roles              |          1 |              1
+ catalog | platform_settings           |          1 |              0
+ public  | platform_settings           |          1 |              0
+ saas    | platform_settings           |          1 |              0
+ catalog | product_branch_availability |          1 |              1
+ public  | product_branch_availability |          1 |              1
+ catalog | product_modifier_groups     |          1 |              0
+ public  | product_modifier_groups     |          1 |              0
+ saas    | product_modifier_groups     |          1 |              0
+ catalog | rtc_session_stats           |          1 |              1
+ public  | rtc_session_stats           |          1 |              1
+ saas    | rtc_session_stats           |          1 |              1
+ catalog | rtc_sessions                |          1 |              4
+ public  | rtc_sessions                |          1 |              4
+ catalog | schema_migrations           |          1 |              0
+ public  | schema_migrations           |          1 |              0
+ saas    | schema_migrations           |          1 |              0
+ catalog | tenant_api_integrations     |          1 |              0
+ public  | tenant_api_integrations     |          1 |              1
+ catalog | tenant_brand                |          1 |              0
+ public  | tenant_brand                |          1 |              0
+ catalog | tenant_domains              |          1 |              1
+ public  | tenant_domains              |          1 |              1
+ catalog | tenant_external_mappings    |          1 |              0
+ public  | tenant_external_mappings    |          1 |              3
+ saas    | tenant_external_mappings    |          1 |              0
+ catalog | tenant_permissions          |          1 |              0
+ public  | tenant_permissions          |          1 |              0
+ catalog | tenant_settings             |          1 |              1
+ public  | tenant_settings             |          1 |              1
+ saas    | tenant_settings             |          1 |              0
+ catalog | tenant_users                |          1 |              1
+ public  | tenant_users                |          1 |              1
+ saas    | tenant_users                |          1 |              1
+ catalog | tenants                     |          1 |              3
+ saas    | tenants                     |          1 |              3
+ catalog | users                       |          1 |              2
+ saas    | users                       |          1 |              5
+ catalog | webrtc_rooms                |          1 |              0
+ public  | webrtc_rooms                |          1 |              0
+ saas    | webrtc_rooms                |          1 |              0
+(82 rows)
+

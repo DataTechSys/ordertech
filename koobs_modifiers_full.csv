@@ -1,0 +1,271 @@
+product_name,product_name_localized,product_sku,modifier_name,modifier_name_localized,modifier_reference,minimum_options,maximum_options,free_options,default_options,unique_options
+ICED | Black Spanish (M),ICED | Black Spanish (M),ICE_BLACK_SPANISH_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Black Spanish (M),ICED | Black Spanish (M),ICE_BLACK_SPANISH_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Spanish Latte (M),HOT | Spanish Latte (M),HOT_SPANISH_LATTE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Spanish Latte (M),HOT | Spanish Latte (M),HOT_SPANISH_LATTE_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Spanish Latte (M),HOT | Spanish Latte (M),HOT_SPANISH_LATTE_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Spanish Latte (M),HOT | Spanish Latte (M),HOT_SPANISH_LATTE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Black Coffee (M),ICED | Black Coffee (M),ICE_BLACK_COFFEE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Black Coffee (M),ICED | Black Coffee (M),ICE_BLACK_COFFEE_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Black Coffee (M),ICED | Black Coffee (M),ICE_BLACK_COFFEE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Cappuccino (M),ICED | Cappuccino (M),ICE_CAPPUCCINO_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Cappuccino (M),ICED | Cappuccino (M),ICE_CAPPUCCINO_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Cappuccino (M),ICED | Cappuccino (M),ICE_CAPPUCCINO_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Latte (M),ICED | Latte (M),ICE_LATTE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Latte (M),ICED | Latte (M),ICE_LATTE_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Latte (M),ICED | Latte (M),ICE_LATTE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Caramel Macchiato (M),ICED | Caramel Macchiato (M),ICE_CARAMEL_MACCHIATO_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Caramel Macchiato (M),ICED | Caramel Macchiato (M),ICE_CARAMEL_MACCHIATO_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Caramel Macchiato (M),ICED | Caramel Macchiato (M),ICE_CARAMEL_MACCHIATO_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Mocha (M),ICED | Mocha (M),ICE_MOCHA_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Mocha (M),ICED | Mocha (M),ICE_MOCHA_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Mocha (M),ICED | Mocha (M),ICE_MOCHA_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | V60 (M),ICED | V60 (M),ICE_V60_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | V60 (M),ICED | V60 (M),ICE_V60_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | V60 (M),ICED | V60 (M),ICE_V60_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Spanish Latte (M),ICED | Spanish Latte (M),ICE_SPANISH_LATTE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Spanish Latte (M),ICED | Spanish Latte (M),ICE_SPANISH_LATTE_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Spanish Latte (M),ICED | Spanish Latte (M),ICE_SPANISH_LATTE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Flat White (M),ICED | Flat White (M),ICE_FLAT_WHITE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Flat White (M),ICED | Flat White (M),ICE_FLAT_WHITE_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Flat White (M),ICED | Flat White (M),ICE_FLAT_WHITE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Cortado (M),ICED | Cortado (M),ICE_CORTADO_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Cortado (M),ICED | Cortado (M),ICE_CORTADO_M,Extra,اضافي,Extra,0,10,0,,1
+ICED | Cortado (M),ICED | Cortado (M),ICE_CORTADO_M,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Black Spanish (L),ICED | Black Spanish (L),ICE_BLACK_SPANISH_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Black Spanish (L),ICED | Black Spanish (L),ICE_BLACK_SPANISH_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Black Coffee (L),ICED | Black Coffee (L),ICE_BLACK_COFFEE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Black Coffee (L),ICED | Black Coffee (L),ICE_BLACK_COFFEE_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Black Coffee (L),ICED | Black Coffee (L),ICE_BLACK_COFFEE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Cappuccino (L),ICED | Cappuccino (L),ICE_CAPPUCCINO_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Cappuccino (L),ICED | Cappuccino (L),ICE_CAPPUCCINO_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Cappuccino (L),ICED | Cappuccino (L),ICE_CAPPUCCINO_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Latte (L),ICED | Latte (L),ICE_LATTE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Latte (L),ICED | Latte (L),ICE_LATTE_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Latte (L),ICED | Latte (L),ICE_LATTE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Caramel Macchiato (L),ICED | Caramel Macchiato (L),ICE_CARAMEL_MACCHIATO_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Caramel Macchiato (L),ICED | Caramel Macchiato (L),ICE_CARAMEL_MACCHIATO_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Caramel Macchiato (L),ICED | Caramel Macchiato (L),ICE_CARAMEL_MACCHIATO_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Mocha (L),ICED | Mocha (L),ICE_MOCHA_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Mocha (L),ICED | Mocha (L),ICE_MOCHA_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Mocha (L),ICED | Mocha (L),ICE_MOCHA_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | V60 (L),ICED | V60 (L),ICE_V60_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | V60 (L),ICED | V60 (L),ICE_V60_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | V60 (L),ICED | V60 (L),ICE_V60_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Spanish Latte (L),ICED | Spanish Latte (L),ICE_SPANISH_LATTE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Spanish Latte (L),ICED | Spanish Latte (L),ICE_SPANISH_LATTE_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Spanish Latte (L),ICED | Spanish Latte (L),ICE_SPANISH_LATTE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Flat White (L),ICED | Flat White (L),ICE_FLAT_WHITE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Flat White (L),ICED | Flat White (L),ICE_FLAT_WHITE_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Flat White (L),ICED | Flat White (L),ICE_FLAT_WHITE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+ICED | Cortado (L),ICED | Cortado (L),ICE_CORTADO_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+ICED | Cortado (L),ICED | Cortado (L),ICE_CORTADO_L,Extra,اضافي,Extra,0,10,0,,1
+ICED | Cortado (L),ICED | Cortado (L),ICE_CORTADO_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Black Spanish (M),HOT | Black Spanish (M),HOT_BLACK_SPANISH_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Black Spanish (M),HOT | Black Spanish (M),HOT_BLACK_SPANISH_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Black Coffee (M),HOT | Black Coffee (M),HOT_BLACK_COFFEE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Black Coffee (M),HOT | Black Coffee (M),HOT_BLACK_COFFEE_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Black Coffee (M),HOT | Black Coffee (M),HOT_BLACK_COFFEE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Cappuccino (M),HOT | Cappuccino (M),HOT_CAPPUCCINO_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Cappuccino (M),HOT | Cappuccino (M),HOT_CAPPUCCINO_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Cappuccino (M),HOT | Cappuccino (M),HOT_CAPPUCCINO_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Cappuccino (M),HOT | Cappuccino (M),HOT_CAPPUCCINO_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Latte (M),HOT | Latte (M),HOT_LATTE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Latte (M),HOT | Latte (M),HOT_LATTE_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Latte (M),HOT | Latte (M),HOT_LATTE_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Latte (M),HOT | Latte (M),HOT_LATTE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Caramel Macchiato (M),HOT | Caramel Macchiato (M),HOT_CARAMEL_MACCHIATO_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Caramel Macchiato (M),HOT | Caramel Macchiato (M),HOT_CARAMEL_MACCHIATO_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Caramel Macchiato (M),HOT | Caramel Macchiato (M),HOT_CARAMEL_MACCHIATO_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Caramel Macchiato (M),HOT | Caramel Macchiato (M),HOT_CARAMEL_MACCHIATO_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Mocha (M),HOT | Mocha (M),HOT_MOCHA_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Mocha (M),HOT | Mocha (M),HOT_MOCHA_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Mocha (M),HOT | Mocha (M),HOT_MOCHA_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Mocha (M),HOT | Mocha (M),HOT_MOCHA_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | V60 (M),HOT | V60 (M),HOT_V60_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | V60 (M),HOT | V60 (M),HOT_V60_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | V60 (M),HOT | V60 (M),HOT_V60_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Flat White (M),HOT | Flat White (M),HOT_FLAT_WHITE_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Flat White (M),HOT | Flat White (M),HOT_FLAT_WHITE_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Flat White (M),HOT | Flat White (M),HOT_FLAT_WHITE_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Flat White (M),HOT | Flat White (M),HOT_FLAT_WHITE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Cortado (M),HOT | Cortado (M),HOT_CORTADO_M,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Cortado (M),HOT | Cortado (M),HOT_CORTADO_M,Extra,اضافي,Extra,0,10,0,,1
+HOT | Cortado (M),HOT | Cortado (M),HOT_CORTADO_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Cortado (M),HOT | Cortado (M),HOT_CORTADO_M,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Black Spanish (L),HOT | Black Spanish (L),HOT_BLACK_SPANISH_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Black Spanish (L),HOT | Black Spanish (L),HOT_BLACK_SPANISH_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Black Coffee (L),HOT | Black Coffee (L),HOT_BLACK_COFFEE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Black Coffee (L),HOT | Black Coffee (L),HOT_BLACK_COFFEE_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Black Coffee (L),HOT | Black Coffee (L),HOT_BLACK_COFFEE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Cappuccino (L),HOT | Cappuccino (L),HOT_CAPPUCCINO_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Cappuccino (L),HOT | Cappuccino (L),HOT_CAPPUCCINO_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Cappuccino (L),HOT | Cappuccino (L),HOT_CAPPUCCINO_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Cappuccino (L),HOT | Cappuccino (L),HOT_CAPPUCCINO_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Latte (L),HOT | Latte (L),HOT_LATTE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Latte (L),HOT | Latte (L),HOT_LATTE_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Latte (L),HOT | Latte (L),HOT_LATTE_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Latte (L),HOT | Latte (L),HOT_LATTE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Caramel Macchiato (L),HOT | Caramel Macchiato (L),HOT_CARAMEL_MACCHIATO_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Caramel Macchiato (L),HOT | Caramel Macchiato (L),HOT_CARAMEL_MACCHIATO_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Caramel Macchiato (L),HOT | Caramel Macchiato (L),HOT_CARAMEL_MACCHIATO_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Caramel Macchiato (L),HOT | Caramel Macchiato (L),HOT_CARAMEL_MACCHIATO_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Mocha (L),HOT | Mocha (L),HOT_MOCHA_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Mocha (L),HOT | Mocha (L),HOT_MOCHA_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Mocha (L),HOT | Mocha (L),HOT_MOCHA_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Mocha (L),HOT | Mocha (L),HOT_MOCHA_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | V60 (L),HOT | V60 (L),HOT_V60_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | V60 (L),HOT | V60 (L),HOT_V60_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | V60 (L),HOT | V60 (L),HOT_V60_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Spanish Latte (L),HOT | Spanish Latte (L),HOT_SPANISH_LATTE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Spanish Latte (L),HOT | Spanish Latte (L),HOT_SPANISH_LATTE_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Spanish Latte (L),HOT | Spanish Latte (L),HOT_SPANISH_LATTE_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Spanish Latte (L),HOT | Spanish Latte (L),HOT_SPANISH_LATTE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Flat White (L),HOT | Flat White (L),HOT_FLAT_WHITE_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Flat White (L),HOT | Flat White (L),HOT_FLAT_WHITE_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Flat White (L),HOT | Flat White (L),HOT_FLAT_WHITE_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Flat White (L),HOT | Flat White (L),HOT_FLAT_WHITE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+HOT | Cortado (L),HOT | Cortado (L),HOT_CORTADO_L,Coffee | Shots,القهوة | الشوتس,COFFEE_SHOTS,0,10,0,,1
+HOT | Cortado (L),HOT | Cortado (L),HOT_CORTADO_L,Extra,اضافي,Extra,0,10,0,,1
+HOT | Cortado (L),HOT | Cortado (L),HOT_CORTADO_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+HOT | Cortado (L),HOT | Cortado (L),HOT_CORTADO_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Cold Brew,Cold Brew,COLD_BREW,Extra,اضافي,Extra,0,10,0,,1
+Cold Brew,Cold Brew,COLD_BREW,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Tea Pot | Black,Hot Tea Pot | Black,HOT_TEA_POT_BLACK,Extra,اضافي,Extra,0,10,0,,1
+Hot Tea Pot | Black,Hot Tea Pot | Black,HOT_TEA_POT_BLACK,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Tea Pot | Green,Hot Tea Pot | Green,HOT_TEA_POT_GREEN,Extra,اضافي,Extra,0,10,0,,1
+Hot Tea Pot | Green,Hot Tea Pot | Green,HOT_TEA_POT_GREEN,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Tea Pot | Chamomile,Hot Tea Pot | Chamomile,HOT_TEA_POT_CHAMOMILE,Extra,اضافي,Extra,0,10,0,,1
+Hot Tea Pot | Chamomile,Hot Tea Pot | Chamomile,HOT_TEA_POT_CHAMOMILE,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Tea Pot | Earl Grey,Hot Tea Pot | Earl Grey,HOT_TEA_POT_EARL_GREY,Extra,اضافي,Extra,0,10,0,,1
+Hot Tea Pot | Earl Grey,Hot Tea Pot | Earl Grey,HOT_TEA_POT_EARL_GREY,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Tea Pot | Mint,Hot Tea Pot | Mint,HOT_TEA_POT_MINT,Extra,اضافي,Extra,0,10,0,,1
+Hot Tea Pot | Mint,Hot Tea Pot | Mint,HOT_TEA_POT_MINT,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Tea | Black,Iced Tea | Black,ICED_TEA_BLACK,Extra,اضافي,Extra,0,10,0,,1
+Iced Tea | Black,Iced Tea | Black,ICED_TEA_BLACK,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Tea | Green,Iced Tea | Green,ICED_TEA_GREEN,Extra,اضافي,Extra,0,10,0,,1
+Iced Tea | Green,Iced Tea | Green,ICED_TEA_GREEN,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Tea | Chamomile,Iced Tea | Chamomile,ICED_TEA_CHAMOMILE,Extra,اضافي,Extra,0,10,0,,1
+Iced Tea | Chamomile,Iced Tea | Chamomile,ICED_TEA_CHAMOMILE,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Tea | Earl Grey,Iced Tea | Earl Grey,ICED_TEA_EARL_GREY,Extra,اضافي,Extra,0,10,0,,1
+Iced Tea | Earl Grey,Iced Tea | Earl Grey,ICED_TEA_EARL_GREY,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Tea | Mint,Iced Tea | Mint,ICED_TEA_MINT,Extra,اضافي,Extra,0,10,0,,1
+Iced Tea | Mint,Iced Tea | Mint,ICED_TEA_MINT,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Chocolate (M),Hot Chocolate (M),HOT_CHOCOLATE_M,Extra,اضافي,Extra,0,10,0,,1
+Hot Chocolate (M),Hot Chocolate (M),HOT_CHOCOLATE_M,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+Hot Chocolate (M),Hot Chocolate (M),HOT_CHOCOLATE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+Hot Chocolate (L),Hot Chocolate (L),HOT_CHOCOLATE_L,Extra,اضافي,Extra,0,10,0,,1
+Hot Chocolate (L),Hot Chocolate (L),HOT_CHOCOLATE_L,Hot Milk,حليب ساخن,HOT_MILK,0,10,0,,1
+Hot Chocolate (L),Hot Chocolate (L),HOT_CHOCOLATE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Chocolate (M),Iced Chocolate (M),ICED_CHOCOLATE_M,Extra,اضافي,Extra,0,10,0,,1
+Iced Chocolate (M),Iced Chocolate (M),ICED_CHOCOLATE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+Iced Chocolate (L),Iced Chocolate (L),ICED_CHOCOLATE_L,Extra,اضافي,Extra,0,10,0,,1
+Iced Chocolate (L),Iced Chocolate (L),ICED_CHOCOLATE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Orange Juice (M),Fresh Orange Juice (M),FRESH_ORANGE_JUICE_M,Extra,اضافي,Extra,0,10,0,,1
+Fresh Orange Juice (M),Fresh Orange Juice (M),FRESH_ORANGE_JUICE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Orange Juice (L),Fresh Orange Juice (L),FRESH_ORANGE_JUICE_L,Extra,اضافي,Extra,0,10,0,,1
+Fresh Orange Juice (L),Fresh Orange Juice (L),FRESH_ORANGE_JUICE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Apple Juice (M),Fresh Apple Juice (M),FRESH_APPLE_JUICE_M,Extra,اضافي,Extra,0,10,0,,1
+Fresh Apple Juice (M),Fresh Apple Juice (M),FRESH_APPLE_JUICE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Apple Juice (L),Fresh Apple Juice (L),FRESH_APPLE_JUICE_L,Extra,اضافي,Extra,0,10,0,,1
+Fresh Apple Juice (L),Fresh Apple Juice (L),FRESH_APPLE_JUICE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Carrot Juice (M),Fresh Carrot Juice (M),FRESH_CARROT_JUICE_M,Extra,اضافي,Extra,0,10,0,,1
+Fresh Carrot Juice (M),Fresh Carrot Juice (M),FRESH_CARROT_JUICE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Carrot Juice (L),Fresh Carrot Juice (L),FRESH_CARROT_JUICE_L,Extra,اضافي,Extra,0,10,0,,1
+Fresh Carrot Juice (L),Fresh Carrot Juice (L),FRESH_CARROT_JUICE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Lemon Juice (M),Fresh Lemon Juice (M),FRESH_LEMON_JUICE_M,Extra,اضافي,Extra,0,10,0,,1
+Fresh Lemon Juice (M),Fresh Lemon Juice (M),FRESH_LEMON_JUICE_M,Delivery,ديليفري,Delivery,1,1,0,,1
+Fresh Lemon Juice (L),Fresh Lemon Juice (L),FRESH_LEMON_JUICE_L,Extra,اضافي,Extra,0,10,0,,1
+Fresh Lemon Juice (L),Fresh Lemon Juice (L),FRESH_LEMON_JUICE_L,Delivery,ديليفري,Delivery,1,1,0,,1
+Soft Drinks - Pepsi,Soft Drinks - Pepsi,SOFT_DRINKS_PEPSI,Delivery,ديليفري,Delivery,1,1,0,,1
+Soft Drinks - 7UP,Soft Drinks - 7UP,SOFT_DRINKS_7UP,Delivery,ديليفري,Delivery,1,1,0,,1
+Soft Drinks - Mirinda,Soft Drinks - Mirinda,SOFT_DRINKS_MIRINDA,Delivery,ديليفري,Delivery,1,1,0,,1
+Soft Drinks - Mountain Dew,Soft Drinks - Mountain Dew,SOFT_DRINKS_MOUNTAIN_DEW,Delivery,ديليفري,Delivery,1,1,0,,1
+Water 500ml,Water 500ml,WATER_500ML,Delivery,ديليفري,Delivery,1,1,0,,1
+Sparkling Water,Sparkling Water,SPARKLING_WATER,Delivery,ديليفري,Delivery,1,1,0,,1
+Energy Drink - Red Bull,Energy Drink - Red Bull,ENERGY_DRINK_RED_BULL,Delivery,ديليفري,Delivery,1,1,0,,1
+Energy Drink - Monster,Energy Drink - Monster,ENERGY_DRINK_MONSTER,Delivery,ديليفري,Delivery,1,1,0,,1
+Croissant | Plain,Croissant | Plain,CROISSANT_PLAIN,Extra,اضافي,Extra,0,10,0,,1
+Croissant | Plain,Croissant | Plain,CROISSANT_PLAIN,Delivery,ديليفري,Delivery,1,1,0,,1
+Croissant | Chocolate,Croissant | Chocolate,CROISSANT_CHOCOLATE,Extra,اضافي,Extra,0,10,0,,1
+Croissant | Chocolate,Croissant | Chocolate,CROISSANT_CHOCOLATE,Delivery,ديليفري,Delivery,1,1,0,,1
+Croissant | Almond,Croissant | Almond,CROISSANT_ALMOND,Extra,اضافي,Extra,0,10,0,,1
+Croissant | Almond,Croissant | Almond,CROISSANT_ALMOND,Delivery,ديليفري,Delivery,1,1,0,,1
+Croissant | Feta Cheese,Croissant | Feta Cheese,CROISSANT_FETA_CHEESE,Extra,اضافي,Extra,0,10,0,,1
+Croissant | Feta Cheese,Croissant | Feta Cheese,CROISSANT_FETA_CHEESE,Delivery,ديليفري,Delivery,1,1,0,,1
+Croissant | Turkey & Cheese,Croissant | Turkey & Cheese,CROISSANT_TURKEY_CHEESE,Extra,اضافي,Extra,0,10,0,,1
+Croissant | Turkey & Cheese,Croissant | Turkey & Cheese,CROISSANT_TURKEY_CHEESE,Delivery,ديليفري,Delivery,1,1,0,,1
+Muffin | Blueberry,Muffin | Blueberry,MUFFIN_BLUEBERRY,Extra,اضافي,Extra,0,10,0,,1
+Muffin | Blueberry,Muffin | Blueberry,MUFFIN_BLUEBERRY,Delivery,ديليفري,Delivery,1,1,0,,1
+Muffin | Chocolate Chip,Muffin | Chocolate Chip,MUFFIN_CHOCOLATE_CHIP,Extra,اضافي,Extra,0,10,0,,1
+Muffin | Chocolate Chip,Muffin | Chocolate Chip,MUFFIN_CHOCOLATE_CHIP,Delivery,ديليفري,Delivery,1,1,0,,1
+Muffin | Banana Walnut,Muffin | Banana Walnut,MUFFIN_BANANA_WALNUT,Extra,اضافي,Extra,0,10,0,,1
+Muffin | Banana Walnut,Muffin | Banana Walnut,MUFFIN_BANANA_WALNUT,Delivery,ديليفري,Delivery,1,1,0,,1
+Danish | Cheese,Danish | Cheese,DANISH_CHEESE,Extra,اضافي,Extra,0,10,0,,1
+Danish | Cheese,Danish | Cheese,DANISH_CHEESE,Delivery,ديليفري,Delivery,1,1,0,,1
+Danish | Apple,Danish | Apple,DANISH_APPLE,Extra,اضافي,Extra,0,10,0,,1
+Danish | Apple,Danish | Apple,DANISH_APPLE,Delivery,ديليفري,Delivery,1,1,0,,1
+Bagel | Plain,Bagel | Plain,BAGEL_PLAIN,Extra,اضافي,Extra,0,10,0,,1
+Bagel | Plain,Bagel | Plain,BAGEL_PLAIN,Delivery,ديليفري,Delivery,1,1,0,,1
+Bagel | Sesame,Bagel | Sesame,BAGEL_SESAME,Extra,اضافي,Extra,0,10,0,,1
+Bagel | Sesame,Bagel | Sesame,BAGEL_SESAME,Delivery,ديليفري,Delivery,1,1,0,,1
+Bagel | Everything,Bagel | Everything,BAGEL_EVERYTHING,Extra,اضافي,Extra,0,10,0,,1
+Bagel | Everything,Bagel | Everything,BAGEL_EVERYTHING,Delivery,ديليفري,Delivery,1,1,0,,1
+Sandwich | Club,Sandwich | Club,SANDWICH_CLUB,Extra,اضافي,Extra,0,10,0,,1
+Sandwich | Club,Sandwich | Club,SANDWICH_CLUB,Delivery,ديليفري,Delivery,1,1,0,,1
+Sandwich | BLT,Sandwich | BLT,SANDWICH_BLT,Extra,اضافي,Extra,0,10,0,,1
+Sandwich | BLT,Sandwich | BLT,SANDWICH_BLT,Delivery,ديليفري,Delivery,1,1,0,,1
+Sandwich | Grilled Chicken,Sandwich | Grilled Chicken,SANDWICH_GRILLED_CHICKEN,Extra,اضافي,Extra,0,10,0,,1
+Sandwich | Grilled Chicken,Sandwich | Grilled Chicken,SANDWICH_GRILLED_CHICKEN,Delivery,ديليفري,Delivery,1,1,0,,1
+Sandwich | Tuna,Sandwich | Tuna,SANDWICH_TUNA,Extra,اضافي,Extra,0,10,0,,1
+Sandwich | Tuna,Sandwich | Tuna,SANDWICH_TUNA,Delivery,ديليفري,Delivery,1,1,0,,1
+Wrap | Caesar Chicken,Wrap | Caesar Chicken,WRAP_CAESAR_CHICKEN,Extra,اضافي,Extra,0,10,0,,1
+Wrap | Caesar Chicken,Wrap | Caesar Chicken,WRAP_CAESAR_CHICKEN,Delivery,ديليفري,Delivery,1,1,0,,1
+Wrap | Turkey & Cheese,Wrap | Turkey & Cheese,WRAP_TURKEY_CHEESE,Extra,اضافي,Extra,0,10,0,,1
+Wrap | Turkey & Cheese,Wrap | Turkey & Cheese,WRAP_TURKEY_CHEESE,Delivery,ديليفري,Delivery,1,1,0,,1
+Wrap | Veggie,Wrap | Veggie,WRAP_VEGGIE,Extra,اضافي,Extra,0,10,0,,1
+Wrap | Veggie,Wrap | Veggie,WRAP_VEGGIE,Delivery,ديليفري,Delivery,1,1,0,,1
+Salad | Caesar,Salad | Caesar,SALAD_CAESAR,Extra,اضافي,Extra,0,10,0,,1
+Salad | Caesar,Salad | Caesar,SALAD_CAESAR,Delivery,ديليفري,Delivery,1,1,0,,1
+Salad | Greek,Salad | Greek,SALAD_GREEK,Extra,اضافي,Extra,0,10,0,,1
+Salad | Greek,Salad | Greek,SALAD_GREEK,Delivery,ديليفري,Delivery,1,1,0,,1
+Salad | Garden,Salad | Garden,SALAD_GARDEN,Extra,اضافي,Extra,0,10,0,,1
+Salad | Garden,Salad | Garden,SALAD_GARDEN,Delivery,ديليفري,Delivery,1,1,0,,1
+Soup | Tomato,Soup | Tomato,SOUP_TOMATO,Extra,اضافي,Extra,0,10,0,,1
+Soup | Tomato,Soup | Tomato,SOUP_TOMATO,Delivery,ديليفري,Delivery,1,1,0,,1
+Soup | Chicken Noodle,Soup | Chicken Noodle,SOUP_CHICKEN_NOODLE,Extra,اضافي,Extra,0,10,0,,1
+Soup | Chicken Noodle,Soup | Chicken Noodle,SOUP_CHICKEN_NOODLE,Delivery,ديليفري,Delivery,1,1,0,,1
+Soup | Vegetable,Soup | Vegetable,SOUP_VEGETABLE,Extra,اضافي,Extra,0,10,0,,1
+Soup | Vegetable,Soup | Vegetable,SOUP_VEGETABLE,Delivery,ديليفري,Delivery,1,1,0,,1
+Cookie | Chocolate Chip,Cookie | Chocolate Chip,COOKIE_CHOCOLATE_CHIP,Extra,اضافي,Extra,0,10,0,,1
+Cookie | Chocolate Chip,Cookie | Chocolate Chip,COOKIE_CHOCOLATE_CHIP,Delivery,ديليفري,Delivery,1,1,0,,1
+Cookie | Oatmeal Raisin,Cookie | Oatmeal Raisin,COOKIE_OATMEAL_RAISIN,Extra,اضافي,Extra,0,10,0,,1
+Cookie | Oatmeal Raisin,Cookie | Oatmeal Raisin,COOKIE_OATMEAL_RAISIN,Delivery,ديليفري,Delivery,1,1,0,,1
+Cookie | Peanut Butter,Cookie | Peanut Butter,COOKIE_PEANUT_BUTTER,Extra,اضافي,Extra,0,10,0,,1
+Cookie | Peanut Butter,Cookie | Peanut Butter,COOKIE_PEANUT_BUTTER,Delivery,ديليفري,Delivery,1,1,0,,1
+Brownie | Classic,Brownie | Classic,BROWNIE_CLASSIC,Extra,اضافي,Extra,0,10,0,,1
+Brownie | Classic,Brownie | Classic,BROWNIE_CLASSIC,Delivery,ديليفري,Delivery,1,1,0,,1
+Brownie | Fudge,Brownie | Fudge,BROWNIE_FUDGE,Extra,اضافي,Extra,0,10,0,,1
+Brownie | Fudge,Brownie | Fudge,BROWNIE_FUDGE,Delivery,ديليفري,Delivery,1,1,0,,1
+Cake Slice | Chocolate,Cake Slice | Chocolate,CAKE_SLICE_CHOCOLATE,Extra,اضافي,Extra,0,10,0,,1
+Cake Slice | Chocolate,Cake Slice | Chocolate,CAKE_SLICE_CHOCOLATE,Delivery,ديليفري,Delivery,1,1,0,,1
+Cake Slice | Cheesecake,Cake Slice | Cheesecake,CAKE_SLICE_CHEESECAKE,Extra,اضافي,Extra,0,10,0,,1
+Cake Slice | Cheesecake,Cake Slice | Cheesecake,CAKE_SLICE_CHEESECAKE,Delivery,ديليفري,Delivery,1,1,0,,1
+Cake Slice | Carrot,Cake Slice | Carrot,CAKE_SLICE_CARROT,Extra,اضافي,Extra,0,10,0,,1
+Cake Slice | Carrot,Cake Slice | Carrot,CAKE_SLICE_CARROT,Delivery,ديليفري,Delivery,1,1,0,,1
+Donut | Glazed,Donut | Glazed,DONUT_GLAZED,Extra,اضافي,Extra,0,10,0,,1
+Donut | Glazed,Donut | Glazed,DONUT_GLAZED,Delivery,ديليفري,Delivery,1,1,0,,1
+Donut | Chocolate,Donut | Chocolate,DONUT_CHOCOLATE,Extra,اضافي,Extra,0,10,0,,1
+Donut | Chocolate,Donut | Chocolate,DONUT_CHOCOLATE,Delivery,ديليفري,Delivery,1,1,0,,1
+Donut | Jelly,Donut | Jelly,DONUT_JELLY,Extra,اضافي,Extra,0,10,0,,1
+Donut | Jelly,Donut | Jelly,DONUT_JELLY,Delivery,ديليفري,Delivery,1,1,0,,1
+Pretzel,Pretzel,PRETZEL,Extra,اضافي,Extra,0,10,0,,1
+Pretzel,Pretzel,PRETZEL,Delivery,ديليفري,Delivery,1,1,0,,1
+Yogurt Parfait,Yogurt Parfait,YOGURT_PARFAIT,Extra,اضافي,Extra,0,10,0,,1
+Yogurt Parfait,Yogurt Parfait,YOGURT_PARFAIT,Delivery,ديليفري,Delivery,1,1,0,,1
+Fruit Bowl,Fruit Bowl,FRUIT_BOWL,Extra,اضافي,Extra,0,10,0,,1
+Fruit Bowl,Fruit Bowl,FRUIT_BOWL,Delivery,ديليفري,Delivery,1,1,0,,1
+Chips | Potato,Chips | Potato,CHIPS_POTATO,Delivery,ديليفري,Delivery,1,1,0,,1
+Chips | Corn,Chips | Corn,CHIPS_CORN,Delivery,ديليفري,Delivery,1,1,0,,1
+Nuts Mix,Nuts Mix,NUTS_MIX,Delivery,ديليفري,Delivery,1,1,0,,1
+Granola Bar,Granola Bar,GRANOLA_BAR,Delivery,ديليفري,Delivery,1,1,0,,1

@@ -58,14 +58,17 @@ export async function startLocalCam(videoEl, opts = {}) {
     el.srcObject = stream;
     try { el.play && el.play().catch(()=>{}); } catch {}
   }
+  const audioConstraint = (opts && opts.audio === true)
+    ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    : false;
   try {
     // 1) Preferred constraints
     let stream = await tryGet({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-      audio: opts && opts.audio === true
+      audio: audioConstraint
     });
     // 2) Simpler fallback
-    if (!stream) stream = await tryGet({ video: true, audio: opts && opts.audio === true });
+    if (!stream) stream = await tryGet({ video: true, audio: audioConstraint });
     // 3) Enumerate devices and pick the first available videoinput
     if (!stream) {
       try {
@@ -73,11 +76,14 @@ export async function startLocalCam(videoEl, opts = {}) {
         const cams = devices.filter(d => d.kind === 'videoinput');
         if (cams.length) {
           const d = cams[0];
-          stream = await tryGet({ video: { deviceId: { exact: d.deviceId } }, audio: opts && opts.audio === true });
+          stream = await tryGet({ video: { deviceId: { exact: d.deviceId } }, audio: audioConstraint });
         }
       } catch {}
     }
     if (!stream) return null;
+
+    // Ensure local audio tracks are enabled
+    try { stream.getAudioTracks && stream.getAudioTracks().forEach(t => { try { t.enabled = true; } catch {} }); } catch {}
 
     // Apply auto-exposure/white-balance/focus if supported by the camera/driver
     try {

@@ -1,0 +1,6 @@
+product_sku,product_name,modifier_reference,modifier_name,minimum_options,maximum_options
+PCB-104,12Pcs | Drip Coffee Can,coffee_shot,Coffee | Shots,0,1
+PCB-105,5Pcs | Drip Coffee Bags,coffee_shot,Coffee | Shots,0,1
+659657707796,Coffee Beans | Brazil 250g,coffee_shot,Coffee | Shots,0,1
+PHT-106,Cortado,coffee_shot,Coffee | Shots,1,1
+PHT-107,Double Espresso,coffee_shot,Coffee | Shots,1,1

@@ -1,0 +1,255 @@
+// google-tts-service.js — Server-side Google Cloud TTS integration
+// Provides high-quality TTS via Google Cloud Text-to-Speech API
+
+const { TextToSpeechClient } = require('@google-cloud/text-to-speech');
+const path = require('path');
+const fs = require('fs');
+
+// Initialize TTS client
+let ttsClient = null;
+try {
+  // Use service account key file
+  const keyFilePath = path.join(__dirname, 'google-tts-key.json');
+  if (fs.existsSync(keyFilePath)) {
+    ttsClient = new TextToSpeechClient({
+      keyFilename: keyFilePath,
+      projectId: 'smart-order-469705'
+    });
+    console.log('[GoogleTTS] ✅ Client initialized with service account key');
+  } else {
+    console.log('[GoogleTTS] ⚠️ Service account key not found, using default credentials');
+    // Fallback to default credentials (works in Cloud Run with service account attached)
+    ttsClient = new TextToSpeechClient({
+      projectId: 'smart-order-469705'
+    });
+  }
+} catch (error) {
+  console.error('[GoogleTTS] Failed to initialize client:', error.message);
+}
+
+// Voice configurations for different languages and scenarios
+// Prioritizing the most natural-sounding female voices
+const VOICE_CONFIG = {
+  'en-US': {
+    primary: { name: 'en-US-Neural2-F', gender: 'FEMALE' }, // Best natural female voice
+    alternatives: [
+      { name: 'en-US-Neural2-H', gender: 'FEMALE' }, // Alternative premium female
+      { name: 'en-US-Journey-F', gender: 'FEMALE' }, // Latest Journey model (most human-like)
+      { name: 'en-US-Neural2-A', gender: 'FEMALE' }, // Previous default
+      { name: 'en-US-Wavenet-C', gender: 'FEMALE' },
+      { name: 'en-US-Neural2-D', gender: 'MALE' }, // Male backup
+    ]
+  },
+  'ar-XA': {
+    primary: { name: 'ar-XA-Neural2-A', gender: 'FEMALE' }, // Best Arabic female neural
+    alternatives: [
+      { name: 'ar-XA-Wavenet-A', gender: 'FEMALE' }, // High-quality Wavenet
+      { name: 'ar-XA-Wavenet-B', gender: 'MALE' },
+      { name: 'ar-XA-Standard-A', gender: 'FEMALE' }
+    ]
+  },
+  'es-ES': {
+    primary: { name: 'es-ES-Neural2-A', gender: 'FEMALE' }, // Best Spanish female neural
+    alternatives: [
+      { name: 'es-ES-Neural2-C', gender: 'FEMALE' }, // Alternative female
+      { name: 'es-ES-Wavenet-C', gender: 'FEMALE' },
+      { name: 'es-ES-Neural2-B', gender: 'MALE' }
+    ]
+  },
+  'en-GB': {
+    primary: { name: 'en-GB-Neural2-A', gender: 'FEMALE' }, // British female
+    alternatives: [
+      { name: 'en-GB-Neural2-C', gender: 'FEMALE' },
+      { name: 'en-GB-Wavenet-A', gender: 'FEMALE' },
+      { name: 'en-GB-Neural2-B', gender: 'MALE' }
+    ]
+  }
+};
+
+// Cache for generated audio (optional - for performance)
+const audioCache = new Map();
+const MAX_CACHE_SIZE = 100;
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Generate speech audio using Google Cloud TTS
+ * @param {Object} options - TTS options
+ * @param {string} options.text - Text to synthesize
+ * @param {string} options.languageCode - Language code (e.g., 'en-US')
+ * @param {string} options.voiceName - Specific voice name (optional)
+ * @param {string} options.gender - Voice gender preference (optional)
+ * @param {number} options.speakingRate - Speaking rate (0.25-4.0, default: 1.0)
+ * @param {number} options.pitch - Pitch adjustment (-20.0 to 20.0, default: 0.0)
+ * @param {number} options.volumeGainDb - Volume gain (-96.0 to 16.0, default: 0.0)
+ * @returns {Promise<Buffer>} Audio data as MP3 buffer
+ */
+async function synthesizeSpeech(options = {}) {
+  if (!ttsClient) {
+    throw new Error('Google Cloud TTS client not initialized');
+  }
+
+  const {
+    text,
+    languageCode = 'en-US',
+    voiceName,
+    gender,
+    speakingRate = 1.0,
+    pitch = 0.0,
+    volumeGainDb = 0.0
+  } = options;
+
+  if (!text || typeof text !== 'string') {
+    throw new Error('Text is required for TTS synthesis');
+  }
+
+  // Create cache key
+  const cacheKey = JSON.stringify({
+    text: text.substring(0, 500), // Limit cache key size
+    languageCode,
+    voiceName,
+    gender,
+    speakingRate,
+    pitch,
+    volumeGainDb
+  });
+
+  // Check cache
+  if (audioCache.has(cacheKey)) {
+    const cached = audioCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log('[GoogleTTS] ✅ Cache hit for TTS request');
+      return cached.audioBuffer;
+    } else {
+      audioCache.delete(cacheKey);
+    }
+  }
+
+  try {
+    // Select voice
+    const voiceConfig = VOICE_CONFIG[languageCode] || VOICE_CONFIG['en-US'];
+    let selectedVoice = voiceConfig.primary;
+
+    if (voiceName) {
+      selectedVoice = { name: voiceName };
+    } else if (gender) {
+      const voicesByGender = voiceConfig.alternatives?.filter(v => 
+        v.gender.toLowerCase() === gender.toLowerCase()
+      );
+      if (voicesByGender && voicesByGender.length > 0) {
+        selectedVoice = voicesByGender[0];
+      }
+    }
+
+    // Construct the TTS request
+    const request = {
+      input: { text },
+      voice: {
+        languageCode,
+        name: selectedVoice.name
+      },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: Math.max(0.25, Math.min(4.0, speakingRate)),
+        pitch: Math.max(-20.0, Math.min(20.0, pitch)),
+        volumeGainDb: Math.max(-96.0, Math.min(16.0, volumeGainDb))
+      }
+    };
+
+    console.log(`[GoogleTTS] 🔊 Synthesizing speech: "${text.substring(0, 50)}..." (${selectedVoice.name})`);
+
+    // Call Google Cloud TTS API
+    const [response] = await ttsClient.synthesizeSpeech(request);
+    const audioBuffer = Buffer.from(response.audioContent);
+
+    console.log(`[GoogleTTS] ✅ Speech synthesized: ${audioBuffer.length} bytes`);
+
+    // Cache the result
+    if (audioCache.size >= MAX_CACHE_SIZE) {
+      // Remove oldest entry
+      const oldestKey = audioCache.keys().next().value;
+      audioCache.delete(oldestKey);
+    }
+    audioCache.set(cacheKey, {
+      audioBuffer,
+      timestamp: Date.now()
+    });
+
+    return audioBuffer;
+
+  } catch (error) {
+    console.error('[GoogleTTS] ❌ Speech synthesis failed:', error.message);
+    throw new Error(`TTS synthesis failed: ${error.message}`);
+  }
+}
+
+/**
+ * Get available voices for a language
+ * @param {string} languageCode - Language code
+ * @returns {Array} Available voices
+ */
+function getVoicesForLanguage(languageCode = 'en-US') {
+  const config = VOICE_CONFIG[languageCode];
+  if (!config) {
+    return VOICE_CONFIG['en-US'].alternatives || [];
+  }
+  
+  return [config.primary, ...(config.alternatives || [])];
+}
+
+/**
+ * Test TTS functionality
+ * @param {string} text - Test text
+ * @param {string} languageCode - Language code
+ * @returns {Promise<Buffer>} Test audio
+ */
+async function testTTS(text = 'Hello! This is a test of Google Cloud Text-to-Speech.', languageCode = 'en-US') {
+  try {
+    console.log('[GoogleTTS] 🧪 Running TTS test...');
+    const audioBuffer = await synthesizeSpeech({ text, languageCode });
+    console.log(`[GoogleTTS] ✅ Test successful: ${audioBuffer.length} bytes generated`);
+    return audioBuffer;
+  } catch (error) {
+    console.error('[GoogleTTS] ❌ Test failed:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Health check for TTS service
+ * @returns {Promise<Object>} Health status
+ */
+async function healthCheck() {
+  if (!ttsClient) {
+    return {
+      status: 'unhealthy',
+      error: 'TTS client not initialized'
+    };
+  }
+
+  try {
+    // Quick test synthesis
+    await synthesizeSpeech({
+      text: 'Health check',
+      languageCode: 'en-US'
+    });
+
+    return {
+      status: 'healthy',
+      voices: Object.keys(VOICE_CONFIG),
+      cacheSize: audioCache.size
+    };
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      error: error.message
+    };
+  }
+}
+
+module.exports = {
+  synthesizeSpeech,
+  getVoicesForLanguage,
+  testTTS,
+  healthCheck,
+  isAvailable: !!ttsClient
+};

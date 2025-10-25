@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>🔍 Audio Diagnostic Tool</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
+        .test { margin: 20px 0; padding: 10px; border: 1px solid #333; }
+        button { margin: 5px; padding: 10px; }
+        .result { background: #333; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Audio Diagnostic Tool</h1>
+    
+    <div class="test">
+        <h3>1. Available Audio Devices:</h3>
+        <button onclick="listDevices()">List All Audio Devices</button>
+        <div id="devices" class="result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>2. Test Recording (2 seconds):</h3>
+        <button onclick="testRecord()">Test Built-in Mic</button>
+        <div id="recording" class="result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>3. System Audio Check:</h3>
+        <button onclick="checkSystemAudio()">Check for System Audio Routing</button>
+        <div id="system" class="result"></div>
+    </div>
+
+    <script>
+        async function listDevices() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+            
+            let html = '<strong>INPUT DEVICES:</strong><br>';
+            audioInputs.forEach((device, i) => {
+                html += `${i+1}. ${device.label} (ID: ${device.deviceId})<br>`;
+            });
+            
+            html += '<br><strong>OUTPUT DEVICES:</strong><br>';
+            audioOutputs.forEach((device, i) => {
+                html += `${i+1}. ${device.label} (ID: ${device.deviceId})<br>`;
+            });
+            
+            document.getElementById('devices').innerHTML = html;
+        }
+        
+        async function testRecord() {
+            const result = document.getElementById('recording');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                // Find built-in mic specifically
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const builtInMic = devices.find(device => 
+                    device.kind === 'audioinput' && 
+                    device.label.includes('iMac Microphone')
+                );
+                
+                if (!builtInMic) {
+                    result.innerHTML = '❌ Built-in microphone not found!';
+                    return;
+                }
+                
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        deviceId: { exact: builtInMic.deviceId },
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        channelCount: 1
+                    }
+                });
+                
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                
+                recorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) chunks.push(e.data);
+                };
+                
+                recorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    const blob = new Blob(chunks);
+                    const url = URL.createObjectURL(blob);
+                    
+                    result.innerHTML = `
+                        ✅ Recording successful!<br>
+                        Device: ${builtInMic.label}<br>
+                        Size: ${blob.size} bytes<br>
+                        <audio controls src="${url}"></audio><br>
+                        <small>If you hear background audio in this recording, the issue is system-level audio routing.</small>
+                    `;
+                };
+                
+                recorder.start();
+                result.innerHTML = '🔴 Recording 2 seconds of silence... DO NOT SPEAK';
+                
+                setTimeout(() => {
+                    recorder.stop();
+                }, 2000);
+                
+            } catch (error) {
+                result.innerHTML = '❌ Error: ' + error.message;
+            }
+        }
+        
+        function checkSystemAudio() {
+            const result = document.getElementById('system');
+            result.innerHTML = `
+                <strong>MANUAL CHECK REQUIRED:</strong><br>
+                1. Open System Preferences → Sound → Input<br>
+                2. Select "iMac Microphone" as input device<br>
+                3. Check input level while playing YouTube video<br>
+                4. If the input level moves without you speaking = AUDIO ROUTING ISSUE<br>
+                <br>
+                <strong>Common Causes:</strong><br>
+                • SoundFlower/Loopback installed<br>
+                • Virtual audio devices routing system audio<br>
+                • Microsoft Teams/ManyCam audio capture<br>
+                • Background apps capturing audio<br>
+                <br>
+                <strong>Solutions:</strong><br>
+                1. Quit Chrome completely: killall "Google Chrome"<br>
+                2. Disable virtual audio devices<br>
+                3. Reset audio system: sudo killall coreaudiod<br>
+            `;
+        }
+        
+        // Auto-run device detection
+        window.onload = () => {
+            listDevices();
+        };
+    </script>
+</body>
+</html>

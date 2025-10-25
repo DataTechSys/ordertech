@@ -42,7 +42,7 @@ pathMatchers:
     - /tenants
     - /tenants/*
     service: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-koobs-backend
-- defaultService: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-ew1-backend
+- defaultService: https://www.googleapis.com/compute/beta/projects/smart-order-469705/global/backendServices/smartorder-me1-backend
   name: app-ordertech
   pathRules:
   - paths:

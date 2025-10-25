@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Modifier groups table
 CREATE TABLE IF NOT EXISTS modifier_groups (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
   name text NOT NULL,
   reference text,
   min_select integer,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS modifier_groups (
 -- Modifier options table
 CREATE TABLE IF NOT EXISTS modifier_options (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
   group_id uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
   name text NOT NULL,
   price numeric(10,3) NOT NULL DEFAULT 0,

@@ -6,7 +6,13 @@
 
   function setPreview(imgEl, url){
     try {
-      const fallbacks = [url, '/placeholder.jpg'].filter(Boolean);
+      // Use cloud storage for all images - both provided URLs and fallbacks
+      const cloudStorageBase = 'https://storage.googleapis.com/smart-order-assets-me-central1-715493130630';
+      const fallbacks = [
+        url, 
+        `${cloudStorageBase}/placeholders/product-placeholder.png`,
+        '/images/placeholder.png'
+      ].filter(Boolean);
       let i = 0;
       const tryNext = () => { if (i >= fallbacks.length) return; imgEl.onerror = () => tryNext(); imgEl.src = fallbacks[i++]; };
       tryNext();
@@ -14,7 +20,7 @@
   }
 
   // Page state
-  const PST = { productTab: 'active', products: [], categories: [], productsPage: 1, productsPageSize: 20 };
+  const PST = { productTab: 'active', products: [], categories: [], productsPage: 1, productsPageSize: 100 };
   // Import (browser) state
   const IMPORT = { headers: [], rows: [], mapped: [], defaultCatId: '' };
 
@@ -35,16 +41,19 @@
   async function loadProducts(){
     const id = STATE.selectedTenantId; if (!id) return;
     try {
-      // Admin endpoint returns both active and inactive; include status=all explicitly for clarity
       const rows = await api(`/admin/tenants/${encodeURIComponent(id)}/products`, { tenantId: id, query: { status: 'all' } });
       const catsById = new Map((PST.categories||[]).map(c=>[String(c.id), c.name]));
       PST.products = (Array.isArray(rows)?rows:[]).map(p=>({ ...p, status: statusOfProduct(p), category_name: p.category_name || catsById.get(String(p.category_id)) || '' }));
       renderProductsTable();
-    } catch {}
+    } catch (error) {
+      console.error('Error loading products:', error);
+    }
   }
 
   function renderProductsTable(){
-    const wrap = $('#productTableWrap'); if(!wrap) return;
+    const wrap = $('#productTableWrap'); 
+    if(!wrap) return;
+    
     let html='';
     html += '<table class="table"><thead><tr>'+
             '<th class="col-checkbox"><input id="prodChkAll" type="checkbox" class="checkbox"/></th>'+
@@ -66,7 +75,12 @@
       const sku = displaySku(p); const st=statusOfProduct(p);
       const label = st==='deleted'?'Deleted':(st==='inactive'?'Inactive':'Active');
       const pillClass = st==='deleted'?'status-pill del':(st==='inactive'?'status-pill off':'status-pill ok');
-      const img = p.image_url?`<img class=\"thumb\" src=\"${p.image_url}\" alt=\"\">`:`<div class=\"thumb\" aria-hidden=\"true\"></div>`;
+      // Use image proxy for external Foodics images to avoid CORS/404 issues
+      let imgSrc = p.image_url;
+      if (imgSrc && (imgSrc.includes('foodics') || imgSrc.includes('amazonaws'))) {
+        imgSrc = `/img?u=${encodeURIComponent(imgSrc)}`;
+      }
+      const img = imgSrc?`<img class=\"thumb\" src=\"${imgSrc}\" alt=\"\" onerror=\"this.style.display='none'\">`:`<div class=\"thumb\" aria-hidden=\"true\"></div>`;
       html += `<tr class=\"row-click\" data-pid=\"${p.id}\">`+
               `<td class=\"col-checkbox\"><input type=\"checkbox\" class=\"checkbox prod-chk\" value=\"${p.id}\"></td>`+
               `<td class=\"col-photo\">${img}</td>`+
@@ -79,9 +93,41 @@
     }
     html += '</tbody></table>';
     wrap.innerHTML = html;
+    
+    // Essential fix: Ensure table cells are visible
+    const tableEl = wrap.querySelector('table');
+    if (tableEl) {
+      const allCells = tableEl.querySelectorAll('td, th');
+      
+      allCells.forEach((cell) => {
+        cell.style.color = '#374151'; // Good dark gray color
+        cell.style.fontSize = '14px';
+        cell.style.display = 'table-cell';
+        cell.style.visibility = 'visible';
+        cell.style.opacity = '1';
+        
+        // Fix nested elements like links
+        const links = cell.querySelectorAll('a');
+        links.forEach(link => {
+          link.style.color = '#2563eb'; // Blue color for links
+          link.style.textDecoration = 'none';
+        });
+        
+        // Fix status pills
+        const pills = cell.querySelectorAll('.status-pill');
+        pills.forEach(pill => {
+          pill.style.display = 'inline-block';
+          pill.style.padding = '2px 8px';
+          pill.style.borderRadius = '12px';
+          pill.style.fontSize = '12px';
+          pill.style.fontWeight = '500';
+        });
+      });
+    }
     const info = $('#prodPageInfo'); if (info) info.textContent = total ? `Showing ${total?(startIdx+1):0}–${endIdx} of ${total}` : 'No results';
     const prevBtn = $('#prodPrev'); const nextBtn = $('#prodNext');
     const needPager = maxPage > 1;
+    const container = document.getElementById('prodPagination'); if (container) container.style.display = needPager ? '' : 'none';
     if (prevBtn) { prevBtn.disabled=(page<=1); prevBtn.style.display = needPager ? '' : 'none'; }
     if (nextBtn) { nextBtn.disabled=(page>=maxPage); nextBtn.style.display = needPager ? '' : 'none'; }
     // Hide pager when not needed
@@ -91,15 +137,14 @@
     all?.addEventListener('change', ()=>{ rowChecks.forEach(cb=>cb.checked=all.checked); updateBulk(); });
     rowChecks.forEach(cb=>cb.addEventListener('change', updateBulk));
     updateBulk();
-    // Click on product name link opens editor
-    $$('a.row-link[data-pid]', wrap).forEach(a=>a.addEventListener('click', (e)=>{ e.preventDefault(); const pid=a.getAttribute('data-pid'); const prod=(PST.products||[]).find(x=>String(x.id)===String(pid)); if(prod) openProductEditor(prod); }));
+    // Click on product name link navigates to full-page editor
+    $$('a.row-link[data-pid]', wrap).forEach(a=>a.addEventListener('click', (e)=>{ e.preventDefault(); const pid=a.getAttribute('data-pid'); const tid=STATE.selectedTenantId||''; if (pid && tid) { window.location.href = `/products/edit/?tenant=${encodeURIComponent(tid)}&id=${encodeURIComponent(pid)}`; } }));
     // Also allow clicking anywhere on the row (except on interactive controls)
     $$('tr.row-click[data-pid]', wrap).forEach(tr => tr.addEventListener('click', (e)=>{
       const target = e.target;
       if (target && (target.closest('input,button,select,label,a') && !target.closest('a.row-link'))) return; // ignore clicks on controls except the name link which is handled above
-      const pid = tr.getAttribute('data-pid');
-      const prod = (PST.products||[]).find(x=>String(x.id)===String(pid));
-      if (prod) { e.preventDefault(); openProductEditor(prod); }
+      const pid = tr.getAttribute('data-pid'); const tid=STATE.selectedTenantId||'';
+      if (pid && tid) { e.preventDefault(); window.location.href = `/products/edit/?tenant=${encodeURIComponent(tid)}&id=${encodeURIComponent(pid)}`; }
     }));
   }
 
@@ -198,7 +243,7 @@
   function wireProductModal(){
     const mb = $('#productModal');
 
-    async function uploadImageFor(kind, file){
+    async function uploadImageFor(kind, file, onProgress){
       const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return null; }
       const type = file.type || 'application/octet-stream';
       if (!/^image\//i.test(type)) { toast('Please select an image'); return null; }
@@ -206,8 +251,18 @@
       try {
         const sig = await api('/admin/upload-url', { method:'POST', body:{ tenant_id: id, filename: file.name, contentType: type, kind }, tenantId: id });
         if (!sig?.url || !sig?.method) throw new Error('sign_failed');
-        const putRes = await fetch(sig.url, { method: sig.method, headers: { 'Content-Type': type }, body: file });
-        if (!putRes.ok) { const txt = await putRes.text().catch(()=>'' ); throw new Error(`upload_failed:${putRes.status}:${txt||''}`); }
+        // XHR with progress
+        await new Promise((resolve, reject) => {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open(sig.method, sig.url, true);
+            xhr.setRequestHeader('Content-Type', type);
+            xhr.upload.onprogress = (e)=>{ if (e && e.lengthComputable && typeof onProgress === 'function'){ const pct = Math.round((e.loaded / e.total) * 100); try { onProgress(pct); } catch {} } };
+            xhr.onload = ()=>{ if (xhr.status >= 200 && xhr.status < 300) resolve(true); else reject(new Error('upload_failed:'+xhr.status)); };
+            xhr.onerror = ()=> reject(new Error('upload_error'));
+            xhr.send(file);
+          } catch (err) { reject(err); }
+        });
         return sig.publicUrl || '';
       } catch (e) { toast('Upload failed'); return null; }
     }
@@ -223,7 +278,14 @@
         try {
           const f = e.target.files && e.target.files[0]; if (!f) return;
           try { if (menuPrev) { const blobUrl = URL.createObjectURL(f); menuPrev.src = blobUrl; setTimeout(()=>URL.revokeObjectURL(blobUrl), 15000); } } catch {}
-          const publicUrl = await uploadImageFor('product', f);
+          // Progress bar under the media card
+          let pb = document.getElementById('prodMenuUploadProgress');
+          try {
+            if (!pb && menuPrev) { pb = window.Admin.createProgressBar({ id: 'prodMenuUploadProgress', small: true }); const card = menuPrev.closest('.media-card'); const prevWrap = menuPrev.closest('.preview'); if (pb && (prevWrap||card)) (prevWrap||card).insertAdjacentElement('afterend', pb); }
+            pb?.show(); pb?.set(0);
+          } catch {}
+          const publicUrl = await uploadImageFor('product', f, (pct)=>{ try { pb?.set(pct); } catch {} });
+          try { if (publicUrl) { pb?.set(100); setTimeout(()=>pb?.hide(), 600); } else { pb?.hide(); } } catch {}
           if (!publicUrl) return;
           if (imgUrlEl) imgUrlEl.value = publicUrl;
           if (menuPrev) setPreview(menuPrev, publicUrl);
@@ -283,7 +345,13 @@
         try {
           const f = e.target.files && e.target.files[0]; if (!f) return;
           try { if (beautyPrev) { const blobUrl = URL.createObjectURL(f); beautyPrev.src = blobUrl; setTimeout(()=>URL.revokeObjectURL(blobUrl), 15000); } } catch {}
-          const publicUrl = await uploadImageFor('product', f);
+          let pb = document.getElementById('prodBeautyUploadProgress');
+          try {
+            if (!pb && beautyPrev) { pb = window.Admin.createProgressBar({ id: 'prodBeautyUploadProgress', small: true }); const card = beautyPrev.closest('.media-card'); const prevWrap = beautyPrev.closest('.preview'); if (pb && (prevWrap||card)) (prevWrap||card).insertAdjacentElement('afterend', pb); }
+            pb?.show(); pb?.set(0);
+          } catch {}
+          const publicUrl = await uploadImageFor('product', f, (pct)=>{ try { pb?.set(pct); } catch {} });
+          try { if (publicUrl) { pb?.set(100); setTimeout(()=>pb?.hide(), 600); } else { pb?.hide(); } } catch {}
           if (!publicUrl) return;
           if (beautyEl) beautyEl.value = publicUrl;
           if (beautyPrev) setPreview(beautyPrev, publicUrl);
@@ -354,13 +422,29 @@
               videoPrev.src = blobUrl; setTimeout(()=>URL.revokeObjectURL(blobUrl), 15000);
             }
           } catch {}
-          const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+          let pb = document.getElementById('prodVideoUploadProgress');
+          try {
+            if (!pb && videoPrev) { pb = window.Admin.createProgressBar({ id: 'prodVideoUploadProgress', small: true }); const prevWrap = videoPrev.closest('.preview'); const card = videoPrev.closest('.media-card'); if (pb && (prevWrap||card)) (prevWrap||card).insertAdjacentElement('afterend', pb); }
+            pb?.show(); pb?.set(0);
+          } catch {}
+          const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); pb?.hide(); return; }
           const type = f.type || 'application/octet-stream';
           const sig = await api('/admin/upload-url', { method:'POST', body:{ tenant_id: id, filename: f.name, contentType: type, kind: 'product' }, tenantId: id });
-          if (!sig?.url || !sig?.method) { toast('Upload failed'); return; }
-          const putRes = await fetch(sig.url, { method: sig.method, headers: { 'Content-Type': type }, body: f });
-          if (!putRes.ok) { toast('Upload failed'); return; }
+          if (!sig?.url || !sig?.method) { toast('Upload failed'); pb?.hide(); return; }
+          // XHR with progress for video
+          try {
+            await new Promise((resolve, reject)=>{
+              const xhr = new XMLHttpRequest();
+              xhr.open(sig.method, sig.url, true);
+              xhr.setRequestHeader('Content-Type', type);
+              xhr.upload.onprogress = (ev)=>{ if (ev && ev.lengthComputable) { const pct=Math.round((ev.loaded/ev.total)*100); try { pb?.set(pct); } catch {} } };
+              xhr.onload = ()=>{ if (xhr.status>=200 && xhr.status<300) resolve(true); else reject(new Error('upload_failed:'+xhr.status)); };
+              xhr.onerror = ()=> reject(new Error('upload_error'));
+              xhr.send(f);
+            });
+          } catch { toast('Upload failed'); pb?.hide(); return; }
           const publicUrl = sig.publicUrl || '';
+          try { pb?.set(100); setTimeout(()=>pb?.hide(), 600); } catch {}
           if (videoEl) videoEl.value = publicUrl;
           if (videoPrev) { try { videoPrev.src = publicUrl; } catch {} }
           if (CURRENT_PRODUCT && CURRENT_PRODUCT.id) {
@@ -373,7 +457,7 @@
     $('#productModalClose')?.addEventListener('click', close);
     $('#productModalCancel')?.addEventListener('click', close);
     mb?.addEventListener('click', (e)=>{ if (e.target===mb) close(); });
-    $('#newProductBtn')?.addEventListener('click', ()=> openProductEditor(null));
+    $('#newProductBtn')?.addEventListener('click', ()=>{ const tid=STATE.selectedTenantId||''; if (!tid){ toast('Select a tenant'); return; } window.location.href = `/products/edit/?tenant=${encodeURIComponent(tid)}`; });
     bindMediaUpload();
 
     $('#productModalSave')?.addEventListener('click', async ()=>{
@@ -503,12 +587,40 @@
     IMPORT.headers = headers.slice();
     IMPORT.rows = rows.slice();
     const nameKey = headers.find(h=>/^name$/i.test(h)) || 'name';
+    const nameLocKey = headers.find(h=>/^name[_ ]?localized$/i.test(h)) || 'name_localized';
+    const descKey = headers.find(h=>/^description$/i.test(h)) || 'description';
+    const descLocKey = headers.find(h=>/^description[_ ]?localized$/i.test(h)) || 'description_localized';
     const skuKey = headers.find(h=>/^sku$/i.test(h)) || 'sku';
     const catRefKey = headers.find(h=>/(^category_reference$|^reference$)/i.test(h)) || 'category_reference';
     const catNameKey = headers.find(h=>/^category_name$/i.test(h)) || headers.find(h=>/^category$/i.test(h)) || headers.find(h=>/^(category_)?name$/i.test(h) && !/^name$/i.test(h)) || 'category_name';
     const priceKey = headers.find(h=>/^price$/i.test(h)) || 'price';
+    const costKey = headers.find(h=>/^cost$/i.test(h)) || 'cost';
     const imageKey = headers.find(h=>/^image(_url)?$/i.test(h)) || (headers.includes('image_url')?'image_url':'image');
+    const barcodeKey = headers.find(h=>/^barcode$/i.test(h)) || 'barcode';
+    const taxKey = headers.find(h=>/^tax(_group)?[_ ]?reference$/i.test(h)) || 'tax_group_reference';
+    const prepKey = headers.find(h=>/^preparation[_ ]?time$/i.test(h)) || 'preparation_time';
+    const calKey = headers.find(h=>/^calories$/i.test(h)) || 'calories';
+    const walkKey = headers.find(h=>/^(walking_)?minutes|walk(ing)?[_ ]?minutes/i.test(h)) || 'walking_minutes_to_burn_calories';
+    const highSaltKey = headers.find(h=>/^(is_)?high[_ ]?salt$/i.test(h)) || 'is_high_salt';
+    const soldByWeightKey = headers.find(h=>/^(is_)?sold[_ ]?by[_ ]?weight$/i.test(h)) || 'is_sold_by_weight';
+    const stockProdKey = headers.find(h=>/^(is_)?stock[_ ]?product$/i.test(h)) || 'is_stock_product';
     const activeKey = headers.find(h=>/^(is_)?active$/i.test(h)) || 'is_active';
+    // Optional extended meta fields
+    const ingredientsEnKey = headers.find(h=>/^ingredients[_ ]?en$/i.test(h)) || 'ingredients_en';
+    const ingredientsArKey = headers.find(h=>/^ingredients[_ ]?ar$/i.test(h)) || 'ingredients_ar';
+    const allergensKey = headers.find(h=>/^allergens$/i.test(h)) || 'allergens';
+    const servingKey = headers.find(h=>/^serving[_ ]?size$/i.test(h)) || 'serving_size';
+    const fatKey = headers.find(h=>/^fat(_g)?$/i.test(h)) || 'fat_g';
+    const carbsKey = headers.find(h=>/^carbs(_g)?$/i.test(h)) || 'carbs_g';
+    const proteinKey = headers.find(h=>/^protein(_g)?$/i.test(h)) || 'protein_g';
+    const sugarKey = headers.find(h=>/^sugar(_g)?$/i.test(h)) || 'sugar_g';
+    const sodiumKey = headers.find(h=>/^sodium(_mg)?$/i.test(h)) || 'sodium_mg';
+    const saltKey = headers.find(h=>/^salt(_g)?$/i.test(h)) || 'salt_g';
+    const spiceKey = headers.find(h=>/^spice[_ ]?level$/i.test(h)) || 'spice_level';
+    const posVisKey = headers.find(h=>/^pos[_ ]?visible$/i.test(h)) || 'pos_visible';
+    const onlineVisKey = headers.find(h=>/^online[_ ]?visible$/i.test(h)) || 'online_visible';
+    const deliveryVisKey = headers.find(h=>/^delivery[_ ]?visible$/i.test(h)) || 'delivery_visible';
+
     // Modifiers column key candidates: modifier_groups, modifier_group_refs, modifier_refs, modifiers
     const modsKey = headers.find(h => /^(modifier_)?groups?(_refs?|_references?)?$/i.test(h)) || headers.find(h=>/^modifiers$/i.test(h)) || null;
 
@@ -516,13 +628,46 @@
     const catsByRef = new Map((PST.categories||[]).map(c=>[String((c.reference||'').toLowerCase()), c]).filter(([k,_])=>!!k));
 
     IMPORT.mapped = rows.map((r, idx) => {
-      const name = String(r[nameKey]||'').trim();
-      const sku = String(r[skuKey]||'').trim();
-      const price = parseFloat(String(r[priceKey]||'').trim());
-      const image = String(r[imageKey]||'').trim();
-      const isActive = /^\s*(yes|true|1)\s*$/i.test(String(r[activeKey]||'').trim());
-      const catNameCsv = String(r[catNameKey]||'').trim();
-      const catRefCsv = String(r[catRefKey]||'').trim();
+      const get = (key) => key ? String(r[key]??'').trim() : '';
+      const getNum = (key) => { const v = get(key); const n = Number(v); return Number.isFinite(n) ? n : null; };
+      const getInt = (key) => { const v = get(key); const n = parseInt(v,10); return Number.isFinite(n) ? n : null; };
+      const getBool = (key) => /^\s*(yes|true|1)\s*$/i.test(get(key));
+
+      const name = get(nameKey);
+      const name_localized = get(nameLocKey);
+      const description = get(descKey);
+      const description_localized = get(descLocKey);
+      const sku = get(skuKey);
+      const price = getNum(priceKey) ?? 0;
+      const cost = getNum(costKey);
+      const image = get(imageKey);
+      const barcode = get(barcodeKey);
+      const tax_group_reference = get(taxKey);
+      const preparation_time = getInt(prepKey);
+      const calories = getInt(calKey);
+      const walking_minutes_to_burn_calories = getInt(walkKey);
+      const is_high_salt = getBool(highSaltKey);
+      const is_sold_by_weight = getBool(soldByWeightKey);
+      const is_stock_product = getBool(stockProdKey);
+      const active = getBool(activeKey);
+      const catNameCsv = get(catNameKey);
+      const catRefCsv = get(catRefKey);
+
+      const ingredients_en = get(ingredientsEnKey);
+      const ingredients_ar = get(ingredientsArKey);
+      const allergens = get(allergensKey);
+      const serving_size = get(servingKey);
+      const fat_g = getNum(fatKey);
+      const carbs_g = getNum(carbsKey);
+      const protein_g = getNum(proteinKey);
+      const sugar_g = getNum(sugarKey);
+      const sodium_mg = getInt(sodiumKey);
+      const salt_g = getNum(saltKey);
+      const spice_level = get(spiceKey);
+      const pos_visible = getBool(posVisKey);
+      const online_visible = getBool(onlineVisKey);
+      const delivery_visible = getBool(deliveryVisKey);
+
       // Resolve category
       let resolved = '';
       let resolvedBy = '';
@@ -533,11 +678,28 @@
         const key = catNameCsv.toLowerCase(); if (catsByName.has(key)) { resolved = String(catsByName.get(key).id); resolvedBy='name'; }
       }
       // Parse modifier group references
-      const modsRaw = modsKey ? String(r[modsKey]||'').trim() : '';
+      const modsRaw = modsKey ? get(modsKey) : '';
       const mod_refs = modsRaw
         ? modsRaw.split(/[;,]/).map(s=>s.trim()).filter(Boolean)
         : [];
-      return { index: idx, row: r, name, sku, price: Number(price)||0, image_url: image||'', active: isActive, csvCategoryName: catNameCsv, csvCategoryRef: catRefCsv, category_id: resolved, category_by: resolvedBy, mod_refs };
+      return {
+        index: idx, row: r,
+        name, name_localized, description, description_localized,
+        sku,
+        price: Number(price)||0,
+        cost,
+        image_url: image||'',
+        barcode,
+        tax_group_reference,
+        preparation_time, calories, walking_minutes_to_burn_calories,
+        is_high_salt, is_sold_by_weight, is_stock_product,
+        active,
+        ingredients_en, ingredients_ar, allergens, serving_size,
+        fat_g, carbs_g, protein_g, sugar_g, sodium_mg, salt_g,
+        spice_level, pos_visible, online_visible, delivery_visible,
+        csvCategoryName: catNameCsv, csvCategoryRef: catRefCsv, category_id: resolved, category_by: resolvedBy,
+        mod_refs
+      };
     });
   }
 
@@ -589,13 +751,26 @@
   async function importProductsFromCsv(file){
     try {
       const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      // Prepare progress UI
+      const modal = document.getElementById('prodImportModal');
+      const footer = modal?.querySelector('.footer');
+      const statusEl = document.getElementById('prodImportStatus');
+      const confirmBtn = document.getElementById('prodImportConfirm');
+      let pb = document.getElementById('prodImportProgress');
+      if (!pb) { pb = window.Admin.createProgressBar({ id: 'prodImportProgress', small: true }); if (pb && footer) footer.insertBefore(pb, footer.querySelector('.spacer')); }
+      try { if (confirmBtn) confirmBtn.disabled = true; } catch {}
+      try { pb?.show(); pb?.set(0); if (statusEl) statusEl.textContent='Importing… 0%'; } catch {}
+
       // Parse if not already mapped for this file selection
       if (!IMPORT.rows.length){
         const { headers, rows } = await window.Importer.parseFile(file);
         buildImportMapping(headers, rows);
       }
       IMPORT.defaultCatId = (document.getElementById('prodImportDefaultCategory')?.value||'').trim();
-      const existing = new Map((PST.products||[]).map(p=>[(String(p.sku||'').toLowerCase() || String(p.name||'').toLowerCase()), true]));
+      const bySku = new Map((PST.products||[]).map(p=>[String(p.sku||'').toLowerCase(), p]));
+      const byName = new Map((PST.products||[]).map(p=>[String(p.name||'').toLowerCase(), p]));
+      const updExisting = !!document.getElementById('prodImportUpdateExisting')?.checked;
+      const reactivate = !!document.getElementById('prodImportReactivate')?.checked;
 
       // Fetch modifier groups (by reference) once per import
       let modsByRef = new Map();
@@ -605,7 +780,7 @@
         modsByRef = new Map(items.filter(g => g && g.reference).map(g => [String(g.reference||'').toLowerCase(), g.id]));
       } catch {}
 
-      let created=0, skipped=0, failed=0, linked=0;
+      let created=0, skipped=0, updated=0, failed=0, linked=0;
       // Helper for Unassigned if still missing and no default chosen but user left blank
       const catsByName = new Map((PST.categories||[]).map(c=>[String((c.name||'').toLowerCase()), c]));
       async function ensureUnassigned(){
@@ -617,49 +792,126 @@
         return '';
       }
 
+      const total = Math.max(1, IMPORT.mapped.length||0);
+      let done = 0;
+
       for (const m of IMPORT.mapped){
-        const key = (m.sku || m.name).toLowerCase();
-        if (!m.name || !key) { skipped++; continue; }
-        if (existing.has(key)) {
-          // Product already exists — attempt to link modifier groups if provided
-          if (Array.isArray(m.mod_refs) && m.mod_refs.length && modsByRef.size) {
-            // Find product id by SKU (preferred) or name
-            let pid = null;
+        const keySku = String(m.sku||'').trim().toLowerCase();
+        const keyName = String(m.name||'').trim().toLowerCase();
+        if (!m.name || (!keySku && !keyName)) { skipped++; done++; const pct=Math.round(done*100/total); pb?.set(pct); if(statusEl) statusEl.textContent=`Importing… ${pct}%`; continue; }
+        const existingProd = (keySku && bySku.get(keySku)) || (keyName && byName.get(keyName)) || null;
+        if (existingProd) {
+          if (updExisting) {
+            // Build patch of only missing/empty fields
+            const p = existingProd; const patch = {};
+            const setStrIfMissing = (k,v)=>{ if (v && (!p[k] || String(p[k]).trim()==='')) patch[k]=v; };
+            const setNumIfMissing = (k,v)=>{ if (v!=null && (p[k]==null || p[k]==='')) patch[k]=v; };
+            const setBoolIfMissing= (k,v)=>{ if (typeof v==='boolean' && (p[k]==null)) patch[k]=v; };
+            setStrIfMissing('name_localized', m.name_localized);
+            setStrIfMissing('description', m.description);
+            setStrIfMissing('description_localized', m.description_localized);
+            setStrIfMissing('tax_group_reference', m.tax_group_reference);
+            setStrIfMissing('barcode', m.barcode);
+            setStrIfMissing('image_url', m.image_url);
+            setNumIfMissing('cost', m.cost);
+            setNumIfMissing('preparation_time', m.preparation_time);
+            setNumIfMissing('calories', m.calories);
+            setNumIfMissing('walking_minutes_to_burn_calories', m.walking_minutes_to_burn_calories);
+            setBoolIfMissing('is_sold_by_weight', !!m.is_sold_by_weight);
+            setBoolIfMissing('is_stock_product', !!m.is_stock_product);
+            setBoolIfMissing('is_high_salt', !!m.is_high_salt);
+            setStrIfMissing('ingredients_en', m.ingredients_en);
+            setStrIfMissing('ingredients_ar', m.ingredients_ar);
+            // allergens is array/string; only set if missing
+            if ((!p.allergens || (Array.isArray(p.allergens) && !p.allergens.length)) && m.allergens) patch.allergens = m.allergens;
+            setStrIfMissing('serving_size', m.serving_size);
+            setNumIfMissing('fat_g', m.fat_g);
+            setNumIfMissing('carbs_g', m.carbs_g);
+            setNumIfMissing('protein_g', m.protein_g);
+            setNumIfMissing('sugar_g', m.sugar_g);
+            setNumIfMissing('sodium_mg', m.sodium_mg);
+            setNumIfMissing('salt_g', m.salt_g);
+            setStrIfMissing('spice_level', m.spice_level);
+            setBoolIfMissing('pos_visible', !!m.pos_visible);
+            setBoolIfMissing('online_visible', !!m.online_visible);
+            setBoolIfMissing('delivery_visible', !!m.delivery_visible);
+            if (reactivate && existingProd.active === false) { patch.active = true; }
             try {
-              const sk = String(m.sku||'').trim().toLowerCase();
-              const nm = String(m.name||'').trim().toLowerCase();
-              const found = (PST.products||[]).find(p => (String(p.sku||'').toLowerCase()===sk && sk) || String(p.name||'').toLowerCase()===nm);
-              if (found) pid = found.id;
-            } catch {}
-            if (pid) {
+              if (Object.keys(patch).length){ await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(existingProd.id)}`, { method:'PUT', body: patch }); updated++; }
+            } catch { failed++; }
+            // Always attempt modifier linking when provided
+            if (Array.isArray(m.mod_refs) && m.mod_refs.length && modsByRef.size) {
               const items = m.mod_refs
                 .map(ref => String(ref||'').toLowerCase())
                 .map(ref => modsByRef.get(ref))
                 .filter(Boolean)
                 .map((gid, idx) => ({ group_id: gid, sort_order: idx }));
               if (items.length){
-                try {
-                  await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(pid)}/modifier-groups`, { method:'PUT', body: { items } });
-                  linked++;
-                } catch {}
+                try { await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(existingProd.id)}/modifier-groups`, { method:'PUT', body: { items } }); linked++; } catch {}
               }
             }
+          } else {
+            // No update — only attempt to link modifiers and then skip
+            if (Array.isArray(m.mod_refs) && m.mod_refs.length && modsByRef.size) {
+              const items = m.mod_refs
+                .map(ref => String(ref||'').toLowerCase())
+                .map(ref => modsByRef.get(ref))
+                .filter(Boolean)
+                .map((gid, idx) => ({ group_id: gid, sort_order: idx }));
+              if (items.length){ try { await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(existingProd.id)}/modifier-groups`, { method:'PUT', body:{ items } }); linked++; } catch {} }
+            }
+            skipped++;
           }
-          skipped++;
+          done++; const pct1=Math.round(done*100/total); pb?.set(pct1); if(statusEl) statusEl.textContent=`Importing… ${pct1}%`;
           continue;
         }
         let catId = m.category_id || '';
         if (!catId && IMPORT.defaultCatId) catId = IMPORT.defaultCatId;
         if (!catId) catId = await ensureUnassigned();
-        if (!catId) { skipped++; continue; }
+        if (!catId) { skipped++; done++; const pct2=Math.round(done*100/total); pb?.set(pct2); if(statusEl) statusEl.textContent=`Importing… ${pct2}%`; continue; }
         try {
           const srcEl = document.querySelector('input[name="prodImportImageSource"]:checked');
           const imgSrc = srcEl ? srcEl.value : 'pos';
           const imgUrl = imgSrc === 'local' ? '/images/products/placeholder.jpg' : (m.image_url||'');
-          const body = { name: m.name, sku: m.sku, category_id: catId, price: Number(m.price)||0, image_url: imgUrl, active: m.active };
+          const body = {
+            name: m.name,
+            name_localized: m.name_localized || '',
+            description: m.description || '',
+            description_localized: m.description_localized || '',
+            sku: m.sku,
+            category_id: catId,
+            price: Number(m.price)||0,
+            cost: (m.cost==null?null:Number(m.cost)),
+            image_url: imgUrl,
+            barcode: m.barcode || '',
+            tax_group_reference: m.tax_group_reference || '',
+            preparation_time: m.preparation_time,
+            calories: m.calories,
+            walking_minutes_to_burn_calories: m.walking_minutes_to_burn_calories,
+            is_high_salt: !!m.is_high_salt,
+            is_sold_by_weight: !!m.is_sold_by_weight,
+            is_stock_product: !!m.is_stock_product,
+            ingredients_en: m.ingredients_en || '',
+            ingredients_ar: m.ingredients_ar || '',
+            allergens: m.allergens || '',
+            serving_size: m.serving_size || '',
+            fat_g: m.fat_g,
+            carbs_g: m.carbs_g,
+            protein_g: m.protein_g,
+            sugar_g: m.sugar_g,
+            sodium_mg: m.sodium_mg,
+            salt_g: m.salt_g,
+            spice_level: m.spice_level || '',
+            pos_visible: m.pos_visible,
+            online_visible: m.online_visible,
+            delivery_visible: m.delivery_visible,
+            active: m.active
+          };
           const createdResp = await api(`/admin/tenants/${encodeURIComponent(id)}/products`, { method:'POST', body });
           const pid = createdResp?.product?.id || null;
-          created++; existing.set(key, true);
+          created++;
+          try { if (m.sku) bySku.set(String(m.sku).toLowerCase(), { id: pid||true }); } catch {}
+          try { if (m.name) byName.set(String(m.name).toLowerCase(), { id: pid||true }); } catch {}
           // Link modifier groups by reference if provided
           if (pid && Array.isArray(m.mod_refs) && m.mod_refs.length && modsByRef.size){
             const items = m.mod_refs
@@ -675,11 +927,13 @@
             }
           }
         } catch { failed++; }
+        done++; const pct = Math.round(done*100/total); pb?.set(pct); if (statusEl) statusEl.textContent = `Importing… ${pct}%`;
       }
-      const statusEl = document.getElementById('prodImportStatus');
-      if (statusEl) statusEl.textContent = `Created: ${created}, skipped: ${skipped}, failed: ${failed}${linked?`, linked modifiers: ${linked}`:''}`;
-      toast(`Imported — created ${created}, skipped ${skipped}${failed?`, failed ${failed}`:''}${linked?`, linked modifiers ${linked}`:''}`);
+      if (statusEl) statusEl.textContent = `Created: ${created}, updated: ${updated}, skipped: ${skipped}, failed: ${failed}${linked?`, linked modifiers: ${linked}`:''}`;
+      try { pb?.set(100); setTimeout(()=> pb?.hide(), 800); } catch {}
+      toast(`Imported — created ${created}, updated ${updated}, skipped ${skipped}${failed?`, failed ${failed}`:''}${linked?`, linked modifiers ${linked}`:''}`);
       await loadProducts();
+      try { if (confirmBtn) confirmBtn.disabled = false; } catch {}
     } catch { toast('Import failed'); }
   }
 
@@ -715,12 +969,107 @@
     // Re-resolve when default category changes
     $('#prodImportDefaultCategory')?.addEventListener('change', ()=>{ if (IMPORT.rows.length){ renderImportPreview(); } });
     $('#prodImportConfirm')?.addEventListener('click', async ()=>{ const inp=$('#prodImportFile'); const f=inp&&inp.files&&inp.files[0]; if(!f){ toast('Choose a CSV'); return; } await importProductsFromCsv(f); $('#prodImportModal')?.classList.remove('open'); });
+    // Import product-modifier links (CSV)
+    $('#btnProdModsImport')?.addEventListener('click', ()=>{ $('#prodModsFile')?.click(); });
+    $('#prodModsFile')?.addEventListener('change', async (e)=>{
+      try {
+        const id = STATE.selectedTenantId; if(!id){ toast('Select a tenant'); return; }
+        const f = e.target && e.target.files && e.target.files[0]; if (!f) return;
+        const text = await f.text();
+        // Try open endpoint first (for development), fallback to regular endpoint
+        let resp;
+        try {
+          resp = await fetch(`/admin/tenants/${encodeURIComponent(id)}/products/modifiers/import-open`, { method:'POST', headers:{ 'content-type':'text/csv' }, body: text });
+          if (!resp.ok && resp.status === 404) {
+            // Fallback to regular endpoint if open version doesn't exist
+            resp = await fetch(`/admin/tenants/${encodeURIComponent(id)}/products/modifiers/import`, { method:'POST', headers:{ 'content-type':'text/csv' }, body: text });
+          }
+        } catch {
+          // Fallback to regular endpoint on any error
+          resp = await fetch(`/admin/tenants/${encodeURIComponent(id)}/products/modifiers/import`, { method:'POST', headers:{ 'content-type':'text/csv' }, body: text });
+        }
+        const j = await resp.json().catch(()=>({ ok:false }));
+        if (resp.ok && j && j.ok) {
+          toast(`Modifiers imported — linked ${j.linked||0}${j.missing_products?`, missing products ${j.missing_products}`:''}${j.missing_groups?`, missing groups ${j.missing_groups}`:''}`);
+        } else {
+          toast('Import modifiers failed');
+        }
+      } catch { toast('Import modifiers failed'); }
+      finally { try { e.target.value = ''; } catch {} }
+    });
+
     $('#btnProdExport')?.addEventListener('click', ()=>{
       try {
         const headers=['id','sku','name','category_name','price','image_url','active'];
         const rows=(PST.products||[]).map(p=>({ id:p.id, sku:p.sku||'', name:p.name||'', category_name:p.category_name||'', price:p.price||0, image_url:p.image_url||'', active: (p.active==null?true:p.active) }));
         window.Importer.downloadCsv('products.csv', headers, rows);
       } catch { toast('Export failed'); }
+    });
+    // Sync (Foodics) — show confirmation modal with 'With Images' checkbox
+    $('#btnProdSync')?.addEventListener('click', ()=>{
+      const md = $('#prodSyncModal'); if (!md) { toast('Sync UI not available'); return; }
+      try { $('#prodSyncWithImages').checked = true; } catch {}
+      try { $('#prodSyncStatus').textContent = '—'; } catch {}
+      md.classList.add('open'); md.setAttribute('aria-hidden','false');
+    });
+    $('#prodSyncClose')?.addEventListener('click', ()=>{ $('#prodSyncModal')?.classList.remove('open'); });
+    $('#prodSyncCancel')?.addEventListener('click', ()=>{ $('#prodSyncModal')?.classList.remove('open'); });
+    $('#prodSyncModal')?.addEventListener('click', (e)=>{ if (e.target === $('#prodSyncModal')) $('#prodSyncModal')?.classList.remove('open'); });
+    $('#prodSyncConfirm')?.addEventListener('click', async ()=>{
+      const { ProgressBar } = window.Admin;
+      
+      try {
+        const id = STATE.selectedTenantId; if(!id){ toast('Select a tenant'); return; }
+        const withImages = !!document.getElementById('prodSyncWithImages')?.checked;
+        
+        // Close the modal first
+        $('#prodSyncModal')?.classList.remove('open');
+        
+        // Show progress bar
+        ProgressBar.show('Product Sync', 'Starting product sync...');
+        
+        // Phase 1: Categories
+        ProgressBar.update(20, 'Syncing categories...');
+        const categoriesUrl = `/admin/tenants/${encodeURIComponent(id)}/integrations/foodics/sync?phase=categories`;
+        const catRes = await api(categoriesUrl, { method:'POST', tenantId: null });
+        const catStats = catRes?.stats || {};
+        const cc = catStats.categories?.created || 0;
+        const cu = catStats.categories?.updated || 0;
+        
+        ProgressBar.update(40, 'Categories synced, now syncing products...', `Categories: +${cc}/~${cu}`);
+        
+        // Phase 2: Products
+        const productsUrl = withImages
+          ? `/admin/tenants/${encodeURIComponent(id)}/integrations/foodics/sync?phase=products&force_images=1`
+          : `/admin/tenants/${encodeURIComponent(id)}/integrations/foodics/sync?phase=products`;
+        
+        ProgressBar.update(60, withImages ? 'Syncing products with images...' : 'Syncing products...');
+        const prodRes = await api(productsUrl, { method:'POST', tenantId: null });
+        const prodStats = prodRes?.stats || {};
+        const pc = prodStats.products?.created || 0;
+        const pu = prodStats.products?.updated || 0;
+        const pf = prodStats.products?.image_found || 0;
+        const pm = prodStats.products?.image_missing || 0;
+        
+        ProgressBar.update(90, 'Refreshing data...');
+        
+        // Reload data
+        await loadCategories();
+        await loadProducts();
+        
+        // Show success with final stats
+        const imgNote = withImages ? ` • Images: ${pf} set/${pm} missing` : '';
+        const finalDetails = `Categories: +${cc}/~${cu} • Products: +${pc}/~${pu}${imgNote}`;
+        ProgressBar.setSuccess('Product sync completed!');
+        ProgressBar.update(100, 'Sync completed!', finalDetails);
+        
+        toast(`Synced — products +${pc}/~${pu}, categories +${cc}/~${cu}${withImages ? `, images ${pf} set/${pm} missing` : ''}`);
+        
+      } catch (e) {
+        const msg = (e && e.data && (e.data.message || e.data.error)) ? String(e.data.message || e.data.error) : 'Sync failed';
+        ProgressBar.setError('Sync failed: ' + msg);
+        toast(msg);
+      }
     });
     // Tabs
     $$('#prodTabs .tab').forEach(btn=> btn.addEventListener('click', ()=>{ PST.productTab = btn.getAttribute('data-tab') || 'active'; $$('#prodTabs .tab').forEach(b=> b.classList.toggle('active', b===btn)); PST.productsPage=1; renderProductsTable(); }));
@@ -729,7 +1078,12 @@
       const id = STATE.selectedTenantId; if(!id){ toast('Select a tenant'); return; }
       const ids = $$('#productTableWrap .prod-chk:checked').map(cb=>cb.value);
       if (!ids.length) return; const action = $('#prodBulkAction')?.value || 'delete';
-      const confirmMsg = action==='delete'?`Delete ${ids.length} product(s)?` : action==='inactivate'?`Inactivate ${ids.length} product(s)?` : `Activate ${ids.length} product(s)?`;
+      const confirmMsg = action==='delete'?`Delete ${ids.length} product(s)?`
+        : action==='inactivate'?`Inactivate ${ids.length} product(s)?`
+        : action==='activate'?`Activate ${ids.length} product(s)?`
+        : action==='refresh_image'?`Refresh image for ${ids.length} product(s)?`
+        : action==='refresh_data'?`Refresh data+image for ${ids.length} product(s)?`
+        : `Apply ${action} to ${ids.length} product(s)?`;
       if (!confirm(confirmMsg)) return;
       let ok=0, fail=0;
       for (const pid of ids){
@@ -738,13 +1092,18 @@
             await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(pid)}`, { method:'DELETE' });
           } else if (action === 'inactivate') {
             await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(pid)}`, { method:'PUT', body:{ active:false } });
-          } else {
+          } else if (action === 'activate') {
             await api(`/admin/tenants/${encodeURIComponent(id)}/products/${encodeURIComponent(pid)}`, { method:'PUT', body:{ status:'active', active:true } });
+          } else if (action === 'refresh_image') {
+            await api(`/admin/tenants/${encodeURIComponent(id)}/integrations/foodics/rehydrate-product`, { method:'POST', body:{ product_id: pid, mode:'image' }, tenantId: id });
+          } else if (action === 'refresh_data') {
+            await api(`/admin/tenants/${encodeURIComponent(id)}/integrations/foodics/rehydrate-product`, { method:'POST', body:{ product_id: pid, mode:'data' }, tenantId: id });
           }
           ok++;
         } catch { fail++; }
       }
-      toast(`${action[0].toUpperCase()+action.slice(1)}: ${ok} ok${fail?`, ${fail} failed`:''}`);
+      const label = action.replace('_',' ');
+      toast(`${label[0].toUpperCase()+label.slice(1)}: ${ok} ok${fail?`, ${fail} failed`:''}`);
       await loadProducts();
     });
   }
@@ -756,10 +1115,71 @@
   window.onTenantChanged = function(){ loadCategories().then(loadProducts).catch(()=>{}); };
 
   function init(){
-    wireProductModal();
+    // Only wire modal if present (legacy); full-page editor is at /products/edit/
+    if (document.getElementById('productModal')) {
+      try { wireProductModal(); } catch {}
+    }
     wireToolbar();
     wireAuth();
-    Admin.bootstrapAuth(()=>{ loadCategories().then(loadProducts).catch(()=>{}); });
+    
+    // Listen for tenant selection before loading data
+    let dataLoaded = false;
+    const loadProductData = () => {
+      console.log('loadProductData called:', { dataLoaded, selectedTenantId: STATE.selectedTenantId });
+      if (dataLoaded) {
+        console.log('Data already loaded, skipping');
+        return; // Prevent double-loading
+      }
+      if (!STATE.selectedTenantId) {
+        console.log('No tenant selected yet, waiting...');
+        return;
+      }
+      console.log('Loading products for tenant:', STATE.selectedTenantId);
+      dataLoaded = true;
+      loadCategories().then(loadProducts).catch((err) => {
+        console.error('Error loading product data:', err);
+        dataLoaded = false; // Allow retry
+      });
+    };
+    
+    // Listen for tenantSelected event
+    document.addEventListener('tenantSelected', () => {
+      console.log('tenantSelected event received in products.js');
+      setTimeout(loadProductData, 50); // Small delay for safety
+    });
+    
+    // Also listen for tenantsLoaded as backup
+    document.addEventListener('tenantsLoaded', () => {
+      console.log('tenantsLoaded event received in products.js');
+      setTimeout(loadProductData, 200); // Longer delay since tenant might not be selected yet
+    });
+    
+    // Expose loadProductData globally for debugging
+    window.loadProductData = loadProductData;
+    
+    Admin.bootstrapAuth(() => {
+      console.log('bootstrapAuth callback called');
+      // Try loading immediately if tenant is already selected
+      loadProductData();
+      // Multiple retry attempts to ensure data loads
+      setTimeout(() => {
+        console.log('Retry attempt 1');
+        dataLoaded = false; // Reset flag to allow retry
+        loadProductData();
+      }, 1500);
+      
+      setTimeout(() => {
+        console.log('Retry attempt 2');
+        dataLoaded = false; // Reset flag to allow retry
+        loadProductData();
+      }, 3000);
+      
+      setTimeout(() => {
+        console.log('Final retry attempt');
+        dataLoaded = false; // Reset flag to allow retry
+        loadProductData();
+      }, 5000);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

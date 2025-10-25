@@ -1,0 +1,79 @@
+# Keep Cloud Run source uploads minimal for the main service
+
+# This file controls what gets uploaded when using:
+#   gcloud run deploy --source .
+# It does NOT affect sub-service deploys from subdirectories.
+
+# VCS and editor cruft
+.gcloudignore
+.git
+.gitignore
+.github
+.vscode
+.idea
+.warp
+
+# Dependencies and caches
+node_modules
+**/node_modules
+**/.cache
+**/.DS_Store
+
+# Documentation and ops inventories
+docs
+inventory
+
+# Non-service apps and native (exclude Xcode and iOS projects/builds)
+CashierApp
+DisplayApp
+ios-cashier
+ios
+Archive
+OrderTechCore
+*.xcodeproj
+*.xcworkspace
+*.xcuserdatad
+*.xcuserstate
+*.xcassets
+*.xcconfig
+DerivedData
+**/DerivedData
+*.xcbuilddata
+*.xcent
+*.xcent.der
+*.app
+*.ipa
+*.dSYM
+
+# Kiosk artifacts (you confirmed these can be excluded)
+kiosk
+kiosk-shell
+
+# Heavy/static assets now served from GCS
+images
+photos
+data
+
+# LARGE EXCLUSIONS: Heavy projects not needed for Cloud Run service
+# AI Assistant project (4.5GB) - separate application
+koobs-ai-assistant
+# C++ Whisper library (219MB) - not needed for web service
+whisper.cpp
+# macOS projects (126MB) - not needed for web service
+macos
+
+# Generic build outputs
+build
+dist
+**/build
+**/dist
+
+# Logs and temp
+logs
+*.log
+tmp
+nohup.out
+.logs
+.pid
+server_data
+cloud-sql-proxy

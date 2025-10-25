@@ -1,0 +1,23 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Design/Tokens.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/Tokens.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/Tokens.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/Tokens.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/Tokens.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/Tokens.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/WebRTCService.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/WebRTCService.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/WebRTCService.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/WebRTCService.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/WebRTCService.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/WebRTCService.swiftdeps"
+  }
+}

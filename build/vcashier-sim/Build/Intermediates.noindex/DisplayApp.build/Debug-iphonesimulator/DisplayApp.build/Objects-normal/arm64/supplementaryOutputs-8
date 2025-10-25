@@ -1,0 +1,23 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/App/RootView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RootView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RootView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RootView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RootView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/RTC/RTCVideoViews.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/RTCVideoViews.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Session/SessionHolder.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/SessionHolder.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/SessionHolder.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/SessionHolder.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/SessionHolder.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/SessionHolder.swiftdeps"
+  }
+}

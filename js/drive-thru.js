@@ -1,5 +1,6 @@
 import { qs, qsa, fmt, getParams, loadCategories, loadProducts, startLocalCam, setRemoteVideo, createCart, api, proxiedImageSrc } from '/js/common.js?v=1.0.14';
 import { setDisplayId, renderBillList, renderTotals } from '/js/ui-common.js';
+import { hasMilkVariants, productOptions, computePriceWith, selectionLabelSimple } from '/js/product-helpers.js?v=1.0.0';
 import { computeTotals } from '/js/data.js';
 
 const { tenant, remote } = getParams();
@@ -49,7 +50,13 @@ function imageDisplaySrcForUrl(u){
   const raw = String(u || '').trim();
   if (!raw) return '';
   if (/^http:\/\//i.test(raw)) return proxiedImageSrc(raw); // avoid mixed content
-  if (/^https:\/\//i.test(raw)) return raw;                 // try direct first
+  if (/^https:\/\//i.test(raw)) {
+    try {
+      const h = new URL(raw).host;
+      if (h && h !== location.host) return proxiedImageSrc(raw);
+    } catch {}
+    return raw;                 // same-origin https is fine
+  }
   return raw; // local/relative path
 }
 function attachImageFallback(imgEl, originalUrl){
@@ -57,11 +64,11 @@ function attachImageFallback(imgEl, originalUrl){
     const raw = String(originalUrl || '').trim();
     if (!imgEl || !raw) return;
     const isHttps = /^https:\/\//i.test(raw);
-    const proxy = proxiedImageSrc(raw) || '/images/products/placeholder.jpg';
+    const proxy = proxiedImageSrc(raw) || '/images/placeholder.png';
     let triedProxy = false;
     imgEl.addEventListener('error', () => {
       if (isHttps && !triedProxy) { triedProxy = true; imgEl.src = proxy; }
-      else { imgEl.src = '/images/products/placeholder.jpg'; }
+      else { imgEl.src = '/images/placeholder.png'; }
     });
   } catch {}
 }
@@ -133,8 +140,45 @@ let imgMap = new Map();
 let reconnectDelay = 500;
 let reconnectTimer = null;
 let peersConnected = false;
+// LiveKit auto-rejoin state (display)
+let __lkRejoinTimer = null;
+let __lkRejoinBackoff = 2000;
+// Audio unlock state for autoplay policy
+let __audioUnlocked = false;
+function clearLivekitRejoinTimer(){ try { if (__lkRejoinTimer) clearTimeout(__lkRejoinTimer); } catch {} __lkRejoinTimer = null; }
+function scheduleLivekitRejoin(reason){
+  try { if ((window.__rtcProvider||'') !== 'livekit') return; } catch {}
+  const jitter = Math.floor(Math.random()*300);
+  const delay = Math.min(__lkRejoinBackoff, 30000) + jitter;
+  __lkRejoinBackoff = Math.min(__lkRejoinBackoff*2, 30000);
+  clearLivekitRejoinTimer();
+  __lkRejoinTimer = setTimeout(async () => { try { await joinLivekitDisplay(); } catch {} }, delay);
+}
+// Current RTC provider hint for telemetry and reconnect logic
+try { window.__rtcProvider = 'p2p'; } catch {}
 let statusFreezeUntil = 0; // gate READY flicker shortly after offers/restarts
 let lastCashierName = 'Cashier';
+// Heartbeat tracking for remote (cashier) media health; used to clear stale "Live" state
+let __lastRtcStatusAt = 0;
+let __hbMonitorTimer = null;
+function startHeartbeatMonitor(){
+  try { if (__hbMonitorTimer) { clearInterval(__hbMonitorTimer); __hbMonitorTimer = null; } } catch {}
+  __hbMonitorTimer = setInterval(() => {
+    try {
+      // Only enforce when we think we're connected; otherwise, let normal flow drive UI
+      if (!peersConnected) return;
+      const now = Date.now();
+      // If we haven't received an rtc:status in ~9s, consider the peer stale and reset UI/RTC
+      if (!__lastRtcStatusAt || (now - __lastRtcStatusAt) > 9000) {
+        peersConnected = false; updateIdleState();
+        try { renderLiveFlag(); } catch {}
+        try { setPosterVisible(true); setPosterNotice('Waiting for session…', true); } catch {}
+        try { setLinkStatusLabel(); } catch {}
+        try { stopRTC('hb-timeout'); } catch {}
+      }
+    } catch {}
+  }, 4000);
+}
 
 // Session/idle tracking and auto-refresh scheduler
 let sessionActive = false; // true between session:started and session:ended
@@ -206,12 +250,38 @@ function renderLiveFlag(){
     const wrap = document.getElementById('liveFlag');
     if (!wrap) return;
     wrap.innerHTML = '';
-    if (!peersConnected) return; // only show when connected
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'flag in-session';
-    btn.textContent = `Live: ${String(lastCashierName||'').split(/\s+/)[0] || 'Cashier'}`;
-    wrap.appendChild(btn);
+
+    // Always show branch tag if known (even when not connected)
+    try {
+      const branch = localStorage.getItem('DEVICE_BRANCH') || '';
+      if (branch) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'flag';
+        b.textContent = `Branch: ${branch}`;
+        wrap.appendChild(b);
+      }
+    } catch {}
+
+    // Show live status only when peers are connected AND WebRTC looks healthy
+    const pcConnected = isDisplayConnected();
+    const mediaHealthy = (audioInHealthy || videoInHealthy);
+    if (peersConnected && (pcConnected || mediaHealthy)) {
+      // Replace text label with a simple green dot indicator (no text)
+      const dot = document.createElement('span');
+      dot.className = 'conn-dot online';
+      dot.setAttribute('aria-label', 'Connected');
+      wrap.appendChild(dot);
+    }
+
+    // Audio indicator when unlocked
+    if (__audioUnlocked) {
+      const a = document.createElement('button');
+      a.type = 'button';
+      a.className = 'flag';
+      a.textContent = 'Audio: ON';
+      wrap.appendChild(a);
+    }
   } catch {}
 }
 
@@ -392,13 +462,23 @@ try {
     try { init(); } catch {}
   } else {
     setPosterNotice('', false);
+    // Pre-fetch RTC config to determine desired provider early (avoid starting P2P if SFU is default)
+    (async () => {
+      try {
+        const cfg = await getIceConfigDetailed();
+        if (cfg && cfg.sfu && cfg.sfu.enabled && String(cfg.sfu.defaultProvider||'') === 'livekit') {
+          try { window.__rtcProvider = 'livekit'; } catch {}
+        }
+      } catch {}
+    })();
     connect();
     init();
+    try { ensurePreconnectPip(); } catch {}
     setupPresenceHeartbeat();
     // Fallback: try starting RTC even if WS handshake is blocked by proxy/CDN
-    setTimeout(() => { if (!rtcStarted && !rtcStarting) startRTC(); }, 1200);
+    setTimeout(() => { if (window.__rtcProvider === 'p2p' && !rtcStarted && !rtcStarting) startRTC(); }, 1200);
   }
-} catch {
+  } catch {
   // If localStorage is unavailable for some reason, default to INACTIVE
   const pill = document.getElementById('linkPill');
   const label = document.getElementById('linkStatus');
@@ -409,6 +489,7 @@ try {
   setPosterVisible(true);
   setPosterNotice('No Active Key', true);
 }
+try { ensurePreconnectPip(); } catch {}
 
 let rtcStarted = false;
 let rtcStarting = false;
@@ -426,6 +507,8 @@ function clearRtcTimers(){
   window.__rtcTimersDisplay = { pollOfferTimer: null, candidatesInterval: null };
 }
 function scheduleRtcRestart(reason){
+  // Only restart the P2P stack; SFU clients handle their own reconnection
+  try { if (window.__rtcProvider && window.__rtcProvider !== 'p2p') return; } catch {}
   if (restartTimer) return;
   restartTimer = setTimeout(() => {
     try {
@@ -443,23 +526,54 @@ function scheduleRtcRestart(reason){
     } finally { restartTimer = null; }
   }, 2500);
 }
+function isIOS(){
+  try {
+    const ua = navigator.userAgent || '';
+    const p = navigator.platform || '';
+    return /(iPad|iPhone|iPod)/i.test(ua) || (p === 'MacIntel' && navigator.maxTouchPoints > 1);
+  } catch { return false; }
+}
+function setStatusLabelText(text, type){
+  try {
+    const pill = document.getElementById('linkPill');
+    const label = document.getElementById('linkStatus');
+    const dot = pill ? pill.querySelector('.dot') : null;
+    if (type === 'connected') {
+      if (dot) dot.style.background = '#22c55e';
+      if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+      if (label) label.textContent = isIOS() ? '' : text;
+      return;
+    }
+    if (type === 'ready') {
+      if (dot) dot.style.background = '#f59e0b';
+      if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+      if (label) label.textContent = isIOS() ? '' : text;
+      return;
+    }
+    if (type === 'reconnecting') {
+      if (dot) dot.style.background = '#f59e0b';
+      if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+      if (label) label.textContent = isIOS() ? '' : text;
+      return;
+    }
+    if (type === 'offline') {
+      if (dot) dot.style.background = '#ef4444';
+      if (pill) { pill.style.background = '#ef4444'; pill.style.color = '#fff'; }
+      if (label) label.textContent = isIOS() ? '' : text;
+      return;
+    }
+  } catch {}
+}
 function setLinkStatusLabel(){
   try { renderLiveFlag(); } catch {}
-  const pill = document.getElementById('linkPill');
-  const label = document.getElementById('linkStatus');
-  const dot = pill ? pill.querySelector('.dot') : null;
   // Consider actual PC connectivity in addition to media health
   const pcConnected = isDisplayConnected();
   const mediaHealthy = (audioInHealthy || videoInHealthy);
   const connected = (mediaHealthy || pcConnected) && peersConnected;
   if (connected) {
-    if (label) label.textContent = `CONNECTED — ${lastCashierName}${(!videoInHealthy && audioInHealthy) ? ' (AUDIO ONLY)' : ''}`;
-    if (dot) dot.style.background = '#22c55e';
-    if (pill) { pill.style.background = '#22c55e'; pill.style.color = '#0b1220'; }
+    setStatusLabelText(`CONNECTED — ${lastCashierName}${(!videoInHealthy && audioInHealthy) ? ' (AUDIO ONLY)' : ''}`, 'connected');
   } else {
-    if (label) label.textContent = 'READY';
-    if (dot) dot.style.background = '#f59e0b';
-    if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+    setStatusLabelText('READY', 'ready');
   }
 }
 let __posterApplyTimer = null;
@@ -490,6 +604,10 @@ function updatePosterFromHealth(){
 function beginRtcStats(pc){
   if (hbTimer) { try { clearInterval(hbTimer); } catch {} hbTimer = null; }
   __lastStats = { aIn: { bytes: 0, at: 0 }, aOut: { bytes: 0, at: 0 }, vIn: { bytes: 0, at: 0 }, vOut: { bytes: 0, at: 0 } };
+  let __bytesSnap = null; // { inBytes, outBytes, at }
+  let __lastTelemetryAt = 0;
+  const TELEMETRY_PERIOD_MS = (function(){ try { const n=Number(localStorage.getItem('RTC_STATS_INTERVAL_SEC')); return Number.isFinite(n)&&n>0 ? n*1000 : 5000; } catch { return 5000; } })();
+  const telemetryEnabled = () => { try { const v=String(localStorage.getItem('FRONTEND_RTC_TELEMETRY_ENABLED')||'1'); return v==='1' || /^(true|yes|on)$/i.test(v); } catch { return true; } };
   hbTimer = setInterval(async () => {
     try {
       const now = Date.now();
@@ -528,19 +646,158 @@ function beginRtcStats(pc){
           ws.send(JSON.stringify({ type:'rtc:heartbeat', basketId, audio:{ in: audioInHealthy, out: audioOutHealthy }, video:{ in: videoInHealthy, out: videoOutHealthy } }));
         }
       } catch {}
+
+      // telemetry (every TELEMETRY_PERIOD_MS)
+      try {
+        const now2 = Date.now();
+        if (telemetryEnabled() && (now2 - __lastTelemetryAt) >= TELEMETRY_PERIOD_MS) {
+          // Bitrates from bytes deltas across interval snapshot
+          const inBytes = (typeof aIn==='number' ? aIn : (__lastStats.aIn.bytes||0)) + (typeof vIn==='number' ? vIn : (__lastStats.vIn.bytes||0));
+          const outBytes = (typeof aOut==='number' ? aOut : (__lastStats.aOut.bytes||0)) + (typeof vOut==='number' ? vOut : (__lastStats.vOut.bytes||0));
+          let brInKbps = null, brOutKbps = null;
+          if (__bytesSnap) {
+            const dt = Math.max(0.5, (now2 - __bytesSnap.at)/1000);
+            const dIn = Math.max(0, inBytes - __bytesSnap.inBytes);
+            const dOut = Math.max(0, outBytes - __bytesSnap.outBytes);
+            brInKbps = Math.round((dIn*8/1000)/dt);
+            brOutKbps = Math.round((dOut*8/1000)/dt);
+          }
+          __bytesSnap = { inBytes, outBytes, at: now2 };
+
+          // Candidate pair, RTT, jitter and loss
+          let byId = new Map();
+          rep.forEach(r => { try { if (r && r.id) byId.set(r.id, r); } catch {} });
+          let rttMs = null, pairId = null, localCand = null, remoteCand = null;
+          rep.forEach(r => {
+            if (r.type === 'transport' && r.selectedCandidatePairId) {
+              const pair = byId.get(r.selectedCandidatePairId);
+              if (pair) {
+                pairId = pair.id || null;
+                if (typeof pair.currentRoundTripTime === 'number') rttMs = Math.round(pair.currentRoundTripTime * 1000);
+                const lc = byId.get(pair.localCandidateId);
+                const rc = byId.get(pair.remoteCandidateId);
+                if (lc) localCand = { type: lc.candidateType, protocol: lc.protocol };
+                if (rc) remoteCand = { type: rc.candidateType, protocol: rc.protocol };
+              }
+            }
+          });
+          // Approx jitter and loss (use inbound stats if present)
+          let jitterMs = null, lossPct = null;
+          try {
+            let jitterSum = 0, jitterN = 0, lost = 0, recv = 0;
+            rep.forEach(r => {
+              if (r.type === 'inbound-rtp' && !r.isRemote) {
+                if (typeof r.jitter === 'number') { jitterSum += (r.jitter*1000); jitterN++; }
+                if (typeof r.packetsLost === 'number') lost += Math.max(0, r.packetsLost);
+                if (typeof r.packetsReceived === 'number') recv += Math.max(0, r.packetsReceived);
+              }
+            });
+            jitterMs = jitterN ? Math.round(jitterSum / jitterN) : null;
+            lossPct = (lost+recv) ? Math.round((lost*1000)/(lost+recv))/10 : null;
+          } catch {}
+
+          const headers = { 'content-type':'application/json' };
+          try { if (tenant) headers['x-tenant-id'] = tenant; } catch {}
+          try {
+            const tok = localStorage.getItem('DEVICE_TOKEN_DISPLAY') || localStorage.getItem('DEVICE_TOKEN') || '';
+            if (tok) headers['x-device-token'] = tok;
+          } catch {}
+          const device_id = (function(){ try { return localStorage.getItem('DEVICE_ID_DISPLAY') || localStorage.getItem('DEVICE_ID') || ''; } catch { return ''; } })();
+          const payload = {
+            basketId,
+            role: 'display',
+            device_id,
+            provider: (window.__rtcProvider || 'p2p'),
+            metrics: {
+              rtt_ms: rttMs,
+              br_in_kbps: brInKbps,
+              br_out_kbps: brOutKbps,
+              jitter_ms: jitterMs,
+              pkt_loss_pct: lossPct,
+              local_candidate: localCand,
+              remote_candidate: remoteCand,
+              pair_id: pairId
+            }
+          };
+          fetch('/rtc/telemetry', { method:'POST', headers, body: JSON.stringify(payload) }).catch(()=>{});
+          __lastTelemetryAt = now2;
+        }
+      } catch {}
+
       // update UI
       setLinkStatusLabel();
       updatePosterFromHealth();
     } catch {}
   }, 2000);
 }
+// Optional: mic level meter for diagnostics (enable with localStorage.DRIVE_DEBUG_MIC='1')
+function maybeStartMicMeter(stream){
+  try {
+    if (!stream) return;
+    if (String(localStorage.getItem('DRIVE_DEBUG_MIC')||'') !== '1') return;
+    if (document.getElementById('micMeter')) return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser(); analyser.fftSize = 256;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    const el = document.createElement('div');
+    el.id = 'micMeter';
+    Object.assign(el.style, { position:'fixed', left:'12px', bottom:'12px', width:'120px', height:'10px', background:'#1f2937', border:'1px solid #334155', borderRadius:'4px', zIndex:9999 });
+    const bar = document.createElement('div'); Object.assign(bar.style, { height:'100%', width:'2%', background:'#22c55e', borderRadius:'3px', transition:'width 80ms linear' });
+    el.appendChild(bar); document.body.appendChild(el);
+    function tick(){
+      try {
+        analyser.getByteTimeDomainData(data);
+        let sum=0; for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+        const rms = Math.sqrt(sum/data.length);
+        const pct = Math.min(100, Math.max(0, Math.round(rms*180)));
+        bar.style.width = Math.max(2, pct) + '%';
+      } catch {}
+      requestAnimationFrame(tick);
+    }
+    tick();
+  } catch {}
+}
+
+function ensurePreconnectPip(){
+  try {
+    if (!localEl) return;
+    const s = localEl.srcObject;
+    if (s && typeof s.getTracks === 'function' && s.getTracks().some(t => t.readyState === 'live')) return;
+    // Start a lightweight preview without audio to avoid feedback; will be replaced by RTC provider once connected
+    startLocalCam(localEl, { audio: false }).catch(()=>{});
+  } catch {}
+}
+
+function stopPreconnectPip(){
+  try {
+    const pip = localEl || document.getElementById('localVideo');
+    if (!pip) return;
+    const s = pip.srcObject;
+    if (s && typeof s.getTracks === 'function') {
+      s.getTracks().forEach(t => { try { t.stop(); } catch {} });
+    }
+    pip.srcObject = null;
+  } catch {}
+}
+
 function stopRTC(reason){
   try { updateIdleState(); } catch {}
   try { console.log('RTC(display) stop', { reason }); } catch {}
+  __audioUnlocked = false; try { renderLiveFlag(); } catch {}
   clearRtcTimers();
   try {
     const pc = window.__pcDisplay; if (pc && pc.close) pc.close();
   } catch {}
+  // Also disconnect LiveKit room if present and clean up any audio elements
+  try {
+    const room = window.__lkRoomDisplay;
+    if (room && typeof room.disconnect === 'function') { try { room.disconnect(); } catch {} }
+    const sink = document.getElementById('audioSink') || document.body;
+    Array.from(sink.querySelectorAll('audio')).forEach(el => { try { el.pause && el.pause(); el.srcObject = null; el.remove(); } catch {} });
+  } catch {}
+  window.__lkRoomDisplay = null;
   window.__pcDisplay = null;
   try {
     const s = localEl && localEl.srcObject; if (s && s.getTracks) { for (const t of s.getTracks()) { try { t.stop(); } catch {} } }
@@ -550,25 +807,32 @@ function stopRTC(reason){
   rtcStarted = false; rtcStarting = false; restartTimer && clearTimeout(restartTimer); restartTimer = null; rtcBackoff = 1000;
   // force refresh ICE servers next time
   try { window.__ICE_SERVERS = null; } catch {}
-  const pill = document.getElementById('linkPill');
-  const label = document.getElementById('linkStatus');
-  const dot = pill ? pill.querySelector('.dot') : null;
   const keepLabel = (reason === 'preclear');
   if (!keepLabel) {
-    if (label) label.textContent = 'READY';
-    if (dot) dot.style.background = '#f59e0b';
-    if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+    setStatusLabelText('READY', 'ready');
   }
   // Reset health and show poster when RTC is stopped
   audioInHealthy = audioOutHealthy = videoInHealthy = videoOutHealthy = false;
   setPosterVisible(true);
+  try { ensurePreconnectPip(); } catch {}
 }
 async function startRTC(){
   if (rtcStarted || rtcStarting) return;
   rtcStarting = true;
   try {
     const localStream = await startLocalCam(localEl, { audio: true });
+    try { if (localStream && localStream.getAudioTracks) localStream.getAudioTracks().forEach(t => { try { t.enabled = true; } catch {} }); } catch {}
+    try { maybeStartMicMeter(localStream); } catch {}
     await initRTC(localStream);
+    // Ensure sender audio track is enabled once PC is created
+    setTimeout(() => {
+      try {
+        const pc = window.__pcDisplay;
+        if (pc && typeof pc.getSenders === 'function') {
+          pc.getSenders().forEach(s => { const tr = s && s.track; if (tr && tr.kind === 'audio') { try { tr.enabled = true; } catch {} } });
+        }
+      } catch {}
+    }, 0);
     rtcStarted = true;
   } catch (e) { console.warn('RTC start failed', e); }
   finally { rtcStarting = false; }
@@ -604,32 +868,47 @@ async function init() {
   }
 
   let cats = [];
+  // Load categories; robust fallback even when tenant is provided (avoid blank UI)
   try {
     cats = await loadCategories(tenant);
   } catch {
-    // categories load failed; only fallback when no tenant is specified
-    if (!tenant) {
+    cats = null;
+  }
+  if (!Array.isArray(cats) || cats.length === 0) {
+    try {
       const fb = await loadFallbackCatalog();
-      cats = fb.cats;
-    } else {
+      if (fb && Array.isArray(fb.cats) && fb.cats.length) {
+        cats = fb.cats;
+        try { console.warn('Categories fallback applied (JSON catalog)'); } catch {}
+      } else {
+        cats = [];
+      }
+    } catch {
       cats = [];
     }
   }
+  // Load products; robust fallback even when tenant is provided (avoid blank UI)
   try {
     allProds = await loadProducts(tenant);
   } catch {
-    // products load failed; only fallback when no tenant is specified
-    if (!tenant) {
+    allProds = null;
+  }
+  if (!Array.isArray(allProds) || allProds.length === 0) {
+    try {
       const fb = await loadFallbackCatalog();
-      if (!cats || !cats.length) cats = fb.cats;
-      allProds = fb.prods;
-    } else {
+      if ((!cats || !cats.length) && fb && Array.isArray(fb.cats) && fb.cats.length) cats = fb.cats;
+      if (fb && Array.isArray(fb.prods) && fb.prods.length) {
+        allProds = fb.prods;
+        try { console.warn('Products fallback applied (JSON catalog)'); } catch {}
+      } else {
+        allProds = [];
+      }
+    } catch {
       allProds = [];
     }
   }
 
   imgMap = new Map((allProds||[]).map(p => [p.id, imageDisplaySrcForUrl(p.image_url)]));
-  try { prefetchImages(allProds).catch(()=>{}); } catch {}
   // Compute "Populer" deterministically when a session seed is available
   {
     const curated = buildDemoPopular(allProds||[]);
@@ -647,6 +926,20 @@ async function init() {
   } else {
     await showCategory(POPULER);
   }
+  // Defer image prefetch until after initial render so first paint is fast
+  try {
+    const schedule = () => {
+      try {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => { prefetchImages(allProds).catch(()=>{}); }, { timeout: 2500 });
+        } else {
+          setTimeout(() => { prefetchImages(allProds).catch(()=>{}); }, 1200);
+        }
+      } catch {}
+    };
+    // Queue scheduling after current task yields to paint
+    setTimeout(schedule, 0);
+  } catch {}
 }
 
 function renderCategories(cats) {
@@ -662,11 +955,14 @@ function renderCategories(cats) {
     b.style.minWidth = '0';
     b.onclick = async () => {
       await setActiveAndShow(c.name, b);
-      try {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'ui:selectCategory', basketId, name: c.name }));
-        }
-      } catch {}
+      // Removed: Display should not send category selections back to Cashier
+      // This prevents feedback loops and ensures proper remote control flow
+      // The Cashier controls the Display menu, not vice versa
+      // try {
+      //   if (ws && ws.readyState === WebSocket.OPEN) {
+      //     ws.send(JSON.stringify({ type: 'ui:selectCategory', basketId, name: c.name }));
+      //   }
+      // } catch {}
     };
     return b;
   };
@@ -717,7 +1013,10 @@ function renderProducts(list) {
 card.onclick = () => onProductTileClick(p, card);
 
     const img = document.createElement('img');
-    const initial = imageDisplaySrcForUrl(p.image_url) || '/images/products/placeholder.jpg';
+    const initial = imageDisplaySrcForUrl(p.image_url) || '/images/placeholder.png';
+    img.decoding = 'async';
+    img.loading = 'eager';
+    try { img.setAttribute('fetchpriority', 'high'); } catch {}
     img.src = initial;
     attachImageFallback(img, p.image_url);
 
@@ -768,25 +1067,50 @@ ws.addEventListener('open', () => {
       // Identify as display with name for peer-status
       try {
         const name = localStorage.getItem('DEVICE_NAME_DISPLAY') || localStorage.getItem('DEVICE_NAME') || 'Drive‑Thru';
+try {
+        const device_id = localStorage.getItem('DEVICE_ID_DISPLAY') || localStorage.getItem('DEVICE_ID') || '';
+        ws.send(JSON.stringify({ type:'hello', basketId, role:'display', name, device_id }));
+      } catch {
         ws.send(JSON.stringify({ type:'hello', basketId, role:'display', name }));
+      }
       } catch {}
-      const pill = document.getElementById('linkPill');
-      const label = document.getElementById('linkStatus');
-      const dot = pill ? pill.querySelector('.dot') : null;
-      if (label) label.textContent = 'READY';
-      if (dot) dot.style.background = '#f59e0b';
-      if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+      // Start heartbeat watchdog
+      try { __lastRtcStatusAt = 0; startHeartbeatMonitor(); } catch {}
+      setStatusLabelText('READY', 'ready');
       // Keep poster visible while connecting/handshaking
       setPosterVisible(true);
-      // Start RTC immediately; display will poll for offer until cashier posts one
-      startRTC();
+      // Decide provider first to avoid spinning up P2P when SFU is available
+      (async () => {
+        try {
+          const cfg = await getIceConfigDetailed();
+          if (cfg && cfg.sfu && cfg.sfu.enabled && String(cfg.sfu.defaultProvider||'') === 'livekit'){
+            try { window.__rtcProvider = 'livekit'; } catch {}
+            try { stopRTC('prefer-sfu'); } catch {}
+            const ok = await joinLivekitDisplay();
+            if (!ok) {
+              // Fallback to P2P only if SFU connect fails
+              try { window.__rtcProvider = 'p2p'; } catch {}
+              startRTC();
+            }
+          } else {
+            // No SFU available → P2P
+            try { window.__rtcProvider = 'p2p'; } catch {}
+            startRTC();
+          }
+        } catch {
+          // On error, keep P2P behavior
+          try { window.__rtcProvider = 'p2p'; } catch {}
+          startRTC();
+        }
+      })();
       statusFreezeUntil = Date.now() + 3000;
     });
     ws.addEventListener('message', async (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        if (msg.type === 'rtc:status' && msg.basketId === basketId) {
+if (msg.type === 'rtc:status' && msg.basketId === basketId) {
           try {
+            __lastRtcStatusAt = Date.now();
             const their = msg.status || {};
             const fromCashier = their.cashier || {};
             // cashier outbound == our inbound
@@ -804,6 +1128,8 @@ ws.addEventListener('open', () => {
             scheduleRtcRestart('preclear');
           } else {
             stopRTC('remote');
+            // Reflect disconnected state immediately in UI
+            peersConnected = false; try { renderLiveFlag(); setLinkStatusLabel(); updatePosterFromHealth(); } catch {}
             // If cashier requested a hard reset, reload to pick up latest config/state
             if (msg.reason === 'reset') {
               try { location.reload(); } catch {}
@@ -811,7 +1137,18 @@ ws.addEventListener('open', () => {
           }
           return;
         }
-        if (msg.type === 'peer:status') {
+        if (msg.type === 'rtc:provider' && (msg.provider === 'livekit' || msg.provider === 'twilio')) {
+          (async () => {
+            try {
+              try { clearLivekitRejoinTimer(); } catch {}
+              stopRTC('sfu-switch');
+              if (msg.provider === 'livekit') await joinLivekitDisplay();
+              else await joinTwilioDisplay();
+            } catch {}
+          })();
+          return;
+        }
+if (msg.type === 'peer:status') {
           const pill = document.getElementById('linkPill');
           const label = document.getElementById('linkStatus');
           const dot = pill ? pill.querySelector('.dot') : null;
@@ -821,7 +1158,7 @@ if (msg.status === 'connected') { cancelPosterResume();
             // Update drive live flag
             try { renderLiveFlag(); } catch {}
             // Do not set pill here; let RTCPeerConnection events drive the UI to avoid flicker
-            startRTC();
+            try { if ((window.__rtcProvider||'p2p') === 'p2p') startRTC(); } catch {}
           } else {
             // Avoid flicker to READY while we are connecting/connected
             const pc = window.__pcDisplay;
@@ -830,11 +1167,11 @@ if (msg.status === 'connected') { cancelPosterResume();
               pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'connected'
             ));
             if (midHandshake) return;
-peersConnected = false; updateIdleState();
+            // Peer left: immediately stop RTC to clear stale media and UI state
+            try { stopRTC('peer-left'); } catch {}
+            peersConnected = false; updateIdleState();
             try { renderLiveFlag(); } catch {}
-            if (label) label.textContent = 'READY';
-            if (dot) dot.style.background = '#f59e0b';
-            if (pill) { pill.style.background = '#f59e0b'; pill.style.color = '#0b1220'; }
+            setStatusLabelText('READY', 'ready');
           }
         }
 if (msg.type === 'session:started' && msg.basketId === basketId) {
@@ -884,6 +1221,14 @@ if (msg.type === 'poster:start' && msg.basketId === basketId) {
             const list = Array.isArray(msg.scenarios) ? msg.scenarios : [];
             for (const sc of list) { try { runPreflightAnswer(msg.requestId, sc); } catch {} }
           } catch {}
+          return;
+        }
+        // Apply RTC config preference from cashier and restart to take effect
+        if (msg.type === 'rtc:config' && msg.basketId === basketId) {
+          try { window.applyRtcConfig = msg.config || null; } catch {}
+          try { stopRTC('reconfig'); } catch {}
+          statusFreezeUntil = Date.now() + 3000;
+          setTimeout(() => { try { startRTC(); } catch {} }, 150);
           return;
         }
         if (msg.type === 'rtc:offer') {
@@ -936,12 +1281,8 @@ if (msg.type === 'poster:start' && msg.basketId === basketId) {
 ws.addEventListener('close', () => {
       try { updateIdleState(); } catch {}
       peersConnected = false; try { renderLiveFlag(); } catch {}
-      const pill = document.getElementById('linkPill');
-      const label = document.getElementById('linkStatus');
-      const dot = pill ? pill.querySelector('.dot') : null;
-      if (label) label.textContent = 'OFFLINE';
-      if (dot) dot.style.background = '#ef4444';
-      if (pill) { pill.style.background = '#ef4444'; pill.style.color = '#fff'; }
+      try { __lastRtcStatusAt = 0; } catch {}
+      setStatusLabelText('OFFLINE', 'offline');
       // Show poster while offline
       setPosterVisible(true);
       // Attempt to reconnect with backoff
@@ -1005,9 +1346,11 @@ function showOptionsUI(readOnly, p, opts, sel){
   const btnConfirm = document.getElementById('optConfirm');
   if (!modal||!body) return;
   title.textContent = `Choose options — ${p.name||''}`;
-  btnCancel.disabled = true; btnConfirm.disabled = true;
+
+  sel = sel || {};
 
   function render(){
+    const price = computePriceWith(p, opts, sel);
     const grp = [];
     if (opts.size && opts.size.length){
       const items = opts.size.map(o => renderOptionButton({ id:o.id, name:o.label, delta:o.delta }, sel.sizeId===o.id)).join('');
@@ -1017,6 +1360,7 @@ function showOptionsUI(readOnly, p, opts, sel){
       const items = opts.milk.map(o => renderOptionButton({ id:o.id, name:o.label, delta:o.delta }, sel.milkId===o.id)).join('');
       grp.push(`<fieldset><legend>Milk</legend><div class=\"optrow\">${items}</div></fieldset>`);
     }
+    grp.push(`<div style=\"margin-top:8px;font-weight:600;\">Price: ${fmt(price)} KWD</div>`);
     body.innerHTML = grp.join('');
     applyOptionButtonStyles(body);
     if (!readOnly){
@@ -1028,16 +1372,38 @@ function showOptionsUI(readOnly, p, opts, sel){
           btn.addEventListener('click', ()=>{
             const id = btn.getAttribute('data-opt');
             if (isSize) sel.sizeId = id; else if (isMilk) sel.milkId = id;
-            // Toggle selected state within group (single-select)
             fs.querySelectorAll('button.optbtn').forEach(b => b.classList.toggle('selected', b===btn));
             applyOptionButtonStyles(fs);
             try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection: sel })); } catch {}
+            // update price label
+            render();
           });
         });
       });
     }
   }
   render();
+
+  btnCancel.style.display = readOnly ? 'none' : '';
+  btnConfirm.style.display = readOnly ? 'none' : '';
+  // Ensure buttons are enabled when interactive
+  btnCancel.disabled = !!readOnly ? true : false;
+  btnConfirm.disabled = !!readOnly ? true : false;
+
+  btnCancel.onclick = () => { hideOptionsUI(); try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
+  btnConfirm.onclick = () => {
+    const price = computePriceWith(p, opts, sel);
+    const suffix = selectionLabelSimple(opts, sel);
+    const variantKey = `${p.id}#size=${sel.sizeId||''}&milk=${sel.milkId||''}`;
+    try {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type:'basket:update', basketId, op:{ action:'add', item:{ sku: variantKey, name: suffix?`${p.name} (${suffix})`:p.name, price }, qty:1 } }));
+      }
+    } catch {}
+    hideOptionsUI();
+    try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
+  };
+
   modal.style.display = 'flex';
 }
 function updateOptionsSelection(sel){
@@ -1107,7 +1473,7 @@ function showProductPreviewUIDisplay(p){
   title.textContent = 'Add Item';
   try { if (card) card.classList.add('compact'); } catch {}
   const ar = (p.name_localized && String(p.name_localized).trim()) ? String(p.name_localized).trim() : '';
-  const imgUrl = imageDisplaySrcForUrl(p.image_url) || '/images/products/placeholder.jpg';
+  const imgUrl = imageDisplaySrcForUrl(p.image_url) || '/images/placeholder.png';
   const price = fmt(p.price) + ' KWD';
   body.innerHTML = `
     <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
@@ -1131,7 +1497,7 @@ function showProductPreviewUIDisplay(p){
   btnCancel.disabled = false; btnConfirm.disabled = false;
   btnCancel.textContent = 'Close';
   btnConfirm.textContent = 'Add';
-  btnCancel.onclick = () => { hideOptionsUI(); };
+  btnCancel.onclick = () => { hideOptionsUI(); try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
   btnConfirm.onclick = async () => {
     try {
       const groups = await fetchProductModifiers(p);
@@ -1140,11 +1506,18 @@ function showProductPreviewUIDisplay(p){
         showProductPopupWithOptions(p, groups);
         try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups })); } catch {}
       } else {
-        // Fallback to simple options if defined
-        const opts = { };
-        // No dynamic simple opts for drive yet; add directly
-        addToBill(p);
-        hideOptionsUI();
+        // Fallback to simple options (size/milk) if defined
+        const opts = productOptions(p);
+        if (opts && ((opts.size && opts.size.length) || (opts.milk && opts.milk.length))) {
+          const groups2 = [];
+          if (opts.size && opts.size.length) groups2.push({ id:'size', name:'Size', required:false, min:0, max:1, options: opts.size.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
+          if (opts.milk && opts.milk.length) groups2.push({ id:'milk', name:'Milk', required:false, min:0, max:1, options: opts.milk.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
+          showProductPopupWithOptions(p, groups2);
+          try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups: groups2 })); } catch {}
+        } else {
+          addToBill(p);
+          hideOptionsUI();
+        }
       }
     } catch {
       addToBill(p);
@@ -1155,21 +1528,278 @@ function showProductPreviewUIDisplay(p){
 }
 
 async function onDisplayProductClick(p){
-  // Show preview locally and remotely; then, if modifiers exist, open options and mirror to cashier
-  try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showPreview', basketId, product: p })); } catch {}
-  showProductPreviewUIDisplay(p);
+  // Prefer opening Options immediately if real modifiers or simple options exist; otherwise show preview
   try {
     const groups = await fetchProductModifiers(p);
     if (Array.isArray(groups) && groups.length) {
+      // Open full modifiers UI and mirror to cashier
       showProductPopupWithOptions(p, groups);
       try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups })); } catch {}
+      return;
     }
+  } catch {}
+  // Fallback to simple options (size/milk) if defined
+  try {
+    const opts = productOptions(p);
+    if (opts && ((opts.size && opts.size.length) || (opts.milk && opts.milk.length))) {
+      const groups2 = [];
+      if (opts.size && opts.size.length) groups2.push({ id:'size', name:'Size', required:false, min:0, max:1, options: opts.size.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
+      if (opts.milk && opts.milk.length) groups2.push({ id:'milk', name:'Milk', required:false, min:0, max:1, options: opts.milk.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
+      showProductPopupWithOptions(p, groups2);
+      try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups: groups2 })); } catch {}
+      return;
+    }
+  } catch {}
+  // Otherwise, show preview locally and remotely
+  try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showPreview', basketId, product: p })); } catch {}
+  showProductPreviewUIDisplay(p);
+}
+
+// Detailed ICE config helper (cached with TTL to avoid rate limits)
+let __rtcCfgCacheDisplay = null; let __rtcCfgAtDisplay = 0;
+async function getIceConfigDetailed(){
+  const now = Date.now();
+  try {
+    if (__rtcCfgCacheDisplay && (now - __rtcCfgAtDisplay) < 60000) return __rtcCfgCacheDisplay;
+    const r = await fetch('/webrtc/config', { cache:'no-store' });
+    if (!r.ok) {
+      if (r.status === 429 && __rtcCfgCacheDisplay) return __rtcCfgCacheDisplay;
+      throw new Error('cfg_fetch_failed');
+    }
+    const j = await r.json();
+    __rtcCfgCacheDisplay = j; __rtcCfgAtDisplay = now;
+    return j;
+  } catch {
+    return __rtcCfgCacheDisplay || { iceServers:[{ urls: ['stun:stun.l.google.com:19302'] }] };
+  }
+}
+
+// Simple audio prompt overlay for autoplay restrictions
+function showAudioPrompt(room){
+  try {
+    if (document.getElementById('audioPrompt')) return;
+    const div = document.createElement('div');
+    div.id = 'audioPrompt';
+    Object.assign(div.style, {
+      position:'fixed', bottom:'16px', left:'16px', zIndex:99999,
+      background:'#0b1220', color:'#fff', border:'1px solid #243244', borderRadius:'10px',
+      padding:'10px 12px', boxShadow:'0 6px 18px rgba(0,0,0,0.35)', display:'flex', gap:'8px', alignItems:'center'
+    });
+    const txt = document.createElement('span'); txt.textContent = 'Tap to enable audio'; txt.style.fontWeight='700';
+    const btn = document.createElement('button'); btn.textContent = 'Enable'; Object.assign(btn.style, { padding:'6px 10px', borderRadius:'8px', border:'1px solid #334155', background:'#22c55e', color:'#0b1220', cursor:'pointer', fontWeight:'800' });
+    btn.onclick = async () => {
+      try { await room.startAudio(); document.body.removeChild(div); } catch (_) { btn.textContent='Tap again'; }
+    };
+    div.appendChild(txt); div.appendChild(btn); document.body.appendChild(div);
+  } catch {}
+}
+function hideAudioPrompt(){ try { const el=document.getElementById('audioPrompt'); if (el) el.remove(); } catch {}}
+
+// Global one-time audio unlock handler to satisfy autoplay restrictions
+function ensureAudioUnlocked(room){
+  try {
+    if (!room) return;
+    if (window.__audioUnlockInstalled) return;
+    const tryStart = async () => {
+      try { await room.startAudio(); __audioUnlocked = true; hideAudioPrompt(); try { renderLiveFlag(); } catch {} } catch {}
+      try {
+        window.removeEventListener('pointerdown', tryStart, { capture: true });
+        window.removeEventListener('click', tryStart, { capture: true });
+        window.removeEventListener('touchstart', tryStart, { capture: true });
+      } catch {}
+    };
+    window.addEventListener('pointerdown', tryStart, { capture: true, once: true });
+    window.addEventListener('click', tryStart, { capture: true, once: true });
+    window.addEventListener('touchstart', tryStart, { capture: true, once: true });
+    window.__audioUnlockInstalled = true;
   } catch {}
 }
 
-// Detailed ICE config helper
-async function getIceConfigDetailed(){
-  try { const r = await fetch('/webrtc/config', { cache:'no-store' }); return await r.json(); } catch { return { iceServers:[{ urls: ['stun:stun.l.google.com:19302'] }] }; }
+async function joinLivekitDisplay(){
+  try {
+    clearLivekitRejoinTimer();
+    // Load LiveKit SDK: prefer same-origin vendor proxy, then ESM CDNs, then UMD script globals
+    async function loadLivekitModule(){
+      // 1) Same-origin ESM proxy (avoids CORS/DNS issues)
+      try { return await import('/js/vendor/livekit-client.esm.js?v=2.4.0'); } catch (e) {}
+      // 2) ESM from public CDNs
+      const urls = [
+        'https://cdn.livekit.io/client-sdk-js/v2.4.0/livekit-client.esm.js',
+        'https://cdn.jsdelivr.net/npm/@livekit/client@2.4.0/dist/livekit-client.esm.js',
+        'https://unpkg.com/@livekit/client@2.4.0/dist/livekit-client.esm.js'
+      ];
+      let lastErr;
+      for (const u of urls) { try { return await import(u); } catch (e) { lastErr = e; } }
+      // 3) UMD fallback (classic script, no CORS required)
+      const umdUrls = [ '/js/vendor/livekit-client.umd.min.js', 'https://cdn.jsdelivr.net/npm/@livekit/client@2.4.0/dist/livekit-client.umd.min.js', 'https://unpkg.com/@livekit/client@2.4.0/dist/livekit-client.umd.min.js' ];
+      for (const u of umdUrls) {
+        try {
+          await new Promise((resolve, reject) => { const s=document.createElement('script'); s.src=u; s.async=true; s.onload=()=>resolve(true); s.onerror=()=>reject(new Error('load_failed')); document.head.appendChild(s); });
+          const g = (window.livekit||window.Livekit||window.LiveKit||window.LiveKitClient||window.LK||null);
+          if (g && g.Room) return g;
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error('livekit_load_failed');
+    }
+
+    const r = await fetch('/rtc/token', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ provider:'livekit', basketId, role:'drive' }) });
+    if (!r.ok) return false; const j = await r.json();
+    if (!j || !j.token || !j.url) return false;
+
+    const lk = await loadLivekitModule();
+    const room = new lk.Room({
+      adaptiveStream: true,
+      dynacast: true,
+      stopLocalTrackOnUnpublish: true,
+      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      publishDefaults: {
+        // Prefer H.264 for smoother iOS decode, enable simulcast so SFU can pick a fitting layer
+        videoCodec: 'h264',
+        simulcast: true,
+        videoEncoding: { maxBitrate: 600_000, maxFramerate: 24 },
+        audioBitrate: 20_000
+      }
+    });
+    window.__lkRoomDisplay = room;
+
+    const remoteStreamVideo = document.getElementById('remoteVideo');
+    const audioSink = document.getElementById('audioSink') || document.body;
+room.on(lk.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      try {
+        if (participant && participant.isLocal) return; // ignore self
+        if (track.kind === 'audio') {
+          const el = document.createElement('audio');
+          el.autoplay = true; el.playsInline = true;
+          track.attach(el);
+          try { audioSink.appendChild(el); el.play && el.play().catch(()=>{}); } catch {}
+        } else if (track.kind === 'video' && remoteStreamVideo) {
+          try { track.attach(remoteStreamVideo); remoteStreamVideo.muted = true; remoteStreamVideo.play && remoteStreamVideo.play().catch(()=>{}); } catch {}
+        }
+      } catch {}
+    });
+
+    // Attach local video track to the PiP element when published
+    try {
+      const pip = document.getElementById('localVideo');
+      room.on(lk.RoomEvent.LocalTrackPublished, (pub) => {
+        try {
+          const track = pub && pub.track;
+          if (track && track.kind === 'video' && pip) {
+            // Stop any pre-connect preview and hand-over to LiveKit
+            try { const s = pip.srcObject; if (s && s.getTracks) { s.getTracks().forEach(t => { try { t.stop(); } catch {} }); pip.srcObject = null; } } catch {}
+            track.attach(pip);
+            try { pip.muted = true; pip.playsInline = true; pip.autoplay = true; pip.play && pip.play().catch(()=>{}); } catch {}
+          }
+        } catch {}
+      });
+    } catch {}
+
+    // Detach and remove media elements when tracks are unsubscribed
+room.on(lk.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+      try {
+        const els = track.detach();
+        els && els.forEach(el => { try { el.pause && el.pause(); el.srcObject = null; el.remove(); } catch {} });
+      } catch {}
+    });
+
+    // Clean up participant media on disconnects
+    room.on(lk.RoomEvent.ParticipantDisconnected, (participant) => {
+      try {
+        participant.tracks.forEach(pub => { try { const t = pub.track; if (t) { const els = t.detach(); els && els.forEach(el => { try { el.pause && el.pause(); el.srcObject = null; el.remove(); } catch {} }); } } catch {} });
+      } catch {}
+    });
+
+    // Update UI while reconnecting
+    room.on(lk.RoomEvent.Reconnecting, () => {
+      try {
+        setStatusLabelText('RECONNECTING — SFU(LiveKit)', 'reconnecting');
+      } catch {}
+      try { setPosterVisible(true); } catch {}
+    });
+room.on(lk.RoomEvent.Reconnected, () => {
+      try { __lkRejoinBackoff = 2000; clearLivekitRejoinTimer(); } catch {}
+      try { setPosterVisible(false); } catch {}
+      try { renderLiveFlag(); } catch {}
+      try {
+        setStatusLabelText('CONNECTED — SFU(LiveKit)', 'connected');
+      } catch {}
+    });
+
+    // Basic resilience: if disconnected, show poster and let outer flow retry
+room.on(lk.RoomEvent.Disconnected, () => {
+      try { setPosterVisible(true); } catch {}
+      try {
+        __audioUnlocked = false; renderLiveFlag();
+        // Detach all tracks and remove any appended audio elements
+        room.participants.forEach(p => { try { p.tracks.forEach(pub => { const t = pub.track; if (t) { const els = t.detach(); els && els.forEach(el => { try { el.pause && el.pause(); el.srcObject = null; el.remove(); } catch {} }); } }); } catch {} });
+        const sink = document.getElementById('audioSink') || document.body;
+        Array.from(sink.querySelectorAll('audio')).forEach(el => { try { el.pause && el.pause(); el.srcObject = null; el.remove(); } catch {} });
+      } catch {}
+      try { window.__lkRoomDisplay = null; } catch {}
+      try { ensurePreconnectPip(); } catch {}
+      try { scheduleLivekitRejoin('disconnected'); } catch {}
+    });
+
+    await room.connect(j.url, j.token);
+    try { __lkRejoinBackoff = 2000; clearLivekitRejoinTimer(); } catch {}
+    try { window.__rtcProvider = 'livekit'; } catch {}
+    // Some browsers block audio autoplay until a gesture; attempt to start audio context
+    try { await room.startAudio(); __audioUnlocked = true; hideAudioPrompt(); } catch { __audioUnlocked = false; showAudioPrompt(room); ensureAudioUnlocked(room); }
+    try { renderLiveFlag(); } catch {}
+    // Hand-over camera from preconnect preview to LiveKit before enabling local tracks
+    try { stopPreconnectPip(); } catch {}
+    try { await room.localParticipant.setMicrophoneEnabled(true); } catch {}
+    // Enable local camera so cashier can see the display and PiP shows locally (lower res for latency/stability)
+    try { await room.localParticipant.setCameraEnabled(true, { resolution: { width: 960, height: 540 }, frameRate: 24, facingMode: 'user' }); } catch {}
+    try { setPosterVisible(false); } catch {}
+    try { setStatusLabelText('CONNECTED — SFU(LiveKit)', 'connected'); } catch {}
+    return true;
+  } catch (e) { try { scheduleLivekitRejoin('join-failed'); } catch {} return false; }
+}
+
+function loadTwilioVideo(){
+  return new Promise((resolve, reject) => {
+    if (window.Twilio && window.Twilio.Video) return resolve(window.Twilio.Video);
+    const s = document.createElement('script');
+    s.src = 'https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js';
+    s.async = true;
+    s.onload = () => { try { resolve(window.Twilio && window.Twilio.Video ? window.Twilio.Video : null); } catch(e){ reject(e); } };
+    s.onerror = () => reject(new Error('twilio_video_load_failed'));
+    document.head.appendChild(s);
+  });
+}
+
+async function joinTwilioDisplay(){
+  try {
+    const r = await fetch('/rtc/token', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ provider:'twilio', basketId, role:'drive' }) });
+    if (!r.ok) return false; const j = await r.json();
+    if (!j || !j.token) return false;
+    const TVideo = await loadTwilioVideo(); if (!TVideo) return false;
+    const room = await TVideo.connect(j.token, {
+      audio: true,
+      video: false,
+      dominantSpeaker: true,
+      networkQuality: { local: 1, remote: 1 }
+    });
+window.__twRoomDisplay = room;
+    try { window.__rtcProvider = 'twilio'; } catch {}
+    const remoteStreamVideo = document.getElementById('remoteVideo');
+    const audioSink = document.getElementById('audioSink') || document.body;
+    room.on('trackSubscribed', (track) => {
+      try {
+        if (track.kind === 'audio') {
+          const el = track.attach();
+          el.autoplay = true; el.playsInline = true;
+          try { audioSink.appendChild(el); el.play && el.play().catch(()=>{}); } catch {}
+        } else if (track.kind === 'video' && remoteStreamVideo) {
+          try { track.attach(remoteStreamVideo); remoteStreamVideo.muted = true; remoteStreamVideo.play && remoteStreamVideo.play().catch(()=>{}); } catch {}
+        }
+      } catch {}
+    });
+    try { setPosterVisible(false); } catch {}
+    try { setStatusLabelText('CONNECTED — SFU(Twilio)', 'connected'); } catch {}
+    return true;
+  } catch (e) { return false; }
 }
 
 async function runPreflightAnswer(requestId, scenario){
@@ -1230,6 +1860,7 @@ async function runPreflightAnswer(requestId, scenario){
 
 async function initRTC(localStream){
   try {
+    try { window.__rtcProvider = 'p2p'; } catch {}
     clearRtcTimers();
     const cfg = await getIceConfigDetailed();
     let iceServers = cfg.iceServers || [];
@@ -1254,7 +1885,7 @@ async function initRTC(localStream){
         pendingRemote.push(cand);
       }
     };
-console.log('RTC(display) init', { pairId: basketId, icePolicy, servers: Array.isArray(ice) ? ice.length : 0 });
+console.log('RTC(display) init', { pairId: basketId, icePolicy, servers: Array.isArray(iceServers) ? iceServers.length : 0 });
     if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
     try { tuneQoS(pc); } catch {}
     const remoteStream = new MediaStream();
@@ -1406,17 +2037,22 @@ function showProductPopupWithOptions(p, groups){
     const ar = (p.name_localized && String(p.name_localized).trim()) ? String(p.name_localized).trim() : '';
     const img = imageDisplaySrcForUrl(p.image_url) || '/images/products/placeholder.jpg';
     const price = computePrice();
-    function section(g){
-      const set = sel.get(g.id)||new Set();
-      const multi = (g.max||0) !== 1;
-      const items = (g.options||[]).map(o => renderOptionButton({ id:o.id, name:o.name, delta:o.delta }, set.has(o.id))).join('');
-      const note = (g.required || g.min || g.max) ? `<small class=\"muted\">${g.required?'Required. ':''}${g.min?`Min ${g.min}. `:''}${g.max?`Max ${g.max}.`:''}</small>` : '';
-      return `<fieldset data-gid=\"${g.id}\"><legend>${g.name}</legend><div class=\"optrow\">${items}</div>${note}</fieldset>`;
+    function renderGroups(){
+      const sections = [];
+      for (const g of groups){
+        const set = sel.get(g.id)||new Set();
+        const multi = (g.max||0) !== 1;
+        const items = (g.options||[]).map(o => renderOptionButton({ id:o.id, name:o.name, delta:o.delta }, set.has(o.id))).join('');
+        const note = (g.required || g.min || g.max) ? `<small class=\"muted\">${g.required?'Required. ':''}${g.min?`Min ${g.min}. `:''}${g.max?`Max ${g.max}.`:''}</small>` : '';
+        sections.push(`<fieldset data-gid=\"${g.id}\"><legend>${g.name}</legend><div class=\"optrow\">${items}</div>${note}</fieldset>`);
+      }
+      return `<div class=\"options-box\" style=\"margin-top:8px; padding:12px; border:1px solid #e5e7eb; border-radius:12px;\">\n          <h4 style=\"margin:0 0 8px 0;\">Options</h4>\n          ${sections.join('')}\n        </div>`;
     }
     body.innerHTML = `
-      <div style=\"display:flex; flex-direction:column; gap:12px;\">\n        <img class=\"product-img\" src=\"${img}\" alt=\"${p.name}\" onerror=\"this.src='/images/products/placeholder.jpg'\"/>\n        <div class=\"names\" style=\"text-align:center; width:100%;\">\n          <div class=\"name-ar\" style=\"font-family: 'Almarai', Inter, system-ui; font-weight:700; font-size:1.1em; direction:rtl;\">${ar||'\\u00A0'}</div>\n          <div class=\"name-en\" style=\"font-family: 'Almarai', Inter, system-ui; font-weight:600;\">${p.name}</div>\n          <div class=\"price\" id=\"optPriceKwd\" style=\"margin-top:6px; color:#6b7280; font-weight:700;\">${fmt(price)} KWD</div>\n        </div>\n        ${groups.map(section).join('')}\n      </div>`;
+      <div style=\"display:flex; flex-direction:column; gap:12px;\">\n        <img class=\"product-img\" src=\"${img}\" alt=\"${p.name}\"/>\n        <div class=\"names\" style=\"text-align:center; width:100%;\">\n          <div class=\"name-ar\" style=\"font-family: 'Almarai', Inter, system-ui; font-weight:700; font-size:1.1em; direction:rtl;\">${ar||'\\u00A0'}</div>\n          <div class=\"name-en\" style=\"font-family: 'Almarai', Inter, system-ui; font-weight:600;\">${p.name}</div>\n          <div class=\"price\" id=\"optPriceKwd\" style=\"margin-top:6px; color:#6b7280; font-weight:700;\">${fmt(price)} KWD</div>\n        </div>\n        ${renderGroups()}\n      </div>`;
+    try { const el = body.querySelector('img.product-img'); if (el) attachImageFallback(el, p.image_url); } catch {}
     applyOptionButtonStyles(body);
-    body.querySelectorAll('fieldset').forEach(fs => {
+    body.querySelectorAll('fieldset[data-gid]').forEach(fs => {
       const gid = fs.getAttribute('data-gid');
       const g = (groups||[]).find(x => String(x.id)===String(gid));
       const set = sel.get(gid)||new Set();
@@ -1448,6 +2084,7 @@ function showProductPopupWithOptions(p, groups){
   render();
   btnCancel.style.display = '';
   btnConfirm.style.display = '';
+  btnCancel.disabled = false; btnConfirm.disabled = false;
   btnCancel.onclick = () => { hideOptionsUI(); try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
   btnConfirm.onclick = () => {
     // validate required
@@ -1457,9 +2094,16 @@ function showProductPopupWithOptions(p, groups){
       if (g.min && set.size < g.min) { alert(`${g.name}: choose at least ${g.min}`); return; }
       if (g.max && set.size > g.max) { alert(`${g.name}: choose up to ${g.max}`); return; }
     }
+    const price = computePrice();
+    const suffix = selectionLabel();
     const parts=[]; for (const g of (groups||[])) { const set = Array.from(sel.get(g.id)||[]); if (set.length) parts.push(`${g.id}:${set.join('+')}`); }
     const variantKey = `${p.id}#mods=${encodeURIComponent(parts.join(','))}`;
-    addToBill({ ...p, id: p.id, price: computePrice() });
+    const itemName = suffix ? `${p.name} (${suffix})` : p.name;
+    try {
+      if (ws && ws.readyState===WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type:'basket:update', basketId, op:{ action:'add', item:{ sku: variantKey, name: itemName, price }, qty:1 } }));
+      }
+    } catch {}
     hideOptionsUI();
     try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
   };
@@ -1475,7 +2119,7 @@ async function prefetchImages(list){
       .map(p => imageDisplaySrcForUrl(p.image_url))
       .filter(u => typeof u === 'string' && !!u)));
     let idx = 0;
-    const limit = 6;
+    const limit = 4;
     async function worker(){
       while (idx < urls.length){
         const i = idx++;

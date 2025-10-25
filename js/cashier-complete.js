@@ -5,17 +5,44 @@
   function getToken(){ return localStorage.getItem('DEVICE_TOKEN_CASHIER') || localStorage.getItem('DEVICE_TOKEN') || ''; }
   let tenant = new URLSearchParams(location.search).get('tenant') || '';
   if (!tenant) { try { tenant = localStorage.getItem('DEVICE_TENANT_ID') || ''; } catch {} }
+  // Device association (for identity and branch-aware pairing)
+  let __deviceAssoc = { id: null, branch_id: null, branch: null, tenant_id: tenant };
+  async function associateDevice(){
+    try {
+      const tok = getToken();
+      if (!tok) return __deviceAssoc;
+      const headers = { 'content-type':'application/json' };
+      if (tenant) headers['x-tenant-id'] = tenant;
+      headers['x-device-token'] = tok;
+      const r = await fetch('/ws/associate', { method:'POST', headers });
+      if (!r.ok) return __deviceAssoc;
+      const j = await r.json().catch(()=>({}));
+      __deviceAssoc = {
+        id: j.device_id || j.id || null,
+        branch_id: j.branch_id || null,
+        branch: j.branch || null,
+        tenant_id: j.tenant_id || tenant || null
+      };
+      if (!tenant && __deviceAssoc.tenant_id) { tenant = String(__deviceAssoc.tenant_id); try { localStorage.setItem('DEVICE_TENANT_ID', tenant); } catch {} }
+    } catch {}
+    return __deviceAssoc;
+  }
+  function getAssoc(){ return __deviceAssoc; }
+  function getFlag(key, def){ try { const v = localStorage.getItem(key); if (v==null) return !!def; return /^(1|true|yes|on)$/i.test(String(v)); } catch { return !!def; } }
   // Image helpers (proxy remote URLs and fallback gracefully)
   function proxiedImageSrc(u){
     if (!u) return '';
     const s = String(u);
     return /^https?:\/\//i.test(s) ? ('/img?u=' + encodeURIComponent(s)) : s;
   }
-  function imageDisplaySrcForUrl(u){
+function imageDisplaySrcForUrl(u){
     const raw = String(u || '').trim();
     if (!raw) return '';
     if (/^http:\/\//i.test(raw)) return proxiedImageSrc(raw);
-    if (/^https:\/\//i.test(raw)) return raw;
+    if (/^https:\/\//i.test(raw)) {
+      try { const h = new URL(raw).host; if (h && h !== location.host) return proxiedImageSrc(raw); } catch {}
+      return raw;
+    }
     return raw;
   }
   function attachImageFallback(imgEl, originalUrl){
@@ -50,7 +77,12 @@
     if (!el) return;
     el.innerHTML = '';
     const current = (basketId && basketId !== 'unpaired') ? String(basketId) : '';
-    if (!items || items.length === 0) {
+
+    // Exclude the currently connected device from flags (it's already shown in the status chip)
+    const others = (items || []).filter(it => !(current && String(it.id) === current));
+
+    if (!others.length) {
+      // Show a generic Pair button to open the chooser when there are no other displays
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'flag idle';
@@ -65,11 +97,11 @@
       el.appendChild(btn);
       return;
     }
-    (items || []).forEach(it => {
+
+    others.forEach(it => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      const isActive = current && String(it.id) === current;
-      const statusCls = isActive ? 'in-session' : (it.connected ? 'waiting' : 'idle');
+      const statusCls = it.connected ? 'waiting' : 'idle';
       btn.className = 'flag ' + statusCls;
       const label = it.name || 'Display';
       btn.title = it.branch ? `${label} — ${it.branch}` : label;
@@ -77,23 +109,11 @@
       btn.onclick = async (ev) => {
         ev.preventDefault();
         try {
-          if (isActive) {
-            // Stop and fully reset
-            try { await fetch(`/webrtc/session/${encodeURIComponent(current)}?reason=user`, { method:'DELETE' }); } catch {}
-            try { await fetch(`/session/reset?pairId=${encodeURIComponent(current)}`, { method:'POST' }); } catch {}
-            try { stopRTC && stopRTC('user'); } catch {}
-            const p = new URLSearchParams(location.search);
-            p.delete('basket');
-            p.delete('pair');
-            const qs = p.toString();
-            location.href = location.pathname + (qs ? ('?' + qs) : '');
-          } else {
-            // Start pairing to this display and auto-start session
-            const p = new URLSearchParams(location.search);
-            p.set('basket', String(it.id));
-            p.set('pair', '1');
-            location.search = p.toString();
-          }
+          // Start pairing to this display and auto-start session
+          const p = new URLSearchParams(location.search);
+          p.set('basket', String(it.id));
+          p.set('pair', '1');
+          location.search = p.toString();
         } catch {}
       };
       el.appendChild(btn);
@@ -114,6 +134,15 @@
     if (label) label.textContent = text;
     if (dot) dot.style.background = connected ? '#22c55e' : '';
   }
+  function ensureNetBarsInsideChip(){
+    try {
+      const chip = document.getElementById('statusChip');
+      const bars = document.getElementById('netBars');
+      if (chip && bars && bars.parentElement !== chip) {
+        chip.appendChild(bars);
+      }
+    } catch {}
+  }
   async function fetchDisplays(){
     try {
       const headers = {};
@@ -123,6 +152,39 @@
       const j = await r.json();
       return Array.isArray(j.items) ? j.items : [];
     } catch { return []; }
+  }
+  // Fast pairing: choose a display automatically based on branch (id/name) if enabled
+  async function attemptFastPair(){
+    // Disabled by default: require explicit opt-in via localStorage 'CASHIER_FAST_PAIR_ENABLED' = 'true'
+    if (!getFlag('CASHIER_FAST_PAIR_ENABLED', false)) return;
+    try {
+      const d = getAssoc();
+      const items = await fetchDisplays();
+      if (!Array.isArray(items) || !items.length) return;
+      let chosen = null;
+      if (d && d.branch_id) {
+        chosen = items.find(it => it.branch_id && String(it.branch_id)===String(d.branch_id) && !it.connected)
+              || items.find(it => it.branch_id && String(it.branch_id)===String(d.branch_id))
+              || null;
+      }
+      if (!chosen && d && d.branch) {
+        const bn = String(d.branch||'').trim();
+        if (bn) {
+          chosen = items.find(it => String(it.branch||'').trim()===bn && !it.connected)
+                || items.find(it => String(it.branch||'').trim()===bn)
+                || null;
+        }
+      }
+      if (!chosen) {
+        chosen = items.find(it => !it.connected) || items[0] || null;
+      }
+      if (chosen && chosen.id) {
+        const p = new URLSearchParams(location.search);
+        p.set('basket', String(chosen.id));
+        p.set('pair', '1');
+        location.search = p.toString();
+      }
+    } catch {}
   }
   function showDropdown(items, anchorEl){
     const anchor = anchorEl || qs('#btnPlay') || document.body;
@@ -215,6 +277,48 @@
     menu.style.left = left + 'px';
     menu.style.top = top + 'px';
   }
+
+  // Make the local PiP video draggable within its panel (no-op if not present)
+  function enablePipDrag(){
+    try {
+      const v = document.getElementById('localVideo');
+      const panel = v && v.parentElement;
+      if (!v || !panel) return;
+      let dragging = false; let sx=0, sy=0; let startLeft=0, startTop=0;
+      v.style.touchAction = 'none';
+      const getPoint = (ev) => (ev.touches && ev.touches[0]) || ev;
+      const onDown = (ev) => {
+        try {
+          const p = getPoint(ev);
+          dragging = true; sx = p.clientX; sy = p.clientY;
+          const cs = window.getComputedStyle(v);
+          startLeft = parseFloat(cs.left)||0; startTop = parseFloat(cs.top)||0;
+          ev.preventDefault();
+        } catch {}
+      };
+      const onMove = (ev) => {
+        if (!dragging) return;
+        try {
+          const p = getPoint(ev);
+          let dx = p.clientX - sx; let dy = p.clientY - sy;
+          let left = startLeft + dx; let top = startTop + dy;
+          const bounds = panel.getBoundingClientRect();
+          const vb = v.getBoundingClientRect();
+          const minLeft = 0, minTop = 0;
+          const maxLeft = Math.max(0, bounds.width - vb.width);
+          const maxTop = Math.max(0, bounds.height - vb.height);
+          if (left < minLeft) left = minLeft; if (left > maxLeft) left = maxLeft;
+          if (top < minTop) top = minTop; if (top > maxTop) top = maxTop;
+          v.style.left = left + 'px'; v.style.top = top + 'px';
+        } catch {}
+      };
+      const onUp = () => { dragging = false; };
+      v.addEventListener('pointerdown', onDown, { passive:false });
+      window.addEventListener('pointermove', onMove, { passive:true });
+      window.addEventListener('pointerup', onUp, { passive:true });
+    } catch {}
+  }
+
   function initControls(){
     // Wire Play/Stop
     const btnPlay = qs('#btnPlay');
@@ -254,13 +358,15 @@
       }
     };
   }
-document.addEventListener('DOMContentLoaded', ()=>{ initControls(); applyBrand().catch(()=>{}); startDisplayFlagsPolling(); enablePipDrag(); try { initDeviceOverlayIfNeeded(); } catch (e) { console.warn('overlay init failed', e); } });
+document.addEventListener('DOMContentLoaded', ()=>{ initControls(); applyBrand().catch(()=>{}); startDisplayFlagsPolling(); enablePipDrag(); try { ensureNetBarsInsideChip(); } catch {} try { initDeviceOverlayIfNeeded(); } catch (e) { console.warn('overlay init failed', e); } });
   // Pairing gate: connect whenever a basket is present. ?pair=1 is treated as a one-shot hint only.
   const paramsGate = new URLSearchParams(location.search);
   const basketIdParam = paramsGate.get('basket') || '';
-  const shouldConnect = Boolean(basketIdParam); // presence of basket implies intent to connect
+  let shouldConnect = Boolean(basketIdParam); // presence of basket implies intent to connect
   let canConnect = shouldConnect; // dynamic gate we can toggle via UI (Stop streaming)
-const basketId = shouldConnect ? basketIdParam : 'unpaired';
+let basketId = shouldConnect ? basketIdParam : 'unpaired';
+// Proactively mark session started on load when pairing was intended (avoid waiting for WS open)
+try { if (shouldConnect) { fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' }).catch(()=>{}); } } catch {}
 // Load preferred RTC config for this basket (if selected from overlay previously)
 try {
   const rawPref = localStorage.getItem('RTC_PREF_' + basketId);
@@ -270,6 +376,12 @@ try {
   let ws;
   let reconnectDelay = 500;
   let peersConnected = false;
+  // Connection supervisor state
+  let __autoRetries = 0;
+  let __supervisor = null;
+  let __sessionStartedAt = 0;
+  let __lastDisplayStatusAt = 0;
+  let __lastRemoteTrackAt = 0;
 
   const POPULER = 'Populer';
   let allProducts = [];
@@ -317,6 +429,11 @@ function renderNetBars(bars){
   try {
     const el = document.getElementById('netBars');
     if (!el) return;
+    // Ensure bars live inside the status chip
+    const chip = document.getElementById('statusChip');
+    if (chip && el.parentElement !== chip) {
+      chip.appendChild(el);
+    }
     // Create bars if not present
     if (!el.children.length) {
       for (let i=0;i<3;i++){ const b=document.createElement('i'); el.appendChild(b); }
@@ -335,7 +452,7 @@ function connect() {
       ws.send(JSON.stringify({ type: 'subscribe', basketId }));
       try {
         const name = localStorage.getItem('DEVICE_NAME_CASHIER') || localStorage.getItem('DEVICE_NAME') || 'Cashier';
-        ws.send(JSON.stringify({ type:'hello', basketId, role:'cashier', name }));
+        { const d = getAssoc(); ws.send(JSON.stringify({ type:'hello', basketId, role:'cashier', name, device_id: d && d.id ? String(d.id) : undefined })); }
       } catch {}
       // Send rtc:config to drive if a preference exists
       try { if (window.__RTC_PREF) ws.send(JSON.stringify({ type:'rtc:config', basketId, config: window.__RTC_PREF })); } catch {}
@@ -348,22 +465,69 @@ function connect() {
       }
       // Auto-start session and RTC when we intended to pair
       if (canConnect) {
+        try { __sessionStartedAt = Date.now(); __autoRetries = 0; } catch {}
         try { fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method:'POST' }); } catch {}
-        startRTC();
-        // Start a connect budget timer: if we don't see peersConnected within ~15s, abort and return to overlay
+        (async () => {
+          // Decide provider first to avoid spinning up P2P when SFU is available
+          try {
+            const cfg = await getRtcConfig();
+            if (cfg && cfg.sfu && cfg.sfu.enabled && String(cfg.sfu.defaultProvider||'') === 'livekit'){
+              try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'rtc:provider', basketId, provider:'livekit' })); } catch {}
+              try { window.__rtcProvider = 'livekit'; } catch {}
+              try { stopRTC('prefer-sfu'); } catch {}
+              const ok = await joinLivekitCashier();
+              if (ok) { peersConnected = true; try { updateOverlayVisibility(); } catch {} return; }
+              try { window.__rtcProvider = 'p2p'; } catch {}
+            }
+          } catch {}
+          // P2P path
+          try { startRTC(); } catch {}
+          // Start supervisor to self-heal stuck handshakes (P2P only)
+          try { if (__supervisor) clearInterval(__supervisor); } catch {}
+          __supervisor = setInterval(async () => {
+          try {
+            const now = Date.now();
+            const pc = window.__pcCashier;
+            const pcConnected = !!(pc && (pc.iceConnectionState === 'connected' || pc.connectionState === 'connected'));
+            const remoteTrackRecent = (__lastRemoteTrackAt && (now - __lastRemoteTrackAt) < 8000);
+            const displayStatusRecent = (__lastDisplayStatusAt && (now - __lastDisplayStatusAt) < 9000);
+            if (!pcConnected || (!remoteTrackRecent && !displayStatusRecent)) {
+              // Allow a short grace after session start
+              const sinceStart = now - (__sessionStartedAt||now);
+              if (sinceStart > 5000 && __autoRetries < 2) {
+                __autoRetries++;
+                console.warn('RTC(cashier) auto-retry', { attempt: __autoRetries });
+                try { await fetch(`/webrtc/session/${encodeURIComponent(basketId)}?reason=auto-retry-${__autoRetries}`, { method:'DELETE' }); } catch {}
+                try { stopRTC('auto-retry'); } catch {}
+                try { startRTC(); } catch {}
+              } else if (sinceStart > 9000 && __autoRetries >= 2 && window.__rtcProvider === 'p2p') {
+                // Escalate to SFU fallback when P2P remains unhealthy
+                const ok = await attemptSfuFallback();
+                if (ok) { try { console.warn('RTC(cashier) switched to SFU by supervisor'); } catch {} }
+              }
+            }
+          } catch {}
+        }, 2500);
+        // Start a connect budget timer: if we don't see peersConnected soon (P2P), attempt SFU fallback or reset UI
         try { if (__connectFailTimer) clearTimeout(__connectFailTimer); } catch {}
-        __connectFailTimer = setTimeout(() => {
+        __connectFailTimer = setTimeout(async () => {
           try {
             if (!peersConnected) {
+              // Attempt SFU fallback (LiveKit → Twilio) before giving up
+              try {
+                const ok = await attemptSfuFallback();
+                if (ok) { return; }
+              } catch {}
+              // Fall back to current behavior (clear session and return to overlay)
               try { stopRTC('user'); } catch {}
               try { fetch(`/webrtc/session/${encodeURIComponent(basketId)}?reason=connect-timeout`, { method:'DELETE' }); } catch {}
-              // Remove basket param and reload (overlay will appear)
               const p = new URLSearchParams(location.search);
               p.delete('basket'); p.delete('pair');
               location.href = location.pathname + (p.toString()?('?'+p.toString()):'');
             }
           } catch {}
-        }, 15000);
+        }, 6000);
+      })();
       }
     });
     ws.addEventListener('message', async (ev) => {
@@ -398,17 +562,41 @@ function connect() {
           } catch {}
         } else if (msg.type === 'ui:optionsClose') {
           hideOptionsUI();
+        } else if (msg.type === 'rtc:status' && msg.basketId === basketId) {
+          try {
+            // Aggregate remote (display) health for monitoring and UI bars
+            const disp = (msg.status && msg.status.display) ? msg.status.display : null;
+            if (disp && typeof disp.ts === 'number') {
+              __lastDisplayStatusAt = disp.ts;
+            }
+            // Derive bars: 3 when both sides look healthy (prefer audio path)
+            try {
+              const local = window.__mediaHealthyCashier || {};
+              const audioInOk = !!(local.aIn) || !!(disp && disp.audio && disp.audio.out);
+              const audioOutOk = !!(local.aOut) || !!(disp && disp.audio && disp.audio.in);
+              let bars = 1;
+              if (audioInOk && audioOutOk) bars = 3; else if (audioInOk || audioOutOk) bars = 2; else bars = 1;
+              renderNetBars(bars);
+              // Extend overlay grace while we continue to see healthy media
+              if (bars >= 2) extendOverlayGrace(6000);
+            } catch {}
+          } catch {}
         } else if (msg.type === 'peer:status') {
           if (msg.status === 'connected') {
             try { if (__connectFailTimer) { clearTimeout(__connectFailTimer); __connectFailTimer = null; } } catch {}
             peersConnected = true;
-            setStatusChip('connected', `CONNECTED — ${String(msg.displayName||'Display')}`);
+            try { extendOverlayGrace(15000); } catch {}
+            if ((window.__rtcProvider||'p2p') === 'p2p') {
+              setStatusChip('connected', `CONNECTED — ${String(msg.displayName||'Display')}`);
+            }
             if (window.__setConnectedUI) window.__setConnectedUI();
-            startRTC();
+            try { if ((window.__rtcProvider||'p2p') === 'p2p') startRTC(); } catch {}
+            try { updateOverlayVisibility(); } catch {}
           } else {
             peersConnected = false;
             setStatusChip('ready','READY');
             if (window.__setReadyUI) window.__setReadyUI();
+            try { updateOverlayVisibility(); } catch {}
           }
         } else if (msg.type === 'rtc:stopped' && msg.basketId === basketId) {
           if (preClearing) {
@@ -417,6 +605,7 @@ function connect() {
             console.log('RTC(cashier) received stop command');
             peersConnected = false;
             stopRTC('remote');
+            try { updateOverlayVisibility(); } catch {}
           }
         } else if (msg.type === 'session:started' && msg.basketId === basketId) {
           const b = qs('#osnBadge');
@@ -457,11 +646,12 @@ function connect() {
       if (label) label.textContent = 'OFFLINE';
       if (dot) dot.style.background = '#ef4444';
       if (pill) { pill.style.background = '#ef4444'; pill.style.color = '#fff'; }
+      try { peersConnected = false; updateOverlayVisibility(); } catch {}
       if (shouldConnect) setTimeout(connect, Math.min(reconnectDelay *= 2, 8000));
     });
     ws.addEventListener('error', () => { try { ws.close(); } catch (_) {} });
   }
-  if (shouldConnect) connect();
+  (async () => { try { await associateDevice(); } catch {} finally { if (shouldConnect) { connect(); } else { try { await attemptFastPair(); } catch {} } } })();
   // Query current poster state from display after a short delay
   setTimeout(()=>{ try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'poster:query', basketId })); } catch {} }, 1000);
 
@@ -475,6 +665,10 @@ function connect() {
   function sendUpdate(op) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({ type: 'basket:update', basketId, op }));
+  }
+
+  function wsSendUI(msg){
+    try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); } catch {}
   }
 
   window.onAddItem = function(p) {
@@ -502,18 +696,18 @@ function connect() {
   function clearSelection(){
     if (selectedBtn) selectedBtn.classList.remove('selected');
     selectedId = null; selectedBtn = null;
-    try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:clearSelection', basketId })); } catch {}
+    try { wsSendUI({ type:'ui:clearSelection', basketId }); } catch {}
   }
   function selectTile(btn, id){
     clearSelection();
     selectedId = id; selectedBtn = btn;
     if (selectedBtn) selectedBtn.classList.add('selected');
-    try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:selectProduct', basketId, productId: id })); } catch {}
+    try { wsSendUI({ type:'ui:selectProduct', basketId, productId: id }); } catch {}
   }
 function onProductTileClick(p, btn){
     // New behavior: open overlay immediately and mirror to display
     try { clearSelection(); } catch {}
-    try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showPreview', basketId, product: p })); } catch {}
+    try { wsSendUI({ type:'ui:showPreview', basketId, product: p }); } catch {}
     onProductClick(p);
   }
 
@@ -521,7 +715,8 @@ function onProductTileClick(p, btn){
     get: async (url) => {
         const headers = { 'accept': 'application/json' };
         if (tenant) headers['x-tenant-id'] = tenant;
-        const r = await fetch(url, { headers });
+        // Avoid 304/If-None-Match semantics breaking fetch().json() by forcing no-store
+        const r = await fetch(url, { headers, cache: 'no-store' });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return await r.json();
     }
@@ -571,24 +766,22 @@ function onProductTileClick(p, btn){
     try {
       cats = await api.get('/categories');
     } catch {
-      // Only fallback when no explicit tenant is provided (avoid cross-tenant mixing)
-      if (!tenant) {
-        const fb = await loadFallbackCatalog();
-        cats = fb.cats;
-      } else {
-        cats = [];
-      }
+      cats = [];
+    }
+    // Fallback to demo catalog when API returns empty or fails (demo-friendly)
+    if (!Array.isArray(cats) || cats.length === 0) {
+      const fb = await loadFallbackCatalog();
+      cats = fb.cats;
     }
     try {
       allProducts = await api.get('/products');
     } catch {
-      if (!tenant) {
-        const fb = await loadFallbackCatalog();
-        if (!cats || !cats.length) cats = fb.cats;
-        allProducts = fb.prods;
-      } else {
-        allProducts = [];
-      }
+      allProducts = [];
+    }
+    if (!Array.isArray(allProducts) || allProducts.length === 0) {
+      const fb = await loadFallbackCatalog();
+      if (!cats || !cats.length) cats = fb.cats;
+      allProducts = fb.prods;
     }
 
     imgById = new Map((allProducts||[]).map(p => [p.id, p.image_url]));
@@ -611,9 +804,9 @@ function onProductTileClick(p, btn){
       }
     }
   }
-  init();
-  // Fallback: start RTC even if WS handshake is blocked by proxy/CDN
-  setTimeout(() => { if (canConnect && !rtcStarted && !rtcStarting) startRTC(); }, 1200);
+init();
+// Fallback: start RTC even if WS handshake is blocked by proxy/CDN — only in P2P mode
+setTimeout(() => { try { if ((window.__rtcProvider||'p2p') === 'p2p' && canConnect && !rtcStarted && !rtcStarting) startRTC(); } catch {} }, 800);
   // Delay RTC until peers are connected
   let rtcStarted = false;
   let rtcStarting = false;
@@ -674,6 +867,7 @@ function onProductTileClick(p, btn){
     if (rtcStarted || rtcStarting) return;
     rtcStarting = true;
     try {
+      window.__rtcProvider = 'p2p';
       await initRTC();
       rtcStarted = true;
     } catch (e) {
@@ -710,11 +904,7 @@ function onProductTileClick(p, btn){
   }
 
   function emitCategory(name){
-    try {
-      if (peersConnected && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ui:selectCategory', basketId, name }));
-      }
-    } catch {}
+    try { wsSendUI({ type: 'ui:selectCategory', basketId, name }); } catch {}
   }
 
   async function showCategory(name) {
@@ -796,10 +986,10 @@ function onProductTileClick(p, btn){
       del.title = 'Remove';
       del.className = 'trash';
       del.textContent = '🗑';
-      del.style = 'margin-left:8px; background:none; border:none; cursor:pointer; font-size:14px; line-height:1;';
+      del.style = 'background:none; border:none; cursor:pointer; font-size:16px; line-height:1; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; margin:0 0 0 4px;';
       del.onclick = (e) => { e.stopPropagation(); window.onRemoveItem(item.sku); };
 
-      li.appendChild(img); li.appendChild(info); li.appendChild(amt); li.appendChild(del);
+      li.appendChild(img); li.appendChild(del); li.appendChild(info); li.appendChild(amt);
       billItemsEl.appendChild(li);
       mapped.push({ id: item.sku, name: item.name, price: item.price, qty: item.qty, thumb });
     }
@@ -817,7 +1007,47 @@ function onProductTileClick(p, btn){
     if (kind==='connected') chip.classList.add('connected');
     else if (kind==='offline') chip.classList.add('offline');
     else chip.classList.add('ready');
+    const bars = document.getElementById('netBars');
+    // Set text first
     chip.textContent = label || (kind==='connected' ? 'CONNECTED' : kind==='offline' ? 'OFFLINE' : 'READY');
+    // Insert tiny provider tag before the signal bars
+    try {
+      const prov = (window.__rtcProvider || 'p2p');
+      const tag = document.createElement('span');
+      tag.className = 'prov-badge';
+      tag.textContent = (prov==='livekit') ? 'Live' : (prov==='twilio') ? 'Twilio' : 'P2P';
+      chip.appendChild(tag);
+    } catch {}
+    // Append the bars span to keep it inside the chip and to the right of provider tag
+    if (bars) {
+      try { bars.style.display = 'inline-flex'; } catch {}
+      chip.appendChild(bars);
+    }
+    // Make the chip a disconnect button when connected
+    try {
+      chip.onclick = null;
+      chip.style.cursor = '';
+      chip.title = '';
+      if (kind === 'connected') {
+        chip.style.cursor = 'pointer';
+        chip.title = 'Disconnect';
+        chip.onclick = async () => {
+          try {
+            const current = basketId && basketId !== 'unpaired' ? String(basketId) : '';
+            if (current) {
+              try { stopRTC && stopRTC('user'); } catch {}
+              try { await fetch(`/webrtc/session/${encodeURIComponent(current)}?reason=user`, { method:'DELETE' }); } catch {}
+              try { await fetch(`/session/reset?pairId=${encodeURIComponent(current)}`, { method:'POST' }); } catch {}
+              const p = new URLSearchParams(location.search);
+              p.delete('basket');
+              p.delete('pair');
+              const qs = p.toString();
+              location.href = location.pathname + (qs ? ('?' + qs) : '');
+            }
+          } catch {}
+        };
+      }
+    } catch {}
   }
 
   const clearBtn = document.getElementById('clear-basket');
@@ -838,6 +1068,35 @@ function onProductTileClick(p, btn){
     // Hard reset session: clears basket, resets signaling, and instructs display to reload
     try { await fetch(`/session/reset?pairId=${encodeURIComponent(basketId)}`, { method:'POST' }); } catch {}
     try { posterActive = false; const b=document.getElementById('posterBtn'); if (b) b.textContent='Poster'; } catch {}
+    // After reset, proactively re-start the session and RTC so the cashier doesn't need to click Play again.
+    try {
+      // Small delay to let the display reload and resubscribe
+      await new Promise(r => setTimeout(r, 300));
+      await fetch(`/session/start?pairId=${encodeURIComponent(basketId)}`, { method: 'POST' }).catch(()=>{});
+      // Ensure we are allowed to connect and kick off RTC
+      canConnect = true;
+      // Prefer SFU provider immediately when backend advertises it as default
+      try {
+        const cfg = await getRtcConfig();
+        if (cfg && cfg.sfu && cfg.sfu.enabled && String(cfg.sfu.defaultProvider||'') === 'livekit'){
+          try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'rtc:provider', basketId, provider:'livekit' })); } catch {}
+          try { stopRTC && stopRTC('prefer-sfu'); } catch {}
+          const ok = await joinLivekitCashier();
+          if (!ok) { try { startRTC(); } catch {} }
+        } else if (cfg && cfg.sfu && cfg.sfu.enabled && String(cfg.sfu.defaultProvider||'') === 'twilio') {
+          try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'rtc:provider', basketId, provider:'twilio' })); } catch {}
+          try { stopRTC && stopRTC('prefer-sfu'); } catch {}
+          const ok = await joinTwilioCashier();
+          if (!ok) { try { startRTC(); } catch {} }
+        } else {
+          // P2P start
+          startRTC();
+        }
+      } catch {
+        // Fallback to P2P
+        try { startRTC(); } catch {}
+      }
+    } catch {}
   });
   const posterBtn = document.getElementById('posterBtn');
   if (posterBtn) posterBtn.addEventListener('click', async () => {
@@ -912,16 +1171,26 @@ const r = await fetch('/webrtc/config', { cache: 'no-store' });
   }
 
   // ---- WebRTC two-way video (cashier offers)
-// Detailed ICE config helper
+// Detailed ICE config helper (cached with TTL to avoid rate limits)
+let __rtcCfgCacheCashier = null; let __rtcCfgAtCashier = 0;
 async function getIceConfigDetailed(){
+  const now = Date.now();
   try {
+    if (__rtcCfgCacheCashier && (now - __rtcCfgAtCashier) < 60000) return __rtcCfgCacheCashier;
     const r = await fetch('/webrtc/config', { cache:'no-store' });
-    return await r.json();
-  } catch { return { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] }; }
+    if (!r.ok) {
+      if (r.status === 429 && __rtcCfgCacheCashier) return __rtcCfgCacheCashier;
+      throw new Error('cfg_fetch_failed');
+    }
+    const j = await r.json();
+    __rtcCfgCacheCashier = j; __rtcCfgAtCashier = now;
+    return j;
+  } catch { return __rtcCfgCacheCashier || { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] }; }
 }
 
 async function initRTC(){
     try {
+      try { fetch('/client-log', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ tag:'startRTC', role:'cashier', basketId, msg:'begin' }) }); } catch {}
       clearRtcTimers();
       // Pre-clear any stale session state on the backend (offer/answer/ICE) once per load
       if (!didPreclear) {
@@ -1025,11 +1294,20 @@ async function initRTC(){
           pendingRemote.push(cand);
         }
       };
-console.log('RTC(cashier) init', { pairId: basketId, icePolicy, servers: Array.isArray(ice) ? ice.length : 0 });
+console.log('RTC(cashier) init', { pairId: basketId, icePolicy, servers: Array.isArray(iceServers) ? iceServers.length : 0 });
       if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
       const remoteStream = new MediaStream();
       if (remoteEl) { remoteEl.srcObject = remoteStream; remoteEl.play && remoteEl.play().catch(()=>{}); }
-      pc.ontrack = (ev) => { ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
+      // Safari/iOS: attach remote audio to an <audio> element to ensure audio playback
+      try {
+        const aud = document.createElement('audio');
+        aud.autoplay = true; aud.playsInline = true; aud.muted = false;
+        aud.srcObject = remoteStream;
+        const sink = document.getElementById('audioSink') || document.body;
+        sink.appendChild(aud);
+        aud.play && aud.play().catch(()=>{});
+      } catch {}
+      pc.ontrack = (ev) => { __lastRemoteTrackAt = Date.now(); ev.streams[0]?.getTracks().forEach(tr => remoteStream.addTrack(tr)); };
 pc.addEventListener('iceconnectionstatechange', () => {
         console.log('RTC(cashier) iceConnectionState:', pc.iceConnectionState);
         if (pc.iceConnectionState === 'connected') { rtcBackoff = 1000; }
@@ -1037,7 +1315,26 @@ pc.addEventListener('iceconnectionstatechange', () => {
       });
       pc.addEventListener('connectionstatechange', () => {
         console.log('RTC(cashier) connectionState:', pc.connectionState);
-        if (pc.connectionState === 'connected') { rtcBackoff = 1000; }
+        if (pc.connectionState === 'connected') {
+          rtcBackoff = 1000;
+          // Media watchdog: if no media flows within 8s, fall back to SFU
+          try {
+            if (window.__mediaWatchdogTimer) { clearTimeout(window.__mediaWatchdogTimer); }
+          } catch {}
+          window.__mediaWatchdogTimer = setTimeout(async () => {
+            try {
+              if (window.__rtcProvider === 'p2p') {
+                const mh = window.__mediaHealthyCashier || {};
+                const inboundOk = !!(mh.aIn || mh.vIn);
+                const outboundOk = !!(mh.aOut || mh.vOut);
+                if (!inboundOk || !outboundOk) {
+                  const ok = await attemptSfuFallback();
+                  if (ok) return;
+                }
+              }
+            } catch {}
+          }, 8000);
+        }
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') scheduleRtcRestart(pc.connectionState);
       });
       pc.addEventListener('icegatheringstatechange', () => console.log('RTC(cashier) iceGatheringState:', pc.iceGatheringState));
@@ -1097,7 +1394,7 @@ const candidatesInterval = setInterval(async () => {
       }, 1800);
       window.__rtcTimersCashier = window.__rtcTimersCashier || {};
       window.__rtcTimersCashier.candidatesInterval = candidatesInterval;
-    } catch (e) { console.warn('RTC init failed', e); }
+    } catch (e) { console.warn('RTC init failed', e); try { fetch('/client-log', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ tag:'startRTC', role:'cashier', basketId, msg:'error', meta: { error: String(e&&e.message||e) } }) }); } catch {} }
   }
 
   function beginRtcStats(pc){
@@ -1123,6 +1420,8 @@ const candidatesInterval = setInterval(async () => {
         const videoInHealthy = (__lastStats.vIn.at && (now-__lastStats.vIn.at)<6000);
         const audioOutHealthy = (__lastStats.aOut.at && (now-__lastStats.aOut.at)<6000);
         const videoOutHealthy = (__lastStats.vOut.at && (now-__lastStats.vOut.at)<6000);
+        // expose to watchdog
+        try { window.__mediaHealthyCashier = { aIn: audioInHealthy, vIn: videoInHealthy, aOut: audioOutHealthy, vOut: videoOutHealthy }; } catch {}
         // send heartbeat: cashier outbound is display inbound
         try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'rtc:heartbeat', basketId, audio:{ in: audioInHealthy, out: audioOutHealthy }, video:{ in: videoInHealthy, out: videoOutHealthy } })); } catch {}
         // simple bars: prioritize audio
@@ -1158,31 +1457,260 @@ const candidatesInterval = setInterval(async () => {
     } catch {}
   }
 
+  // ---- SFU fallback (prefer LiveKit, then Twilio [stub])
+  async function getRtcConfig(){
+    try { return await getIceConfigDetailed(); } catch { return {}; }
+  }
+
+  async function joinLivekitCashier(){
+    try {
+      const r = await fetch('/rtc/token', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ provider:'livekit', basketId, role:'cashier' }) });
+      if (!r.ok) return false; const j = await r.json();
+      if (!j || !j.token || !j.url) return false;
+      async function loadLivekitModule(){
+        // 1) Same-origin ESM proxy
+        try { return await import('/js/vendor/livekit-client.esm.js?v=2.4.0'); } catch (e) {}
+        // 2) ESM CDNs
+        const urls = [
+          'https://cdn.livekit.io/client-sdk-js/v2.4.0/livekit-client.esm.js',
+          'https://cdn.jsdelivr.net/npm/@livekit/client@2.4.0/dist/livekit-client.esm.js',
+          'https://unpkg.com/@livekit/client@2.4.0/dist/livekit-client.esm.js'
+        ];
+        let lastErr;
+        for (const u of urls) { try { return await import(u); } catch (e) { lastErr = e; } }
+        // 3) UMD fallback
+        const umdUrls = [ '/js/vendor/livekit-client.umd.min.js', 'https://cdn.jsdelivr.net/npm/@livekit/client@2.4.0/dist/livekit-client.umd.min.js', 'https://unpkg.com/@livekit/client@2.4.0/dist/livekit-client.umd.min.js' ];
+        for (const u of umdUrls) {
+          try {
+            await new Promise((resolve, reject) => { const s=document.createElement('script'); s.src=u; s.async=true; s.onload=()=>resolve(true); s.onerror=()=>reject(new Error('load_failed')); document.head.appendChild(s); });
+            const g = (window.livekit||window.Livekit||window.LiveKit||window.LiveKitClient||window.LK||null);
+            if (g && g.Room) return g;
+          } catch (e) { lastErr = e; }
+        }
+        throw lastErr || new Error('livekit_load_failed');
+      }
+      const lk = await loadLivekitModule();
+      const room = new lk.Room({ adaptiveStream:true, dynacast:true, stopLocalTrackOnUnpublish:true, audioCaptureDefaults:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true } });
+      window.__lkRoomCashier = room;
+      const audioSink = document.getElementById('audioSink') || document.body;
+      const localVideoEl = document.getElementById('localVideo');
+      room.on(lk.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+        try {
+          if (track.kind === 'audio') {
+            const el = document.createElement('audio');
+            el.autoplay = true; el.playsInline = true;
+            track.attach(el);
+            try { audioSink.appendChild(el); el.play && el.play().catch(()=>{}); } catch {}
+          } else if (track.kind === 'video') {
+            const v = document.getElementById('remoteVideo');
+            if (v) { try { track.attach(v); v.muted = true; v.play && v.play().catch(()=>{}); } catch {} }
+          }
+        } catch {}
+      });
+      // Attach local camera to PIP as soon as it is published
+      room.on(lk.RoomEvent.LocalTrackPublished, (pub) => {
+        try {
+          const track = pub && pub.track;
+          if (track && track.kind === 'video' && localVideoEl) { track.attach(localVideoEl); localVideoEl.muted = true; localVideoEl.playsInline = true; localVideoEl.autoplay = true; localVideoEl.play && localVideoEl.play().catch(()=>{}); }
+        } catch {}
+      });
+      await room.connect(j.url, j.token);
+      await room.localParticipant.setMicrophoneEnabled(true);
+      // Enable camera so both remote and local PIP show video
+      try { await room.localParticipant.setCameraEnabled(true); } catch {}
+      // Update UI
+      setStatusChip('connected', 'CONNECTED — SFU(LiveKit)');
+      try { window.__rtcProvider = 'livekit'; } catch {}
+      try { extendOverlayGrace(15000); } catch {}
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function loadTwilioVideo(){
+    return new Promise((resolve, reject) => {
+      if (window.Twilio && window.Twilio.Video) return resolve(window.Twilio.Video);
+      const s = document.createElement('script');
+      s.src = 'https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js';
+      s.async = true;
+      s.onload = () => { try { resolve(window.Twilio && window.Twilio.Video ? window.Twilio.Video : null); } catch(e){ reject(e); } };
+      s.onerror = () => reject(new Error('twilio_video_load_failed'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function joinTwilioCashier(){
+    try {
+      const r = await fetch('/rtc/token', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ provider:'twilio', basketId, role:'cashier' }) });
+      if (!r.ok) return false; const j = await r.json();
+      if (!j || !j.token) return false;
+      const TVideo = await loadTwilioVideo(); if (!TVideo) return false;
+      const room = await TVideo.connect(j.token, {
+        audio: true,
+        video: false,
+        dominantSpeaker: true,
+        networkQuality: { local: 1, remote: 1 }
+      });
+      window.__twRoomCashier = room;
+      const remoteEl = document.getElementById('remoteVideo');
+      const audioSink = document.getElementById('audioSink') || document.body;
+      room.on('trackSubscribed', (track) => {
+        try {
+          if (track.kind === 'audio') {
+            const el = track.attach();
+            el.autoplay = true; el.playsInline = true;
+            try { audioSink.appendChild(el); el.play && el.play().catch(()=>{}); } catch {}
+          } else if (track.kind === 'video' && remoteEl) {
+            try { track.attach(remoteEl); remoteEl.muted = true; remoteEl.play && remoteEl.play().catch(()=>{}); } catch {}
+          }
+        } catch {}
+      });
+      setStatusChip('connected', 'CONNECTED — SFU(Twilio)');
+      try { window.__rtcProvider = 'twilio'; } catch {}
+      try { extendOverlayGrace(15000); } catch {}
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function attemptSfuFallback(){
+    try {
+      const cfg = await getRtcConfig();
+      const order = (cfg && cfg.sfu && Array.isArray(cfg.sfu.fallbackOrder)) ? cfg.sfu.fallbackOrder : ['p2p'];
+      const next = order.find(p => p !== 'p2p');
+      if (!next) return false;
+      if (next === 'livekit') {
+        try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'rtc:provider', basketId, provider:'livekit' })); } catch {}
+        try { stopRTC('sfu-switch'); } catch {}
+        const ok = await joinLivekitCashier();
+        if (ok) { peersConnected = true; try { updateOverlayVisibility(); } catch {} return true; }
+      } else if (next === 'twilio') {
+        try { if (ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'rtc:provider', basketId, provider:'twilio' })); } catch {}
+        try { stopRTC('sfu-switch'); } catch {}
+        const ok = await joinTwilioCashier();
+        if (ok) { peersConnected = true; try { updateOverlayVisibility(); } catch {} return true; }
+      }
+      return false;
+    } catch { return false; }
+  }
+
   // ---- Device overlay + Preflight (cashier drives selection before session) ----
   const OVERLAY_ID = 'deviceOverlay';
   const OVERLAY_HTML = (devices=[]) => {
-    return `\n      <div class="ov-header">Select Drive Device</div>\n      <div class="ov-grid" id="ovGrid"></div>\n      <div class="ov-foot">Quality and path are pre-tested (Direct, Direct(TURN), Twilio).</div>\n    `;
+    return `\n      <div class=\"ov-header\">\n        <span>Select Drive Device</span>\n        <span class=\"spacer\"></span>\n        <button id=\"ovRefresh\" class=\"btn\" type=\"button\" style=\"padding:4px 10px;\">Refresh</button>\n      </div>\n      <div class=\"ov-grid\" id=\"ovGrid\"></div>\n    `;
   };
-  const PREFLIGHT_TIMEOUT_MS = 2600;
+  const PREFLIGHT_TIMEOUT_MS = 4000;
   const PREFLIGHT_PINGS = 3;
   const PREFLIGHT_CONCURRENCY = 4;
   const deviceRankings = new Map(); // id -> { quality, bestScenarioId, bestTag, at }
   const selectedScenarioByDevice = new Map();
   let __ovInit = false;
+  let __ovDevicesCache = [];
 
   function ensureOverlayEl(){
     const card = document.querySelector('.order-panel .billCard');
     const el = document.getElementById(OVERLAY_ID);
     if (!card || !el) return null;
     el.innerHTML = OVERLAY_HTML();
-    // anchor inside bill card bounds
-    el.style.inset = '0';
+    // Anchor inside bill card bounds but leave room for status and actions
+    try {
+      el.style.inset = '';
+      el.style.top = '9px';
+      el.style.left = '6px';
+      el.style.right = '6px';
+      el.style.bottom = '10px';
+    } catch {}
     return el;
   }
 
+  let __ovVisible = false;
+  let __ovPreflightTimer = null;
+  let __ovPreflightRunning = false;
+  let __ovSuppressedUntil = 0;
+  // Grace window after we reach a connected/healthy state to prevent overlay flicker
+  let __ovGraceUntil = 0;
+  function extendOverlayGrace(ms){ try { const now=Date.now(); const add = Math.max(0, Number(ms)||0); __ovGraceUntil = Math.max(__ovGraceUntil||0, now + add); } catch {} }
+
   function showOverlay(show){
     const el = document.getElementById(OVERLAY_ID); if (!el) return;
+    __ovVisible = !!show;
     if (show) el.classList.add('show'); else el.classList.remove('show');
+    try {
+      if (__ovVisible) {
+        startOverlayPreflightTimer();
+      } else {
+        stopOverlayPreflightTimer();
+      }
+    } catch {}
+  }
+  function startOverlayPreflightTimer(){
+    try {
+      if (__ovPreflightTimer) return;
+      // Run immediately, then every 60s
+      runPreflightAllOverlay().catch(()=>{});
+      __ovPreflightTimer = setInterval(() => { runPreflightAllOverlay().catch(()=>{}); }, 60000);
+    } catch {}
+  }
+  function stopOverlayPreflightTimer(){
+    try { if (__ovPreflightTimer) clearInterval(__ovPreflightTimer); } catch {}
+    __ovPreflightTimer = null;
+  }
+  async function runPreflightAllOverlay(){
+    if (!__ovVisible) return;
+    if (__ovPreflightRunning) return;
+    __ovPreflightRunning = true;
+    try {
+      let devices = __ovDevicesCache && __ovDevicesCache.length ? __ovDevicesCache.slice() : [];
+      if (!devices.length) {
+        try { devices = await listDisplaysOverlay(); __ovDevicesCache = devices.slice(); } catch { devices = []; }
+      }
+      if (!devices.length) return;
+      await Promise.all(devices.map(d => limitPref(()=>runPreflightForDevice(d))));
+      renderDeviceCardsOverlay(devices);
+    } finally { __ovPreflightRunning = false; }
+  }
+  function updateOverlayVisibility(){
+    try {
+      const el = document.getElementById(OVERLAY_ID); if (!el) return;
+      const now = Date.now();
+      // Suppress overlay during explicit suppression or grace window
+      if ((__ovSuppressedUntil && now < __ovSuppressedUntil) || (__ovGraceUntil && now < __ovGraceUntil)) { showOverlay(false); return; }
+      // Consider chip UI as an additional source of truth
+      let connectedUI = false;
+      try {
+        const chip = document.getElementById('statusChip');
+        connectedUI = !!(chip && chip.classList && chip.classList.contains('connected'));
+      } catch {}
+      // Honor an active connect budget for current basket
+      let inBudget = false;
+      try {
+        const bid = (typeof basketId !== 'undefined' && basketId && basketId !== 'unpaired') ? String(basketId) : '';
+        if (bid) {
+          const s = localStorage.getItem('CONNECT_BUDGET_' + bid) || '0';
+          const until = parseInt(s, 10) || 0; inBudget = until > now;
+        }
+      } catch {}
+      const shouldHide = !!(peersConnected || connectedUI || inBudget);
+      showOverlay(!shouldHide);
+    } catch {}
+  }
+
+  function beginPairingToBasket(newId){
+    try {
+      const until = Date.now() + 20000;
+      try { localStorage.setItem('CONNECT_BUDGET_' + newId, String(until)); } catch {}
+      __ovSuppressedUntil = until;
+      try { showOverlay(false); } catch {}
+      try { updateOverlayVisibility(); } catch {}
+      // Update URL without reloading; include pair=1 so ws open will clear it
+      const p = new URLSearchParams(location.search);
+      p.set('basket', newId);
+      p.set('pair', '1');
+      const qs = p.toString();
+      history.replaceState(null, '', location.pathname + (qs ? ('?' + qs) : ''));
+      // Update runtime pairing gate and id, then (re)connect
+      shouldConnect = true; canConnect = true; basketId = String(newId);
+      try { if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) { ws.close(); } } catch {}
+      setTimeout(() => { try { connect(); } catch {} }, 0);
+    } catch {}
   }
 
   async function listDisplaysOverlay(){
@@ -1201,26 +1729,39 @@ const candidatesInterval = setInterval(async () => {
       const grid = document.getElementById('ovGrid'); if (!grid) return;
       grid.innerHTML = '';
       if (!devices || !devices.length) {
+        try {
+          grid.style.display = 'flex';
+          grid.style.flex = '1';
+          grid.style.minHeight = '0';
+          grid.style.alignItems = 'center';
+          grid.style.justifyContent = 'center';
+          grid.style.padding = '0 12px';
+        } catch {}
         const empty = document.createElement('div');
         empty.className = 'muted';
-        empty.style.padding = '12px';
+        empty.style.textAlign = 'center';
         empty.textContent = 'No displays online yet. Open a Drive screen to connect.';
         grid.appendChild(empty);
         return;
       }
-      (devices||[]).forEach(d => {
+      try { grid.style.display = 'grid'; grid.style.alignItems = ''; grid.style.justifyContent = ''; grid.style.padding = '8px'; } catch {}
+      const list = (devices||[]).slice().sort((a,b)=>{
+        const ra = deviceRankings.get(a.id); const rb = deviceRankings.get(b.id);
+        const qa = ra && typeof ra.quality==='number' ? ra.quality : -1;
+        const qb = rb && typeof rb.quality==='number' ? rb.quality : -1;
+        if (qb !== qa) return qb - qa;
+        return String(a.name||'').localeCompare(String(b.name||''));
+      });
+      list.forEach(d => {
         const rk = deviceRankings.get(d.id);
         const q = rk && typeof rk.quality === 'number' ? Math.round(rk.quality) : null;
         const tag = rk ? rk.bestTag : '';
         const div = document.createElement('div');
         div.className = 'ov-card';
         div.innerHTML = `
-          <div class="ov-title">${(d.name||'Display')}</div>
-          <div class="ov-sub">${d.branch ? d.branch : ''}</div>
-          <div class="ov-badges">
-            <span class="ov-badge ${q==null?'':(q>=75?'good':q>=45?'mid':'bad')}">${q==null?'testing…':(q+'%')}</span>
-            <span class="ov-badge">${tag||''}</span>
-          </div>`;
+          <div class=\"ov-title\">${d.branch ? d.branch : (d.name || 'Display')}</div>
+          <div class=\"ov-sub\">${d.branch ? (d.name || 'Display') : ''}</div>
+          <div class=\"ov-badges\">\n            <span class=\"ov-badge ${q==null?'':(q>=75?'good':q>=45?'mid':'bad')}\" title=\"${q==null?'Running preflight…':'Connection quality score'}\">${q==null?'testing…':(q+'%')}</span>\n            <span class=\"ov-badge\" title=\"Path preference\">${tag||''}</span>\n          </div>`;
         div.addEventListener('click', ()=> onDeviceSelectedOverlay(d));
         grid.appendChild(div);
       });
@@ -1299,7 +1840,7 @@ const candidatesInterval = setInterval(async () => {
     // Ping RTTs over datachannel
     const rtts = [];
     await new Promise((resolve, reject) => {
-      const to = setTimeout(() => reject(new Error('pf_ping_timeout')), Math.min(1200, sc.timeoutMs||PREFLIGHT_TIMEOUT_MS));
+      const to = setTimeout(() => reject(new Error('pf_ping_timeout')), Math.min(2000, sc.timeoutMs||PREFLIGHT_TIMEOUT_MS));
       dc.onopen = async () => {
         try {
           for (let i=0;i<PREFLIGHT_PINGS;i++) {
@@ -1313,7 +1854,7 @@ const candidatesInterval = setInterval(async () => {
                 } catch {}
               };
               dc.addEventListener('message', h);
-              setTimeout(()=>rej(new Error('pf_pong_timeout')), 400);
+              setTimeout(()=>rej(new Error('pf_pong_timeout')), 800);
             });
             rtts.push(performance.now()-t);
           }
@@ -1366,6 +1907,29 @@ const candidatesInterval = setInterval(async () => {
     const scenarios = buildScenariosForDevice(d.id, requestId);
     await beginPreflightOnDrive(d.id, requestId, scenarios);
     const results = await Promise.allSettled(scenarios.map(sc => limitPref(()=>runScenarioOffer(d.id, requestId, sc))));
+    // Telemetry (post each fulfilled result)
+    try {
+      const headers = { 'content-type':'application/json' };
+      if (tenant) headers['x-tenant-id'] = tenant;
+      for (const rr of results) {
+        if (rr.status !== 'fulfilled') continue;
+        const r = rr.value || {};
+        const payload = {
+          device_id: d.id,
+          device_name: d.name || '',
+          scenario_id: r.scenarioId || '',
+          provider: scenarioFromId(r.scenarioId||'').provider,
+          policy: scenarioFromId(r.scenarioId||'').policy,
+          connect_time_ms: Number(r.connectTime)||null,
+          rtt_avg_ms: (()=>{ const a=(r.rtts||[]); return a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null; })(),
+          local_candidate: r.localCandidateType || '',
+          local_protocol: r.localProtocol || '',
+          remote_candidate: r.remoteCandidateType || '',
+          remote_protocol: r.remoteProtocol || ''
+        };
+        fetch('/rtc/preflight/log', { method:'POST', headers, body: JSON.stringify(payload) }).catch(()=>{});
+      }
+    } catch {}
     let best = null;
     for (const rr of results) {
       if (rr.status !== 'fulfilled') continue;
@@ -1375,31 +1939,39 @@ const candidatesInterval = setInterval(async () => {
     if (best) {
       deviceRankings.set(d.id, { quality: best.score, bestScenarioId: best.scenarioId, bestTag: scenarioTag(best.scenarioId), at: Date.now() });
       selectedScenarioByDevice.set(d.id, best.scenarioId);
+      try { if (__ovDevicesCache && __ovDevicesCache.length) renderDeviceCardsOverlay(__ovDevicesCache); } catch {}
     }
   }
 
-  async function initDeviceOverlayIfNeeded(){
+async function initDeviceOverlayIfNeeded(){
     try {
-      if (shouldConnect) return; // only when not paired yet
       const el = ensureOverlayEl(); if (!el) return;
-      showOverlay(true);
       const devices = await listDisplaysOverlay();
+      __ovDevicesCache = devices.slice();
+      // Always show chooser until a connection is established
+      if (!peersConnected) showOverlay(true); else showOverlay(false);
+      const refreshBtn = document.getElementById('ovRefresh');
+      if (refreshBtn) refreshBtn.onclick = () => refreshOverlay();
       renderDeviceCardsOverlay(devices);
-      // Safety: after a short budget, mark devices without results as unreachable (0%) to avoid endless "testing…"
-      setTimeout(() => {
-        try {
-          for (const d of (devices||[])) {
-            if (!deviceRankings.has(d.id)) {
-              deviceRankings.set(d.id, { quality: 0, bestScenarioId: null, bestTag: 'Unreachable', at: Date.now() });
-            }
-          }
-          renderDeviceCardsOverlay(devices);
-        } catch {}
-      }, 4000);
       // Kick off preflight per device
       await Promise.all(devices.map(d => limitPref(()=>runPreflightForDevice(d))));
       renderDeviceCardsOverlay(devices);
     } catch (e) { console.warn('overlay error', e); }
+  }
+
+  let __ovRefreshing = false;
+  async function refreshOverlay(){
+    if (__ovRefreshing) return;
+    __ovRefreshing = true;
+    try {
+      const devices = await listDisplaysOverlay();
+      __ovDevicesCache = devices.slice();
+      deviceRankings.clear(); selectedScenarioByDevice.clear();
+      renderDeviceCardsOverlay(devices);
+      await Promise.all(devices.map(d => limitPref(()=>runPreflightForDevice(d))));
+      renderDeviceCardsOverlay(devices);
+    } catch (e) { console.warn('overlay refresh failed', e); }
+    finally { __ovRefreshing = false; }
   }
 
   function scenarioFromId(id){
@@ -1414,18 +1986,13 @@ const candidatesInterval = setInterval(async () => {
       const scId = selectedScenarioByDevice.get(d.id) || '';
       const pref = scenarioFromId(scId);
       try { localStorage.setItem('RTC_PREF_' + d.id, JSON.stringify(pref)); } catch {}
-      // Set a connection budget window (~15s)
-      try { localStorage.setItem('CONNECT_BUDGET_' + d.id, String(Date.now()+15000)); } catch {}
-      // Set basket and pair=1 to trigger session start
-      const p = new URLSearchParams(location.search);
-      p.set('basket', d.id);
-      p.set('pair', '1');
-      location.search = p.toString();
+      beginPairingToBasket(String(d.id));
     } catch {}
   }
 
   // ---- Options / Modifiers flow (cashier drives)
-  function hasMilkVariants(p){
+function hasMilkVariants(p){
+    try { if (window.ProductHelpers && window.ProductHelpers.hasMilkVariants) return window.ProductHelpers.hasMilkVariants(p); } catch {}
     const name = String(p.name||'').toLowerCase();
     const cat  = String(p.category_name||'').toLowerCase();
     const include = ['latte','cappuccino','flat white','mocha','macchiato','cortado','frappe','white mocha','spanish'];
@@ -1450,7 +2017,8 @@ async function fetchProductModifiers(p){
       return groups;
     } catch { return []; }
   }
-  function productOptions(p){
+function productOptions(p){
+    try { if (window.ProductHelpers && window.ProductHelpers.productOptions) return window.ProductHelpers.productOptions(p); } catch {}
     if (!hasMilkVariants(p)) return null;
     return {
       size: [ {id:'reg', label:'Regular', delta:0}, {id:'lg', label:'Large', delta:0.5} ],
@@ -1463,7 +2031,7 @@ async function onProductClick(p){
     const groups = await fetchProductModifiers(p);
     if (Array.isArray(groups) && groups.length) {
       showProductPopupWithOptions(p, groups);
-      try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups })); } catch {}
+      try { wsSendUI({ type:'ui:showOptions', basketId, product: p, groups }); } catch {}
       return;
     }
     // If we have simple options (size/milk), show unified popup and mirror
@@ -1476,10 +2044,11 @@ async function onProductClick(p){
     if (opts.size && opts.size.length) groups2.push({ id:'size', name:'Size', required:false, min:0, max:1, options: opts.size.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
     if (opts.milk && opts.milk.length) groups2.push({ id:'milk', name:'Milk', required:false, min:0, max:1, options: opts.milk.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
     showProductPopupWithOptions(p, groups2);
-    try { if (peersConnected && ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({ type:'ui:showOptions', basketId, product: p, groups: groups2 })); } catch {}
+    try { wsSendUI({ type:'ui:showOptions', basketId, product: p, groups: groups2 }); } catch {}
   }
 
-  function computePriceWith(p, opts, sel){
+function computePriceWith(p, opts, sel){
+    try { if (window.ProductHelpers && window.ProductHelpers.computePriceWith) return window.ProductHelpers.computePriceWith(p, opts, sel); } catch {}
     let price = Number(p.price)||0;
     const size = (opts.size||[]).find(x=>x.id===sel.sizeId);
     const milk = (opts.milk||[]).find(x=>x.id===sel.milkId);
@@ -1487,7 +2056,8 @@ async function onProductClick(p){
     if (milk) price += Number(milk.delta||0);
     return Math.round(price*1000)/1000;
   }
-  function selectionLabel(opts, sel){
+function selectionLabel(opts, sel){
+    try { if (window.ProductHelpers && window.ProductHelpers.selectionLabelSimple) return window.ProductHelpers.selectionLabelSimple(opts, sel); } catch {}
     const parts = [];
     const size = (opts.size||[]).find(x=>x.id===sel.sizeId); if (size) parts.push(size.label);
     const milk = (opts.milk||[]).find(x=>x.id===sel.milkId); if (milk) parts.push(milk.label);
@@ -1501,6 +2071,8 @@ async function onProductClick(p){
     const btnCancel = document.getElementById('optCancel');
     const btnConfirm = document.getElementById('optConfirm');
     if (!modal||!body) return;
+    // Enforce overlay insets (same as device overlay): top 9px, bottom 22px, left/right 6px
+    try { modal.style.inset=''; modal.style.top='9px'; modal.style.bottom='22px'; modal.style.left='6px'; modal.style.right='6px'; } catch {}
     title.textContent = `Choose options — ${p.name}`;
 
     function render(){
@@ -1528,7 +2100,7 @@ async function onProductClick(p){
               if (isSize) sel.sizeId = id; else if (isMilk) sel.milkId = id;
               fs.querySelectorAll('button.optbtn').forEach(b => b.classList.toggle('selected', b===btn));
               applyOptionButtonStyles(fs);
-              try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection: sel })); } catch {}
+              try { wsSendUI({ type:'ui:optionsUpdate', basketId, selection: sel }); } catch {}
             });
           });
         });
@@ -1541,14 +2113,14 @@ async function onProductClick(p){
     btnCancel.style.display = readOnly ? 'none' : '';
     btnConfirm.style.display = readOnly ? 'none' : '';
 
-    btnCancel.onclick = () => { hideOptionsUI(); try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
+    btnCancel.onclick = () => { hideOptionsUI(); try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {} };
     btnConfirm.onclick = () => {
       const price = computePriceWith(p, opts, sel);
       const suffix = selectionLabel(opts, sel);
       const variantKey = `${p.id}#size=${sel.sizeId||''}&milk=${sel.milkId||''}`;
       sendUpdate({ action:'add', item:{ sku: variantKey, name: suffix?`${p.name} (${suffix})`:p.name, price }, qty:1 });
       hideOptionsUI();
-      try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
+      try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {}
     };
 
     modal.style.display = 'flex';
@@ -1570,6 +2142,8 @@ function hideOptionsUI(){
     const btnsRow = document.getElementById('optBtnsRow');
     const card = document.getElementById('optionsCard');
     if (!modal||!body||!title||!btnCancel||!btnConfirm||!btnsRow) return;
+    // Enforce overlay insets as well
+    try { modal.style.inset=''; modal.style.top='9px'; modal.style.bottom='22px'; modal.style.left='6px'; modal.style.right='6px'; } catch {}
 
     title.textContent = 'Add Item';
     try { if (card) card.classList.add('compact'); } catch {}
@@ -1592,13 +2166,14 @@ function hideOptionsUI(){
     btnCancel.disabled = false; btnConfirm.disabled = false;
     btnCancel.textContent = 'Close';
     btnConfirm.textContent = 'Add';
-    btnCancel.onclick = () => { hideOptionsUI(); };
+    btnCancel.onclick = () => { hideOptionsUI(); try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {} };
     btnConfirm.onclick = async () => {
       try {
         const groups = await fetchProductModifiers(p);
         if (Array.isArray(groups) && groups.length) {
-          // Render product preview with Options in the same popup
+          // Render product preview with Options in the same popup and mirror to display
           showProductPopupWithOptions(p, groups);
+          try { wsSendUI({ type:'ui:showOptions', basketId, product: p, groups }); } catch {}
         } else {
           // Try simple options
           const opts = productOptions(p);
@@ -1607,14 +2182,17 @@ function hideOptionsUI(){
             if (opts.size && opts.size.length) groups2.push({ id:'size', name:'Size', required:false, min:0, max:1, options: opts.size.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
             if (opts.milk && opts.milk.length) groups2.push({ id:'milk', name:'Milk', required:false, min:0, max:1, options: opts.milk.map(o=>({ id:o.id, name:o.label, delta:Number(o.delta)||0 })) });
             showProductPopupWithOptions(p, groups2);
+            try { wsSendUI({ type:'ui:showOptions', basketId, product: p, groups: groups2 }); } catch {}
           } else {
             window.onAddItem(p);
             hideOptionsUI();
+            try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {}
           }
         }
       } catch {
         window.onAddItem(p);
         hideOptionsUI();
+        try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {}
       }
     };
 
@@ -1756,10 +2334,8 @@ function hideOptionsUI(){
               sel.set(gid, set);
               applyOptionButtonStyles(fs);
               try {
-                if (peersConnected) {
-                  const map = {}; for (const [k,v] of sel.entries()) map[k] = Array.from(v.values());
-                  ws && ws.send(JSON.stringify({ type:'ui:optionsUpdate', basketId, selection: map }));
-                }
+                const map = {}; for (const [k,v] of sel.entries()) map[k] = Array.from(v.values());
+                wsSendUI({ type:'ui:optionsUpdate', basketId, selection: map });
               } catch {}
               // Update price label
               try { const pk=document.getElementById('optPriceKwd'); if (pk) pk.textContent = `${fmtPrice(computePrice())} KWD`; } catch {}
@@ -1773,7 +2349,7 @@ function hideOptionsUI(){
     const btnConfirm = document.getElementById('optConfirm');
     btnCancel.style.display = '';
     btnConfirm.style.display = '';
-    btnCancel.onclick = () => { hideOptionsUI(); try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {} };
+    btnCancel.onclick = () => { hideOptionsUI(); try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {} };
     btnConfirm.onclick = () => {
       if (hasGroups){
         // enforce required/min
@@ -1792,7 +2368,7 @@ function hideOptionsUI(){
         const itemName = suffix ? `${p.name} (${suffix})` : p.name;
         sendUpdate({ action:'add', item:{ sku: variantKey, name: itemName, price }, qty:1 });
         hideOptionsUI();
-        try { if (peersConnected) ws && ws.send(JSON.stringify({ type:'ui:optionsClose', basketId })); } catch {}
+        try { wsSendUI({ type:'ui:optionsClose', basketId }); } catch {}
       } else {
         // no groups — just add
         window.onAddItem(p);

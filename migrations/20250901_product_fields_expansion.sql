@@ -52,8 +52,8 @@ END$$;
 
 -- Per-branch availability and overrides
 CREATE TABLE IF NOT EXISTS product_branch_availability (
-  product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  branch_id  uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  product_id uuid NOT NULL,
+  branch_id  uuid NOT NULL,
   available  boolean NOT NULL DEFAULT true,
   price_override numeric(10,3),
   packaging_fee_override numeric(10,3),
@@ -63,8 +63,8 @@ CREATE INDEX IF NOT EXISTS ix_pba_branch ON product_branch_availability(branch_i
 
 -- Link products to modifier groups with optional ordering/requirements
 CREATE TABLE IF NOT EXISTS product_modifier_groups (
-  product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  group_id   uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
+  product_id uuid NOT NULL,
+  group_id   uuid NOT NULL,
   sort_order integer,
   required   boolean,
   min_select integer,

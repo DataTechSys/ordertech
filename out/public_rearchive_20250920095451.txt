@@ -1,0 +1,64 @@
+BEGIN
+SET
+SET
+CREATE SCHEMA
+    db     |   role    |             search_path             
+-----------+-----------+-------------------------------------
+ ordertech | ordertech | saas, catalog, audit, media, public
+(1 row)
+
+       ts       
+----------------
+ 20250920095451
+(1 row)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+ cmd 
+-----
+(0 rows)
+
+COMMIT
+ schema  |                 archived                 
+---------+------------------------------------------
+ archive | public__audit_logs__20250920065220
+ archive | public__branches__20250920065220
+ archive | public__devices__20250920065220
+ archive | public__permissions__20250920065220
+ archive | public__role_permissions__20250920065220
+ archive | public__roles__20250920065220
+ archive | public__subscriptions__20250920065220
+ archive | public__tenants__20250920065220
+ archive | public__users__20250920065220
+(9 rows)
+

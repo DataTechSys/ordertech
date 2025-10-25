@@ -26,9 +26,9 @@
           <div class="row cols-2 equal-frames" style="align-items:stretch;">
             <div class="logo-frame" style="height:100%;">
               <div class="label">Company Logo</div>
-              <img id="logoPreview" alt="Company Logo" style="width:320px; height:180px; object-fit:contain; border:1px dashed #ccc; border-radius:6px; background:#fafafa;" />
+<img id="logoPreview" alt="Company Logo" style="width:260px; height:146px; object-fit:contain; border:1px dashed #ccc; border-radius:6px; background:#fafafa;" />
               <div class="row" style="gap:8px; align-items:center;">
-                <input id="logoFile" type="file" accept="image/*" class="input" style="padding:6px; max-width:320px;" />
+<input id="logoFile" type="file" accept="image/*" class="input" style="padding:6px; max-width:260px;" />
               </div>
               <small class="muted">Supported images up to 5MB. Leave empty to use placeholder.</small>
               <input id="brandLogo" type="hidden" />
@@ -36,22 +36,25 @@
             <div class="logo-frame" style="height:100%;">
               <div class="label">Branding</div>
               <label class="grid"><span class="label">Display Name</span>
-                <input id="brandName" class="input" placeholder="Company display name" />
+                <div class="flex between center" style="gap:8px;">
+                  <input id="brandName" class="input sm" placeholder="Company display name" />
+                  <span id="companyIdFixed" class="chip" title="Company ID" style="white-space:nowrap;">ID: —</span>
+                </div>
               </label>
               <label class="grid"><span class="label">Slug</span>
-                <input id="setSlug" class="input" placeholder="company-slug" />
+<input id="setSlug" class="input sm" placeholder="company-slug" />
               </label>
               <div class="row cols-2" style="align-items:flex-start;">
                 <label class="grid"><span class="label">Primary Color</span>
                   <div class="flex center" style="gap:8px;">
-                    <input id="brandPrimaryColor" type="color" class="input" style="padding:0; width:48px; height:32px;" />
-                    <input id="brandPrimaryHex" class="input" placeholder="#22c55e" />
+<input id="brandPrimaryColor" type="color" class="input" style="padding:0; width:40px; height:28px;" />
+<input id="brandPrimaryHex" class="input sm" placeholder="#22c55e" />
                   </div>
                 </label>
                 <label class="grid"><span class="label">Secondary Color</span>
                   <div class="flex center" style="gap:8px;">
-                    <input id="brandSecondaryColor" type="color" class="input" style="padding:0; width:48px; height:32px;" />
-                    <input id="brandSecondaryHex" class="input" placeholder="#0ea5e9" />
+<input id="brandSecondaryColor" type="color" class="input" style="padding:0; width:40px; height:28px;" />
+<input id="brandSecondaryHex" class="input sm" placeholder="#0ea5e9" />
                   </div>
                 </label>
               </div>
@@ -59,24 +62,24 @@
           </div>
           <div class="row cols-3" style="align-items:flex-start;">
             <label class="grid"><span class="label">Address</span>
-              <input id="brandAddress" class="input" placeholder="Street, building, area" />
+<input id="brandAddress" class="input sm" placeholder="Street, building, area" />
             </label>
             <label class="grid"><span class="label">City</span>
-              <select id="brandCity" class="select"></select>
+<select id="brandCity" class="select sm"></select>
             </label>
             <label class="grid"><span class="label">Country</span>
-              <select id="brandCountry" class="select"></select>
+<select id="brandCountry" class="select sm"></select>
             </label>
           </div>
           <div class="row cols-3" style="align-items:flex-start;">
             <label class="grid"><span class="label">Tel</span>
-              <input id="brandTel" class="input" placeholder="+965 5555 5555" />
+<input id="brandTel" class="input sm" placeholder="+965 5555 5555" />
             </label>
             <label class="grid"><span class="label">Email</span>
-              <input id="brandEmail" type="email" class="input" placeholder="info@example.com" />
+<input id="brandEmail" type="email" class="input sm" placeholder="info@example.com" />
             </label>
             <label class="grid"><span class="label">Website</span>
-              <input id="brandWebsite" class="input" placeholder="https://example.com" />
+<input id="brandWebsite" class="input sm" placeholder="https://example.com" />
             </label>
           </div>
         </div>
@@ -87,13 +90,13 @@
           <div class="toolbar"><div class="title" style="font-weight:700;">Defaults</div><span class="spacer"></span></div>
           <div class="row cols-3" style="align-items:flex-start;">
             <label class="grid"><span class="label">Currency</span>
-              <input id="setCurrency" class="input" placeholder="KWD" />
+<input id="setCurrency" class="input sm" placeholder="KWD" />
             </label>
             <label class="grid"><span class="label">Timezone</span>
-              <input id="setTimezone" class="input" placeholder="Asia/Kuwait" />
+<input id="setTimezone" class="input sm" placeholder="Asia/Kuwait" />
             </label>
             <label class="grid"><span class="label">Default Locale</span>
-              <input id="setLocale" class="input" placeholder="en" />
+<input id="setLocale" class="input sm" placeholder="en" />
             </label>
           </div>
           <div class="row">
@@ -107,7 +110,7 @@
     <script src="/js/admin-common.js"></script>
     <script src="/js/admin-shell.js"></script>
     <script src="/js/geo.js"></script>
-    <script src="/js/company.js"></script>
+    <script src="/js/company.js?v=20250915a"></script>
   </body>
 </html>
 

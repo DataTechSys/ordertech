@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recording Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; font-family: monospace; font-size: 14px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .audio-level { height: 20px; background: #ddd; margin: 10px 0; position: relative; }
+        .audio-level-bar { height: 100%; background: #28a745; transition: width 0.1s; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🎙️ Basic Audio Recording Test</h1>
+    
+    <button class="button" onclick="testPermissions()" id="permBtn">1. Test Permissions</button>
+    <button class="button" onclick="testMediaRecorder()" id="testBtn">2. Test MediaRecorder</button>
+    <button class="button" onclick="testAudioAnalysis()" id="analysisBtn">3. Test Audio Analysis</button>
+    <button class="button" onclick="clearLog()">Clear Log</button>
+    
+    <div>
+        Audio Level: <div class="audio-level"><div class="audio-level-bar" id="audioBar" style="width: 0%"></div></div>
+    </div>
+    
+    <h3>Debug Log:</h3>
+    <div class="log" id="log"></div>
+
+    <script>
+        let mediaRecorder = null;
+        let audioStream = null;
+        let audioContext = null;
+        let analyser = null;
+        let isRecording = false;
+        let monitoringAudio = false;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : (type === 'success' ? 'success' : '');
+            logDiv.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function testPermissions() {
+            try {
+                log('=== Testing Microphone Permissions ===');
+                
+                log('Requesting microphone access...');
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: true
+                });
+                log('✅ Microphone permission granted!', 'success');
+                
+                // Get device info
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                
+                log(`Found ${audioInputs.length} audio input devices:`);
+                audioInputs.forEach((device, index) => {
+                    log(`  ${index + 1}. ${device.label || 'Unknown Device'} (${device.deviceId})`);
+                });
+                
+                // Stop the stream
+                stream.getTracks().forEach(track => track.stop());
+                log('Stream stopped');
+                
+            } catch (error) {
+                log(`❌ Permission Error: ${error.message}`, 'error');
+                log(`Error Name: ${error.name}`);
+                if (error.name === 'NotAllowedError') {
+                    log('⚠️ Microphone access denied. Please allow microphone access in your browser settings.', 'error');
+                }
+            }
+        }
+        
+        async function testMediaRecorder() {
+            try {
+                log('=== Testing MediaRecorder ===');
+                
+                if (isRecording) {
+                    log('Stopping existing recording...');
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                    if (audioStream) {
+                        audioStream.getTracks().forEach(track => track.stop());
+                        audioStream = null;
+                    }
+                    isRecording = false;
+                    return;
+                }
+                
+                // Get audio stream
+                log('Requesting microphone access...');
+                audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 16000,
+                        channelCount: 1
+                    }
+                });
+                log('✅ Microphone access granted', 'success');
+                
+                // Check supported MIME types
+                const mimeTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/mp4',
+                    'audio/wav'
+                ];
+                
+                log('Checking supported MIME types:');
+                let selectedMime = null;
+                for (const type of mimeTypes) {
+                    const supported = MediaRecorder.isTypeSupported(type);
+                    log(`  ${supported ? '✅' : '❌'} ${type}`);
+                    if (supported && !selectedMime) {
+                        selectedMime = type;
+                    }
+                }
+                
+                if (!selectedMime) {
+                    throw new Error('No supported MIME types found');
+                }
+                
+                log(`Using MIME type: ${selectedMime}`, 'success');
+                
+                // Create MediaRecorder
+                mediaRecorder = new MediaRecorder(audioStream, {
+                    mimeType: selectedMime,
+                    audioBitsPerSecond: 16000
+                });
+                
+                const audioChunks = [];
+                let dataCount = 0;
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    dataCount++;
+                    log(`📦 Data chunk ${dataCount}: ${event.data.size} bytes`);
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstart = () => {
+                    log('🎙️ MediaRecorder started', 'success');
+                    document.getElementById('testBtn').textContent = '2. Stop Recording';
+                    isRecording = true;
+                };
+                
+                mediaRecorder.onstop = () => {
+                    log('⏹️ MediaRecorder stopped');
+                    const audioBlob = new Blob(audioChunks, { type: selectedMime });
+                    log(`📄 Final audio blob: ${audioBlob.size} bytes`, 'success');
+                    
+                    // Create audio URL for playback test
+                    if (audioBlob.size > 0) {
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        log(`🔗 Audio URL created: ${audioUrl.substring(0, 50)}...`);
+                        
+                        // Add playback button
+                        const playBtn = document.createElement('button');
+                        playBtn.textContent = '▶️ Play Recording';
+                        playBtn.onclick = () => {
+                            const audio = new Audio(audioUrl);
+                            audio.play().catch(e => log(`Playback error: ${e.message}`, 'error'));
+                        };
+                        document.body.appendChild(playBtn);
+                    }
+                    
+                    document.getElementById('testBtn').textContent = '2. Test MediaRecorder';
+                    isRecording = false;
+                };
+                
+                mediaRecorder.onerror = (error) => {
+                    log(`❌ MediaRecorder error: ${error}`, 'error');
+                    isRecording = false;
+                };
+                
+                // Start recording
+                log('Starting MediaRecorder...');
+                mediaRecorder.start(100); // 100ms intervals
+                
+                // Auto-stop after 5 seconds for testing
+                setTimeout(() => {
+                    if (isRecording) {
+                        log('⏰ Auto-stopping after 5 seconds...');
+                        mediaRecorder.stop();
+                        audioStream.getTracks().forEach(track => track.stop());
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                log(`❌ MediaRecorder Error: ${error.message}`, 'error');
+                log(`Error Stack: ${error.stack}`);
+                isRecording = false;
+            }
+        }
+        
+        async function testAudioAnalysis() {
+            try {
+                log('=== Testing Audio Analysis ===');
+                
+                if (monitoringAudio) {
+                    log('Stopping audio monitoring...');
+                    if (audioContext) {
+                        audioContext.close();
+                        audioContext = null;
+                    }
+                    if (audioStream) {
+                        audioStream.getTracks().forEach(track => track.stop());
+                        audioStream = null;
+                    }
+                    monitoringAudio = false;
+                    document.getElementById('analysisBtn').textContent = '3. Test Audio Analysis';
+                    return;
+                }
+                
+                if (!audioStream) {
+                    audioStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+                }
+                
+                // Set up audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.3;
+                
+                const source = audioContext.createMediaStreamSource(audioStream);
+                source.connect(analyser);
+                
+                log('✅ Audio analysis set up', 'success');
+                monitoringAudio = true;
+                document.getElementById('analysisBtn').textContent = '3. Stop Audio Monitoring';
+                
+                // Start monitoring audio levels
+                const monitorAudio = () => {
+                    if (!analyser || !monitoringAudio) return;
+                    
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    // Calculate volume
+                    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                    const volume = average / 255;
+                    
+                    // Update visual indicator
+                    const audioBar = document.getElementById('audioBar');
+                    audioBar.style.width = (volume * 100) + '%';
+                    
+                    if (volume > 0.01) {
+                        log(`🎵 Audio level: ${(volume * 100).toFixed(1)}%`);
+                    }
+                    
+                    // Continue monitoring
+                    if (monitoringAudio) {
+                        requestAnimationFrame(monitorAudio);
+                    }
+                };
+                
+                monitorAudio();
+                
+            } catch (error) {
+                log(`❌ Audio Analysis Error: ${error.message}`, 'error');
+                monitoringAudio = false;
+            }
+        }
+        
+        // Check browser compatibility on load
+        window.onload = function() {
+            log('=== Browser Compatibility Check ===');
+            
+            if (!navigator.mediaDevices) {
+                log('❌ navigator.mediaDevices not supported', 'error');
+            } else {
+                log('✅ navigator.mediaDevices supported', 'success');
+            }
+            
+            if (!navigator.mediaDevices.getUserMedia) {
+                log('❌ getUserMedia not supported', 'error');
+            } else {
+                log('✅ getUserMedia supported', 'success');
+            }
+            
+            if (!window.MediaRecorder) {
+                log('❌ MediaRecorder not supported', 'error');
+            } else {
+                log('✅ MediaRecorder supported', 'success');
+            }
+            
+            if (!window.AudioContext && !window.webkitAudioContext) {
+                log('❌ AudioContext not supported', 'error');
+            } else {
+                log('✅ AudioContext supported', 'success');
+            }
+            
+            log('');
+            log('👆 Click the buttons above to test each component step by step');
+        };
+    </script>
+</body>
+</html>

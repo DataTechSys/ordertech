@@ -2,8 +2,8 @@
 -- Idempotent and safe
 
 CREATE TABLE IF NOT EXISTS tenant_permissions (
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
+  user_id uuid NOT NULL,
   permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
   PRIMARY KEY (tenant_id, user_id)
 );

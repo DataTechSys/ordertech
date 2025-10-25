@@ -9,9 +9,13 @@
 
   function setPageInfo(count){
     const el = $('#branchPageInfo'); if (el) el.textContent = `Page ${branchPage+1} • ${count} items`;
+    const container = $('#branchPagination');
     const prev = $('#branchPrev');
     const next = $('#branchNext');
-    if (prev) { if (branchPage <= 0) prev.setAttribute('disabled','disabled'); else prev.removeAttribute('disabled'); }
+    const hasPrev = branchPage > 0;
+    const singlePage = !hasPrev && count < branchPageSize;
+    if (container) container.style.display = singlePage ? 'none' : '';
+    if (prev) { if (!hasPrev) prev.setAttribute('disabled','disabled'); else prev.removeAttribute('disabled'); }
     if (next) { if (count < branchPageSize) next.setAttribute('disabled','disabled'); else next.removeAttribute('disabled'); }
   }
 
@@ -26,15 +30,27 @@
       const wrap = $('#branchTableWrap'); if (!wrap) return; wrap.innerHTML = '';
       const table = document.createElement('table'); table.className='table';
       table.innerHTML = `<thead><tr>
-        <th>Name</th><th>Created</th><th>Actions</th>
+        <th>Name</th><th>Reference</th><th>Tax Group</th><th>Created</th><th>Actions</th>
       </tr></thead><tbody></tbody>`;
       const tbody = table.querySelector('tbody');
       for (const b of items){
         const tr = document.createElement('tr');
         const created = b.created_at ? new Date(b.created_at).toLocaleString() : '—';
-        tr.innerHTML = `<td>${b.name||'—'}</td><td>${created}</td><td></td>`;
+        tr.innerHTML = `<td>${b.name||'—'}</td><td>${b.reference||'—'}</td><td>${b.tax_group||'—'}</td><td>${created}</td><td></td>`;
         const actions = document.createElement('div'); actions.className='btn-group';
-        const edit = document.createElement('button'); edit.className='btn sm'; edit.textContent='Edit'; edit.onclick = ()=>{ editingId = b.id; $('#branchName').value=b.name; $('#branchModalDelete').classList.remove('hidden'); openModal(); };
+        const edit = document.createElement('button'); edit.className='btn sm'; edit.textContent='Edit';
+        edit.onclick = ()=>{ 
+          editingId = b.id; 
+          $('#branchName').value = b.name || '';
+          $('#branchReference').value = b.reference || '';
+          $('#branchTaxGroup').value = b.tax_group || '';
+          $('#branchActive').checked = b.active !== false;
+          $('#branchAddress').value = b.address || '';
+          $('#branchPhone').value = b.phone || '';
+          $('#branchDescription').value = b.description || '';
+          $('#branchModalDelete').classList.remove('hidden'); 
+          openModal(); 
+        };
         const del = document.createElement('button'); del.className='btn sm danger'; del.textContent='Delete'; del.onclick = async ()=>{ if (!confirm('Delete branch?')) return; try { await api(`/admin/tenants/${encodeURIComponent(tid)}/branches/${encodeURIComponent(b.id)}`, { method:'DELETE', tenantId: tid }); refresh(); } catch { toast('Delete failed'); } };
         actions.appendChild(edit); actions.appendChild(del);
         tr.lastElementChild.appendChild(actions);
@@ -50,17 +66,69 @@
     sel?.addEventListener('change', ()=>{ branchPageSize = Number(sel.value)||50; branchPage = 0; refresh(); });
     $('#branchPrev')?.addEventListener('click', ()=>{ if (branchPage>0) { branchPage--; refresh(); } });
     $('#branchNext')?.addEventListener('click', ()=>{ branchPage++; refresh(); });
-    $('#newBranchBtn')?.addEventListener('click', ()=>{ editingId=null; $('#branchName').value=''; $('#branchModalDelete').classList.add('hidden'); openModal(); });
+    $('#newBranchBtn')?.addEventListener('click', ()=>{ 
+      editingId=null; 
+      $('#branchName').value=''; 
+      $('#branchReference').value=''; 
+      $('#branchTaxGroup').value=''; 
+      $('#branchAddress').value=''; 
+      $('#branchPhone').value=''; 
+      $('#branchDescription').value=''; 
+      $('#branchActive').checked = true;
+      $('#branchModalDelete').classList.add('hidden'); 
+      openModal(); 
+    });
+    $('#syncBranchesBtn')?.addEventListener('click', async ()=>{
+      const tid = STATE.selectedTenantId; if (!tid) return;
+      const btn = $('#syncBranchesBtn'); 
+      if (!btn) return;
+      btn.setAttribute('disabled', 'disabled');
+      btn.textContent = 'Syncing...';
+      try {
+        const res = await api(`/admin/tenants/${encodeURIComponent(tid)}/integrations/foodics/sync/branches`, {
+          method: 'POST',
+          body: { pruneMissing: false },
+          tenantId: tid
+        });
+        const s = res?.summary || {};
+        const msg = res?.message || `Sync complete: +${s.created} created, ${s.updated} updated, ${s.mappedExisting} mapped existing`;
+        toast(msg);
+        refresh();
+      } catch(e) {
+        if (e?.error === 'integration_not_configured') {
+          toast('Foodics integration not configured for this tenant');
+        } else if (e?.error === 'foodics_fetch_failed') {
+          toast('Failed to fetch branches from Foodics: ' + (e.message || 'Unknown error'));
+        } else {
+          toast('Sync failed: ' + (e.message || 'Unknown error'));
+        }
+      } finally {
+        btn.removeAttribute('disabled');
+        btn.textContent = 'Sync from Foodics';
+      }
+    });
     $('#branchModalClose')?.addEventListener('click', closeModal);
     $('#branchModalCancel')?.addEventListener('click', closeModal);
     $('#branchModalSave')?.addEventListener('click', async ()=>{
       const tid = STATE.selectedTenantId; if (!tid) return;
       const name = $('#branchName').value.trim(); if (!name) return;
+      
+      // Collect all form data
+      const branchData = {
+        name,
+        reference: $('#branchReference').value.trim() || null,
+        tax_group: $('#branchTaxGroup').value.trim() || null,
+        address: $('#branchAddress').value.trim() || null,
+        phone: $('#branchPhone').value.trim() || null,
+        description: $('#branchDescription').value.trim() || null,
+        active: $('#branchActive').checked
+      };
+      
       try {
         if (editingId) {
-          await api(`/admin/tenants/${encodeURIComponent(tid)}/branches/${encodeURIComponent(editingId)}`, { method:'PUT', body:{ name }, tenantId: tid });
+          await api(`/admin/tenants/${encodeURIComponent(tid)}/branches/${encodeURIComponent(editingId)}`, { method:'PUT', body: branchData, tenantId: tid });
         } else {
-          await api(`/admin/tenants/${encodeURIComponent(tid)}/branches`, { method:'POST', body:{ name }, tenantId: tid });
+          await api(`/admin/tenants/${encodeURIComponent(tid)}/branches`, { method:'POST', body: branchData, tenantId: tid });
         }
         closeModal(); refresh();
       } catch(e){ toast('Save failed'); }

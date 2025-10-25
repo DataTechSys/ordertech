@@ -1,0 +1,4 @@
+module OrderTechCore {
+    header "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/OrderTechCore-Swift.h"
+    requires objc
+}

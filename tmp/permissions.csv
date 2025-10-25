@@ -1,0 +1,15 @@
+permission_id,code,description
+381d8d37-9558-4fd5-9f52-c08f2a5f9111,tenant.manage,Manage tenant settings
+e54755e8-0f42-4b74-a492-a786d82e86c7,branches.read,Read branches
+516c25c2-300f-4180-bc79-3351b9749ef0,branches.write,Create/update branches
+33c36a69-c531-497e-beeb-3c575471db25,devices.read,Read devices
+c2ca5619-a4f2-4566-8d77-6e01964bc12f,devices.write,Create/update devices
+e94f6efb-dd41-4e40-9530-dee734eb10f9,users.read,Read users
+74c1efab-0daf-486b-8450-9cb7a6b5100a,users.write,Create/update users
+f3dae177-2992-4c22-8133-64285c32f04f,roles.read,Read roles
+0e6926c3-2ca8-44c8-977b-ee23e454f23c,roles.write,Create/update roles
+f4fb5f84-9ca1-45aa-900c-720be4f65b08,permissions.read,Read permissions
+55867e65-8624-47fb-ae9c-980203022f80,permissions.write,Create/update permissions
+63d1fe31-d402-4540-bfea-fd68feddc0b4,subscriptions.read,Read subscriptions
+2e467849-a5d2-4ef4-af31-1feff9ca12de,subscriptions.write,Create/update subscriptions
+c7797bab-745e-4bb3-ad90-59802faf7d5f,audit.read,Read audit logs

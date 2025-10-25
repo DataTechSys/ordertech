@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Debug Test</title>
+</head>
+<body style="padding: 20px; font-family: Arial;">
+    <h1>🧪 Debug Test</h1>
+    
+    <button onclick="alert('Button 1 works!')">Test Button 1</button>
+    <br><br>
+    
+    <button onclick="testTauri()">Test Tauri</button>
+    <br><br>
+    
+    <div id="output" style="background: #f0f0f0; padding: 10px; margin: 10px 0;"></div>
+    
+    <script>
+        console.log('Script starting...');
+        
+        window.testTauri = function() {
+            console.log('testTauri called');
+            const output = document.getElementById('output');
+            output.innerHTML = 'testTauri function called!<br>';
+            
+            if (window.__TAURI__) {
+                output.innerHTML += 'Tauri detected!<br>';
+                
+                const { invoke } = window.__TAURI__.tauri;
+                
+                invoke('greet', { name: 'Test' })
+                    .then(result => {
+                        console.log('Greet result:', result);
+                        output.innerHTML += 'Greet result: ' + result + '<br>';
+                    })
+                    .catch(error => {
+                        console.error('Greet error:', error);
+                        output.innerHTML += 'Greet error: ' + error + '<br>';
+                    });
+            } else {
+                output.innerHTML += 'Tauri NOT detected<br>';
+            }
+        };
+        
+        console.log('Script loaded. Tauri available:', !!window.__TAURI__);
+    </script>
+</body>
+</html>

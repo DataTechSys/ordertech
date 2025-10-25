@@ -1,0 +1,30 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Core/Environment/TenantDirectory.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/TenantDirectory.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/TenantDirectory.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/TenantDirectory.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/TenantDirectory.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/TenantDirectory.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Features/Shared/StatusChipView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/StatusChipView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/StatusChipView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/StatusChipView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/StatusChipView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/StatusChipView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Shared/Design/SquareAsyncImage.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SquareAsyncImage.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SquareAsyncImage.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SquareAsyncImage.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SquareAsyncImage.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SquareAsyncImage.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Cashier/Sources/Shared/Design/SystemTheme.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SystemTheme.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SystemTheme.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SystemTheme.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SystemTheme.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/CashierApp.build/Debug-iphonesimulator/V-Cashier.build/Objects-normal/arm64/SystemTheme.swiftdeps"
+  }
+}

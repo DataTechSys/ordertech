@@ -1,0 +1,30 @@
+{
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Activation/InlineActivationPageView.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/InlineActivationPageView.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Core/Networking/HttpClient+Endpoints.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/HttpClient+Endpoints.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Session/DisplayUIModels.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/DisplayUIModels.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/ios/V-Drive/Sources/Utils/ImageDiskCache.swift" : {
+    "const-values" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.swiftconstvalues",
+    "dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.d",
+    "diagnostics" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.dia",
+    "object" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.o",
+    "swift-dependencies" : "/Users/mosawi/DATATECH/OrderTech/build/vcashier-sim/Build/Intermediates.noindex/DisplayApp.build/Debug-iphonesimulator/DisplayApp.build/Objects-normal/arm64/ImageDiskCache.swiftdeps"
+  }
+}

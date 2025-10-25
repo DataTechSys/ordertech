@@ -34,6 +34,10 @@ jobs:
           gcloud config set project "$GCP_PROJECT"
           gcloud config set run/region "$GCP_REGION"
 
+      - name: Guard region (must be me-central1)
+        run: |
+          if [ "$GCP_REGION" != "me-central1" ]; then echo "ERROR: GCP_REGION must be me-central1 (got '$GCP_REGION')"; exit 1; fi
+
       - name: Build & push image
         run: |
           TAG="gcr.io/${GCP_PROJECT}/${CLOUD_RUN_SERVICE}:kiosk-feed-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"

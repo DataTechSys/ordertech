@@ -1,15 +1,100 @@
-# Exclude files not needed in the container build context
+# Keep Docker build context minimal and fast for OrderTech Cloud Run deployment
+
+# VCS / Editor
+.dockerignore
+.gcloudignore
 .git
 .gitignore
-node_modules
-npm-debug.log
-**/.DS_Store
-
-# Exclude local artifacts
-kiosk-shell/node_modules
-kiosk-shell/dist
-kiosk-shell/.cache
-
-# Editor/project files
+.github
 .vscode
 .idea
+.warp
+*.swp
+*.swo
+
+# Dependencies and caches (will be installed fresh in container)
+node_modules
+**/node_modules
+**/.cache
+**/.DS_Store
+npm-debug.log*
+yarn-error.log*
+.pnpm-store
+**/.turbo
+**/.parcel-cache
+**/.vite
+**/.next/cache
+
+# Documentation and ops inventories
+docs
+inventory
+
+# Build outputs (will be rebuilt in container)
+build
+dist
+.out
+.next
+coverage
+**/build
+**/dist
+**/coverage
+
+# Non-service apps and native projects (not needed for web service)
+CashierApp
+DisplayApp
+ios-cashier
+ios
+Archive
+OrderTechCore
+*.xcodeproj
+*.xcworkspace
+*.xcuserdatad
+*.xcuserstate
+*.xcassets
+*.xcconfig
+DerivedData
+**/DerivedData
+*.xcbuilddata
+*.xcent
+*.xcent.der
+*.app
+*.ipa
+*.dSYM
+macos
+
+# Kiosk artifacts (not needed for web service)
+kiosk
+kiosk-shell
+
+# LARGE EXCLUSIONS: Heavy projects and assets
+# AI Assistant project (4.5GB) - separate application
+koobs-ai-assistant
+# C++ Whisper library (219MB) - not needed for web service
+whisper.cpp
+# Static media assets (111MB total) - should be served from Google Cloud Storage
+images
+photos
+data
+# Keep only essential public assets that can't be moved to GCS yet
+# public/images - commented out for now, review if these are essential
+
+# Logs, temp, and dev files
+logs
+*.log
+tmp
+nohup.out
+.logs
+.pid
+server_data
+
+# Local development and environment files
+docker-compose.yml
+.env*
+.envrc
+*.local
+cloud-sql-proxy
+
+# Test files
+test
+**/*.test.js
+**/*.spec.js

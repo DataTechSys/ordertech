@@ -1,0 +1,3 @@
+product_name,product_name_localized,product_sku,modifier_name,modifier_name_localized,modifier_reference,minimum_options,maximum_options,free_options,default_options,unique_options
+"Croissant | Almond","كرواسان باللوز",PCR-101,Extra,,extra,0,2,0,,No
+"Croissant | Almond","كرواسان باللوز",PCR-101,Delivery,,delivery,0,1,0,,No

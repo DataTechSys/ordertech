@@ -1,8 +1,21 @@
 [
   {
-    "origin": ["https://app.ordertech.me", "https://ordertech-715493130630.me-central1.run.app"],
-    "method": ["PUT"],
-    "responseHeader": ["Content-Type"],
+    "origin": [
+      "https://koobs.ordertech.me",
+      "https://fouz.ordertech.me",
+      "https://app.ordertech.me"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Cache-Control"],
+    "maxAgeSeconds": 3600
+  },
+  {
+    "origin": [
+      "https://app.ordertech.me",
+      "https://ordertech-715493130630.me-central1.run.app"
+    ],
+    "method": ["PUT", "POST"],
+    "responseHeader": ["Content-Type", "Cache-Control"],
     "maxAgeSeconds": 3600
   }
 ]

@@ -1,0 +1,4 @@
+device_id,tenant_id,device_name,role,status,branch,device_token,activated_at,revoked_at,last_seen,meta,short_code,branch_id,location,uuid,activation_token,expiry_date,last_checkin,created_at
+f9e38416-f610-445f-861e-a78acc43f672,56ac557e-589d-4602-bc9b-946b201fb6f6,Fouz pc,display,active,Main,f339efc7bf22f7081f283fa3d58e19f3fdf2cdb06113f2edc5a03aadfc9c8261,2025-09-06 12:47:09.672532+00,,2025-09-10 06:49:34.267073+00,{},,,,,,,,2025-09-18 05:01:51.421764+00
+11f92cd3-b980-4ab2-ac19-25a79ba5f83f,f8578f9c-782b-4d31-b04f-3b2d890c5896,IPHONE,cashier,revoked,ABU HALIFA,aaface02b5f115919bb7de0cefd964ff32b6a6194daf4387e7f75de5ec5a0d35,,,,{},772468,,,,,,,2025-09-18 14:08:44.858714+00
+17e4a322-95ce-421d-93c0-b7644630d0dc,f8578f9c-782b-4d31-b04f-3b2d890c5896,IPAD1,display,revoked,ABU HALIFA,5a010124ee4d25d4cf0e902fe6438db506046a3c6b9b5f062bf290ee60461f80,,,,{},845833,,,,,,,2025-09-18 16:15:29.092329+00

@@ -30,8 +30,8 @@ END$$;
 
 -- Tenant membership and roles
 CREATE TABLE IF NOT EXISTS tenant_users (
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
+  user_id uuid NOT NULL,
   role user_role NOT NULL DEFAULT 'viewer',
   invited_at timestamptz,
   accepted_at timestamptz,
@@ -41,14 +41,14 @@ CREATE TABLE IF NOT EXISTS tenant_users (
 -- Tenant domains (subdomain or custom domains mapped to a tenant)
 CREATE TABLE IF NOT EXISTS tenant_domains (
   host text PRIMARY KEY,
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
   verified_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_tenant_domains_tenant_id ON tenant_domains(tenant_id);
 
 -- Tenant settings and branding
 CREATE TABLE IF NOT EXISTS tenant_settings (
-  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id uuid PRIMARY KEY,
   slug text UNIQUE,
   default_locale text,
   currency text,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS tenant_settings (
 );
 
 CREATE TABLE IF NOT EXISTS tenant_brand (
-  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id uuid PRIMARY KEY,
   display_name text,
   logo_url text,
   color_primary text,

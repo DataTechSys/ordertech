@@ -1,0 +1,8 @@
+Field Name,Type,Description
+branch_id,UUID,Primary key
+tenant_id,UUID (FK),Linked to tenant
+branch_name,VARCHAR(100),Branch display name
+location,VARCHAR(255),Optional address
+expiry_date,DATE,Optional expiration
+is_active,BOOLEAN,Active status
+created_at,TIMESTAMP,Record creation time

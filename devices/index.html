@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>OrderTech — Devices</title>
     <link rel="stylesheet" href="/css/admin.css" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
@@ -22,7 +25,23 @@
     <main class="main">
       <section class="card">
         <div class="body">
-          <div class="toolbar">
+          <!-- Header: Tabs + Create Device on the same row -->
+          <div class="toolbar" id="devHeader" style="margin-bottom:12px;">
+            <div class="tabs" id="devTabs">
+              <button class="tab active" data-tab="all">All</button>
+              <button class="tab" data-tab="cashier">Cashier</button>
+              <button class="tab" data-tab="display">Display</button>
+            </div>
+            <span class="spacer"></span>
+            <button id="addDeviceBtn" class="btn primary">Create Device</button>
+          </div>
+          <div id="devicesTableWrap"></div>
+          <div id="devPagination" class="toolbar" style="margin-top:12px; display:none;">
+            <div class="btn-group">
+              <button id="devPrev" class="btn">Prev</button>
+              <button id="devNext" class="btn">Next</button>
+            </div>
+            <span class="spacer"></span>
             <label class="grid" style="max-width:160px;">
               <span class="label">Page size</span>
               <select id="devPageSize" class="select">
@@ -31,15 +50,8 @@
                 <option value="100">100</option>
               </select>
             </label>
-            <span class="spacer"></span>
-            <button id="addDeviceBtn" class="btn">Add Device</button>
-            <div class="btn-group">
-              <button id="devPrev" class="btn">Prev</button>
-              <button id="devNext" class="btn">Next</button>
-            </div>
+            <span class="chip" id="devicesPageInfo">—</span>
           </div>
-          <div id="devicesPageInfo" class="chip">—</div>
-          <div id="devicesTableWrap"></div>
         </div>
       </section>
     </main>
@@ -75,6 +87,54 @@
       </div>
     </div>
 
+    <div id="sessionsModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sessionsModalTitle">
+        <div class="header">
+          <div class="title" id="sessionsModalTitle">Recent Sessions</div>
+          <button id="sessionsModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div id="sessionsList" class="list"></div>
+        </div>
+        <div class="footer">
+          <span class="spacer"></span>
+          <button id="sessionsModalClose2" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device details modal -->
+    <div id="deviceDetailsModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="deviceDetailsTitle">
+        <div class="header">
+          <div class="title" id="deviceDetailsTitle">Device Details</div>
+          <button id="deviceDetailsClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="grid" style="row-gap:8px;">
+            <div><strong>Name:</strong> <span id="detName">—</span></div>
+            <div><strong>Type:</strong> <span id="detType">—</span></div>
+            <div><strong>Status:</strong> <span id="detStatus">—</span></div>
+            <div><strong>Branch:</strong> <span id="detBranch">—</span></div>
+            <div><strong>Activation Code:</strong> <span id="detCode">—</span></div>
+            <div><strong>Activated:</strong> <span id="detActivated">—</span></div>
+          </div>
+        </div>
+          <div class="footer">
+          <div class="btn-group">
+            <button id="detEvents" class="btn">Events</button>
+            <button id="detSessions" class="btn">Sessions</button>
+          </div>
+          <div class="btn-group" style="margin-left:8px;">
+            <button id="detRevoke" class="btn">De-Activate</button>
+            <button id="detDelete" class="btn danger">Delete</button>
+          </div>
+          <span class="spacer"></span>
+          <button id="deviceDetailsClose2" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+
     <div id="addDeviceModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addDeviceModalTitle">
         <div class="header">
@@ -83,9 +143,6 @@
         </div>
         <div class="content">
           <div class="row cols-2">
-            <label class="grid"><span class="label">6-digit Code</span>
-              <input id="devCode" class="input" placeholder="123456" />
-            </label>
             <label class="grid"><span class="label">Role</span>
               <select id="devRole" class="select">
                 <option value="cashier">Cashier</option>
@@ -111,9 +168,9 @@
       </div>
     </div>
 
-    <script src="/js/admin-common.js"></script>
-    <script src="/js/admin-shell.js"></script>
-    <script src="/js/devices.js"></script>
+    <script src="/js/admin-common.js?v=20250915"></script>
+    <script src="/js/admin-shell.js?v=20250915"></script>
+    <script src="/js/devices.js?v=20250915"></script>
   </body>
 </html>
 

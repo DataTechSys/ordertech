@@ -1,7 +1,7 @@
 const DATA_URL = '/data/products.json';
 const IMG_BASE = '/images/products/';
 const ALLERGEN_BASE = '/images/allergens/';
-const FALLBACK_IMG = IMG_BASE + 'placeholder.jpg';
+const FALLBACK_IMG = '/images/placeholder.png';
 
 const PAGE_SIZE = 20; // 4 x 5
 

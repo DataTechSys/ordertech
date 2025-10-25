@@ -22,7 +22,18 @@
     <main class="main">
       <section class="card">
         <div class="body">
-          <div class="toolbar" style="gap:12px; align-items:flex-end;">
+          <div class="toolbar" id="branchHeader">
+            <button id="syncBranchesBtn" class="btn ghost">Sync from Foodics</button>
+            <span class="spacer"></span>
+            <button id="newBranchBtn" class="btn primary">New Branch</button>
+          </div>
+          <div id="branchTableWrap"></div>
+          <div id="branchPagination" class="toolbar" style="margin-top:12px; display:none;">
+            <div class="btn-group">
+              <button id="branchPrev" class="btn">Prev</button>
+              <button id="branchNext" class="btn">Next</button>
+            </div>
+            <span class="spacer"></span>
             <label class="grid" style="max-width:160px;">
               <span class="label">Page size</span>
               <select id="branchPageSize" class="select">
@@ -31,15 +42,8 @@
                 <option value="100">100</option>
               </select>
             </label>
-            <div class="btn-group">
-              <button id="branchPrev" class="btn">Prev</button>
-              <button id="branchNext" class="btn">Next</button>
-            </div>
             <span class="chip" id="branchPageInfo">—</span>
-            <div class="spacer"></div>
-            <button id="newBranchBtn" class="btn primary">New Branch</button>
           </div>
-          <div id="branchTableWrap"></div>
         </div>
       </section>
     </main>
@@ -52,7 +56,26 @@
         </div>
         <div class="content">
           <label class="grid"><span class="label">Name</span>
-            <input id="branchName" class="input" />
+            <input id="branchName" class="input" required />
+          </label>
+          <label class="grid"><span class="label">Reference</span>
+            <input id="branchReference" class="input" placeholder="e.g., B11" />
+          </label>
+          <label class="grid"><span class="label">Tax Group</span>
+            <input id="branchTaxGroup" class="input" />
+          </label>
+          <label class="grid"><span class="label">Address</span>
+            <input id="branchAddress" class="input" />
+          </label>
+          <label class="grid"><span class="label">Phone</span>
+            <input id="branchPhone" class="input" type="tel" />
+          </label>
+          <label class="grid"><span class="label">Description</span>
+            <textarea id="branchDescription" class="input" rows="3"></textarea>
+          </label>
+          <label class="grid checkbox">
+            <input id="branchActive" type="checkbox" checked />
+            <span class="label">Active</span>
           </label>
         </div>
         <div class="footer">

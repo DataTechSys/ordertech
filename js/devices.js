@@ -8,11 +8,17 @@
   let evDeviceId = null;
   let evPage = 0;
   let evPageSize = 50;
+  let sessDeviceId = null;
+  let currentTab = 'all';
 
   function setPageInfo(count){
     const info = $('#devicesPageInfo'); if (info) info.textContent = `Page ${devPage+1} • ${count} items`;
+    const container = $('#devPagination');
     const prev = $('#devPrev'); const next = $('#devNext');
-    if (prev) { if (devPage <= 0) prev.setAttribute('disabled','disabled'); else prev.removeAttribute('disabled'); }
+    const hasPrev = devPage > 0;
+    const singlePage = !hasPrev && count < devPageSize; // Only one page (or empty)
+    if (container) container.style.display = singlePage ? 'none' : '';
+    if (prev) { if (!hasPrev) prev.setAttribute('disabled','disabled'); else prev.removeAttribute('disabled'); }
     if (next) { if (count < devPageSize) next.setAttribute('disabled','disabled'); else next.removeAttribute('disabled'); }
   }
   function setEvPageInfo(count){
@@ -23,6 +29,8 @@
   }
   function openEvents(){ const m=$('#eventsModal'); if(!m) return; m.style.display='block'; m.removeAttribute('aria-hidden'); }
   function closeEvents(){ const m=$('#eventsModal'); if(!m) return; m.setAttribute('aria-hidden','true'); m.style.display='none'; }
+  function openSessions(){ const m=$('#sessionsModal'); if(!m) return; m.style.display='block'; m.removeAttribute('aria-hidden'); }
+  function closeSessions(){ const m=$('#sessionsModal'); if(!m) return; m.setAttribute('aria-hidden','true'); m.style.display='none'; }
 
   async function loadBranches(){
     const sel = $('#devBranch'); if (!sel) return;
@@ -60,31 +68,28 @@
     const wrap = $('#devicesTableWrap'); if (!wrap) return;
     const table = document.createElement('table'); table.className='table';
     table.innerHTML = `<thead><tr>
-      <th>Name</th><th>Role</th><th>Status</th><th>Branch</th><th>Short Code</th><th>Last Seen</th><th>Actions</th>
+      <th>Name</th><th>Reference</th><th>Status</th><th>Type</th><th>Branch</th>
     </tr></thead><tbody></tbody>`;
     const tbody = table.querySelector('tbody');
     for (const d of items){
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${d.name||'—'}</td><td>${d.role||'—'}</td><td>${d.status||'—'}</td><td>${d.branch||'—'}</td><td>${d.short_code||'—'}</td><td>${d.last_seen||'—'}</td><td></td>`;
-      const actions = document.createElement('div'); actions.className='btn-group';
-      const delBtn = document.createElement('button'); delBtn.className='btn sm danger'; delBtn.textContent='Delete'; delBtn.onclick = async ()=>{
-        const tid = STATE.selectedTenantId; if (!tid) return;
-        if (!confirm('Delete this device? This will also revoke access.')) return;
-        try {
-          await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(d.id)}/revoke`, { method:'POST', tenantId: tid });
-        } catch (e) {}
-        try {
-          await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(d.id)}`, { method:'DELETE', tenantId: tid });
-          toast('Device removed');
-        } catch (e) { toast('Delete failed'); }
-        load();
-      };
-      const view = document.createElement('a'); view.className='btn sm'; view.textContent='Events'; view.href = `#`; view.onclick = async (e)=>{ e.preventDefault(); evDeviceId = d.id; evPage = 0; await loadEvents(d); openEvents(); };
-      actions.appendChild(delBtn); actions.appendChild(view);
-      tr.lastElementChild.appendChild(actions);
+      const type = (String(d.role||'').trim().toLowerCase()==='display') ? 'Display' : 'Cashier';
+      const isActive = String(d.status||'').trim().toLowerCase() === 'active';
+      const used = isActive && !!d.activated_at;
+      const statusChip = `<span class=\"chip ${used?'danger':'ok'}\">${used?'Used':'Not Used'}</span>`;
+      const ref = d.short_code || '—';
+      tr.innerHTML = `<td class=\"cell-link\">${d.name||'—'}</td><td>${ref}</td><td>${statusChip}</td><td>${type}</td><td>${d.branch||'—'}</td>`;
+      tr.addEventListener('click', ()=> openDeviceDetails(d));
       tbody.appendChild(tr);
     }
     wrap.innerHTML=''; wrap.appendChild(table);
+  }
+
+  function applyTab(items){
+    if (currentTab === 'all') return items;
+    if (currentTab === 'cashier') return items.filter(d => String(d.role||'').toLowerCase()==='cashier');
+    if (currentTab === 'display') return items.filter(d => String(d.role||'').toLowerCase()==='display');
+    return items;
   }
 
   async function load(){
@@ -92,7 +97,7 @@
     try {
       const j = await api(`/admin/tenants/${encodeURIComponent(tid)}/devices?limit=${devPageSize}&offset=${devPage*devPageSize}`, { tenantId: tid });
       const items = Array.isArray(j.items) ? j.items : [];
-      renderTable(items);
+      renderTable(applyTab(items));
       setPageInfo(items.length);
     } catch { toast('Failed to load devices'); }
   }
@@ -114,9 +119,98 @@
     } catch { toast('Failed to load events'); }
   }
 
+  async function loadSessions(device){
+    const tid = STATE.selectedTenantId; if (!tid || !sessDeviceId) return;
+    try {
+      const j = await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(sessDeviceId)}/sessions?limit=20`, { tenantId: tid });
+      const items = Array.isArray(j.items) ? j.items : [];
+      const list = $('#sessionsList'); if (!list) return;
+      list.innerHTML='';
+      const title = $('#sessionsModalTitle'); if (title) title.textContent = `Recent Sessions${device?.name?(' • '+device.name):''}`;
+      for (const s of items){
+        const row = document.createElement('div'); row.className='row';
+        const started = s.started_at ? new Date(s.started_at).toLocaleString() : '—';
+        const ended = s.ended_at ? new Date(s.ended_at).toLocaleString() : '—';
+        const dur = (typeof s.duration_sec === 'number') ? `${s.duration_sec}s` : '—';
+        const prov = s.provider || '—';
+        const counter = s.counterpart_device_id || '—';
+        row.textContent = `${started} → ${ended} • ${dur} • ${prov} • counterpart: ${counter}`;
+        list.appendChild(row);
+      }
+    } catch { toast('Failed to load sessions'); }
+  }
+
   window.onTenantChanged = function(){ devPage=0; load().catch(()=>{}); };
 
+  function openDeviceDetails(d){
+    const m = $('#deviceDetailsModal'); if (!m) return;
+    $('#detName').textContent = d.name || '—';
+    $('#detType').textContent = (String(d.role||'').toLowerCase()==='display') ? 'Display' : 'Cashier';
+    const detStatusEl = $('#detStatus');
+    const isActive = String(d.status||'').toLowerCase() === 'active';
+    const used = isActive && !!d.activated_at;
+    if (detStatusEl) { detStatusEl.textContent = used ? 'Used' : 'Not Used'; detStatusEl.className = `chip ${used ? 'danger' : 'ok'}`; }
+    $('#detBranch').textContent = d.branch || '—';
+    $('#detCode').textContent = d.short_code || '—';
+    $('#detActivated').textContent = d.activated_at || '—';
+    $('#detEvents').onclick = async (e)=>{ e.preventDefault(); evDeviceId = d.id; evPage = 0; await loadEvents(d); openEvents(); };
+    $('#detSessions').onclick = async (e)=>{ e.preventDefault(); sessDeviceId = d.id; await loadSessions(d); openSessions(); };
+    // Wire revoke/delete
+    const revokeBtn = $('#detRevoke');
+    const delBtn = $('#detDelete');
+    if (revokeBtn) {
+      revokeBtn.textContent = 'De-Activate';
+      revokeBtn.onclick = async (e)=>{
+        e.preventDefault();
+        try {
+          const tid = STATE.selectedTenantId; if (!tid) return;
+          await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(d.id)}/revoke`, { method:'POST', tenantId: tid });
+          toast('Device de-activated');
+          const st = $('#detStatus'); if (st) { st.textContent = 'Not Used'; st.className = 'chip ok'; }
+          await load();
+          // Refresh details view fields (code may have changed)
+          try { $('#detCode').textContent = ''; } catch {}
+        } catch { toast('De-activate failed'); }
+      };
+    }
+    if (delBtn) {
+      delBtn.onclick = async (e)=>{
+        e.preventDefault();
+        if (!confirm('Delete this device?')) return;
+        const tid = STATE.selectedTenantId; if (!tid) return;
+        try {
+          await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(d.id)}`, { method:'DELETE', tenantId: tid });
+        } catch (e2) {
+          const code = e2 && e2.status ? Number(e2.status) : 0;
+          const err = (e2 && e2.data && (e2.data.error||'')) || '';
+          if (code === 409 && err === 'device_not_revoked') {
+            try {
+              await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(d.id)}/revoke`, { method:'POST', tenantId: tid });
+              await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/${encodeURIComponent(d.id)}`, { method:'DELETE', tenantId: tid });
+            } catch { toast('Delete failed'); return; }
+          } else if (code === 404) { /* treat as deleted */ }
+          else { toast('Delete failed'); return; }
+        }
+        toast('Device deleted');
+        try { m.setAttribute('aria-hidden','true'); m.style.display='none'; } catch {}
+        await load();
+      };
+    }
+    m.style.display='block'; m.removeAttribute('aria-hidden');
+    $('#deviceDetailsClose')?.addEventListener('click', ()=>{ m.setAttribute('aria-hidden','true'); m.style.display='none'; }, { once:true });
+    $('#deviceDetailsClose2')?.addEventListener('click', ()=>{ m.setAttribute('aria-hidden','true'); m.style.display='none'; }, { once:true });
+  }
+
   function init(){
+    // Tabs
+    const tabs = document.querySelectorAll('#devTabs .tab');
+    tabs.forEach(btn => btn.addEventListener('click', ()=>{
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTab = String(btn.dataset.tab||'all');
+      devPage = 0; load();
+    }));
+
     const sel = $('#devPageSize'); sel?.addEventListener('change', ()=>{ devPageSize = Number(sel.value)||50; devPage = 0; load(); });
     $('#devPrev')?.addEventListener('click', ()=>{ if (devPage>0) { devPage--; load(); } });
     $('#devNext')?.addEventListener('click', ()=>{ devPage++; load(); });
@@ -126,6 +220,8 @@
     $('#evNext')?.addEventListener('click', async ()=>{ evPage++; await loadEvents(); });
     $('#eventsModalClose')?.addEventListener('click', closeEvents);
     $('#eventsModalClose2')?.addEventListener('click', closeEvents);
+    $('#sessionsModalClose')?.addEventListener('click', closeSessions);
+    $('#sessionsModalClose2')?.addEventListener('click', closeSessions);
     // Add Device modal wiring
     $('#addDeviceBtn')?.addEventListener('click', openAddDevice);
     $('#addDeviceModalClose')?.addEventListener('click', closeAddDevice);
@@ -135,33 +231,32 @@
     roleSel?.addEventListener('change', ()=>{ const v=(roleSel.value||'').trim().toLowerCase(); setBranchRequired(v==='display'); });
     $('#addDeviceModalSave')?.addEventListener('click', async ()=>{
       const tid = STATE.selectedTenantId; if (!tid) return;
-      const code = ($('#devCode')?.value||'').trim();
       const role = ($('#devRole')?.value||'').trim().toLowerCase();
       const name = ($('#devName')?.value||'').trim();
       const branch = ($('#devBranch')?.value||'').trim();
       const branchSel = $('#devBranch');
       const noBranches = !!(branchSel && branchSel.dataset && branchSel.dataset.empty);
-      if (!/^\d{6}$/.test(code)) { toast('Enter a 6-digit code'); return; }
       if (role !== 'cashier' && role !== 'display') { toast('Choose a role'); return; }
       if (role === 'display') {
         if (noBranches) { toast('Create a branch first'); return; }
         if (!branch) { toast('Select a branch'); return; }
       }
       try {
-        const body = { code, role, name };
+        const body = { role, name };
         if (branch) body.branch = branch;
-        await api(`/admin/tenants/${encodeURIComponent(tid)}/devices/claim`, { method:'POST', body, tenantId: tid });
+        const result = await api(`/admin/tenants/${encodeURIComponent(tid)}/devices`, { method:'POST', body, tenantId: tid });
         closeAddDevice();
         devPage = 0;
         await load();
-        toast('Device added');
+        const code = (result && result.device && result.device.short_code) ? String(result.device.short_code) : '';
+        toast(`Device added${code?`. Activation code: ${code}`:''}`);
       } catch(e){
         try {
           const code = e && e.status ? Number(e.status) : 0;
           const err = (e && e.data && (e.data.error || e.data.code)) || '';
           if (code === 409) {
             if (err === 'license_limit_reached') { toast('License limit reached. Revoke a device or increase the license.'); return; }
-            if (err === 'code_already_claimed') { toast('This code is already claimed. Use the 6‑digit code shown on the device screen (or regenerate it).'); return; }
+            if (err === 'code_already_claimed') { toast('This code is already claimed.'); return; }
             toast('Add failed (conflict)'); return;
           }
           if (code === 404 && err === 'branch_not_found') { toast('Selected branch not found'); return; }

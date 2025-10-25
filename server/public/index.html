@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderTech Dashboard - Super Pro Monitoring</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .title h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #1e293b;
+            border-radius: 25px;
+            border: 1px solid #334155;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .stat-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #60a5fa, #a855f7, #ec4899);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-change {
+            font-size: 0.8rem;
+            color: #22c55e;
+        }
+        
+        .services-section {
+            margin: 3rem 0;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        
+        .header-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+        
+        .refresh-btn:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        
+        #check-all-button {
+            background: #059669;
+        }
+        
+        #check-all-button:hover {
+            background: #047857;
+        }
+        
+        #check-all-button:disabled {
+            background: #64748b;
+        }
+        
+        .services-table {
+            background: #1e293b;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        
+        .table-header {
+            background: #334155;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr 1fr 100px;
+            padding: 1rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            border-bottom: 1px solid #475569;
+        }
+        
+        .service-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr 1fr 100px;
+            padding: 1rem;
+            border-bottom: 1px solid #334155;
+            transition: background 0.3s;
+            align-items: center;
+        }
+        
+        .service-row:hover {
+            background: #334155;
+        }
+        
+        .service-row:last-child {
+            border-bottom: none;
+        }
+        
+        .service-name {
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        
+        .service-type {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        
+        .service-endpoint {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.85rem;
+            color: #60a5fa;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-up {
+            background: #22c55e20;
+            color: #22c55e;
+            border: 1px solid #22c55e40;
+        }
+        
+        .status-down {
+            background: #ef444420;
+            color: #ef4444;
+            border: 1px solid #ef444440;
+        }
+        
+        .status-degraded {
+            background: #f59e0b20;
+            color: #f59e0b;
+            border: 1px solid #f59e0b40;
+        }
+        
+        .status-unknown {
+            background: #64748b20;
+            color: #64748b;
+            border: 1px solid #64748b40;
+        }
+        
+        .response-time {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .region-badge {
+            padding: 0.3rem 0.6rem;
+            background: #475569;
+            color: #cbd5e1;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        
+        .region-local {
+            background: #059669;
+            color: white;
+        }
+        
+        .region-cloud {
+            background: #7c3aed;
+            color: white;
+        }
+        
+        .region-global {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .test-btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+        }
+        
+        .test-btn:hover {
+            background: #4f46e5;
+        }
+        
+        .test-btn:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #334155;
+            border-top: 2px solid #60a5fa;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        
+        .error-message {
+            background: #ef444420;
+            border: 1px solid #ef444440;
+            color: #ef4444;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .footer {
+            background: #1e293b;
+            border-top: 1px solid #334155;
+            padding: 2rem 0;
+            margin-top: 3rem;
+            text-align: center;
+            color: #64748b;
+        }
+        
+        .api-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+        
+        .api-link {
+            color: #60a5fa;
+            text-decoration: none;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .api-link:hover {
+            color: #93c5fd;
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .table-header,
+            .service-row {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+            
+            .table-header > *,
+            .service-row > * {
+                display: flex;
+                justify-content: space-between;
+            }
+            
+            .api-links {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="title">
+                    <h1>🚀 OrderTech Dashboard</h1>
+                    <span style="color: #a855f7; font-weight: 600;">Super Pro</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="connection-status"></div>
+                    <span id="connection-text">Connecting...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Services</div>
+                <div class="stat-value" id="total-services">
+                    <span class="loading"></span>
+                </div>
+                <div class="stat-change" id="total-change">Monitoring active</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Online Services</div>
+                <div class="stat-value" id="online-services" style="color: #22c55e;">
+                    <span class="loading"></span>
+                </div>
+                <div class="stat-change" id="uptime-percent">0% uptime</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Issues Found</div>
+                <div class="stat-value" id="issues-services" style="color: #ef4444;">
+                    <span class="loading"></span>
+                </div>
+                <div class="stat-change" id="issues-change">Down + Degraded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Health Checks</div>
+                <div class="stat-value" id="total-checks" style="color: #a855f7;">
+                    <span class="loading"></span>
+                </div>
+                <div class="stat-change" id="checks-change">Total performed</div>
+            </div>
+        </div>
+        
+        <div class="services-section">
+            <div class="section-header">
+                <h2 class="section-title">Service Status</h2>
+                <div class="header-buttons">
+                    <button class="refresh-btn" onclick="checkAllServices()" id="check-all-button">
+                        🔍 Check All
+                    </button>
+                    <button class="refresh-btn" onclick="refreshData()" id="refresh-button">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div id="error-container"></div>
+            
+            <div class="services-table">
+                <div class="table-header">
+                    <div>Service</div>
+                    <div>Type</div>
+                    <div>Endpoint</div>
+                    <div>Status</div>
+                    <div>Response</div>
+                    <div>Region</div>
+                    <div>Test</div>
+                </div>
+                <div id="services-list">
+                    <div class="empty-state">
+                        <div class="loading"></div>
+                        <p>Loading services...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <div class="container">
+            <p>OrderTech Monitoring Dashboard • Real-time service health tracking</p>
+            <div class="api-links">
+                <a href="/api/dashboard/summary" class="api-link">📊 /api/dashboard/summary</a>
+                <a href="/api/services" class="api-link">🔧 /api/services</a>
+                <a href="/health" class="api-link">❤️ /health</a>
+            </div>
+            <p style="margin-top: 1rem; font-size: 0.8rem;">Last updated: <span id="last-updated">Never</span></p>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket;
+        let refreshing = false;
+        
+        // Initialize dashboard
+        async function initDashboard() {
+            try {
+                await loadDashboardData();
+                await loadServicesData();
+                setupWebSocket();
+                updateConnectionStatus(true, 'Connected ✅');
+                
+                // Auto-refresh every 30 seconds
+                setInterval(async () => {
+                    if (!refreshing) {
+                        await loadDashboardData();
+                        await loadServicesData();
+                    }
+                }, 30000);
+                
+            } catch (error) {
+                console.error('Failed to initialize dashboard:', error);
+                updateConnectionStatus(false, 'Connection failed ❌');
+                showError('Failed to load dashboard data. Please check if the server is running.');
+            }
+        }
+        
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/summary');
+                const data = await response.json();
+                
+                document.getElementById('total-services').textContent = data.services.total || '0';
+                document.getElementById('online-services').textContent = data.services.up || '0';
+                document.getElementById('issues-services').textContent = 
+                    (data.services.down || 0) + (data.services.degraded || 0);
+                document.getElementById('total-checks').textContent = data.monitoring.totalChecks || '0';
+                
+                // Calculate uptime percentage
+                const total = data.services.total || 1;
+                const uptime = Math.round((data.services.up / total) * 100);
+                document.getElementById('uptime-percent').textContent = `${uptime}% uptime`;
+                
+                document.getElementById('last-updated').textContent = 
+                    new Date(data.lastUpdated).toLocaleTimeString();
+                
+                hideError();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard summary:', error);
+                showError('Failed to connect to monitoring API');
+            }
+        }
+        
+        async function loadServicesData() {
+            try {
+                const response = await fetch('/api/services');
+                const data = await response.json();
+                
+                const servicesContainer = document.getElementById('services-list');
+                
+                if (!data.services || data.services.length === 0) {
+                    servicesContainer.innerHTML = `
+                        <div class="empty-state">
+                            <p>No services configured</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                servicesContainer.innerHTML = data.services.map(service => `
+                    <div class="service-row">
+                        <div class="service-name">${service.name}</div>
+                        <div class="service-type">${service.type}</div>
+                        <div class="service-endpoint">${formatEndpoint(service)}</div>
+                        <div>${formatStatus(service.status)}</div>
+                        <div class="response-time">${formatResponseTime(service)}</div>
+                        <div>${formatRegion(service.region)}</div>
+                        <div>
+                            <button class="test-btn" onclick="testService('${service.id}')" id="test-${service.id}">
+                                Test
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Failed to load services:', error);
+                document.getElementById('services-list').innerHTML = `
+                    <div class="empty-state">
+                        <p style="color: #ef4444;">Failed to load services</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testService(serviceId) {
+            const button = document.getElementById(`test-${serviceId}`);
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>';
+            
+            try {
+                const response = await fetch(`/api/services/${serviceId}/check`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                button.innerHTML = '✅';
+                setTimeout(() => {
+                    button.innerHTML = 'Test';
+                    button.disabled = false;
+                }, 2000);
+                
+                // Refresh data to show updated status
+                await loadDashboardData();
+                await loadServicesData();
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                button.innerHTML = '❌';
+                setTimeout(() => {
+                    button.innerHTML = 'Test';
+                    button.disabled = false;
+                }, 2000);
+            }
+        }
+        
+        function formatEndpoint(service) {
+            if (service.port) {
+                return `${service.host}:${service.port}`;
+            }
+            return service.host;
+        }
+        
+        function formatStatus(status) {
+            const statusClass = `status-${status}`;
+            const statusIcon = {
+                'up': '🟢',
+                'down': '🔴', 
+                'degraded': '🟡',
+                'unknown': '⚪'
+            }[status] || '❓';
+            
+            return `<span class="status-badge ${statusClass}">${statusIcon} ${status}</span>`;
+        }
+        
+        function formatResponseTime(service) {
+            if (service.responseTime || service.response_time_ms) {
+                const time = service.responseTime || service.response_time_ms;
+                if (time < 100) {
+                    return `<span style="color: #22c55e;">${time}ms</span>`;
+                } else if (time < 1000) {
+                    return `<span style="color: #f59e0b;">${time}ms</span>`;
+                } else {
+                    return `<span style="color: #ef4444;">${time}ms</span>`;
+                }
+            }
+            return '<span style="color: #64748b;">~</span>';
+        }
+        
+        function formatRegion(region) {
+            const regionClass = `region-${region}`;
+            return `<span class="region-badge ${regionClass}">${region}</span>`;
+        }
+        
+        function setupWebSocket() {
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    console.log('WebSocket connected');
+                    updateConnectionStatus(true, 'Real-time connected 🔄');
+                });
+                
+                socket.on('disconnect', () => {
+                    console.log('WebSocket disconnected');
+                    updateConnectionStatus(false, 'Real-time disconnected ⚡');
+                });
+                
+                socket.on('status:update', (data) => {
+                    console.log('Service status update:', data);
+                    // Auto-refresh when status changes
+                    loadDashboardData();
+                    loadServicesData();
+                });
+                
+            } catch (error) {
+                console.error('WebSocket setup failed:', error);
+            }
+        }
+        
+        function updateConnectionStatus(connected, text) {
+            const statusDot = document.getElementById('connection-status');
+            const statusText = document.getElementById('connection-text');
+            
+            if (connected) {
+                statusDot.style.background = '#22c55e';
+                statusDot.style.animation = 'pulse 2s infinite';
+            } else {
+                statusDot.style.background = '#ef4444';
+                statusDot.style.animation = 'none';
+            }
+            
+            statusText.textContent = text;
+        }
+        
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+        
+        function hideError() {
+            document.getElementById('error-container').innerHTML = '';
+        }
+        
+        async function checkAllServices() {
+            const button = document.getElementById('check-all-button');
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span> Checking...';
+            
+            try {
+                const response = await fetch('/api/services/check-all', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                button.innerHTML = '✅ Checked All';
+                setTimeout(() => {
+                    button.innerHTML = '🔍 Check All';
+                    button.disabled = false;
+                }, 2000);
+                
+                // Refresh data to show updated statuses
+                await loadDashboardData();
+                await loadServicesData();
+                
+            } catch (error) {
+                console.error('Check all failed:', error);
+                button.innerHTML = '❌ Failed';
+                setTimeout(() => {
+                    button.innerHTML = '🔍 Check All';
+                    button.disabled = false;
+                }, 2000);
+            }
+        }
+        
+        async function refreshData() {
+            if (refreshing) return;
+            
+            refreshing = true;
+            const button = document.getElementById('refresh-button');
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span> Refreshing...';
+            
+            try {
+                await loadDashboardData();
+                await loadServicesData();
+                
+                button.innerHTML = '✅ Refreshed';
+                setTimeout(() => {
+                    button.innerHTML = '🔄 Refresh';
+                    button.disabled = false;
+                    refreshing = false;
+                }, 1500);
+                
+            } catch (error) {
+                button.innerHTML = '❌ Failed';
+                setTimeout(() => {
+                    button.innerHTML = '🔄 Refresh';
+                    button.disabled = false;
+                    refreshing = false;
+                }, 2000);
+            }
+        }
+        
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+</html>

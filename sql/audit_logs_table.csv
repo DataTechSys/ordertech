@@ -1,0 +1,7 @@
+Field Name,Type,Description
+log_id,UUID,Primary key
+tenant_id,UUID (FK),Scope to tenant
+user_id,UUID (FK),Who did the action
+action,VARCHAR(100),"e.g. login, update_device"
+timestamp,TIMESTAMP,When it happened
+meta,JSON,Extra info

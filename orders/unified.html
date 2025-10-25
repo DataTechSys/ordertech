@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Orders (All Sources)</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <style>
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        text-align: center;
+      }
+      
+      .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+      
+      .stat-label {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      
+      .filters-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      
+      .filter-row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      
+      .filter-row:last-child {
+        margin-bottom: 0;
+      }
+      
+      .filter-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      
+      .filter-group label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+        gap: 4px;
+      }
+      
+      .badge.cashier {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      
+      .badge.foodics {
+        background: #dcfce7;
+        color: #166534;
+      }
+      
+      .badge.paid {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      
+      .badge.closed {
+        background: #f3f4f6;
+        color: #374151;
+      }
+      
+      .order-items {
+        font-size: 12px;
+        color: var(--muted);
+        max-width: 200px;
+        overflow: hidden;
+        line-height: 1.3;
+      }
+      
+      .loading {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs">
+        <a id="tenantNameCrumb" href="#">—</a>
+        <span class="sep">›</span>
+        <span>Orders (All Sources)</span>
+      </nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    
+    <main class="main">
+      <!-- Statistics Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="cashierCount">0</div>
+          <div class="stat-label">Cashier Orders</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="foodicsCount">0</div>
+          <div class="stat-label">Foodics Orders</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalCount">0</div>
+          <div class="stat-label">Total Orders</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalAmount">0.000 KWD</div>
+          <div class="stat-label">Total Amount</div>
+        </div>
+      </div>
+      
+      <!-- Filters -->
+      <div class="filters-card">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>Source:</label>
+            <select id="sourceFilter" class="select">
+              <option value="">All Sources</option>
+              <option value="cashier">Cashier Orders</option>
+              <option value="foodics">Foodics Orders</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>Status:</label>
+            <select id="statusFilter" class="select">
+              <option value="">All Statuses</option>
+              <option value="paid">Paid</option>
+              <option value="closed">Closed</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label>Period:</label>
+            <select id="daysFilter" class="select">
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="">All time</option>
+            </select>
+          </div>
+          
+          <button id="refreshBtn" class="btn ghost">
+            <i class="ri-refresh-line"></i>
+            Refresh
+          </button>
+        </div>
+      </div>
+      
+      <!-- Orders Table -->
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Orders</div>
+            <span class="spacer"></span>
+            <button id="exportBtn" class="btn ghost">
+              <i class="ri-download-line"></i>
+              Export
+            </button>
+          </div>
+          
+          <div id="ordersTableWrap">
+            <table class="table" id="ordersTable">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Order ID</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Branch</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                  <th>Items</th>
+                </tr>
+              </thead>
+              <tbody id="tbody">
+                <tr>
+                  <td colspan="8" class="muted" style="text-align: center; padding: 40px;">
+                    Select a tenant to view orders
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div id="ordersPagination" class="toolbar" style="margin-top:12px;">
+            <div id="ordersPageInfo" class="chip">—</div>
+            <span class="spacer"></span>
+            <div class="btn-group">
+              <button id="ordersPrev" class="btn">Prev</button>
+              <button id="ordersNext" class="btn">Next</button>
+            </div>
+          </div>
+          
+          <div class="muted">Click a row to view details</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Order Details Modal -->
+    <div id="orderModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+        <div class="header">
+          <div class="title" id="orderModalTitle">Order Details</div>
+          <button id="orderModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div id="orderDetails"></div>
+        </div>
+        <div class="footer">
+          <span class="spacer"></span>
+          <button id="orderModalOk" class="btn">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script src="/js/unified-orders.js"></script>
+  </body>
+</html>

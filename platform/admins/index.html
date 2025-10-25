@@ -34,6 +34,22 @@
           <div id="list" class="list"></div>
         </div>
       </section>
+
+      <section class="card mt-2">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Connection Logs</div>
+            <span class="spacer"></span>
+            <label class="grid" style="grid-template-columns: 120px 120px max-content; gap:8px; align-items:center;">
+              <span class="label">Limit</span>
+              <input id="connLimit" class="input" type="number" min="1" max="500" value="100" />
+              <button id="btnConnRefresh" class="btn">Refresh</button>
+            </label>
+          </div>
+          <div id="connStatus" class="muted" style="margin-bottom:8px;">—</div>
+          <div id="connList" class="list"></div>
+        </div>
+      </section>
     </main>
 
     <script src="/js/admin-common.js"></script>
@@ -91,6 +107,7 @@
           } catch (e) {
             setStatus('Failed to load platform admins.');
           }
+          try { await loadConnLogs(); } catch {}
         }
 
         function normEmail(v){ return String(v||'').trim().toLowerCase(); }
@@ -126,6 +143,42 @@
         }
 
         document.getElementById('btnAdd')?.addEventListener('click', addAdmin);
+
+        // Connection logs UI
+        const connListEl = document.getElementById('connList');
+        const connStatusEl = document.getElementById('connStatus');
+        function setConnStatus(t){ if (connStatusEl) connStatusEl.textContent = t || ''; }
+        function fmtTs(iso){ try { const d=new Date(iso); return d.toLocaleString(); } catch { return iso; } }
+        function renderConnLogs(items){
+          if (!connListEl) return;
+          if (!Array.isArray(items) || !items.length) { connListEl.innerHTML = '<div class="muted">No connection events.</div>'; return; }
+          connListEl.innerHTML = items.map(it => {
+            const meta = it.meta || it.meta_json || {};
+            const action = it.action || '';
+            const ts = it.ts || meta.ts || '';
+            const basketId = meta.basketId || '';
+            const who = [meta.cashierName, meta.displayName].filter(Boolean).join(' ⇄ ');
+            return `
+              <div class="row" style="display:flex; justify-content:space-between; gap:10px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+                <div>
+                  <div style="font-weight:700;">${action}</div>
+                  <div class="muted-sm">${who || '(peers)'} ${basketId?` · id ${basketId}`:''}</div>
+                </div>
+                <div class="muted-sm">${fmtTs(ts)}</div>
+              </div>`;
+          }).join('');
+        }
+        async function loadConnLogs(){
+          setConnStatus('Loading connection logs...');
+          try {
+            const limit = Number(document.getElementById('connLimit')?.value || 100) || 100;
+            const r = await Admin.api(`/admin/logs/connections?limit=${encodeURIComponent(limit)}`);
+            const items = Array.isArray(r.items) ? r.items : [];
+            renderConnLogs(items);
+            setConnStatus('');
+          } catch (e) { setConnStatus('Failed to load connection logs.'); }
+        }
+        document.getElementById('btnConnRefresh')?.addEventListener('click', loadConnLogs);
 
         Admin.bootstrapAuth(load);
       })();

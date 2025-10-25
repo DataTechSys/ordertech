@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔊 اختبار الصوت المباشر</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f0f2f5;
+            direction: rtl;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            display: block;
+            width: 100%;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        audio {
+            width: 100%;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔊 اختبار الصوت المباشر</h1>
+        
+        <div class="status" id="status">جاهز للاختبار...</div>
+        
+        <button onclick="testTTS1()">اختبر TTS مع إعدادات عادية</button>
+        <button onclick="testTTS2()">اختبر TTS مع إعدادات بديلة</button>
+        <button onclick="testLocalAudio()">اختبر الملف المحفوظ محلياً</button>
+        
+        <audio id="audioPlayer" controls style="display:none;">
+            <source id="audioSource" type="audio/mpeg">
+            متصفحك لا يدعم تشغيل الصوت.
+        </audio>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:3000';
+        
+        function updateStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+        
+        function showAudio(audioUrl, description) {
+            const player = document.getElementById('audioPlayer');
+            const source = document.getElementById('audioSource');
+            const results = document.getElementById('results');
+            
+            source.src = audioUrl;
+            player.load();
+            player.style.display = 'block';
+            
+            const div = document.createElement('div');
+            div.innerHTML = `<h3>${description}</h3><p>استمع للملف أدناه:</p>`;
+            results.appendChild(div);
+        }
+        
+        async function testTTS1() {
+            try {
+                updateStatus('جاري إنشاء الصوت مع الإعدادات العادية...');
+                
+                const response = await fetch(`${BASE_URL}/tts/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: 'مرحباً، هذا اختبار للصوت العربي من مطعم كوبز',
+                        language: 'ar-KW',
+                        voice: 'alloy',
+                        model: 'tts-1',
+                        speed: 1.0
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    showAudio(audioUrl, 'الاختبار الأول: إعدادات عادية');
+                    updateStatus('تم إنشاء الصوت - استمع أدناه');
+                } else {
+                    throw new Error('فشل في إنشاء الصوت');
+                }
+            } catch (error) {
+                updateStatus('خطأ: ' + error.message);
+            }
+        }
+        
+        async function testTTS2() {
+            try {
+                updateStatus('جاري إنشاء الصوت مع إعدادات بديلة...');
+                
+                const response = await fetch(`${BASE_URL}/tts/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: 'السلام عليكم، اختبار آخر للصوت العربي',
+                        language: 'ar',
+                        voice: 'echo',
+                        model: 'tts-1',
+                        speed: 0.95
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    showAudio(audioUrl, 'الاختبار الثاني: صوت Echo بسرعة أبطأ');
+                    updateStatus('تم إنشاء الصوت - استمع أدناه');
+                } else {
+                    throw new Error('فشل في إنشاء الصوت');
+                }
+            } catch (error) {
+                updateStatus('خطأ: ' + error.message);
+            }
+        }
+        
+        function testLocalAudio() {
+            updateStatus('تشغيل الملف المحفوظ محلياً...');
+            showAudio('/test-audio.mp3', 'الاختبار الثالث: الملف المحفوظ محلياً');
+        }
+    </script>
+</body>
+</html>

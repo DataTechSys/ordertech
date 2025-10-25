@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>OrderTech — Modifiers</title>
-    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="stylesheet" href="/css/admin.css?v=20250908-1" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
     <script src="/config.js"></script>
@@ -23,13 +23,55 @@
       <section class="card">
         <div class="body">
           <div class="toolbar">
+            <div id="modGrpBulkBar" class="flex hidden" style="gap:8px; margin-right:8px;">
+              <select id="modGrpBulkAction" class="select" style="max-width:220px">
+                <option value="delete">Delete</option>
+              </select>
+              <button id="modGrpBulkApply" class="btn danger">Apply</button>
+            </div>
+            <div id="modOptBulkBar" class="flex hidden" style="gap:8px; margin-right:8px;">
+              <select id="modOptBulkAction" class="select" style="max-width:220px">
+                <option value="delete">Delete</option>
+                <option value="inactivate">Inactivate</option>
+              </select>
+              <button id="modOptBulkApply" class="btn danger">Apply</button>
+            </div>
             <button id="newGroupBtn" class="btn">New Group</button>
             <button id="newOptionBtn" class="btn">New Option</button>
             <div class="flex" style="gap:8px; margin-left:8px;">
               <button id="btnModImport" class="btn"><span class="icon ri ri-download-2-line"></span><span>Import</span></button>
               <button id="btnModExport" class="btn"><span class="icon ri ri-upload-2-line"></span><span>Export CSV</span></button>
+              <button id="btnModSync" class="btn"><span class="icon ri ri-refresh-line"></span><span>Sync</span></button>
+              <button id="btnMoveInactive" class="btn"><span class="icon ri ri-delete-bin-line"></span><span>Move Inactive to Deleted</span></button>
             </div>
             <div class="spacer"></div>
+          </div>
+          <div class="tabs" id="modTabs">
+            <button class="tab active" data-tab="groups">Groups</button>
+            <button class="tab" data-tab="options">Options</button>
+          </div>
+
+          <!-- Filter tabs for Groups -->
+          <div id="groupsFilterTabs" class="tabs" style="margin-top: 8px; margin-bottom: 8px;">
+            <button class="tab active" data-filter="active">Available</button>
+            <button class="tab" data-filter="inactive">Deleted</button>
+          </div>
+
+          <!-- Filter tabs for Options -->
+          <div id="optionsFilterTabs" class="tabs" style="margin-top: 8px; margin-bottom: 8px; display: none;">
+            <button class="tab active" data-filter="active">Active</button>
+            <button class="tab" data-filter="inactive">Inactive</button>
+          </div>
+
+          <div id="groupsTableWrap"></div>
+          <div id="optionsTableWrap" style="display:none;"></div>
+
+          <div id="modPagination" class="toolbar" style="margin-top:12px; display:none;">
+            <div class="btn-group">
+              <button id="modPrev" class="btn">Prev</button>
+              <button id="modNext" class="btn">Next</button>
+            </div>
+            <span class="spacer"></span>
             <div class="flex center" style="gap:8px; align-items:center;">
               <span class="label" style="white-space: nowrap;">Page size</span>
               <select id="modPageSize" class="select">
@@ -38,21 +80,7 @@
                 <option value="100">100</option>
               </select>
             </div>
-          </div>
-          <div class="tabs" id="modTabs">
-            <button class="tab active" data-tab="groups">Groups</button>
-            <button class="tab" data-tab="options">Options</button>
-          </div>
-
-          <div id="groupsTableWrap"></div>
-          <div id="optionsTableWrap" style="display:none;"></div>
-
-          <div class="flex between mt-2">
             <div id="modPageInfo" class="chip">—</div>
-            <div class="btn-group">
-              <button id="modPrev" class="btn">Prev</button>
-              <button id="modNext" class="btn">Next</button>
-            </div>
           </div>
         </div>
       </section>
@@ -75,6 +103,13 @@
               <input id="modImportOptions" type="file" accept=".csv,text/csv" />
               <small class="muted">Template: <a href="/data/templates/modifiers_options.csv" target="_blank" rel="noopener">modifiers_options.csv</a></small>
             </label>
+          </div>
+          <div class="row">
+            <div class="grid" style="gap:6px;">
+              <label class="checkbox-row" style="gap:8px"><input id="modImportUpdateGroups" type="checkbox" /> <span>Update existing groups (fill missing fields only)</span></label>
+              <label class="checkbox-row" style="gap:8px"><input id="modImportUpdateOptions" type="checkbox" /> <span>Update existing options (fill missing fields only)</span></label>
+              <label class="checkbox-row" style="gap:8px"><input id="modImportReactivateOptions" type="checkbox" /> <span>Reactivate options if inactive</span></label>
+            </div>
           </div>
           <div class="stack" style="gap:8px;">
             <div class="muted">Groups Preview</div>
@@ -104,11 +139,14 @@
             <label class="grid"><span class="label">Name</span>
               <input id="grpFormName" class="input"/>
             </label>
+            <label class="grid"><span class="label">Name Localized</span>
+              <input id="grpFormNameLoc" class="input" placeholder="Optional localized name"/>
+            </label>
             <label class="grid"><span class="label">Reference</span>
-              <input id="grpFormRef" class="input" placeholder="Optional external reference"/>
+              <input id="grpFormRef" class="input" placeholder="Optional reference"/>
             </label>
           </div>
-          <div class="row cols-3">
+          <div id="grpAdvRow" class="row cols-3" style="display:none;">
             <label class="grid"><span class="label">Min Select</span>
               <input id="grpFormMin" type="number" step="1" min="0" class="input"/>
             </label>
@@ -138,27 +176,46 @@
         </div>
         <div class="content">
           <div class="row cols-2">
-            <label class="grid"><span class="label">Group</span>
-              <select id="optFormGroup" class="select"></select>
-            </label>
             <label class="grid"><span class="label">Name</span>
               <input id="optFormName" class="input"/>
             </label>
+            <label class="grid"><span class="label">Group</span>
+              <select id="optFormGroup" class="select"></select>
+            </label>
           </div>
           <div class="row cols-2">
-            <label class="grid"><span class="label">Reference</span>
-              <input id="optFormRef" class="input" placeholder="Optional external reference" />
+            <label class="grid"><span class="label">SKU</span>
+              <div class="flex" style="gap:8px; align-items:center;">
+                <input id="optFormRef" class="input" placeholder="e.g. sk-0001" />
+                <button id="optGenSKU" class="btn sm" type="button">Generate</button>
+              </div>
             </label>
           </div>
           <div class="row cols-3">
             <label class="grid"><span class="label">Price (KWD)</span>
               <input id="optFormPrice" type="number" step="0.001" min="0" class="input"/>
             </label>
+            <label class="grid"><span class="label">Tax Group</span>
+              <input id="optFormTax" class="input" placeholder="Optional (e.g. VAT-5%)"/>
+            </label>
+            <label class="grid"><span class="label">Costing Method</span>
+              <select id="optFormCost" class="select">
+                <option value="fixed" selected>Fixed</option>
+                <option value="from_ingredients">From Ingredients</option>
+              </select>
+            </label>
+          </div>
+          <div class="row cols-2">
             <label class="grid"><span class="label">Sort Order</span>
               <input id="optFormSort" type="number" step="1" class="input"/>
             </label>
             <label class="switch-row"><span class="label">Active</span>
               <input id="optFormActive" type="checkbox" class="switch"/>
+            </label>
+          </div>
+          <div class="row cols-2">
+            <label class="grid"><span class="label">Name Localized</span>
+              <input id="optFormNameLoc" class="input"/>
             </label>
           </div>
         </div>
@@ -171,10 +228,41 @@
       </div>
     </div>
 
-    <script src="/js/admin-common.js"></script>
-    <script src="/js/admin-shell.js"></script>
-    <script src="/js/importer.js"></script>
-    <script src="/js/modifiers.js"></script>
+    <!-- Sync Preview Modal -->
+    <div id="syncPreviewModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal large" role="dialog" aria-modal="true" aria-labelledby="syncPreviewTitle">
+        <div class="header">
+          <div class="title" id="syncPreviewTitle">Modifier Sync Preview</div>
+          <button id="syncPreviewClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div class="stack" style="gap:16px;">
+            <div class="alert info">
+              <span class="icon ri-information-line"></span>
+              <div>
+                <strong>Review Modifier Changes</strong><br>
+                The following modifier groups and options will be synced from Foodics. Select which items you want to sync.
+              </div>
+            </div>
+            
+            <div id="syncPreviewContent">
+              <div class="loader">Loading preview...</div>
+            </div>
+          </div>
+        </div>
+        <div class="footer">
+          <div id="syncPreviewSummary" class="muted">—</div>
+          <span class="spacer"></span>
+          <button id="syncPreviewCancel" class="btn">Cancel</button>
+          <button id="syncPreviewConfirm" class="btn primary" disabled>Sync Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/admin-common.js?v=20250908-1"></script>
+    <script src="/js/admin-shell.js?v=20250908-1"></script>
+    <script src="/js/importer.js?v=20250908-1"></script>
+    <script src="/js/modifiers.js?v=20251001-5"></script>
   </body>
 </html>
 

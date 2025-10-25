@@ -1,0 +1,3 @@
+tenant_id,company_name,created_at,license_limit,branch_limit,short_code,subdomain,email,status,start_date,renewal_date,plan_type
+56ac557e-589d-4602-bc9b-946b201fb6f6,Fouzi Cafe,2025-09-06 09:21:50.051433+00,2,1,,,fouz@koobs.cafe,trial,,,trial
+f8578f9c-782b-4d31-b04f-3b2d890c5896,Koobs,2025-09-07 13:40:14.323331+00,12,6,494675,,mosawi@koobs.cafe,active,,,professional

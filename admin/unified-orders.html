@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orders - All Sources</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .page-container{ max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header{ margin-bottom: 24px; }
+    .page-title{ font-size: 28px; font-weight: 700; color: var(--text); margin: 0 0 8px 0; }
+    
+    .filters-card{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
+    .filter-row{ display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .filter-row:last-child{ margin-bottom: 0; }
+    .filter-group{ display: flex; gap: 8px; align-items: center; }
+    .filter-group label{ font-size: 14px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+    
+    .input, .select{ padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; background: var(--bg); color: var(--text); min-width: 120px; }
+    .input:focus, .select:focus{ outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    .input.tenant-input{ min-width: 300px; }
+    
+    .btn{ padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:hover{ background: var(--chip); }
+    .btn.primary{ background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+    .btn.primary:hover{ background: #1d4ed8; }
+    
+    .stats-row{ display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat-card{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; flex: 1; }
+    .stat-value{ font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .stat-label{ font-size: 14px; color: var(--muted); }
+    
+    .table-container{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .table{ width: 100%; border-collapse: collapse; }
+    .table th{ background: var(--chip); padding: 12px; text-align: left; font-weight: 600; font-size: 14px; color: var(--text); border-bottom: 1px solid var(--border); }
+    .table td{ padding: 12px; border-bottom: 1px solid var(--divider); font-size: 14px; }
+    .table tr:hover{ background: var(--chip); }
+    
+    .badge{ display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+    .badge.cashier{ background: #dbeafe; color: #1e40af; }
+    .badge.foodics{ background: #dcfce7; color: #166534; }
+    .badge.paid{ background: #d1fae5; color: #065f46; }
+    .badge.closed{ background: #f3f4f6; color: #374151; }
+    
+    .order-items{ font-size: 12px; color: var(--muted); max-width: 200px; overflow: hidden; line-height: 1.3; }
+    .nowrap{ white-space: nowrap; }
+    .loading{ opacity: 0.6; pointer-events: none; }
+    
+    .pagination{ display: flex; justify-content: between; align-items: center; padding: 16px 20px; border-top: 1px solid var(--border); background: var(--chip); }
+    .pagination-info{ color: var(--muted); font-size: 14px; }
+    .pagination-controls{ display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">Orders - All Sources</h1>
+    </div>
+    
+    <div class="filters-card">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Tenant ID:</label>
+          <input id="tenantId" type="text" class="input tenant-input" placeholder="Enter tenant UUID" />
+        </div>
+        <button id="loadBtn" class="btn primary">Load Orders</button>
+      </div>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Source:</label>
+          <select id="sourceFilter" class="select">
+            <option value="">All Sources</option>
+            <option value="cashier">Cashier Orders</option>
+            <option value="foodics">Foodics Orders</option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label>Status:</label>
+          <select id="statusFilter" class="select">
+            <option value="">All Statuses</option>
+            <option value="paid">Paid</option>
+            <option value="closed">Closed</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label>Period:</label>
+          <select id="daysFilter" class="select">
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="">All time</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value" id="cashierCount">0</div>
+        <div class="stat-label">Cashier Orders</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="foodicsCount">0</div>
+        <div class="stat-label">Foodics Orders</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="totalAmount">0.000 KWD</div>
+        <div class="stat-label">Total Amount</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="table" id="ordersTable">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Order ID</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Branch</th>
+            <th>Status</th>
+            <th>Total</th>
+            <th>Items</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      
+      <div class="pagination">
+        <div class="pagination-info">
+          <span id="pageInfo">—</span>
+        </div>
+        <div class="pagination-controls">
+          <button id="prevBtn" class="btn">Previous</button>
+          <button id="nextBtn" class="btn">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const tbody = document.getElementById('tbody');
+  const tenantInput = document.getElementById('tenantId');
+  const loadBtn = document.getElementById('loadBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const pageInfo = document.getElementById('pageInfo');
+  const sourceFilter = document.getElementById('sourceFilter');
+  const statusFilter = document.getElementById('statusFilter');
+  const daysFilter = document.getElementById('daysFilter');
+  const ordersTable = document.getElementById('ordersTable');
+  
+  let offset = 0; 
+  const limit = 50; 
+  let allOrders = [];
+  let filteredOrders = [];
+
+  function fmtKwd(n){ 
+    try { 
+      return (Math.round(Number(n)*1000)/1000).toFixed(3) + ' KWD'; 
+    } catch { 
+      return String(n); 
+    } 
+  }
+  
+  function fmtTime(s){ 
+    try { 
+      const date = new Date(s);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    } catch { 
+      return s; 
+    } 
+  }
+
+  function getSourceBadge(source, orderType) {
+    if (orderType === 'cashier') {
+      return '<span class="badge cashier">💰 Cashier</span>';
+    } else if (orderType === 'foodics') {
+      return '<span class="badge foodics">🍽️ Foodics</span>';
+    }
+    return '<span class="badge">❓ Unknown</span>';
+  }
+
+  function getStatusBadge(status) {
+    const s = String(status || '').toLowerCase();
+    if (s === 'paid') return '<span class="badge paid">Paid</span>';
+    if (s === 'closed') return '<span class="badge closed">Closed</span>';
+    if (s === 'completed') return '<span class="badge paid">Completed</span>';
+    return `<span class="badge">${status || 'Unknown'}</span>`;
+  }
+
+  async function loadCashierOrders(tenantId) {
+    const url = `/admin/tenants/${encodeURIComponent(tenantId)}/orders?limit=1000`;
+    const r = await fetch(url, { credentials: 'include' });
+    const j = await r.json();
+    const items = Array.isArray(j.items) ? j.items : [];
+    
+    return items.map(item => ({
+      ...item,
+      orderType: 'cashier',
+      orderId: item.ticket_no,
+      orderDate: item.paid_at,
+      customer: item.customer_name || 'Walk-in',
+      branch: item.branch || item.location || 'Unknown',
+      status: 'paid',
+      total: Number(item.total || 0),
+      currency: item.currency || 'KWD',
+      items: Array.isArray(item.items) ? item.items : []
+    }));
+  }
+
+  async function loadFoodicsOrders(tenantId) {
+    try {
+      // This endpoint would need to be implemented in server.js
+      const url = `/admin/tenants/${encodeURIComponent(tenantId)}/sales-orders?limit=1000`;
+      const r = await fetch(url, { credentials: 'include' });
+      
+      if (!r.ok) {
+        console.warn('Foodics orders endpoint not available:', r.status);
+        return [];
+      }
+      
+      const j = await r.json();
+      const items = Array.isArray(j.items) ? j.items : [];
+      
+      return items.map(item => ({
+        ...item,
+        orderType: 'foodics',
+        orderId: item.external_id,
+        orderDate: item.created_at,
+        customer: item.customer_name || 'Walk-in',
+        branch: item.branch_name || 'Unknown',
+        status: item.status || 'unknown',
+        total: Number(item.total || 0),
+        currency: item.currency || 'KWD',
+        items: Array.isArray(item.items) ? item.items : []
+      }));
+    } catch (error) {
+      console.warn('Failed to load Foodics orders:', error);
+      return [];
+    }
+  }
+
+  function applyFilters() {
+    const source = sourceFilter.value;
+    const status = statusFilter.value.toLowerCase();
+    const days = Number(daysFilter.value) || 0;
+    
+    filteredOrders = allOrders.filter(order => {
+      // Source filter
+      if (source && order.orderType !== source) return false;
+      
+      // Status filter
+      if (status && String(order.status || '').toLowerCase() !== status) return false;
+      
+      // Days filter
+      if (days > 0) {
+        const orderDate = new Date(order.orderDate);
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        if (orderDate < cutoff) return false;
+      }
+      
+      return true;
+    });
+    
+    // Sort by date descending
+    filteredOrders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+    
+    updateStats();
+    renderTable();
+  }
+
+  function updateStats() {
+    const cashierOrders = filteredOrders.filter(o => o.orderType === 'cashier');
+    const foodicsOrders = filteredOrders.filter(o => o.orderType === 'foodics');
+    const totalAmount = filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    
+    document.getElementById('cashierCount').textContent = cashierOrders.length;
+    document.getElementById('foodicsCount').textContent = foodicsOrders.length;
+    document.getElementById('totalAmount').textContent = totalAmount.toFixed(3) + ' KWD';
+  }
+
+  async function loadAllOrders() {
+    const tenantId = tenantInput.value.trim(); 
+    if (!tenantId) { 
+      alert('Enter tenant id'); 
+      return; 
+    }
+    
+    tbody.innerHTML = '<tr><td colspan="8" class="muted">Loading orders from all sources…</td></tr>';
+    ordersTable.classList.add('loading');
+    
+    try {
+      // Load both sources in parallel
+      const [cashierOrders, foodicsOrders] = await Promise.all([
+        loadCashierOrders(tenantId),
+        loadFoodicsOrders(tenantId)
+      ]);
+      
+      allOrders = [...cashierOrders, ...foodicsOrders];
+      applyFilters();
+      
+    } catch (e) {
+      console.error('Failed to load orders:', e);
+      tbody.innerHTML = '<tr><td colspan="8" class="muted">Failed to load orders</td></tr>';
+    } finally {
+      ordersTable.classList.remove('loading');
+    }
+  }
+
+  function renderTable() {
+    const start = offset;
+    const end = Math.min(start + limit, filteredOrders.length);
+    const pageOrders = filteredOrders.slice(start, end);
+    
+    if (pageOrders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="muted">No orders found</td></tr>';
+      pageInfo.textContent = 'No results';
+      return;
+    }
+    
+    tbody.innerHTML = pageOrders.map(order => {
+      const itemsStr = order.items.map(x => {
+        const name = x.name || x.product_name || 'Unknown item';
+        const qty = x.qty || x.quantity || 1;
+        const price = x.price || x.unit_price || 0;
+        return `${name} × ${qty} (${(Math.round(Number(price)*1000)/1000).toFixed(3)})`;
+      }).join('<br/>');
+      
+      return `<tr class="order-row" data-order-type="${order.orderType}" data-order-id="${order.orderId}">
+        <td>${getSourceBadge(order.source, order.orderType)}</td>
+        <td class="nowrap">${order.orderId || ''}</td>
+        <td class="nowrap">${fmtTime(order.orderDate)}</td>
+        <td>${order.customer || ''}</td>
+        <td>${order.branch || ''}</td>
+        <td>${getStatusBadge(order.status)}</td>
+        <td class="nowrap">${fmtKwd(order.total)} ${order.currency || ''}</td>
+        <td class="items">${itemsStr || ''}</td>
+      </tr>`;
+    }).join('');
+    
+    pageInfo.textContent = `${start + 1}-${end} of ${filteredOrders.length} orders`;
+    prevBtn.disabled = start === 0;
+    nextBtn.disabled = end >= filteredOrders.length;
+  }
+
+  function parseTenantFromUrl() { 
+    try { 
+      const u = new URL(location.href); 
+      const id = u.searchParams.get('id')||''; 
+      if (id) tenantInput.value=id; 
+    } catch {} 
+  }
+
+  // Event listeners
+  loadBtn.addEventListener('click', () => { offset = 0; loadAllOrders(); });
+  prevBtn.addEventListener('click', () => { 
+    offset = Math.max(0, offset - limit); 
+    renderTable(); 
+  });
+  nextBtn.addEventListener('click', () => { 
+    offset = Math.min(offset + limit, Math.max(0, filteredOrders.length - limit)); 
+    renderTable(); 
+  });
+  
+  // Filter change handlers
+  [sourceFilter, statusFilter, daysFilter].forEach(filter => {
+    filter.addEventListener('change', () => {
+      offset = 0;
+      applyFilters();
+    });
+  });
+  
+  // Row click handler (for future order details modal)
+  tbody.addEventListener('click', (e) => {
+    const row = e.target.closest('.order-row');
+    if (row) {
+      const orderType = row.dataset.orderType;
+      const orderId = row.dataset.orderId;
+      console.log('Order clicked:', { orderType, orderId });
+      // TODO: Open order details modal
+    }
+  });
+
+  // Initialize
+  parseTenantFromUrl();
+  if (tenantInput.value) loadAllOrders();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+Field Name,Type,Description
+user_id,UUID,Primary key
+tenant_id,UUID (FK),Belongs to tenant
+branch_id,UUID (FK),Assigned branch
+email,VARCHAR(100),Login email
+password_hash,TEXT,Hashed password
+name,VARCHAR(100),User's full name
+role_id,UUID (FK),Linked to role
+status,VARCHAR(20),active / disabled / pending
+last_login,TIMESTAMP,Last login date
+created_at,TIMESTAMP,User creation date

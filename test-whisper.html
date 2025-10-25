@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        .status { padding: 10px; margin: 10px 0; border-left: 4px solid #007cba; background: #f0f8ff; }
+        .error { border-left-color: #dc3545; background: #fff5f5; }
+        .success { border-left-color: #28a745; background: #f0fff4; }
+        .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; font-family: monospace; font-size: 14px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🎙️ Whisper Debug Test</h1>
+    
+    <div class="status" id="status">Ready to test Whisper integration</div>
+    
+    <button class="button" onclick="startTest()" id="startBtn">Start Recording Test</button>
+    <button class="button" onclick="stopTest()" id="stopBtn" disabled>Stop Recording</button>
+    <button class="button" onclick="clearLog()">Clear Log</button>
+    
+    <h3>Debug Log:</h3>
+    <div class="log" id="log"></div>
+
+    <script type="module">
+        import { WhisperSTTClient } from './js/ai/openai-whisper-client.js';
+        
+        let whisperClient = null;
+        let isRecording = false;
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[Whisper Test] ${message}`);
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status';
+            if (type === 'error') statusDiv.className += ' error';
+            if (type === 'success') statusDiv.className += ' success';
+        }
+        
+        window.startTest = async function() {
+            try {
+                log('Initializing Whisper client...');
+                
+                whisperClient = new WhisperSTTClient({
+                    language: 'ar-KW', // Kuwaiti Arabic
+                    baseURL: 'http://localhost:3000',
+                    chunkDuration: 8000, // 8 seconds for better testing
+                    silenceThreshold: 0.01,
+                    interimResults: true // Enable for testing
+                });
+                
+                // Set up event handlers
+                whisperClient.on('start', () => {
+                    log('✅ Recording started');
+                    updateStatus('Recording... Speak now!', 'success');
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    isRecording = true;
+                });
+                
+                whisperClient.on('end', () => {
+                    log('⏹️ Recording ended');
+                    updateStatus('Recording stopped', 'info');
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    isRecording = false;
+                });
+                
+                whisperClient.on('partial', (data) => {
+                    log(`🎯 Partial: "${data.transcript}" (confidence: ${data.confidence})`);
+                });
+                
+                whisperClient.on('final', (data) => {
+                    log(`✨ Final: "${data.transcript}" (confidence: ${data.confidence})`);
+                    updateStatus(`Transcribed: "${data.transcript}"`, 'success');
+                });
+                
+                whisperClient.on('error', (error) => {
+                    log(`❌ Error: ${error.message}`);
+                    updateStatus(`Error: ${error.message}`, 'error');
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    isRecording = false;
+                });
+                
+                log('Starting recording...');
+                await whisperClient.start();
+                
+            } catch (error) {
+                log(`❌ Failed to start: ${error.message}`);
+                updateStatus(`Failed: ${error.message}`, 'error');
+            }
+        };
+        
+        window.stopTest = function() {
+            if (whisperClient && isRecording) {
+                log('Stopping recording...');
+                whisperClient.stop();
+            }
+        };
+        
+        window.clearLog = function() {
+            document.getElementById('log').textContent = '';
+        };
+        
+        log('Whisper test page loaded. Click "Start Recording Test" to begin.');
+        
+    </script>
+</body>
+</html>

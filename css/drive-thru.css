@@ -206,6 +206,8 @@ body {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   border-radius: var(--radius);
+  border: 1px solid var(--muted);
+  background: #fff;
 }
 
 /* Names wrapper and lines: Arabic first, then English */
@@ -238,6 +240,34 @@ body {
   color: var(--muted);
   font-weight: var(--font-weight-bold);
 }
+
+/* iOS/WKWebView: enforce centered labels and robust font fallbacks inside tiles */
+.grid .tile .names { align-items: stretch; text-align: center; }
+.grid .tile .names .name-ar,
+.grid .tile .names .name-en { width: 100%; }
+.grid .tile .names .name-ar {
+  text-align: center !important;
+  direction: rtl;
+  font-family: 'Almarai', 'SF Arabic', 'Noto Naskh Arabic', 'Geeza Pro', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+}
+.grid .tile .names .name-en {
+  text-align: center !important; /* enforce center */
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+/* Enforce single-line truncation inside tiles */
+.grid .tile .names .name-ar,
+.grid .tile .names .name-en {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grid .tile .price { text-align: center !important; }
+
+/* Center names and price in the popup as well */
+#optionsCard .names { text-align: center; }
+#optionsCard .names .name-ar,
+#optionsCard .names .name-en,
+#optionsCard .price { text-align: center !important; width: 100%; }
 
 /* Responsive Layout */
 @media (max-width: 768px) {

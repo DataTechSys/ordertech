@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Orders</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><a id="tenantNameCrumb" href="#">—</a><span class="sep">›</span><span>Orders</span></nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+      <button class="btn icon ghost only-mobile" id="mobileMenu" aria-label="Toggle menu">☰</button>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="body">
+          <div class="toolbar">
+            <div class="title" style="font-weight:700;">Orders</div>
+            <span class="spacer"></span>
+          </div>
+          <div id="ordersTableWrap"></div>
+          <div id="ordersPagination" class="toolbar" style="margin-top:12px; display:none;">
+            <div id="ordersPageInfo" class="chip">—</div>
+            <span class="spacer"></span>
+            <div class="btn-group">
+              <button id="ordersPrev" class="btn">Prev</button>
+              <button id="ordersNext" class="btn">Next</button>
+            </div>
+          </div>
+          <div class="muted">Click a row to view details</div>
+        </div>
+      </section>
+    </main>
+
+    <div id="orderModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+        <div class="header">
+          <div class="title" id="orderModalTitle">Order</div>
+          <button id="orderModalClose" class="btn icon ghost" aria-label="Close">✕</button>
+        </div>
+        <div class="content">
+          <div id="orderDetails"></div>
+        </div>
+        <div class="footer">
+          <span class="spacer"></span>
+          <button id="orderModalOk" class="btn">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/admin-common.js"></script>
+    <script src="/js/admin-shell.js"></script>
+    <script src="/js/orders.js"></script>
+  </body>
+</html>
+

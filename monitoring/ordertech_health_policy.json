@@ -1,0 +1,21 @@
+{
+  "displayName": "OrderTech Health Alert",
+  "combiner": "OR",
+  "enabled": true,
+  "conditions": [
+    {
+      "displayName": "Uptime down",
+      "conditionThreshold": {
+        "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\"",
+        "comparison": "COMPARISON_LT",
+        "thresholdValue": 1,
+        "duration": "300s"
+      }
+    }
+  ],
+  "notificationChannels": [
+    "projects/smart-order-469705/notificationChannels/16380203240544271263",
+    "projects/smart-order-469705/notificationChannels/12022366148639661397"
+  ]
+}
+

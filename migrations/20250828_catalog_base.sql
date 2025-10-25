@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 -- Basic indexes
+-- Ensure column exists when table pre-dates this migration
+ALTER TABLE IF EXISTS products ADD COLUMN IF NOT EXISTS category_reference text;
 CREATE INDEX IF NOT EXISTS ix_products_tenant_name   ON products(tenant_id, name);
 CREATE INDEX IF NOT EXISTS ix_products_tenant_catref ON products(tenant_id, category_reference);
 

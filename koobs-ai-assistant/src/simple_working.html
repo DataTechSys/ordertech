@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Test</title>
+</head>
+<body>
+    <h1>🤖 Koobs AI Test</h1>
+    
+    <button onclick="testAlert()">Test Alert</button>
+    <button onclick="testTauri()">Test Tauri</button>
+    
+    <div id="output" style="margin: 20px 0; padding: 15px; background: #f0f0f0;"></div>
+
+    <script>
+        console.log('Script loading...');
+        
+        function testAlert() {
+            console.log('testAlert clicked');
+            alert('Button works!');
+            document.getElementById('output').innerHTML = 'Alert button clicked!';
+        }
+        
+        function testTauri() {
+            console.log('testTauri clicked');
+            const output = document.getElementById('output');
+            
+            if (window.__TAURI__) {
+                output.innerHTML = '✅ Tauri detected!<br>';
+                
+                // Test invoke
+                window.__TAURI__.tauri.invoke('greet', { name: 'Test' })
+                    .then(result => {
+                        output.innerHTML += '✅ Greet result: ' + result;
+                    })
+                    .catch(error => {
+                        output.innerHTML += '❌ Greet error: ' + error;
+                    });
+            } else {
+                output.innerHTML = '❌ Tauri not found';
+            }
+        }
+        
+        // Test on load
+        console.log('Script loaded successfully');
+        console.log('Tauri available:', !!window.__TAURI__);
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM ready');
+            document.getElementById('output').innerHTML = 'Page loaded. Tauri: ' + (window.__TAURI__ ? 'YES' : 'NO');
+        });
+    </script>
+</body>
+</html>

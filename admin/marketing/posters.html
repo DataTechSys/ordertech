@@ -88,7 +88,9 @@
           const ts = new Date(); const pad = n => String(n).padStart(2,'0');
           const name = `poster_${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.jpg`;
           const sig = await Admin.api('/admin/upload-url', { method:'POST', body:{ tenant_id: tid, filename: name, kind:'poster', contentType: ct }, tenantId: tid });
-          await fetch(sig.url, { method: sig.method || 'PUT', headers:{ 'Content-Type': ct }, body: blob });
+          const hdrs = { 'Content-Type': ct };
+          if (sig.cacheControl) hdrs['Cache-Control'] = sig.cacheControl;
+          await fetch(sig.url, { method: sig.method || 'PUT', headers: hdrs, body: blob });
           document.getElementById('status').textContent = 'Uploaded ✓';
           Admin.toast('Uploaded');
           await loadPosters();

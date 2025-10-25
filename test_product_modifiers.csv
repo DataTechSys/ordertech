@@ -1,0 +1,262 @@
+product_name,product_name_localized,product_sku,modifier_name,modifier_name_localized,modifier_reference,minimum_options,maximum_options,free_options,default_options,unique_options
+"ICED | Black Spanish (M)","بلاك سبانش",PIC-101,Extra,,extra,0,2,0,,No
+"ICED | Black Spanish (M)","بلاك سبانش",PIC-101,Delivery,,delivery,0,2,0,,No
+"ICED | Black Spanish (M)","بلاك سبانش",PIC-101,"Milk | Medium",,milk_medium,1,2,0,,No
+"ICED | Black Spanish (M)","بلاك سبانش",PIC-101,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Spanish Latte (M)","سبانش لاتيه - ساخن",PHT-115,Extra,,extra,0,2,0,,No
+"HOT | Spanish Latte (M)","سبانش لاتيه - ساخن",PHT-115,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"HOT | Spanish Latte (M)","سبانش لاتيه - ساخن",PHT-115,Delivery,,delivery,0,2,0,,No
+"HOT | Spanish Latte (M)","سبانش لاتيه - ساخن",PHT-115,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Croissant | Feta Cheese","كرواسان جبنة الفيتا",PCR-104,Delivery,,delivery,0,1,0,,No
+"ICED | Spanish Latte (M)","سبانش لاتيه | مثلج",PIC-110,Extra,,extra,0,2,0,,No
+"ICED | Spanish Latte (M)","سبانش لاتيه | مثلج",PIC-110,Delivery,,delivery,0,2,0,,No
+"ICED | Spanish Latte (M)","سبانش لاتيه | مثلج",PIC-110,"Milk | Medium",,milk_medium,1,2,0,,No
+"ICED | Spanish Latte (M)","سبانش لاتيه | مثلج",PIC-110,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Americano (M)","امريكانو - ساخن",PHT-101,Extra,,extra,0,2,0,,No
+"HOT | Americano (M)","امريكانو - ساخن",PHT-101,Option,,option,0,1,0,,No
+"HOT | Americano (M)","امريكانو - ساخن",PHT-101,Delivery,,delivery,0,2,0,,No
+"HOT | Americano (M)","امريكانو - ساخن",PHT-101,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED |  Cacao Latte","كاكاو لاتيه - بارد",PIC-107,Extra,,extra,0,2,0,,No
+"ICED |  Cacao Latte","كاكاو لاتيه - بارد",PIC-107,Delivery,,delivery,0,2,0,,No
+"ICED |  Cacao Latte","كاكاو لاتيه - بارد",PIC-107,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Tower Drip (M)","القهوة المقطرة",PIC-104,Extra,,extra,0,2,0,,No
+"Tower Drip (M)","القهوة المقطرة",PIC-104,Delivery,,delivery,0,2,0,,No
+"ICED | Latte (M)","لاتيه مثلج - غير محلى",PIC-108,Extra,,extra,0,2,0,,No
+"ICED | Latte (M)","لاتيه مثلج - غير محلى",PIC-108,Delivery,,delivery,0,2,0,,No
+"ICED | Latte (M)","لاتيه مثلج - غير محلى",PIC-108,"Milk | Medium",,milk_medium,1,2,0,,No
+"ICED | Latte (M)","لاتيه مثلج - غير محلى",PIC-108,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Koobs Box | Cold Brew","كوبز بوكس | كولد برو",PPT-107,Delivery,,delivery,0,1,0,,No
+"ICED | Matcha","ماتشا مثلجة",PBR-102,Extra,,extra,0,4,0,,No
+"ICED | Matcha","ماتشا مثلجة",PBR-102,Option,,option,1,2,0,,No
+"ICED | Matcha","ماتشا مثلجة",PBR-102,Delivery,,delivery,0,2,0,,No
+"ICED | Matcha","ماتشا مثلجة",PBR-102,"Milk | Medium",,milk_medium,0,2,0,,No
+"ICED | Matcha","ماتشا مثلجة",PBR-102,"Coffee | Shots",,coffee_shot,0,1,0,,No
+"ICED | Espresso","اسبريسو مثلج",PIC-113,Extra,,extra,0,1,0,,No
+"ICED | Espresso","اسبريسو مثلج",PIC-113,Option,,option,1,1,0,,No
+"ICED | Espresso","اسبريسو مثلج",PIC-113,"Coffee | Shots",,coffee_shot,1,1,0,ST-002,No
+"ICED | Salted Caramel (M)","سولتد كاراميل | مثلج",PIC-109,Extra,,extra,0,2,0,,No
+"ICED | Salted Caramel (M)","سولتد كاراميل | مثلج",PIC-109,Delivery,,delivery,0,2,0,,No
+"ICED | Salted Caramel (M)","سولتد كاراميل | مثلج",PIC-109,"Milk | Medium",,milk_medium,1,2,0,,No
+"ICED | Salted Caramel (M)","سولتد كاراميل | مثلج",PIC-109,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Vanilla Shaken (M)","خليط الفانيلا المثلج",PIC-114,Extra,,extra,0,2,0,,No
+"ICED | Vanilla Shaken (M)","خليط الفانيلا المثلج",PIC-114,Delivery,,delivery,0,2,0,,No
+"ICED | Vanilla Shaken (M)","خليط الفانيلا المثلج",PIC-114,"Milk | Medium",,milk_medium,1,2,0,,No
+"ICED | Vanilla Shaken (M)","خليط الفانيلا المثلج",PIC-114,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT |  Cacao Latte","كاكاو لاتيه ساخن",PHT-103,Extra,,extra,0,2,0,,No
+"HOT |  Cacao Latte","كاكاو لاتيه ساخن",PHT-103,"Hot Milk","حليب ساخن",hot_milk,1,1,0,,No
+"HOT |  Cacao Latte","كاكاو لاتيه ساخن",PHT-103,Delivery,,delivery,0,2,0,,No
+"HOT |  Cacao Latte","كاكاو لاتيه ساخن",PHT-103,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Cappuccino","كابتشينو ساخن",PHT-104,Extra,,extra,0,2,0,,No
+"HOT | Cappuccino","كابتشينو ساخن",PHT-104,"Hot Milk","حليب ساخن",hot_milk,1,1,0,,No
+"HOT | Cappuccino","كابتشينو ساخن",PHT-104,Delivery,,delivery,0,2,0,,No
+"HOT | Cappuccino","كابتشينو ساخن",PHT-104,"Coffee | Shots",,coffee_shot,1,1,0,,No
+Cortado,كورتادو,PHT-106,Extra,,extra,0,2,0,,No
+Cortado,كورتادو,PHT-106,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+Cortado,كورتادو,PHT-106,Delivery,,delivery,0,2,0,,No
+Cortado,كورتادو,PHT-106,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Double Espresso","دبل اسبريسو",PHT-107,Extra,,extra,0,2,0,,No
+"Double Espresso","دبل اسبريسو",PHT-107,Cups,كوب,cups,1,1,0,,No
+"Double Espresso","دبل اسبريسو",PHT-107,Delivery,,delivery,0,2,0,,No
+"Double Espresso","دبل اسبريسو",PHT-107,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Flat White","فلات وايت",PHT-109,Extra,,extra,0,5,0,,No
+"Flat White","فلات وايت",PHT-109,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"Flat White","فلات وايت",PHT-109,Delivery,,delivery,0,2,0,,No
+"Flat White","فلات وايت",PHT-109,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Chocolate","هوت شوكليت",PHT-110,Extra,,extra,0,2,0,,No
+"HOT | Chocolate","هوت شوكليت",PHT-110,"Hot Milk","حليب ساخن",hot_milk,1,1,0,,No
+"HOT | Chocolate","هوت شوكليت",PHT-110,Delivery,,delivery,0,2,0,,No
+"HOT | Matcha","ماتشا ساخنة",PHT-112,Extra,,extra,0,2,0,,No
+"HOT | Matcha","ماتشا ساخنة",PHT-112,Option,,option,1,2,0,,No
+"HOT | Matcha","ماتشا ساخنة",PHT-112,"Hot Milk","حليب ساخن",hot_milk,0,2,0,,No
+"HOT | Matcha","ماتشا ساخنة",PHT-112,Delivery,,delivery,0,2,0,,No
+"HOT | Matcha","ماتشا ساخنة",PHT-112,"Coffee | Shots",,coffee_shot,0,1,0,,No
+"HOT | Latte","لاتيه ساخن",PHT-111,Extra,,extra,0,2,0,,No
+"HOT | Latte","لاتيه ساخن",PHT-111,"Hot Milk","حليب ساخن",hot_milk,1,1,0,,No
+"HOT | Latte","لاتيه ساخن",PHT-111,Delivery,,delivery,0,2,0,,No
+"HOT | Latte","لاتيه ساخن",PHT-111,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Salted Caramel (M)","سولتد كاراميل | ساخن",PHT-114,Extra,,extra,0,2,0,,No
+"HOT | Salted Caramel (M)","سولتد كاراميل | ساخن",PHT-114,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"HOT | Salted Caramel (M)","سولتد كاراميل | ساخن",PHT-114,Delivery,,delivery,0,2,0,,No
+"HOT | Salted Caramel (M)","سولتد كاراميل | ساخن",PHT-114,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Tea",شاي,PHT-116,Flavors,,flavour,1,1,0,,No
+"HOT | Tea",شاي,PHT-116,"Hot Milk","حليب ساخن",hot_milk,0,2,0,,No
+"HOT | Tea",شاي,PHT-116,Delivery,,delivery,0,2,0,,No
+"Halloumi Sandwich","سندويتش الحلوم والمشروم",PSD-104,Delivery,,delivery,0,1,0,,No
+"Turkey Sandwich","ساندويتش الديك الرومي المدخن",PSD-106,Delivery,,delivery,0,1,0,,No
+"Orange Juice","عصير البرتقال",PWJ-104,Option,,option,1,1,0,,No
+"Orange Juice","عصير البرتقال",PWJ-104,Delivery,,delivery,0,2,0,,No
+Aeropress,"ايرو بريس",PSC-101,Delivery,,delivery,0,2,0,,No
+Aeropress,"ايرو بريس",PSC-101,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | Chemex","كيميكس ساخن",PSC-102,Delivery,,delivery,0,2,0,,No
+"HOT | Chemex","كيميكس ساخن",PSC-102,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"French Press","فرنش برس",PSC-104,Delivery,,delivery,0,2,0,,No
+"French Press","فرنش برس",PSC-104,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | V60","في ٦٠ | ساخن",PSC-106,Delivery,,delivery,0,2,0,,No
+"HOT | V60","في ٦٠ | ساخن",PSC-106,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Americano (M)","أمريكانو | مثلج",PIC-106,Extra,,extra,0,3,0,,No
+"ICED | Americano (M)","أمريكانو | مثلج",PIC-106,Option,,option,0,1,0,,No
+"ICED | Americano (M)","أمريكانو | مثلج",PIC-106,Delivery,,delivery,0,2,0,,No
+"ICED | Americano (M)","أمريكانو | مثلج",PIC-106,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Croissant | Plain","كرواسان سادة",PCR-105,Delivery,,delivery,0,1,0,,No
+"Tokyo Ice Tea","طوكيو | ايس تي",PBR-108,Delivery,,delivery,0,2,0,,No
+"Croissant | Cream Cheese","كرواسان الجبن",PCR-103,Delivery,,delivery,0,1,0,,No
+"ICED | Vanilla Cappuccino","كابتشينو فانيلا",PIC-112,Extra,,extra,0,2,0,,No
+"ICED | Vanilla Cappuccino","كابتشينو فانيلا",PIC-112,Delivery,,delivery,0,2,0,,No
+"ICED | Vanilla Cappuccino","كابتشينو فانيلا",PIC-112,"Coffee | Shots",,coffee_shot,1,2,0,,No
+"Croissant | Chocolate","كروسان كاكاو",PCR-102,Delivery,,delivery,0,1,0,,No
+Tumbler,تمبلر,PGF-102,Color,,color,1,1,0,,No
+"Ceramic Mug","كوب سيراميك",PGF-101,Color,,color,1,1,0,,No
+"Croissant | Almond",,PCR-101,Delivery,,delivery,0,1,0,,No
+"Turkish Coffee","قهوة تركية",PHT-117,Extra,,extra,0,1,0,,No
+"Turkish Coffee","قهوة تركية",PHT-117,Option,,option,0,1,0,,No
+"Turkish Coffee","قهوة تركية",PHT-117,Cups,كوب,cups,1,2,0,,No
+"Turkish Coffee","قهوة تركية",PHT-117,"Hot Milk","حليب ساخن",hot_milk,0,1,0,,No
+"Turkish Coffee","قهوة تركية",PHT-117,Delivery,,delivery,0,2,0,,No
+"Cream Brulee","كريم بروليه",PSN-109,Delivery,,delivery,0,2,0,,No
+"Mango Peach Lemonade","مانجو خوخ ليموناضة",PBR-103,Delivery,,delivery,0,2,0,,No
+"Rio Passionfruit","ريو باشن فروت",PBR-106,Delivery,,delivery,0,2,0,,No
+"ICED | Vanilla Almond Matcha",,PBR-104,Extra,,extra,0,2,0,,No
+"ICED | Vanilla Almond Matcha",,PBR-104,Delivery,,delivery,0,2,0,,No
+"Chocolate Frappe","تشوكولت فراب",FRP-102,Option,,option,0,1,0,,No
+"200ml | Cold Brew Bottled","قنينة كولد برو - 200 مل",PIC-103,Extra,,extra,0,2,0,,No
+"200ml | Cold Brew Bottled","قنينة كولد برو - 200 مل",PIC-103,Delivery,,delivery,0,2,0,,No
+"Matcha Pistachio Frappe","فراب الماتشا والفستق",FRP-101,Extra,,extra,0,1,0,,No
+"San Sebastian Cake","كيكة سان سبيستيان",PSN-122,Delivery,,delivery,0,1,0,,No
+"Very Berry","فيري بيري",PBR-109,Delivery,,delivery,0,2,0,,No
+"Chai Latte","شاي لاتيه",PHT-105,Extra,,extra,0,1,0,,No
+"Chai Latte","شاي لاتيه",PHT-105,"Hot Milk","حليب ساخن",hot_milk,0,2,0,,No
+"Chai Latte","شاي لاتيه",PHT-105,Delivery,,delivery,0,2,0,,No
+"Flat Spanish","فلات سبانش",PHT-108,Extra,,extra,0,2,0,,No
+"Flat Spanish","فلات سبانش",PHT-108,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"Flat Spanish","فلات سبانش",PHT-108,Delivery,,delivery,0,2,0,,No
+"Flat Spanish","فلات سبانش",PHT-108,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Medium | Vanilla Ice Cream",,PSS-105,Topping,,topping,1,2,1,,No
+"Affogato | Ice Cream",افوكاتو,PSS-104,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Small | Tiramisu Ice Cream",,PSS-101,Topping,,topping,0,1,0,,No
+"Small | Vanilla Ice Cream",,PSS-102,Topping,,topping,1,2,1,,No
+"Medium | Tiramisu Ice Cream",,PSS-103,Topping,,topping,0,1,0,,No
+"1 Liter | Iced Salted Caramel","كراميل مملح لاتيه - 1 لتر",PPT-105,Delivery,,delivery,0,1,0,,No
+"1 Liter | Iced Salted Caramel","كراميل مملح لاتيه - 1 لتر",PPT-105,"Coffee | Shots",,coffee_shot,1,3,0,,No
+"1 Liter | Iced Spanish Latte","سبانيش لاتيه مثلج - 1 لتر",PPT-106,Delivery,,delivery,0,1,0,,No
+"1 Liter | Iced Spanish Latte","سبانيش لاتيه مثلج - 1 لتر",PPT-106,"Coffee | Shots",,coffee_shot,1,3,0,,No
+"1 Liter | Iced Americano","امريكانو مثلجة - 1 لتر",PPT-103,Delivery,,delivery,0,1,0,,No
+"1 Liter | Iced Americano","امريكانو مثلجة - 1 لتر",PPT-103,"Coffee | Shots",,coffee_shot,1,4,0,,No
+"1 Liter | Tower Drip","كولد درب - 1 لتر",PPT-102,Delivery,,delivery,0,1,0,,No
+"1 Liter | Iced Matcha","ماتشا مثلجة - 1 لتر",PPT-104,Delivery,,delivery,0,1,0,,No
+Strawberry,"موهيتو فراولة",PBR-107,Delivery,,delivery,0,2,0,,No
+"Koobs Box | Shots","كوبز بوكس",PPT-108,Flavors,,flavour,4,4,0,,No
+"ICED | Cacao","ايسد كاكاو",PBR-101,Extra,,extra,0,1,0,,No
+"ICED | Cacao","ايسد كاكاو",PBR-101,Delivery,,delivery,0,2,0,,No
+"ICED | V60","في ٦٠ - مثلج",PSC-107,Delivery,,delivery,0,2,0,,No
+"ICED | V60","في ٦٠ - مثلج",PSC-107,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Chemex","كيمكس مثلج",PSC-103,Delivery,,delivery,0,2,0,,No
+"ICED | Chemex","كيمكس مثلج",PSC-103,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"12Pcs | Drip Coffee Can","علبة القهوة الدرب |12حبة",PCB-104,Delivery,,delivery,0,1,0,,No
+"Chipotle | Chicken Wrap","راب تشيبوتلي الدجاج",PSD-111,Delivery,,delivery,0,2,0,,No
+"Brownie Bites",,PSN-129,Delivery,,delivery,0,2,0,,No
+"Croissant | Zaatar",,PCR-107,Delivery,,delivery,0,1,0,,No
+"Mixed | Mini Fridge Drinks",,PPT-109,Flavors,,flavour,1,100,0,,No
+"6Pcs | Mini Cookies","ميني كوكيز | 6 قطع",PSN-138,Delivery,,delivery,0,2,0,,No
+"ICED | Cold Foam Americano","كولد فوم أمريكانو",PIC-117,Extra,,extra,0,2,0,,No
+"ICED | Cold Foam Americano","كولد فوم أمريكانو",PIC-117,Delivery,,delivery,0,2,0,,No
+"ICED | Cold Foam Americano","كولد فوم أمريكانو",PIC-117,"Coffee | Shots",,coffee_shot,1,1,0,,No
+Sahlab,سحلب,PHT-119,"Hot Milk","حليب ساخن",hot_milk,1,1,0,,No
+Sahlab,سحلب,PHT-119,Delivery,,delivery,0,2,0,,No
+"ICED | Creamy Americano","كريمي أمريكانو",PIC-118,Extra,,extra,0,2,0,,No
+"ICED | Creamy Americano","كريمي أمريكانو",PIC-118,Delivery,,delivery,0,2,0,,No
+"ICED | Creamy Americano","كريمي أمريكانو",PIC-118,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"Regular | Arabic Coffee","قهوة عربية",PHT-120,Option,,option,1,1,0,,No
+"Coffee Beans | Brazil 250g","حبوب القهوة | برازيل 250غ",659657707796,Delivery,,delivery,0,1,0,,No
+"Coffee Beans | Colombia 250g","حبوب القهوة | كولومبيا 250غ",695845497469,Delivery,,delivery,0,1,0,,No
+"50g | Salted Caramel Pecan","بيكان بالكارميل المملح",PSN-153,Delivery,,delivery,0,1,0,,No
+"Umm Ali","ام علي",PSN-150,Option,,option,1,1,0,,No
+"Umm Ali","ام علي",PSN-150,Delivery,,delivery,0,1,0,,No
+"Chocolate Muffin","مافن كاكاو",PSN-155,Delivery,,delivery,0,1,0,,No
+"Danish | Labneh","دانيش لبنة",PCR-113,Delivery,,delivery,0,1,0,,No
+"Danish | Zaatar","دانش زعتر",PCR-114,Delivery,,delivery,0,1,0,,No
+"Brioche | Egg Sandwich","بيض بخبز البريوش",PSD-115,Delivery,,delivery,0,2,0,,No
+"ICED | Brown Sugar Latte","براون شوقر لاتيه - مثلج",PIC-119,Extra,,extra,0,2,0,,No
+"ICED | Brown Sugar Latte","براون شوقر لاتيه - مثلج",PIC-119,Delivery,,delivery,0,2,0,,No
+"ICED | Brown Sugar Latte","براون شوقر لاتيه - مثلج",PIC-119,"Milk | Medium",,milk_medium,1,2,0,,No
+"ICED | Brown Sugar Latte","براون شوقر لاتيه - مثلج",PIC-119,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Kubbar  Tea","كبًر - شاي مثلج",PBR-113,Delivery,,delivery,0,2,0,,No
+"HOT | Brown Sugar Latte","براون شوقر لاتيه | ساخن",PHT-122,Extra,,extra,0,2,0,,No
+"HOT | Brown Sugar Latte","براون شوقر لاتيه | ساخن",PHT-122,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"HOT | Brown Sugar Latte","براون شوقر لاتيه | ساخن",PHT-122,Delivery,,delivery,0,2,0,,No
+"HOT | Brown Sugar Latte","براون شوقر لاتيه | ساخن",PHT-122,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"5Pcs | Drip Coffee Bags","اكياس القهوة المقطرة - ٥ أكياس",PCB-105,Delivery,,delivery,0,1,0,,No
+"ICED | Sweet Milk FF-12oz","حليب محلى مثلج | وسط",FF-001,Extra,,extra,0,1,0,,No
+"ICED | Sweet Milk FF-16oz","حليب محلى مثلج | كبير",FF-002,Extra,,extra,0,1,0,,No
+"Tres Leches Cake",تريليشا,PSN-158,Delivery,,delivery,0,1,0,,No
+"Triple Chocolate Mousse","موس الشوكولاته الثلاثية",PSN-159,Delivery,,delivery,0,1,0,,No
+Tiramisu,تيراميسو,PSN-160,Delivery,,delivery,0,1,0,,No
+"Upside Down Cheesecake","تشيز كيك المقلوبة",PSN-161,Delivery,,delivery,0,1,0,,No
+"Coffee Beans | Classic Blend 250g","بن قهوة - كلاسيك روست 250غ",659657707797,Delivery,,delivery,0,1,0,,No
+"Pistachio Oat Cookie","كوكيز الشوفان بالفستق",PSN-163,Delivery,,delivery,0,1,0,,No
+"Rawdatain | Sparkling Water","مياه غازية | الروضتين",PWJ-102,Delivery,,delivery,0,1,0,,No
+"Eva | Still Water","ماء ايفا",PWJ-101,Delivery,,delivery,0,1,0,,No
+"Hunter Chips | Sea Salted 40g","تشيبس هانتر- ملح البحر -40غ",PSN-113,Delivery,,delivery,0,1,0,,No
+"Hunter Chips | Black Truffle 40g","تيشبس هانتر - الكمأة السوداء 40 جرام",PSN-114,Delivery,,delivery,0,1,0,,No
+"QminC | Curcumin & Lemon","شراب الليمون بالكركم - كيو من سي",PWJ-105,Delivery,,delivery,0,1,0,,No
+"QminC | Ginger with Honey","شراب الزنجبيل والعسل - كيومن سي",PWJ-107,Delivery,,delivery,0,1,0,,No
+"QminC | Manuka Honey Collagen","شراب الكولاجين وعسل المانوكا - كيومن سي",PWJ-106,Delivery,,delivery,0,1,0,,No
+"Voss | Still Water","مياه معدنية | فوس",PWJ-108,Delivery,,delivery,0,1,0,,No
+"4 Cheese Sandwich","ساندويتش الأجبان الأربعة",PSD-105,Delivery,,delivery,0,1,0,,No
+"HOT | Americano (L)","أمريكانو حارة",PHT-102,Extra,,extra,0,2,0,,No
+"HOT | Americano (L)","أمريكانو حارة",PHT-102,Option,,option,0,1,0,,No
+"HOT | Americano (L)","أمريكانو حارة",PHT-102,Delivery,,delivery,0,2,0,,No
+"HOT | Americano (L)","أمريكانو حارة",PHT-102,"Coffee | Shots",,coffee_shot,1,2,0,ST-017,No
+"Tower Drip (L)","تاور دريب",PIC-100,Extra,,extra,0,2,0,,No
+"Tower Drip (L)","تاور دريب",PIC-100,Delivery,,delivery,0,2,0,,No
+"ICED | Vanilla Shaken (L)","فانيلا شيكن مثلجة",PIC-120,Extra,,extra,0,2,0,,No
+"ICED | Vanilla Shaken (L)","فانيلا شيكن مثلجة",PIC-120,Delivery,,delivery,0,3,0,,No
+"ICED | Vanilla Shaken (L)","فانيلا شيكن مثلجة",PIC-120,"Milk | Large",,milk_large,1,1,0,,No
+"ICED | Vanilla Shaken (L)","فانيلا شيكن مثلجة",PIC-120,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Latte (L)","لاتيه مثلجة",PIC-115,Extra,,extra,0,2,0,,No
+"ICED | Latte (L)","لاتيه مثلجة",PIC-115,Delivery,,delivery,0,2,0,,No
+"ICED | Latte (L)","لاتيه مثلجة",PIC-115,"Milk | Large",,milk_large,1,1,0,,No
+"ICED | Latte (L)","لاتيه مثلجة",PIC-115,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Salted Caramel (L)","سولتد كراميل لاتيه مثلجة",PIC-116,Extra,,extra,0,2,0,,No
+"ICED | Salted Caramel (L)","سولتد كراميل لاتيه مثلجة",PIC-116,Delivery,,delivery,0,2,0,,No
+"ICED | Salted Caramel (L)","سولتد كراميل لاتيه مثلجة",PIC-116,"Milk | Large",,milk_large,1,2,0,,No
+"ICED | Salted Caramel (L)","سولتد كراميل لاتيه مثلجة",PIC-116,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Black Spanish (L)","بلاك سبانيش مثلجة",PIC-102,Extra,,extra,0,3,0,,No
+"ICED | Black Spanish (L)","بلاك سبانيش مثلجة",PIC-102,Delivery,,delivery,0,2,0,,No
+"ICED | Black Spanish (L)","بلاك سبانيش مثلجة",PIC-102,"Milk | Large",,milk_large,1,2,0,,No
+"ICED | Black Spanish (L)","بلاك سبانيش مثلجة",PIC-102,"Coffee | Shots",,coffee_shot,1,2,0,,No
+"ICED | Spanish Latte (L)","سبانيش لاتيه مثلجة",PIC-111,Extra,,extra,0,3,0,,No
+"ICED | Spanish Latte (L)","سبانيش لاتيه مثلجة",PIC-111,Delivery,,delivery,0,2,0,,No
+"ICED | Spanish Latte (L)","سبانيش لاتيه مثلجة",PIC-111,"Milk | Large",,milk_large,1,2,0,,No
+"ICED | Spanish Latte (L)","سبانيش لاتيه مثلجة",PIC-111,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"ICED | Americano (L)","أمريكانو مثلجة",PIC-105,Extra,,extra,0,2,0,,No
+"ICED | Americano (L)","أمريكانو مثلجة",PIC-105,Option,,option,0,1,0,,No
+"ICED | Americano (L)","أمريكانو مثلجة",PIC-105,Delivery,,delivery,0,2,0,,No
+"ICED | Americano (L)","أمريكانو مثلجة",PIC-105,"Coffee | Shots",,coffee_shot,1,2,0,,No
+Mafroka,مفروكة,PSN-152,Delivery,,delivery,0,1,0,,No
+"Dubai Chocolate Cake","كيكة دبي بالتشوكولت",PSN-154,Delivery,,delivery,0,1,0,,No
+"HOT | White Cacao Latte","وايت ككاو لاتيه",PHT-123,Extra,,extra,0,1,0,,No
+"HOT | White Cacao Latte","وايت ككاو لاتيه",PHT-123,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"HOT | White Cacao Latte","وايت ككاو لاتيه",PHT-123,Delivery,,delivery,0,2,0,,No
+"HOT | White Cacao Latte","وايت ككاو لاتيه",PHT-123,"Coffee | Shots",,coffee_shot,1,1,0,,No
+"HOT | White Chocolate","وايت تشوكولت",PHT-124,Extra,,extra,0,1,0,,No
+"HOT | White Chocolate","وايت تشوكولت",PHT-124,"Hot Milk","حليب ساخن",hot_milk,1,2,0,,No
+"HOT | White Chocolate","وايت تشوكولت",PHT-124,Delivery,,delivery,0,2,0,,No
+"Turkey Croissant","تركي كرواسون",PCR-112,Delivery,,delivery,0,1,0,,No
+"Saffron Milk Cake","كيكة الزعفران",PSN-151,Delivery,,delivery,0,1,0,,No
+"1 Liter | Kubbar Iced Tea","كبًر شاي مثلج",PPT-101,Delivery,,delivery,1,1,0,,No
+"French Coffee","قهوة فرنسية",PHT-118,Extra,,extra,0,2,0,,No
+"French Coffee","قهوة فرنسية",PHT-118,Option,,option,0,1,0,,No
+"French Coffee","قهوة فرنسية",PHT-118,Cups,كوب,cups,1,2,0,,No
+"French Coffee","قهوة فرنسية",PHT-118,"Hot Milk","حليب ساخن",hot_milk,0,1,0,,No
+"French Coffee","قهوة فرنسية",PHT-118,Delivery,,delivery,0,2,0,,No
+"Mixed Box | Umm Ali & Cream Brulee",,PPT-112,Delivery,,delivery,1,1,0,,No
+"Box | Cream Brulee",,PPT-111,Delivery,,delivery,1,1,0,,No
+"Box | Umm Ali",,PPT-110,Delivery,,delivery,1,1,0,,No
+"Small | Arabic Coffee",,PHT-125,Option,,option,1,1,0,,No
+"Croissant | Bites & Dip",,PCR-111,Extra,,extra,0,4,0,,No
+"Croissant | Bites & Dip",,PCR-111,Option,,option,1,1,0,,No
+"Croissant | Bites & Dip",,PCR-111,Delivery,,delivery,0,1,0,,No
+"Danish | Ricotta","دانيش جبنة الريكوتا",PCR-116,Delivery,,delivery,0,1,0,,No
+"Danish | Mixed Nuts","دانيش مكسرات مشكلة",PCR-106,Delivery,,delivery,0,1,0,,No
+"Coffee Beans | Gwanda Blend 250g","حبوب القهوة | خلطة جواندا 250 جرام",659657707798,Delivery,,delivery,0,1,0,,No
+"Double Chocolate Brownie","براوني دبل تشوكولت",PSN-145,Delivery,,delivery,0,1,0,,No

@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "smart-order-469705",
+  "private_key_id": "61beda5ae613277098dc774f29439afcc2943092",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDnz5hf0/rxpZhz\nPuhUvoV85T9tkiz5l56CSO6kd9DRnHb1IyFU2FJmsp65Kq9Q8w0aV0PaMuLO7o0Q\nnkATvCIfszOoO//0GeVYlAOgBpsntQl9z5tpwsO+SRtSN8B/t8V/w7Bp2Fq5VRAJ\nedJanbBSx9Os9D/6dESXrE1loy3aTnc1a/HmdR/H5MXdIpwwEEVL+WBk1fucClIA\n/4tLnxxCSr7qoNlUdt4cvAjMq+V036qlSwCDUMdy577VDJ2K6DxJVsCjaziAs27t\nDTfCJ8HrXLa98NgOiX806Q5tbP+OQm0LMYsLvRSjwffrKg3yp2Rd8PmMmJ4Hzzq/\nguTaoEi/AgMBAAECggEAFirA3HEN7yuxr1uVpfzuEOpvLVAsItX/31+QCoQ2oMTA\nj2KDnnRtNMrh6L0PNMN5PkqX/3acP8OKE8u+PuTfsn5Vc0IBkNslFlpZGmVnUt26\nAaDnsK5iP4EILs2MB+qP5U7WQNjinBRpSy6uEeJAaToYoNJeh9m0cXiVkiGPke9+\nWHksFmuqvUlhADu2u6bILmUiS9nI6KzXwws775OFSBY/8X3cqJ0MyeGrgjyjPXz7\n2iTkzbJtiNFxmwyq/jHr2fR0UpqYcciSgv9/6x/uzzD3LfQjYCp2+xQVccodLgEL\nnMM0VtkTF6oKTXLza9MPEfEUwLdTXTf8H02lwXgPCQKBgQD3CfkIz6YlFCcUfB/K\nErTzmBRX2gSL22fp4iVtb7PMNFupdy9XIcxEACy/9d6mkfS9rLM3og3ifGBCm16p\nwm2onM0/ealWFvwIqg4fTo29E+/DHHvJI6E5OmF+I1P7yWNBT20AB0aEcZc/5suS\n+Ps0jUDUusV+jzhoEhqsbm8JXQKBgQDwODairqdj49C3ezTxmCCgSet1kY4Lsdt0\na7BesamsolD03TWJSUSLiAOwG98JSZpGq4V8jNEz1Qi2vdr3TT3APsN/pjoutAUU\n/W4qxGglJd1aSYmXgP4fG/D5J1p0th255Tyidmoly5cCta8KKOpICd7OROSP5+Nc\nH0MrBPmMywKBgQC6fXrUXf1szFPcMP/Gimyz38CruVfpRI6jjyb2AHdY1sXDnsfM\nHSWYyBEAMNoOIO0DKxZ4DwwwR/hbD/Ncb/xcZ1LCclOVO/CzkbzrgV+atywuvJft\n9cnF6/6hPIYv843MRethNBzV6vJlORPBNdhdiazBauWgbvoEBnbAaPXFuQKBgQC1\nExqUDKVfFaYJ+NSS3IKTcMUNbXeudxYeruJWrwNgf0YZHfoyD0mdCB0HjirUvGeP\np9FKbndv48Dax0gcLFxE4srJGQs4kzhVdyepEz4R6nXtjgsqafCkkJJXrYNxAKpt\nq0/Ggw5GiS2+vCdCuE7JmK8buzCzDTAEDAi8j9ZwewKBgBEz5E72tvlPWzOylk/M\nHuNAjM94dVRVH3hn+NL1DI53KbAub/by0MUsW6UUj1RwpJhk1vtwHGB9fv6QdMIt\n5YHg47Zv8SAu/eStNlJJEgbB9GP8XhzpRd721P9xMf3gUpJvGKRUkCqmjSekjuuw\nv0qxfqdaKdT1pq+HeSJUQSpA\n-----END PRIVATE KEY-----\n",
+  "client_email": "ordertech-tts-service@smart-order-469705.iam.gserviceaccount.com",
+  "client_id": "104540516173597159307",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ordertech-tts-service%40smart-order-469705.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

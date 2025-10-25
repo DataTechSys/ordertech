@@ -1,0 +1,4 @@
+ schema | relkind | object_name | definition 
+--------+---------+-------------+------------
+(0 rows)
+

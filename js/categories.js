@@ -6,7 +6,7 @@
 
   function setPreview(imgEl, url){
     try {
-      const fallbacks = [url, '/placeholder.jpg'].filter(Boolean);
+      const fallbacks = [url, '/images/placeholder.png'].filter(Boolean);
       let i=0; const next=()=>{ if(i>=fallbacks.length) return; imgEl.onerror=()=>next(); imgEl.src=fallbacks[i++]; };
       next();
     } catch { if (imgEl && url) imgEl.src = url; }
@@ -143,7 +143,7 @@
 
     bindImageUploadAndCsv();
 
-    async function uploadImageFor(kind, file){
+    async function uploadImageFor(kind, file, onProgress){
       const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return null; }
       const type = file.type || 'application/octet-stream';
       if (!/^image\//i.test(type)) { toast('Please select an image'); return null; }
@@ -151,8 +151,17 @@
       try {
         const sig = await api('/admin/upload-url', { method:'POST', body:{ tenant_id: id, filename: file.name, contentType: type, kind }, tenantId: id });
         if (!sig?.url || !sig?.method) throw new Error('sign_failed');
-        const putRes = await fetch(sig.url, { method: sig.method, headers: { 'Content-Type': type }, body: file });
-        if (!putRes.ok) { const txt = await putRes.text().catch(()=>'' ); throw new Error(`upload_failed:${putRes.status}:${txt||''}`); }
+        await new Promise((resolve, reject)=>{
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open(sig.method, sig.url, true);
+            xhr.setRequestHeader('Content-Type', type);
+            xhr.upload.onprogress = (e)=>{ if (e && e.lengthComputable && typeof onProgress==='function'){ const pct=Math.round((e.loaded/e.total)*100); try { onProgress(pct); } catch {} } };
+            xhr.onload = ()=>{ if (xhr.status>=200 && xhr.status<300) resolve(true); else reject(new Error('upload_failed:'+xhr.status)); };
+            xhr.onerror = ()=> reject(new Error('upload_error'));
+            xhr.send(file);
+          } catch (err) { reject(err); }
+        });
         return sig.publicUrl || '';
       } catch { toast('Upload failed'); return null; }
     }
@@ -167,7 +176,13 @@
         try {
           const f = e.target.files && e.target.files[0]; if (!f) return;
           try { if (pv) { const blobUrl = URL.createObjectURL(f); pv.src = blobUrl; setTimeout(()=>URL.revokeObjectURL(blobUrl), 15000); } } catch {}
-          const publicUrl = await uploadImageFor('category', f);
+          let pb = document.getElementById('catImageUploadProgress');
+          try {
+            if (!pb && pv) { pb = window.Admin.createProgressBar({ id: 'catImageUploadProgress', small: true }); const prevWrap = pv.closest('.preview'); const card = pv.closest('.media-card'); if (pb && (prevWrap||card)) (prevWrap||card).insertAdjacentElement('afterend', pb); }
+            pb?.show(); pb?.set(0);
+          } catch {}
+          const publicUrl = await uploadImageFor('category', f, (pct)=>{ try { pb?.set(pct); } catch {} });
+          try { if (publicUrl) { pb?.set(100); setTimeout(()=>pb?.hide(), 600); } else { pb?.hide(); } } catch {}
           if (!publicUrl) return;
           if (urlEl) urlEl.value = publicUrl;
           if (pv) setPreview(pv, publicUrl);
@@ -285,29 +300,62 @@
   async function importCategoriesFromCsv(file){
     try {
       const id = STATE.selectedTenantId; if (!id) { toast('Select a tenant'); return; }
+      const modal = document.getElementById('catImportModal');
+      const footer = modal?.querySelector('.footer');
+      const statusEl = document.getElementById('catImportStatus');
+      const confirmBtn = document.getElementById('catImportConfirm');
+      const updExisting = !!document.getElementById('catImportUpdateExisting')?.checked;
+      let pb = document.getElementById('catImportProgress');
+      if (!pb) { pb = window.Admin.createProgressBar({ id: 'catImportProgress', small: true }); if (pb && footer) footer.insertBefore(pb, footer.querySelector('.spacer')); }
+      try { if (confirmBtn) confirmBtn.disabled = true; } catch {}
+      try { pb?.show(); pb?.set(0); if (statusEl) statusEl.textContent = 'Importing… 0%'; } catch {}
+
       const { headers, rows } = await window.Importer.parseFile(file);
       // Header mapping with aliases
       const nameKey = headers.find(h=> /^name$/i.test(h)) || headers.find(h=> /^category[_ ]?name$/i.test(h)) || 'name';
       const refKey = headers.find(h=> /^reference$/i.test(h)) || 'reference';
       const nameLocKey = headers.find(h=> /^name[_ ]?localized$/i.test(h)) || 'name_localized';
       const imgKey = headers.find(h=> /^image(_url)?$/i.test(h)) || 'image';
-      const existingByName = new Map((CST.categories||[]).map(c=>[String((c.name||'').toLowerCase()), true]));
-      let created=0, skipped=0, failed=0;
+      const byName = new Map((CST.categories||[]).map(c=>[String((c.name||'').toLowerCase()), c]));
+      const byRef  = new Map((CST.categories||[]).filter(c=>c.reference).map(c=>[String((c.reference||'').toLowerCase()), c]));
+      let created=0, skipped=0, updated=0, failed=0;
+      const total = Math.max(1, rows.length||0);
+      let done = 0;
       for (const r of rows){
         const name = String(r[nameKey]||'').trim();
         const reference = String(r[refKey]||'').trim();
         const name_localized = String(r[nameLocKey]||'').trim();
         const image_url = String(r[imgKey]||'').trim();
-        if (!name) { skipped++; continue; }
-        if (existingByName.has(name.toLowerCase())) { skipped++; continue; }
+        if (!name) { skipped++; done++; const pct=Math.round(done*100/total); pb?.set(pct); if(statusEl) statusEl.textContent = `Importing… ${pct}%`; continue; }
+        const keyName = name.toLowerCase();
+        let existing = byName.get(keyName) || (reference ? byRef.get(reference.toLowerCase()) : null) || null;
+        if (existing) {
+          if (updExisting) {
+            const patch = {};
+            if (reference && !existing.reference) patch.reference = reference;
+            if (name_localized && !existing.name_localized) patch.name_localized = name_localized;
+            if (image_url && !existing.image_url) patch.image_url = image_url;
+            try {
+              if (Object.keys(patch).length){ await api(`/admin/tenants/${encodeURIComponent(id)}/categories/${encodeURIComponent(existing.id)}`, { method:'PUT', body: patch }); updated++; }
+              else { skipped++; }
+            } catch { failed++; }
+          } else {
+            skipped++;
+          }
+          done++; const pctUp = Math.round(done*100/total); pb?.set(pctUp); if(statusEl) statusEl.textContent = `Importing… ${pctUp}%`;
+          continue;
+        }
         try {
           await api(`/admin/tenants/${encodeURIComponent(id)}/categories`, { method:'POST', body:{ name, reference, name_localized, image_url } });
-          created++; existingByName.set(name.toLowerCase(), true);
+          created++; byName.set(keyName, { id:'(new)', name, reference, name_localized, image_url });
         } catch { failed++; }
+        done++; const pct = Math.round(done*100/total); pb?.set(pct); if (statusEl) statusEl.textContent = `Importing… ${pct}%`;
       }
-      document.getElementById('catImportStatus').textContent = `Created: ${created}, skipped: ${skipped}, failed: ${failed}`;
-      toast(`Imported — created ${created}, skipped ${skipped}${failed?`, failed ${failed}`:''}`);
+      if (statusEl) statusEl.textContent = `Created: ${created}, updated: ${updated}, skipped: ${skipped}, failed: ${failed}`;
+      try { pb?.set(100); setTimeout(()=> pb?.hide(), 800); } catch {}
+      toast(`Imported — created ${created}${updated?`, updated ${updated}`:''}, skipped ${skipped}${failed?`, failed ${failed}`:''}`);
       await loadCategories(); renderCategoriesTable(); renderHidePanel();
+      try { if (confirmBtn) confirmBtn.disabled = false; } catch {}
     } catch (e) { toast('Import failed'); }
   }
 
@@ -352,6 +400,20 @@
         const rows = (CST.categories||[]).map(c=>({ id:c.id, name:c.name }));
         window.Importer.downloadCsv('categories.csv', ['id','name'], rows);
       } catch { toast('Export failed'); }
+    });
+    // Sync (Foodics)
+    $('#btnCatSync')?.addEventListener('click', async ()=>{
+      try { const id = STATE.selectedTenantId; if(!id){ toast('Select a tenant'); return; }
+        const res = await api(`/admin/tenants/${encodeURIComponent(id)}/integrations/foodics/sync`, { method:'POST', tenantId: null });
+        const st = res?.stats || {}; const cc = st.categories?.created||0, cu=st.categories?.updated||0;
+        toast(`Synced — categories +${cc}/~${cu}`);
+        await loadCategories();
+        await maybeLoadProducts();
+        renderCategoriesTable();
+      } catch (e) {
+        const msg = (e && e.data && (e.data.message || e.data.error)) ? String(e.data.message || e.data.error) : 'Sync failed';
+        toast(msg);
+      }
     });
     // Tabs
     $$('#catTabs .tab').forEach(btn=> btn.addEventListener('click', ()=>{ CST.categoryTab = btn.getAttribute('data-tab') || 'active'; $$('#catTabs .tab').forEach(b=> b.classList.toggle('active', b===btn)); renderCategoriesTable(); }));

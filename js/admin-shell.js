@@ -3,8 +3,14 @@
   const $  = (sel, el=document) => el.querySelector(sel);
   const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
 
-  function activeHref(href){
-    try { const cur = (window.location.pathname || '/').replace(/\/+$/, '/') ; return cur === href.replace(/\/+$/, '/'); } catch { return false; }
+function activeHref(href){
+    try { 
+      const cur = (window.location.pathname || '/').replace(/\/+$/, '/') ; 
+      const target = href.replace(/\/+$/, '/');
+      // Special handling for dashboard - both /admin and /dashboard should match dashboard link
+      if (target === '/admin/' && (cur === '/admin/' || cur === '/dashboard/')) return true;
+      return cur === target;
+    } catch { return false; }
   }
 
   async function fetchSidebar(){
@@ -96,7 +102,17 @@
 function markActiveLinks(sidebar){
   const links = sidebar.querySelectorAll('a.menu-item[href]');
   links.forEach(a => {
-    if (activeHref(a.getAttribute('href')||'')) a.classList.add('active');
+    if (activeHref(a.getAttribute('href')||'')) {
+      a.classList.add('active');
+      // If this is the dashboard link and we're on the dashboard, make it non-clickable
+      const href = a.getAttribute('href') || '';
+      const currentPath = (window.location.pathname || '/').replace(/\/+$/, '/');
+      const isDashboard = currentPath === '/admin/' || currentPath === '/dashboard/';
+      if (href.replace(/\/+$/, '/') === '/admin/' && isDashboard) {
+        a.style.pointerEvents = 'none';
+        a.style.cursor = 'default';
+      }
+    }
   });
   // Ensure parent section of active link is expanded
   const active = sidebar.querySelector('a.menu-item.active');
@@ -115,8 +131,18 @@ function markActiveLinks(sidebar){
   try {
     const header = document.querySelector('header.topbar');
     if (!header) return;
+    
+    // Check if this is a custom header (like dashboard) - don't overwrite it
+    const hasTenantSearch = header.querySelector('#tenantSearch');
+    if (hasTenantSearch) {
+      // This is a custom header, don't modify breadcrumbs
+      return;
+    }
+    
     let bc = header.querySelector('.breadcrumbs');
     if (!bc) { bc = document.createElement('nav'); bc.className='breadcrumbs'; header.insertBefore(bc, header.firstChild); }
+    
+    // Standard breadcrumb handling for all pages (including dashboard)
     const active = sidebar.querySelector('a.menu-item.active');
     const section = active ? active.closest('.menu-section[data-section]') : null;
     const menu = section ? (section.querySelector('.menu-head .label')?.textContent || '') : '';
@@ -130,6 +156,7 @@ function markActiveLinks(sidebar){
       parts.push(`${subIcon}<span>${sub}</span>`);
     }
     bc.innerHTML = parts.join('');
+    
     // Remove old tenant crumb if present
     const old = document.getElementById('tenantNameCrumb'); if (old && old.parentElement) old.parentElement.remove();
   } catch {}
@@ -145,9 +172,11 @@ function showUserName(header){
       if (sel) {
         sel.classList.add('sm');
         sel.style.border = 'none';
-        sel.style.background = 'transparent';
         sel.style.boxShadow = 'none';
         sel.style.outline = 'none';
+        sel.style.width = 'auto';
+        sel.style.maxWidth = '250px';
+        sel.style.fontSize = '13px';
       }
     } catch {}
     // Remove mobile hamburger if present
@@ -159,6 +188,7 @@ function showUserName(header){
     span.style.fontWeight = '600';
     span.style.marginRight = '6px';
     span.style.whiteSpace = 'nowrap';
+    span.style.fontSize = '13px';
     const getName = () => {
       try {
         const u = window.firebase?.auth?.().currentUser;
@@ -179,15 +209,8 @@ function showUserName(header){
     span.textContent = getName() || '';
     // Keep it updated after auth resolves
     setTimeout(()=>{ span.textContent = getName() || span.textContent; }, 1500);
-    // Place the name immediately after the avatar image when available; otherwise, at the start
-    try {
-      const imgBtn = right.querySelector('#avatarBtn');
-      if (imgBtn && imgBtn.parentNode === right) {
-        imgBtn.insertAdjacentElement('afterend', span);
-      } else {
-        right.insertBefore(span, right.firstChild);
-      }
-    } catch { right.insertBefore(span, right.firstChild); }
+    // Just append the username to the searchbar - arrangeTopbar will position it correctly
+    right.appendChild(span);
   } catch {}
 }
 
@@ -195,12 +218,32 @@ function showUserName(header){
     if (!header) return;
     let right = header.querySelector('.searchbar');
     if (!right) { right = document.createElement('div'); right.className='searchbar'; header.appendChild(right); }
+    
+    // Ensure the searchbar container can handle elements properly
+    right.style.display = 'flex';
+    right.style.alignItems = 'center';
+    right.style.gap = '0'; // We'll handle spacing manually
+    right.style.flexWrap = 'nowrap';
+    right.style.minWidth = '0'; // Allow shrinking
 
-    const img = document.createElement('img');
-    img.src = '/images/OrderTech.png';
-    img.alt = 'Company';
-    img.className = 'avatar';
-    img.id = 'avatarBtn';
+    // Add tenant avatar (square with colored background)
+    const tenantAvatar = document.createElement('div');
+    tenantAvatar.id = 'tenantAvatar';
+    tenantAvatar.style.cssText = `
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      max-width: 32px;
+      flex-shrink: 0;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    `;
 
     const dd = document.createElement('div');
     dd.className = 'dropdown';
@@ -212,28 +255,106 @@ function showUserName(header){
 
     btnLogout.addEventListener('click', async ()=>{
       try { if (window.firebase?.auth) await window.firebase.auth().signOut(); } catch {}
-      try { localStorage.removeItem('ID_TOKEN'); } catch {}
+      try { 
+        localStorage.removeItem('ID_TOKEN');
+        localStorage.removeItem('AUTH_TOKEN');
+        localStorage.removeItem('SELECTED_TENANT_ID');
+        localStorage.removeItem('USER_EMAIL');
+        localStorage.removeItem('ACCOUNT_NUMBER');
+      } catch {}
       window.location.href = '/login/?logged_out=1';
     });
 
     dd.appendChild(aCompany); dd.appendChild(aPlatform); dd.appendChild(btnLogout);
 
-    img.addEventListener('click', ()=>{ dd.classList.toggle('open'); });
-    document.addEventListener('click', (e)=>{ const t=e.target; if (!t) return; if (!dd.contains(t) && !img.contains(t)) dd.classList.remove('open'); });
+    tenantAvatar.addEventListener('click', ()=>{ dd.classList.toggle('open'); });
+    document.addEventListener('click', (e)=>{ const t=e.target; if (!t) return; if (!dd.contains(t) && !tenantAvatar.contains(t)) dd.classList.remove('open'); });
 
-    right.appendChild(img); right.appendChild(dd);
+    // Ensure tenant select dropdown exists (create only if not already present)
+    let tenantSelect = right.querySelector('#tenantSelect');
+    if (!tenantSelect) {
+      // Check the entire document to avoid duplicates
+      tenantSelect = document.getElementById('tenantSelect');
+      if (!tenantSelect) {
+        // Create new tenant select dropdown
+        tenantSelect = document.createElement('select');
+        tenantSelect.id = 'tenantSelect';
+        tenantSelect.className = 'sm';
+        // Apply base styling - detailed styling comes from CSS
+        tenantSelect.style.cssText = `
+          width: auto;
+          max-width: 250px;
+        `;
+        right.appendChild(tenantSelect);
+      } else {
+        // Move existing dropdown to the right container
+        if (tenantSelect.parentNode !== right) {
+          right.appendChild(tenantSelect);
+        }
+        // Apply consistent styling to existing dropdown
+        tenantSelect.className = 'sm';
+        tenantSelect.style.cssText = `
+          width: auto;
+          max-width: 250px;
+        `;
+      }
+    }
+    
+    // Set up event listener for when tenants are loaded
+    if (!window._tenantSelectListenerSet) {
+      document.addEventListener('tenantsLoaded', () => {
+        try {
+          console.log('tenantsLoaded event received, populating dropdown');
+          if (window.Admin && window.Admin.populateTenantSelect) {
+            // Single call when tenants are loaded
+            window.Admin.populateTenantSelect(true);
+          }
+        } catch (error) {
+          console.error('Error populating tenant select on tenantsLoaded:', error);
+        }
+      });
+      window._tenantSelectListenerSet = true;
+    }
+    
+    right.appendChild(tenantAvatar); right.appendChild(dd);
 
-    // Update avatar to company logo for current tenant
+    // Update tenant avatar
     async function refreshAvatar(){
       try {
-        const tid = window.Admin?.STATE?.selectedTenantId || '';
-        if (!window.Admin?.api || !tid) { img.src = '/images/OrderTech.png'; return; }
-        const b = await window.Admin.api('/brand', { tenantId: tid });
-        const src = (b && b.logo_url) ? String(b.logo_url) : '/images/OrderTech.png';
-        img.src = src;
-      } catch { img.src = '/images/OrderTech.png'; }
+        // Update tenant avatar
+        const tenantName = window.Admin?.STATE?.selectedTenantName || 'Unknown';
+        const firstLetter = tenantName.charAt(0).toUpperCase();
+        
+        // Generate consistent color based on tenant name
+        const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+        let hash = 0;
+        for (let i = 0; i < tenantName.length; i++) {
+          hash = tenantName.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const color = colors[Math.abs(hash) % colors.length];
+        
+        if (tenantAvatar) {
+          tenantAvatar.textContent = firstLetter;
+          tenantAvatar.style.backgroundColor = color;
+          tenantAvatar.title = `Tenant: ${tenantName}`;
+        }
+        
+        // Keep dropdown styling consistent via CSS instead of inline styles
+        
+        // Ensure sidebar shows OrderTech logo
+        try {
+          const sl = document.querySelector('.sidebar .logo');
+          if (sl) {
+            sl.style.backgroundImage = 'url("/ordertech.png")';
+          }
+        } catch {}
+      } catch (error) {
+        console.error('Error refreshing tenant avatar:', error);
+      }
     }
-    refreshAvatar(); setTimeout(refreshAvatar, 1000); setTimeout(refreshAvatar, 2500);
+    // Initial refresh and single retry to reduce blinking
+    refreshAvatar();
+    setTimeout(refreshAvatar, 1500);
     try { document.getElementById('tenantSelect')?.addEventListener('change', refreshAvatar); } catch {}
 
     // Try to reveal Platform Admin link when Admin is ready
@@ -271,7 +392,10 @@ function showUserName(header){
         chip.textContent = '';
         right.appendChild(chip);
       }
-      try { chip.style.whiteSpace = 'nowrap'; } catch {}
+      try { 
+        chip.style.whiteSpace = 'nowrap'; 
+        chip.style.fontSize = '12px';
+      } catch {}
       async function refresh(){
         try {
           const tid = window.Admin?.STATE?.selectedTenantId || '';
@@ -296,7 +420,7 @@ function showUserName(header){
             label = days ? `Trial · ${days} days` : 'Trial';
             chip.classList.add('tier-trial');
           } else if (tier === 'professional' || tier === 'pro' || tier === 'premium') {
-            label = 'Professional'; chip.classList.add('tier-pro');
+            label = 'Pro'; chip.classList.add('tier-pro');
           } else {
             label = 'Basic'; chip.classList.add('tier-basic');
           }
@@ -306,8 +430,8 @@ function showUserName(header){
           try { chip.style.display='none'; } catch {}
         }
       }
-      // Initial + retries to cover auth bootstrap order
-      refresh(); setTimeout(refresh, 1000); setTimeout(refresh, 2500);
+      // Initial refresh with single retry to reduce blinking
+      refresh(); setTimeout(refresh, 2000);
       // Update on tenant switch
       try { document.getElementById('tenantSelect')?.addEventListener('change', refresh); } catch {}
       // Expose for pages that want to trigger refresh
@@ -315,28 +439,95 @@ function showUserName(header){
     } catch {}
   }
 
+  // Company ID under logo in sidebar
+  function initCompanyIdSidebar(sidebar){
+    try {
+      const el = sidebar.querySelector('#companyIdUnderLogo');
+      if (!el) return;
+      async function refresh(){
+        try {
+          const tid = window.Admin?.STATE?.selectedTenantId || '';
+          const hasAuth = !!(localStorage.getItem('ID_TOKEN') || (window.firebase?.auth && window.firebase.auth().currentUser));
+          if (!tid || !window.Admin?.api || !hasAuth) { el.textContent = '—'; el.style.display=''; return; }
+          const data = await window.Admin.api(`/admin/tenants/${encodeURIComponent(tid)}/public`, { tenantId: null });
+          const raw = (data && data.code) ? String(data.code) : '';
+          const code = raw.replace(/\D/g, '');
+          if (code && code.length === 6) { el.textContent = code; el.style.display=''; }
+          else { el.textContent = '—'; el.style.display=''; }
+        } catch { el.textContent = '—'; el.style.display=''; }
+      }
+      refresh(); setTimeout(refresh, 1000);
+      try { document.getElementById('tenantSelect')?.addEventListener('change', refresh); } catch {}
+      window.__refreshCompanyIdSidebar = refresh;
+    } catch {}
+  }
+
+  // Company ID chip (shows tenant 6-digit code; falls back to UUID prefix)
+
   function arrangeTopbar(header){
     try {
       const right = header.querySelector('.searchbar'); if (!right) return;
-      const avatar = right.querySelector('#avatarBtn');
-      const dd     = right.querySelector('#avatarMenu');
-      const name   = right.querySelector('#userNameLabel');
-      const select = right.querySelector('#tenantSelect');
-      const chip   = right.querySelector('#subscriptionChip');
-      // Remove any stray '|' separators not managed by us
+      
+      // Get all topbar elements
+      const tenantAvatar = right.querySelector('#tenantAvatar');
+      const avatarMenu   = right.querySelector('#avatarMenu');
+      const userName     = right.querySelector('#userNameLabel');
+      const tenantSelect = right.querySelector('#tenantSelect');
+      const subscription = right.querySelector('#subscriptionChip');
+      const companyId    = right.querySelector('#companyIdChip');
+      
+      // Remove any stray separators
       try {
         Array.from(right.children).forEach(n => {
-          if (n && n.nodeType === 1 && n.id !== 'selectChipSep') {
-            if (n.tagName === 'SPAN' && n.textContent && n.textContent.trim() === '|' && n.id !== 'selectChipSep') {
-              n.remove();
-            }
+          if (n && n.nodeType === 1 && n.tagName === 'SPAN' && 
+              n.textContent && n.textContent.trim() === '|') {
+            n.remove();
           }
         });
       } catch {}
-      // Do not render any visual '|' separators in topbar
-      // Final order (left -> right): Subscription Chip, Tenant Select, [User Name], [Avatar]
-      const order = [chip, select, name, avatar, dd].filter(Boolean);
-      for (const el of order) { if (el && el.parentNode === right) right.appendChild(el); }
+      
+      // Desired order (left to right): UserName, TenantSelect, Subscription, CompanyID, TenantAvatar, AvatarMenu
+      // This makes the tenant avatar the rightmost element in the right section
+      const order = [userName, tenantSelect, subscription, companyId, tenantAvatar, avatarMenu].filter(Boolean);
+      
+      // Set consistent spacing for all elements
+      for (let i = 0; i < order.length; i++) {
+        const el = order[i];
+        if (el && el.parentNode === right) {
+          right.appendChild(el);
+          
+          // Clear any existing margins first
+          el.style.margin = '0';
+          
+          // Add proper spacing
+          if (el === tenantAvatar) {
+            // Tenant avatar: space on the left (since it's now rightmost)
+            el.style.marginLeft = '12px';
+          } else if (el === avatarMenu) {
+            // Dropdown menu: no margin (it's positioned absolutely)
+            el.style.margin = '0';
+          } else {
+            // Other elements: space on both sides for breathing room
+            el.style.marginLeft = '8px';
+            el.style.marginRight = '8px';
+          }
+          
+          // Prevent text overflow and squeezing
+          if (el.id === 'userNameLabel') {
+            el.style.whiteSpace = 'nowrap';
+            el.style.overflow = 'hidden';
+            el.style.textOverflow = 'ellipsis';
+            el.style.maxWidth = '200px';
+            el.style.minWidth = '100px';
+          }
+          
+          // Fix dropdown width to fit content
+          if (el.id === 'tenantSelect') {
+            el.style.width = 'auto';
+            el.style.maxWidth = '250px';
+          }
+        }
+      }
     } catch {}
   }
 
@@ -371,6 +562,7 @@ function showUserName(header){
     // Wire interactions
     wireCollapsibles(sidebarContainer);
     markActiveLinks(sidebarContainer);
+    try { initCompanyIdSidebar(sidebarContainer); } catch (e) { console.warn('company id sidebar init failed', e); }
 
     ensureIconFont();
     buildMobileMenuButton(sidebarContainer);
@@ -378,7 +570,10 @@ function showUserName(header){
     injectAvatar(header);
     showUserName(header);
     try { initSubscriptionChip(header); } catch (e) { console.warn('sub chip init failed', e); }
-    try { arrangeTopbar(header); setTimeout(()=>arrangeTopbar(header), 800); } catch (e) { console.warn('arrange topbar failed', e); }
+    try { 
+      // Single arrangeTopbar call after everything is set up to reduce blinking
+      setTimeout(()=>arrangeTopbar(header), 1000); 
+    } catch (e) { console.warn('arrange topbar failed', e); }
 
     // Hide Tenants link in sidebar for non-platform admins (UI nicety; server still enforces auth)
     const updateTenantsLinkVisibility = () => {
@@ -392,6 +587,8 @@ function showUserName(header){
     };
     updateTenantsLinkVisibility();
     setTimeout(updateTenantsLinkVisibility, 1500);
+    // Expose a global hook so admin-common can refresh the Platform section once admin status is known
+    try { window.__updateSidebarPlatformVisibility = updateTenantsLinkVisibility; } catch {}
 
     // Insert topbar sidebar collapse button on the left (before breadcrumbs)
     let toggle = document.getElementById('sidebarCollapse');

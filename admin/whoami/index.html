@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin WhoAmI</title>
+    <link rel="stylesheet" href="/css/admin.css" />
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><a href="/">Home</a><span class="sep">›</span><span>Debug</span></nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+    </header>
+    <main class="main">
+      <section class="card">
+        <div class="header">
+          <div class="title">WhoAmI (Platform-admin only)</div>
+        </div>
+        <div class="body">
+          <div class="box">
+            <div class="box-title">Client</div>
+            <div class="row"><b>Selected Tenant:</b> <span id="selTenant">(—)</span></div>
+            <div class="row"><b>User (from local token):</b> <span id="localEmail">(—)</span></div>
+          </div>
+          <div class="box">
+            <div class="box-title">Server</div>
+            <pre id="whoamiBox" class="code" style="min-height:120px; white-space:pre-wrap"></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js"></script>
+    <script>
+      (function(){
+        const out = document.getElementById('whoamiBox');
+        const sel = document.getElementById('selTenant');
+        const localEmailEl = document.getElementById('localEmail');
+        function q(name){ try{ const u=new URL(window.location.href); const v=u.searchParams.get(name); return v?String(v):'';}catch{return ''} }
+        function setText(el, v){ try{ el.textContent = v || '—'; }catch{} }
+        async function run(){
+          try {
+            Admin.bootstrapAuth(async () => {
+              const urlTenant = q('tenant');
+              const tenant = urlTenant || (Admin.STATE && Admin.STATE.selectedTenantId) || '';
+              setText(sel, tenant || '(none)');
+              try { const email = (Admin.STATE && Admin.STATE.userEmail) || ''; setText(localEmailEl, email || '(unknown)'); } catch {}
+              try {
+                const data = await Admin.api('/admin/debug/whoami', { tenantId: null, query: { tenant } });
+                out.textContent = JSON.stringify(data, null, 2);
+              } catch (e) {
+                out.textContent = 'Request failed: ' + (e && e.status ? e.status : '') + '\n' + JSON.stringify(e && e.data ? e.data : e, null, 2);
+              }
+            });
+          } catch (e) {
+            out.textContent = 'Init failed';
+          }
+        }
+        document.addEventListener('DOMContentLoaded', run);
+      })();
+    </script>
+  </body>
+</html>

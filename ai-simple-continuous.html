@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple AI Continuous Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            direction: rtl;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .start-btn { background: #4CAF50; color: white; }
+        .stop-btn { background: #f44336; color: white; }
+        .status {
+            text-align: center;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            background: #f0f0f0;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fafafa;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .message.user { background: #e3f2fd; }
+        .message.assistant { background: #e8f5e8; }
+        .message.system { background: #f5f5f5; color: #666; font-style: italic; }
+        .debug {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Simple AI Continuous Test - اختبار بسيط</h1>
+        
+        <div style="text-align: center;">
+            <button id="startBtn" class="start-btn" onclick="startTest()">🎤 بدء الاختبار</button>
+            <button id="stopBtn" class="stop-btn" onclick="stopTest()" disabled>⏹️ إيقاف</button>
+            <br><br>
+            <button id="manualRecordBtn" class="start-btn" onmousedown="startRecording()" onmouseup="stopRecording()" ontouchstart="startRecording()" ontouchend="stopRecording()" disabled>🎙️ اضغط واستمر للتسجيل</button>
+            <div id="recordingIndicator" style="display: none; color: red; font-weight: bold; margin: 10px;">🔴 جاري التسجيل...</div>
+        </div>
+        
+        <div id="status" class="status">جاهز للبداية</div>
+        
+        <div id="messages" class="messages"></div>
+        
+        <div id="debug" class="debug">Debug: Waiting to start...</div>
+    </div>
+
+    <script>
+        console.log('JavaScript loaded successfully');
+        
+        const BASE_URL = 'http://localhost:3000';
+        
+        // Simple state tracking
+        let isActive = false;
+        let token = null;
+        let sessionId = null;
+        
+        function log(message) {
+            console.log(message);
+            const debug = document.getElementById('debug');
+            debug.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+        }
+        
+        function addMessage(type, text) {
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.textContent = `${type === 'user' ? 'أنت' : type === 'assistant' ? 'كوبز' : 'النظام'}: ${text}`;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        function updateStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+        
+        async function startTest() {
+            try {
+                log('Starting test...');
+                isActive = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+                updateStatus('جاري التهيئة...');
+                addMessage('system', 'بدء الاختبار...');
+                
+                // Step 1: Get token
+                log('Getting token...');
+                const tokenResponse = await fetch(`${BASE_URL}/ai/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_id: 'web-simple-test-' + Date.now(),
+                        branch_name: 'Test'
+                    })
+                });
+                
+                if (!tokenResponse.ok) throw new Error('Token request failed');
+                const tokenData = await tokenResponse.json();
+                token = tokenData.token;
+                log('Token received');
+                
+                // Step 2: Create session
+                log('Creating session...');
+                const sessionResponse = await fetch(`${BASE_URL}/ai/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ language: 'ar-KW' })
+                });
+                
+                if (!sessionResponse.ok) throw new Error('Session creation failed');
+                const sessionData = await sessionResponse.json();
+                sessionId = sessionData.session_id;
+                log('Session created: ' + sessionId);
+                
+                // Step 3: Start with AI greeting
+                updateStatus('AI يتحدث...');
+                await speakText('مرحبا في كوبز! شلونك؟');
+                addMessage('assistant', 'مرحبا في كوبز! شلونك؟');
+                
+                // Step 4: Enable manual recording instead of auto-listening
+                document.getElementById('manualRecordBtn').disabled = false;
+                updateStatus('✅ جاهز للتسجيل - اضغط على التسجيل اليدوي');
+                
+            } catch (error) {
+                log('Error: ' + error.message);
+                addMessage('system', 'خطأ: ' + error.message);
+                resetButtons();
+            }
+        }
+        
+        async function stopTest() {
+            isActive = false;
+            log('Test stopped');
+            updateStatus('تم الإيقاف');
+            resetButtons();
+        }
+        
+        function resetButtons() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('manualRecordBtn').disabled = true;
+        }
+        
+        let isRecording = false;
+        let currentMediaRecorder = null;
+        let currentStream = null;
+        
+        async function startRecording() {
+            if (!isActive || !token || !sessionId || isRecording) {
+                return;
+            }
+            
+            try {
+                log('🔴 Recording started - keep holding button...');
+                isRecording = true;
+                document.getElementById('recordingIndicator').style.display = 'block';
+                updateStatus('🎤 جاري التسجيل - تكلم الآن!');
+                
+                // Get microphone with specific constraints
+                const constraints = { 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 44100,
+                        channelCount: 1
+                    } 
+                };
+                
+                // Try to get built-in microphone specifically
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const builtInMic = devices.find(device => 
+                        device.kind === 'audioinput' && 
+                        (device.label.toLowerCase().includes('built-in') || device.label.toLowerCase().includes('imac'))
+                    );
+                    
+                    if (builtInMic && builtInMic.deviceId) {
+                        constraints.audio.deviceId = { exact: builtInMic.deviceId };
+                        log('🎤 Using microphone: ' + builtInMic.label);
+                    }
+                } catch (deviceError) {
+                    log('⚠️ Could not enumerate devices: ' + deviceError.message);
+                }
+                
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                log('✅ Microphone access granted');
+                
+                // Setup recorder
+                currentMediaRecorder = new MediaRecorder(currentStream, {
+                    mimeType: MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm'
+                });
+                
+                const audioChunks = [];
+                currentMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                currentMediaRecorder.onstop = async () => {
+                    if (currentStream) {
+                        currentStream.getTracks().forEach(track => track.stop());
+                        currentStream = null;
+                    }
+                    
+                    try {
+                        log('📋 Processing recorded audio...');
+                        
+                        if (audioChunks.length === 0) {
+                            log('⚠️ No audio data recorded');
+                            return;
+                        }
+                        
+                        const audioBlob = new Blob(audioChunks, { type: currentMediaRecorder.mimeType });
+                        log(`📦 Audio recorded: ${audioBlob.size} bytes (${currentMediaRecorder.mimeType})`);
+                        
+                        if (audioBlob.size < 1000) {
+                            log('⚠️ Audio too small - try speaking louder or holding longer');
+                            addMessage('system', 'صوت قصير جداً - حاول مرة أخرى');
+                            return;
+                        }
+                        
+                        // Transcribe with local Whisper
+                        updateStatus('🤖 جاري الترجمة...');
+                        const transcribeResponse = await fetch(`${BASE_URL}/ai/whisper/transcribe`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': currentMediaRecorder.mimeType,
+                                'X-Language': 'ar'
+                            },
+                            body: audioBlob
+                        });
+                        
+                        if (transcribeResponse.ok) {
+                            const result = await transcribeResponse.json();
+                            log(`🗣️ Transcription: "${result.text}"`);
+                            
+                            // Filter background audio
+                            const backgroundPhrases = [
+                                'شكرا على المشاهدة',
+                                'ترجمة نانسي قنقر',
+                                'subscribe',
+                                'music',
+                                'موسيقى'
+                            ];
+                            
+                            const isBackground = backgroundPhrases.some(phrase => 
+                                result.text.toLowerCase().includes(phrase.toLowerCase())
+                            );
+                            
+                            if (result.text && result.text.trim() && !isBackground) {
+                                log('✅ Valid speech detected');
+                                addMessage('user', result.text);
+                                
+                                // Get AI response
+                                updateStatus('🤖 AI يفكر...');
+                                await getAIResponseManual(result.text.trim());
+                            } else {
+                                if (isBackground) {
+                                    log('⚠️ Background audio filtered out');
+                                    addMessage('system', 'تم ترشيح صوت الخلفية');
+                                } else {
+                                    log('⚠️ No clear speech detected');
+                                    addMessage('system', 'لم يتم التعرف على الكلام');
+                                }
+                                updateStatus('✅ جاهز للتسجيل - اضغط واستمر للتسجيل');
+                            }
+                        } else {
+                            throw new Error('Transcription request failed');
+                        }
+                        
+                    } catch (processError) {
+                        log('❌ Processing error: ' + processError.message);
+                        addMessage('system', 'خطأ في معالجة الصوت: ' + processError.message);
+                        updateStatus('✅ جاهز للتسجيل - اضغط واستمر للتسجيل');
+                    }
+                };
+                
+                currentMediaRecorder.onerror = (event) => {
+                    log('❌ Recording error: ' + event.error);
+                };
+                
+                // Start recording
+                currentMediaRecorder.start();
+                log('🔴 Recording started - release button to stop');
+                
+            } catch (error) {
+                log('❌ Microphone error: ' + error.message);
+                isRecording = false;
+                document.getElementById('recordingIndicator').style.display = 'none';
+                updateStatus('✅ جاهز للتسجيل - اضغط واستمر للتسجيل');
+            }
+        }
+        
+        function stopRecording() {
+            if (!isRecording || !currentMediaRecorder) {
+                return;
+            }
+            
+            log('⏹️ Recording stopped by user');
+            isRecording = false;
+            document.getElementById('recordingIndicator').style.display = 'none';
+            
+            if (currentMediaRecorder.state === 'recording') {
+                currentMediaRecorder.stop();
+            }
+        }
+        
+        async function manualRecordAudio() {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // Get microphone with specific constraints
+                    const constraints = { 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 44100,
+                            channelCount: 1
+                        } 
+                    };
+                    
+                    // Try to get built-in microphone specifically
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        const builtInMic = devices.find(device => 
+                            device.kind === 'audioinput' && 
+                            (device.label.toLowerCase().includes('built-in') || device.label.toLowerCase().includes('imac'))
+                        );
+                        
+                        if (builtInMic && builtInMic.deviceId) {
+                            constraints.audio.deviceId = { exact: builtInMic.deviceId };
+                            log('🎤 Using microphone: ' + builtInMic.label);
+                        }
+                    } catch (deviceError) {
+                        log('⚠️ Could not enumerate devices: ' + deviceError.message);
+                    }
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    log('✅ Microphone access granted');
+                    
+                    // Setup recorder
+                    const mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm'
+                    });
+                    
+                    const audioChunks = [];
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        try {
+                            log('📋 Processing recorded audio...');
+                            
+                            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                            log(`📦 Audio recorded: ${audioBlob.size} bytes (${mediaRecorder.mimeType})`);
+                            
+                            if (audioBlob.size < 3000) {
+                                log('⚠️ Audio too small - try speaking louder');
+                                resolve();
+                                return;
+                            }
+                            
+                            // Transcribe with local Whisper
+                            updateStatus('🤖 جاري الترجمة...');
+                            const transcribeResponse = await fetch(`${BASE_URL}/ai/whisper/transcribe`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': mediaRecorder.mimeType,
+                                    'X-Language': 'ar'
+                                },
+                                body: audioBlob
+                            });
+                            
+                            if (transcribeResponse.ok) {
+                                const result = await transcribeResponse.json();
+                                log(`🗣️ Transcription: "${result.text}"`);
+                                
+                                // Filter background audio
+                                const backgroundPhrases = [
+                                    'شكرا على المشاهدة',
+                                    'ترجمة نانسي قنقر',
+                                    'subscribe',
+                                    'music',
+                                    'موسيقى'
+                                ];
+                                
+                                const isBackground = backgroundPhrases.some(phrase => 
+                                    result.text.toLowerCase().includes(phrase.toLowerCase())
+                                );
+                                
+                                if (result.text && result.text.trim() && !isBackground) {
+                                    log('✅ Valid speech detected');
+                                    addMessage('user', result.text);
+                                    
+                                    // Get AI response
+                                    updateStatus('🤖 AI يفكر...');
+                                    await getAIResponseManual(result.text.trim());
+                                } else {
+                                    if (isBackground) {
+                                        log('⚠️ Background audio filtered out');
+                                        addMessage('system', 'تم ترشيح صوت الخلفية');
+                                    } else {
+                                        log('⚠️ No clear speech detected');
+                                        addMessage('system', 'لم يتم التعرف على الكلام');
+                                    }
+                                }
+                            } else {
+                                throw new Error('Transcription request failed');
+                            }
+                            
+                            resolve();
+                            
+                        } catch (processError) {
+                            log('❌ Processing error: ' + processError.message);
+                            reject(processError);
+                        }
+                    };
+                    
+                    mediaRecorder.onerror = (event) => {
+                        log('❌ Recording error: ' + event.error);
+                        reject(new Error('Recording failed: ' + event.error));
+                    };
+                    
+                    // Start recording
+                    mediaRecorder.start();
+                    log('🔴 Recording for 3 seconds...');
+                    
+                    // Stop after 3 seconds
+                    setTimeout(() => {
+                        if (mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                            log('⏹️ Recording stopped');
+                        }
+                    }, 3000);
+                    
+                } catch (error) {
+                    log('❌ Microphone error: ' + error.message);
+                    reject(error);
+                }
+            });
+        }
+        
+        async function speakText(text) {
+            try {
+                log('Speaking: ' + text.substring(0, 20) + '...');
+                const response = await fetch(`${BASE_URL}/tts/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        language: 'ar-KW',
+                        voice: 'nova',
+                        speed: 0.95
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+                    
+                    return new Promise((resolve, reject) => {
+                        audio.onended = () => {
+                            URL.revokeObjectURL(audioUrl);
+                            log('TTS finished');
+                            resolve();
+                        };
+                        audio.onerror = reject;
+                        audio.play().catch(reject);
+                    });
+                } else {
+                    throw new Error('TTS failed');
+                }
+            } catch (error) {
+                log('TTS error: ' + error.message);
+                throw error;
+            }
+        }
+        
+        async function startListening() {
+            if (!isActive) {
+                log('Not active, skipping listen');
+                return;
+            }
+            
+            try {
+                log('Starting to listen...');
+                updateStatus('جاري الاستماع...');
+                
+                // Get microphone permission with strict audio constraints
+                const constraints = { 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 44100,
+                        channelCount: 1,
+                        // Try to exclude system audio/apps
+                        googEchoCancellation: true,
+                        googNoiseSuppression: true,
+                        googAutoGainControl: true,
+                        googTypingNoiseDetection: true
+                    } 
+                };
+                
+                // Try to get built-in microphone specifically
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const builtInMic = devices.find(device => 
+                        device.kind === 'audioinput' && 
+                        device.label.toLowerCase().includes('built-in')
+                    );
+                    
+                    if (builtInMic && builtInMic.deviceId) {
+                        constraints.audio.deviceId = { exact: builtInMic.deviceId };
+                        log('🎤 Using built-in microphone: ' + builtInMic.label);
+                    }
+                } catch (deviceError) {
+                    log('⚠️ Could not enumerate devices: ' + deviceError.message);
+                }
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                log('Microphone access granted');
+                
+                // Setup recorder
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm'
+                });
+                
+                const audioChunks = [];
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    if (!isActive) return;
+                    
+                    try {
+                        log('Processing recorded audio...');
+                        updateStatus('جاري معالجة الكلام...');
+                        
+                        const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                        log(`Audio recorded: ${audioBlob.size} bytes`);
+                        
+                        // Better audio validation
+                        if (audioBlob.size < 5000) {
+                            log('Audio too small, restarting...');
+                            setTimeout(() => startListening(), 1000);
+                            return;
+                        }
+                        
+                        // Check if audio might be system audio by size patterns
+                        if (audioBlob.size > 200000) {
+                            log('⚠️ Audio suspiciously large (' + audioBlob.size + ' bytes) - might be system audio');
+                        }
+                        
+                        log('📤 Sending ' + audioBlob.size + ' bytes to Local Whisper.cpp...');
+                        
+                        // Transcribe
+                        const transcribeResponse = await fetch(`${BASE_URL}/ai/whisper/transcribe`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': mediaRecorder.mimeType,
+                                'X-Language': 'ar'
+                            },
+                            body: audioBlob
+                        });
+                        
+                        if (transcribeResponse.ok) {
+                            const result = await transcribeResponse.json();
+                            log(`🎤 Local Whisper transcription: "${result.text}"`);
+                            
+                            // Filter out common background audio phrases
+                            const backgroundPhrases = [
+                                'شكرا على المشاهدة', // Thanks for watching
+                                'subscribe to the channel',
+                                'اشترك في القناة',
+                                'like and subscribe',
+                                'اعجبني واشترك',
+                                'music',
+                                'موسيقى'
+                            ];
+                            
+                            const isBackgroundAudio = backgroundPhrases.some(phrase => 
+                                result.text.toLowerCase().includes(phrase.toLowerCase())
+                            );
+                            
+                            if (result.text && result.text.trim() && !isBackgroundAudio) {
+                                log('✅ Valid user speech detected');
+                                addMessage('user', result.text);
+                                await getAIResponse(result.text.trim());
+                            } else {
+                                if (isBackgroundAudio) {
+                                    log('⚠️ Filtered out background audio, restarting...');
+                                } else {
+                                    log('No speech detected, restarting...');
+                                }
+                                setTimeout(() => startListening(), 1000);
+                            }
+                        } else {
+                            throw new Error('Transcription failed');
+                        }
+                        
+                    } catch (error) {
+                        log('Processing error: ' + error.message);
+                        if (isActive) {
+                            setTimeout(() => startListening(), 2000);
+                        }
+                    }
+                };
+                
+                mediaRecorder.start();
+                log('Recording started');
+                
+                // Stop after 3 seconds
+                setTimeout(() => {
+                    if (mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                        log('Recording stopped (timeout)');
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                log('Listen error: ' + error.message);
+                addMessage('system', 'خطأ في الاستماع: ' + error.message);
+                if (isActive) {
+                    setTimeout(() => startListening(), 2000);
+                }
+            }
+        }
+        
+        async function getAIResponse(userText) {
+            try {
+                log('Getting AI response for: ' + userText);
+                updateStatus('AI يفكر...');
+                
+                const response = await fetch(`${BASE_URL}/ai/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        messages: [{ 
+                            role: 'system', 
+                            content: 'أجب بجملة قصيرة واحدة فقط (أقل من 10 كلمات)' 
+                        }, { 
+                            role: 'user', 
+                            content: userText 
+                        }]
+                    })
+                });
+                
+                if (!response.ok) throw new Error('AI request failed');
+                
+                let aiResponse = '';
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line === 'data: [DONE]') {
+                            log(`AI response: "${aiResponse}"`);
+                            if (aiResponse.trim()) {
+                                addMessage('assistant', aiResponse);
+                                await speakText(aiResponse);
+                                // Continue conversation
+                                setTimeout(() => {
+                                    if (isActive) startListening();
+                                }, 200);
+                            } else {
+                                setTimeout(() => startListening(), 1000);
+                            }
+                            return;
+                        }
+                        
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.type === 'content_delta') {
+                                    aiResponse += data.delta;
+                                }
+                            } catch (parseError) {
+                                // Ignore parse errors
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                log('AI error: ' + error.message);
+                addMessage('system', 'خطأ AI: ' + error.message);
+                if (isActive) {
+                    setTimeout(() => startListening(), 2000);
+                }
+            }
+        }
+        
+        async function getAIResponseManual(userText) {
+            try {
+                log('Getting AI response for: ' + userText);
+                updateStatus('AI يفكر...');
+                
+                const response = await fetch(`${BASE_URL}/ai/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        messages: [{ 
+                            role: 'system', 
+                            content: 'أجب بجملة قصيرة واحدة فقط (أقل من 10 كلمات)' 
+                        }, { 
+                            role: 'user', 
+                            content: userText 
+                        }]
+                    })
+                });
+                
+                if (!response.ok) throw new Error('AI request failed');
+                
+                let aiResponse = '';
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line === 'data: [DONE]') {
+                            log(`AI response: "${aiResponse}"`);
+                            if (aiResponse.trim()) {
+                                addMessage('assistant', aiResponse);
+                                await speakText(aiResponse);
+                                
+                                // ✅ MANUAL MODE: Don't auto-listen, wait for user to click button
+                                updateStatus('✅ جاهز للتسجيل - اضغط على التسجيل اليدوي');
+                                document.getElementById('manualRecordBtn').disabled = false;
+                            }
+                            return;
+                        }
+                        
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.type === 'content_delta') {
+                                    aiResponse += data.delta;
+                                }
+                            } catch (parseError) {
+                                // Ignore parse errors
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                log('AI error: ' + error.message);
+                addMessage('system', 'خطأ AI: ' + error.message);
+                updateStatus('✅ جاهز للتسجيل - اضغط على التسجيل اليدوي');
+                document.getElementById('manualRecordBtn').disabled = false;
+            }
+        }
+        
+        // Initialize
+        log('Page loaded and ready');
+        updateStatus('جاهز للبداية');
+        
+        // Test basic functionality and show audio devices
+        try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                log('Microphone API available');
+                
+                // List available audio input devices
+                navigator.mediaDevices.enumerateDevices()
+                    .then(devices => {
+                        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                        log('Available microphones: ' + audioInputs.length);
+                        audioInputs.forEach((device, index) => {
+                            console.log(`Mic ${index + 1}: ${device.label || 'Unknown Device'}`);
+                        });
+                    })
+                    .catch(err => log('Could not enumerate devices: ' + err.message));
+            } else {
+                log('ERROR: Microphone API not available');
+            }
+        } catch (error) {
+            log('ERROR during initialization: ' + error.message);
+        }
+    </script>
+</body>
+</html>

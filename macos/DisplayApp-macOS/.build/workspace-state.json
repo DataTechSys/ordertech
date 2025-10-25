@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "ordertechcore",
+          "kind" : "fileSystem",
+          "location" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore",
+          "name" : "OrderTechCore"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore"
+        },
+        "subpath" : "ordertechcore"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

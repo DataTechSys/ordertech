@@ -1,0 +1,248 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-10-08T10:27:00Z",
+  "environment": "development",
+  "metadata": {
+    "description": "OrderTech unified configuration for consistent development environment",
+    "strict_mode": true,
+    "db_proxy_only": true
+  },
+  
+  "database": {
+    "type": "postgresql",
+    "connection_method": "cloud_sql_proxy",
+    "proxy": {
+      "host": "127.0.0.1",
+      "port": 6555,
+      "description": "Cloud SQL Auth Proxy - ONLY database connection method"
+    },
+    "cloud_instance": {
+      "project": "smart-order-469705",
+      "region": "me-central1",
+      "instance": "ordertech-db",
+      "connection_name": "smart-order-469705:me-central1:ordertech-db"
+    },
+    "credentials": {
+      "username": "ordertech",
+      "database_name": "ordertech"
+    },
+    "local_db_disabled": true,
+    "notes": "Local PostgreSQL completely removed - using Cloud SQL proxy only"
+  },
+
+  "servers": {
+    "main_api": {
+      "name": "OrderTech Express API",
+      "host": "127.0.0.1",
+      "port": 8080,
+      "protocol": "http",
+      "description": "Main Express server with monitoring dashboard",
+      "routes": {
+        "admin_dashboard": "/admin",
+        "monitoring_dashboard": "/server",
+        "api_base": "/api",
+        "health_check": "/health"
+      },
+      "startup_command": "PORT=8080 node server.js"
+    },
+    "dashboard_server": {
+      "disabled": true,
+      "note": "Integrated into main API server - no separate dashboard server needed"
+    }
+  },
+
+  "local_services": {
+    "redis": {
+      "name": "Redis Cache & Session Store",
+      "host": "127.0.0.1",
+      "port": 6379,
+      "type": "redis",
+      "required": true,
+      "health_check": "tcp_connection",
+      "description": "Redis for caching and session management"
+    },
+    "minio_api": {
+      "name": "MinIO S3-compatible Storage API",
+      "host": "127.0.0.1",
+      "port": 9000,
+      "type": "minio",
+      "required": true,
+      "health_check": "tcp_connection",
+      "description": "Local S3-compatible object storage"
+    },
+    "minio_console": {
+      "name": "MinIO Admin Console",
+      "host": "127.0.0.1",
+      "port": 9001,
+      "type": "http",
+      "required": false,
+      "health_check": "http_get:/",
+      "description": "MinIO web administration interface"
+    },
+    "docker": {
+      "name": "Docker Daemon",
+      "host": "/var/run/docker.sock",
+      "port": null,
+      "type": "docker",
+      "required": true,
+      "health_check": "socket_exists",
+      "description": "Docker container management"
+    }
+  },
+
+  "cloud_services": {
+    "production": {
+      "cloud_run": {
+        "name": "OrderTech Production Cloud Run",
+        "host": "ordertech-715493130630.me-central1.run.app",
+        "port": 443,
+        "type": "cloud-run",
+        "region": "me-central1",
+        "health_check": "https_get:/health",
+        "url": "https://ordertech-715493130630.me-central1.run.app",
+        "project": "smart-order-469705",
+        "service": "ordertech"
+      },
+      "cloud_sql": {
+        "name": "Cloud SQL PostgreSQL Database",
+        "connection_name": "smart-order-469705:me-central1:ordertech-db",
+        "type": "cloud-sql",
+        "region": "me-central1",
+        "health_check": "proxy_connection",
+        "project": "smart-order-469705",
+        "instance": "ordertech-db"
+      },
+      "cloud_storage": {
+        "name": "OrderTech Cloud Storage Bucket",
+        "host": "ordertech.me",
+        "type": "gcs",
+        "region": "me-central1",
+        "health_check": "assume_up",
+        "bucket": "ordertech.me",
+        "url": "https://storage.googleapis.com/ordertech.me"
+      },
+      "livekit_cloud": {
+        "name": "LiveKit RTC on Cloud Run",
+        "host": "ordertech-715493130630.me-central1.run.app",
+        "port": 443,
+        "type": "livekit",
+        "region": "me-central1",
+        "health_check": "https_get:/health",
+        "endpoint": "/livekit"
+      }
+    },
+    "global_services": {
+      "openai": {
+        "name": "OpenAI API",
+        "host": "api.openai.com",
+        "port": 443,
+        "type": "openai",
+        "health_check": "https_auth_get:/v1/models",
+        "requires_auth": true,
+        "auth_env_var": "OPENAI_API_KEY"
+      },
+      "ordertech_website": {
+        "name": "OrderTech Production Website",
+        "host": "ordertech.me",
+        "port": 443,
+        "type": "http",
+        "health_check": "https_get:/",
+        "description": "Public website and load balancer"
+      },
+      "firebase": {
+        "name": "Firebase Admin SDK",
+        "host": "smart-order-469705.firebaseapp.com",
+        "type": "firebase",
+        "health_check": "assume_up",
+        "project": "smart-order-469705"
+      }
+    }
+  },
+
+  "disabled_services": {
+    "local_postgresql": {
+      "reason": "Removed - using Cloud SQL proxy only",
+      "replaced_by": "cloud_sql_proxy"
+    },
+    "livekit_local": {
+      "reason": "Using LiveKit on Cloud Run instead",
+      "ports": [7880, 7881, 7882]
+    },
+    "whisper_local": {
+      "reason": "Optional local service",
+      "port": 8000
+    },
+    "separate_dashboard_server": {
+      "reason": "Integrated into main API server",
+      "old_port": 3001
+    }
+  },
+
+  "environment_variables": {
+    "required": [
+      "PORT=8080",
+      "DB_HOST=127.0.0.1",
+      "DB_PORT=6555", 
+      "DB_USER=ordertech",
+      "DB_PASSWORD=Ordertech.2020",
+      "DB_NAME=ordertech",
+      "OPENAI_API_KEY"
+    ],
+    "files": [
+      ".env.local"
+    ]
+  },
+
+  "startup_sequence": [
+    {
+      "step": 1,
+      "action": "Start Cloud SQL Proxy",
+      "command": "cloud-sql-proxy",
+      "verify": "lsof -i :6555"
+    },
+    {
+      "step": 2, 
+      "action": "Start Redis",
+      "command": "redis-server or docker compose up redis",
+      "verify": "redis-cli ping"
+    },
+    {
+      "step": 3,
+      "action": "Start MinIO (optional)",
+      "command": "docker compose up minio",
+      "verify": "curl localhost:9000"
+    },
+    {
+      "step": 4,
+      "action": "Start OrderTech API Server",
+      "command": "PORT=8080 node server.js",
+      "verify": "curl localhost:8080/health"
+    }
+  ],
+
+  "monitoring_config": {
+    "dashboard_url": "http://localhost:8080/server",
+    "check_intervals": {
+      "local_services": 15000,
+      "cloud_services": 30000,
+      "global_services": 60000
+    },
+    "timeout": 5000,
+    "retry_count": 2
+  },
+
+  "port_allocations": {
+    "reserved": {
+      "8080": "OrderTech Main API Server",
+      "6555": "Cloud SQL Proxy",
+      "6379": "Redis",
+      "9000": "MinIO API",
+      "9001": "MinIO Console"
+    },
+    "forbidden": {
+      "3000": "Old default - do not use",
+      "3001": "Old dashboard server - integrated",
+      "5432": "Local PostgreSQL - removed"
+    }
+  }
+}

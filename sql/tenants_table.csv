@@ -1,0 +1,10 @@
+Field Name,Type,Description
+tenant_id,UUID,Primary key
+company_name,VARCHAR(100),Display name of tenant
+subdomain,VARCHAR(50),Used in subdomain routing
+email,VARCHAR(100),Admin email
+status,VARCHAR(20),active / trial / suspended
+start_date,DATE,Start of subscription
+renewal_date,DATE,Next renewal
+plan_type,VARCHAR(20),Plan level
+created_at,TIMESTAMP,Creation timestamp

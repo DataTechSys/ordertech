@@ -1,0 +1,73 @@
+name: OrderTech
+options:
+  minimumXcodeGenVersion: 2.38.0
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0.0
+
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    branch: main
+  OrderTechCoreLocal:
+    path: ../../OrderTechCore
+
+fileGroups:
+  - Sources
+  - Resources
+  - Config
+
+targets:
+  OrderTech:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    signing:
+      team: 587PC6459F
+      style: Automatic
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+      - path: ../Resources
+      - path: ../V-Drive/images
+      - path: ../V-Cashier/images
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.ordertech.app
+        TARGETED_DEVICE_FAMILY: "1,2"  # iPhone + iPad (universal)
+        INFOPLIST_FILE: Config/Info.plist
+        OTHER_SWIFT_FLAGS: "$(inherited)"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Config/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
+        UIUserInterfaceStyle: Light
+        UIBackgroundModes:
+          - audio
+        NSCameraUsageDescription: "Camera access is required for two-way video communication."
+        NSMicrophoneUsageDescription: "Microphone access is required for two-way audio communication."
+        NSLocalNetworkUsageDescription: "Local network is used to discover and connect to display devices on the same network."
+        NSBonjourServices:
+          - "_ordertech-display._tcp"
+          - "_ordertech-cashier._tcp"
+    dependencies:
+      - package: LiveKit
+        product: LiveKit
+      - package: OrderTechCoreLocal
+        product: OrderTechCore
+      - framework: ../V-Cashier/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework
+        embed: true
+        codeSign: true
+    scheme:
+      testTargets: []

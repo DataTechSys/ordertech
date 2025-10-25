@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS integration_sync_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL,
   provider text NOT NULL,
   started_at timestamptz NOT NULL DEFAULT now(),
   finished_at timestamptz,

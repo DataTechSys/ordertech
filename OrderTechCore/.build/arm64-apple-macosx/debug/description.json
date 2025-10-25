@@ -1,0 +1,310 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.OrderTechCore-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/sources",
+      "importPath" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsCacheStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsModels.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsRelations.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsSyncer.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "OrderTechCore",
+      "moduleOutputPath" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/Modules/OrderTechCore.swiftmodule",
+      "objects" : [
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core.swift.o",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore.swift.o",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient.swift.o",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels.swift.o",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations.swift.o",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx12.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/include/OrderTechCore-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "ordertechcore"
+      ],
+      "outputFileMapPath" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/Modules/OrderTechCore.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsCacheStore.swift",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsClient.swift",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsModels.swift",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsRelations.swift",
+        "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsSyncer.swift"
+      ],
+      "tempsPath" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "OrderTechCore" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "OrderTechCore",
+      "-package-name",
+      "ordertechcore",
+      "-c",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsCacheStore.swift",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsClient.swift",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsModels.swift",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsRelations.swift",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsSyncer.swift",
+      "-I",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx12.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/include/OrderTechCore-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "ordertechcore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "OrderTechCore" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsCacheStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsModels.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsRelations.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsSyncer.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/sources"
+    },
+    "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

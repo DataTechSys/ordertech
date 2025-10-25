@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderTech AI - Continuous Conversation (يدعم العربية)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin: 10px 0;
+        }
+
+        .conversation-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .conversation-display {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            text-align: left;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 10px;
+            max-width: 80%;
+        }
+
+        .message.user {
+            background: rgba(100, 200, 255, 0.3);
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.assistant {
+            background: rgba(255, 255, 255, 0.2);
+            margin-right: auto;
+        }
+
+        .message.system {
+            background: rgba(255, 200, 100, 0.3);
+            text-align: center;
+            font-style: italic;
+            margin: 15px auto;
+            max-width: 90%;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: rgba(100, 200, 100, 0.6);
+        }
+
+        .btn.danger {
+            background: rgba(200, 100, 100, 0.6);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .mic-indicator {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            transition: all 0.3s;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .mic-indicator.idle {
+            background: rgba(100, 100, 100, 0.3);
+        }
+
+        .mic-indicator.listening {
+            background: rgba(100, 200, 100, 0.5);
+            animation: pulse 2s infinite;
+            border-color: rgba(100, 255, 100, 0.8);
+        }
+
+        .mic-indicator.processing {
+            background: rgba(255, 200, 100, 0.5);
+            animation: spin 2s linear infinite;
+        }
+
+        .mic-indicator.speaking {
+            background: rgba(100, 150, 255, 0.5);
+            animation: glow 1s ease-in-out infinite alternate;
+        }
+
+        .mic-indicator.error {
+            background: rgba(255, 100, 100, 0.5);
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 20px rgba(100, 150, 255, 0.5); }
+            100% { box-shadow: 0 0 40px rgba(100, 150, 255, 0.8); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .config-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .config-panel.show {
+            display: block;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .config-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .config-item label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .config-item input, .config-item select {
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .config-item input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Progress Bar Styles */
+        .progress-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .progress-container.show {
+            display: block;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .progress-title {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        
+        .progress-percent {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+        
+        .progress-bar-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        
+        .progress-bar.indeterminate {
+            background: linear-gradient(90deg, #2196F3, #03DAC6, #2196F3);
+            background-size: 200% 100%;
+            animation: indeterminate 2s linear infinite;
+            width: 100%;
+        }
+        
+        @keyframes indeterminate {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .progress-status {
+            font-size: 0.9em;
+            opacity: 0.8;
+            text-align: center;
+        }
+        
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 0.8em;
+        }
+        
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+        
+        .progress-step.active {
+            opacity: 1;
+            color: #4CAF50;
+        }
+        
+        .progress-step.completed {
+            opacity: 0.8;
+            color: #8BC34A;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .status-display {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 200px;
+            }
+            
+            .progress-steps {
+                flex-direction: column;
+                gap: 5px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Assistant</h1>
+            <p>Continuous voice conversation - Just speak and I'll respond!</p>
+            <p style="font-size: 0.9em; opacity: 0.8;">🇰🇼 Supports Kuwaiti Arabic | يدعم اللهجة الكويتية</p>
+        </div>
+
+        <div class="conversation-panel">
+            <div class="status-display">
+                <div class="status-item">
+                    <div class="status-label">Status</div>
+                    <div class="status-value" id="currentStatus">Starting...</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Messages</div>
+                    <div class="status-value" id="messageCount">0</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Mode</div>
+                    <div class="status-value" id="conversationMode">Continuous + Barge-in</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Language</div>
+                    <div class="status-value" id="currentLanguage">Auto-detected</div>
+                </div>
+            </div>
+            
+            <!-- Progress Bar for Loading Operations -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-header">
+                    <div class="progress-title" id="progressTitle">Loading...</div>
+                    <div class="progress-percent" id="progressPercent">0%</div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-status" id="progressStatus">Initializing...</div>
+                <div class="progress-steps" id="progressSteps">
+                    <div class="progress-step" id="step-token">
+                        <span>🔐</span>
+                        <span>Getting Token</span>
+                    </div>
+                    <div class="progress-step" id="step-menu">
+                        <span>🍽️</span>
+                        <span>Loading Menu</span>
+                    </div>
+                    <div class="progress-step" id="step-complete">
+                        <span>✅</span>
+                        <span>Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mic-indicator idle" id="micIndicator">🎤</div>
+
+            <div class="conversation-display" id="conversationDisplay">
+                <div class="message system">Initializing AI Assistant...</div>
+            </div>
+
+            <div class="controls">
+                <button class="btn primary" id="startBtn" onclick="startContinuousConversation()">
+                    🚀 Start Conversation
+                </button>
+                <button class="btn danger" id="stopBtn" onclick="stopContinuousConversation()" disabled>
+                    ⏹️ Stop
+                </button>
+                <button class="btn" onclick="toggleConfig()">
+                    ⚙️ Settings
+                </button>
+                <button class="btn" onclick="testMicrophone()">
+                    🎙️ Test Mic
+                </button>
+                <button class="btn" onclick="clearConversation()">
+                    🗑️ Clear
+                </button>
+            </div>
+        </div>
+
+        <div class="config-panel" id="configPanel">
+            <h3>⚙️ Configuration</h3>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Language:</label>
+                    <select id="languageSelect" onchange="updateLanguage(this.value)">
+                        <option value="en-US">English (US)</option>
+                        <option value="ar-KW" selected>Arabic (Kuwait) 🇰🇼</option>
+                        <option value="ar-SA">Arabic (Saudi Arabia)</option>
+                        <option value="ar-AE">Arabic (UAE)</option>
+                        <option value="ar-EG">Arabic (Egypt)</option>
+                        <option value="ar">Arabic (Standard)</option>
+                        <option value="es-ES">Spanish (ES)</option>
+                        <option value="fr-FR">French (FR)</option>
+                    </select>
+                </div>
+                <div class="config-item">
+                    <label>Listening Timeout (seconds):</label>
+                    <input type="number" id="timeoutInput" value="8" min="3" max="30" onchange="updateTimeout(this.value)">
+                </div>
+                <div class="config-item">
+                    <label>Auto-restart on silence:</label>
+                    <input type="checkbox" id="autoRestartCheck" checked onchange="updateAutoRestart(this.checked)">
+                </div>
+                <div class="config-item">
+                    <label>Debug mode:</label>
+                    <input type="checkbox" id="debugCheck" onchange="updateDebugMode(this.checked)">
+                </div>
+                <div class="config-item">
+                    <label>Microphone:</label>
+                    <select id="microphoneSelect" onchange="updateMicrophone(this.value)">
+                        <option value="default">System Default</option>
+                    </select>
+                    <button type="button" onclick="refreshMicrophones()" style="margin-left: 8px; padding: 4px 8px; font-size: 12px;">🔄</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import AI modules and initialize -->
+    <script type="module">
+        import { AIClient } from './js/ai/ai-client.js';
+        import { SpeechService } from './js/ai/ai-speech.js';
+        import { TTSService } from './js/ai/ai-tts.js';
+        import { GoogleTTSClient } from './js/ai/google-tts-client.js';
+        import { OpenAITTSClient } from './js/ai/openai-tts-client.js';
+        import { AIToolHandlersWeb } from './js/ai/ai-tools-web.js';
+        import { AIConversationManager } from './js/ai/ai-conversation.js';
+        import { MenuDataManager } from './js/ai/menu-data-manager.js';
+
+        // Default to Kuwaiti Arabic
+        const defaultLanguage = 'ar-KW';
+        console.log('[Init] Using default Kuwaiti Arabic:', defaultLanguage);
+        
+        // Dynamic API URL detection - use Node.js server for local development
+        window.API_BASE_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000' 
+            : window.location.origin;
+        console.log('[Config] Using API base URL:', window.API_BASE_URL);
+        
+        // Initialize global variables
+        window.messageCount = 0;
+        window.config = {
+            language: 'ar-KW',
+            timeout: 8000,
+            autoRestart: true,
+            debug: false
+        };
+        
+        // Initialize global instances with Kuwaiti Arabic
+        window.aiClient = new AIClient();
+        window.speechService = new SpeechService({
+            lang: defaultLanguage,
+            interimResults: true,
+            continuous: true
+        });
+        window.ttsService = new TTSService();
+        window.googleTTSClient = new GoogleTTSClient();
+        window.openaiTTSClient = new OpenAITTSClient();
+        window.toolHandlers = new AIToolHandlersWeb();
+        window.menuDataManager = new MenuDataManager();
+        window.conversationManager = new AIConversationManager({
+            language: defaultLanguage,
+            pushToTalk: false,
+            wakeGreeting: false,
+            bargeIn: true  // Enable barge-in for ChatGPT-like behavior
+        });
+
+        // UI Helper functions (moved to module scope)
+        function updateStatus(status) {
+            document.getElementById('currentStatus').textContent = status;
+        }
+        
+        function addMessage(type, content) {
+            const display = document.getElementById('conversationDisplay');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.textContent = content;
+            display.appendChild(message);
+            display.scrollTop = display.scrollHeight;
+            
+            // Update message count for non-system messages
+            if (type !== 'system' && window.messageCount !== undefined) {
+                window.messageCount++;
+                const countEl = document.getElementById('messageCount');
+                if (countEl) countEl.textContent = window.messageCount;
+            }
+            
+            // Debug logging
+            if (window.config && window.config.debug) {
+                console.log(`[${type.toUpperCase()}]`, content);
+            }
+        }
+        
+        function updateMicIndicator(state) {
+            const indicator = document.getElementById('micIndicator');
+            indicator.className = `mic-indicator ${state}`;
+            
+            const icons = {
+                idle: '🎤',
+                listening: '🎤️',
+                processing: '🤖',
+                speaking: '🔊',
+                error: '❌'
+            };
+            
+            indicator.textContent = icons[state] || '🎤';
+        }
+        
+        // Progress Bar Functions
+        function showProgress(title = 'Loading...') {
+            const container = document.getElementById('progressContainer');
+            const titleEl = document.getElementById('progressTitle');
+            const percentEl = document.getElementById('progressPercent');
+            const statusEl = document.getElementById('progressStatus');
+            const progressBar = document.getElementById('progressBar');
+            
+            titleEl.textContent = title;
+            percentEl.textContent = '0%';
+            statusEl.textContent = 'Starting...';
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('indeterminate');
+            
+            // Reset all steps
+            document.querySelectorAll('.progress-step').forEach(step => {
+                step.classList.remove('active', 'completed');
+            });
+            
+            container.classList.add('show');
+        }
+        
+        function hideProgress() {
+            const container = document.getElementById('progressContainer');
+            container.classList.remove('show');
+        }
+        
+        function updateProgress(percent, status = '', stepId = null) {
+            const percentEl = document.getElementById('progressPercent');
+            const statusEl = document.getElementById('progressStatus');
+            const progressBar = document.getElementById('progressBar');
+            
+            // Update percentage and status
+            percentEl.textContent = `${Math.round(percent)}%`;
+            if (status) statusEl.textContent = status;
+            
+            // Update progress bar
+            if (percent >= 0) {
+                progressBar.classList.remove('indeterminate');
+                progressBar.style.width = `${percent}%`;
+            } else {
+                // Indeterminate progress
+                progressBar.classList.add('indeterminate');
+            }
+            
+            // Update step indicators
+            if (stepId) {
+                // Mark previous steps as completed
+                document.querySelectorAll('.progress-step').forEach(step => {
+                    step.classList.remove('active');
+                    if (step.id < stepId) {
+                        step.classList.add('completed');
+                    }
+                });
+                
+                // Mark current step as active
+                const currentStep = document.getElementById(stepId);
+                if (currentStep) {
+                    currentStep.classList.add('active');
+                }
+            }
+        }
+        
+        function setProgressIndeterminate(status = 'Processing...') {
+            updateProgress(-1, status);
+        }
+
+        // Configuration functions
+        function updateLanguage(language) {
+            window.config.language = language;
+            document.getElementById('currentLanguage').textContent = language;
+            
+            if (window.speechService) {
+                window.speechService.setLanguage(language);
+            }
+            
+            if (window.conversationManager) {
+                window.conversationManager.updateConfig({ language: language });
+            }
+            
+            const langNames = {
+                'ar-KW': 'Arabic (Kuwait) 🇰🇼',
+                'ar-SA': 'Arabic (Saudi Arabia)',
+                'ar-AE': 'Arabic (UAE)',
+                'ar-EG': 'Arabic (Egypt)',
+                'ar': 'Arabic (Standard)',
+                'en-US': 'English (US)',
+                'es-ES': 'Spanish (ES)',
+                'fr-FR': 'French (FR)'
+            };
+            
+            const languageName = langNames[language] || language;
+            addMessage('system', `Language changed to ${languageName}`);
+        }
+        
+        function updateTimeout(timeout) {
+            window.config.timeout = parseInt(timeout) * 1000;
+            addMessage('system', `Listening timeout set to ${timeout} seconds`);
+        }
+        
+        function updateAutoRestart(enabled) {
+            window.config.autoRestart = enabled;
+            addMessage('system', `Auto-restart ${enabled ? 'enabled' : 'disabled'}`);
+        }
+        
+        function updateDebugMode(enabled) {
+            window.config.debug = enabled;
+            addMessage('system', `Debug mode ${enabled ? 'enabled' : 'disabled'}`);
+        }
+        
+        function updateMicrophone(deviceId) {
+            window.config.microphoneId = deviceId;
+            localStorage.setItem('DRIVE_AI_MICROPHONE_ID', deviceId);
+            addMessage('system', `Microphone changed to: ${deviceId === 'default' ? 'System Default' : deviceId}`);
+        }
+        
+        async function refreshMicrophones() {
+            try {
+                const micInfo = await window.speechService.getMicrophoneDevices();
+                const select = document.getElementById('microphoneSelect');
+                
+                // Clear existing options except default
+                select.innerHTML = '<option value="default">System Default</option>';
+                
+                // Add detected devices
+                micInfo.devices.forEach(device => {
+                    if (device.deviceId !== 'default') {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.textContent = device.label;
+                        if (device.isDefault) {
+                            option.textContent += ' (Default)';
+                        }
+                        select.appendChild(option);
+                    }
+                });
+                
+                // Restore saved selection
+                const savedMicId = localStorage.getItem('DRIVE_AI_MICROPHONE_ID');
+                if (savedMicId && select.querySelector(`option[value="${savedMicId}"]`)) {
+                    select.value = savedMicId;
+                }
+                
+                addMessage('system', `Found ${micInfo.devices.length} microphone(s)`);
+                
+            } catch (error) {
+                console.error('[Config] Failed to refresh microphones:', error);
+                addMessage('system', `Error refreshing microphones: ${error.message}`);
+            }
+        }
+        
+        function clearConversation() {
+            document.getElementById('conversationDisplay').innerHTML = '';
+            window.messageCount = 0;
+            document.getElementById('messageCount').textContent = '0';
+            addMessage('system', 'Conversation cleared');
+        }
+        
+        function toggleConfig() {
+            const panel = document.getElementById('configPanel');
+            panel.classList.toggle('show');
+        }
+        
+        // Smart TTS function - OpenAI TTS ONLY (no Google TTS, no local TTS)
+        async function smartSpeak(text) {
+            if (!text || text.trim().length === 0) return;
+            
+            try {
+                // Force OpenAI TTS to be available if service is healthy
+                if (!window.useOpenAITTS) {
+                    console.log('[SmartTTS] Enabling OpenAI TTS - checking health...');
+                    try {
+                        const available = await window.openaiTTSClient.isServiceAvailable();
+                        if (available) {
+                            window.useOpenAITTS = true;
+                            console.log('[SmartTTS] OpenAI TTS enabled successfully');
+                        }
+                    } catch (healthError) {
+                        console.error('[SmartTTS] OpenAI TTS health check failed:', healthError);
+                    }
+                }
+                
+                // Use OpenAI TTS for ALL languages
+                if (window.useOpenAITTS) {
+                    const voiceConfig = {
+                        // Arabic voices - balanced speed for clarity
+                        'ar-KW': { voice: 'nova', speed: 0.95 },   // Best for Kuwaiti Arabic
+                        'ar-SA': { voice: 'alloy', speed: 0.95 },  // Good for Saudi Arabic
+                        'ar-AE': { voice: 'nova', speed: 0.95 },   // UAE Arabic
+                        'ar-EG': { voice: 'fable', speed: 0.95 },  // Egyptian Arabic
+                        'ar': { voice: 'alloy', speed: 0.95 },     // Standard Arabic
+                        // English voices - slightly slower for clarity
+                        'en-US': { voice: 'alloy', speed: 1.0 },   // American English
+                        'en-GB': { voice: 'echo', speed: 1.0 },    // British English
+                        // Other languages
+                        'es-ES': { voice: 'nova', speed: 1.0 },    // Spanish
+                        'fr-FR': { voice: 'shimmer', speed: 1.0 }  // French
+                    };
+                    
+                    const config = voiceConfig[window.config.language] || voiceConfig['en-US'];
+                    
+                    console.log(`[SmartTTS] 🤖 Using OpenAI TTS ONLY for ${window.config.language} - Premium Quality (${config.voice})`);
+                    
+                    await window.openaiTTSClient.speak(text, {
+                        language: window.config.language,
+                        voice: config.voice,
+                        model: 'tts-1-hd',
+                        speed: config.speed
+                    });
+                    return; // Success - exit function
+                }
+                
+                // No OpenAI TTS available - show error instead of using any other TTS
+                console.log('[SmartTTS] ❌ OpenAI TTS unavailable - no fallback allowed');
+                addMessage('system', `❌ OpenAI TTS unavailable for ${window.config.language}. Please check connection.`);
+                addMessage('assistant', text); // Show text only
+                return; // Don't use any other TTS
+                
+            } catch (error) {
+                console.error('[SmartTTS] OpenAI TTS Error:', error);
+                
+                // No fallback - show error instead of using robotic voice
+                console.log('[SmartTTS] OpenAI TTS failed - no fallback allowed');
+                addMessage('system', `❌ OpenAI TTS failed: ${error.message}`);
+                addMessage('assistant', text); // Show text only
+                return; // Don't use any fallback TTS
+            }
+        }
+        
+        // Make UI functions globally available for use in regular script section
+        window.addMessage = addMessage;
+        window.updateStatus = updateStatus;
+        window.updateMicIndicator = updateMicIndicator;
+        window.smartSpeak = smartSpeak;
+        
+        // Global menu query functions for AI Assistant to use (fast local access)
+        window.getMenuCategories = function() {
+            if (window.menuDataManager && window.menuDataManager.isReady()) {
+                return window.menuDataManager.getMenuCategories();
+            }
+            return { error: 'Menu data not ready' };
+        };
+        
+        window.getCategoryProducts = function(categoryName) {
+            if (window.menuDataManager && window.menuDataManager.isReady()) {
+                return window.menuDataManager.getCategoryProducts(categoryName);
+            }
+            return { error: 'Menu data not ready' };
+        };
+        
+        window.searchProducts = function(searchTerm) {
+            if (window.menuDataManager && window.menuDataManager.isReady()) {
+                return window.menuDataManager.searchProducts(searchTerm);
+            }
+            return { error: 'Menu data not ready' };
+        };
+        
+        window.getProductDetails = function(productId) {
+            if (window.menuDataManager && window.menuDataManager.isReady()) {
+                return window.menuDataManager.getProductDetails(productId);
+            }
+            return { error: 'Menu data not ready' };
+        };
+        
+        window.getAllProducts = function() {
+            if (window.menuDataManager && window.menuDataManager.isReady()) {
+                return window.menuDataManager.getAllProducts();
+            }
+            return { error: 'Menu data not ready' };
+        };
+
+        // Initialize on load
+        window.addEventListener('load', async () => {
+            // Update UI to show Kuwaiti Arabic
+            document.getElementById('currentLanguage').textContent = 'Arabic (Kuwait) 🇰🇼';
+            
+            // Set dropdown to Kuwaiti Arabic
+            const languageSelect = document.getElementById('languageSelect');
+            languageSelect.value = 'ar-KW';
+            
+            await initializeServices();
+        });
+
+        async function initializeServices() {
+            try {
+                updateStatus('Initializing...');
+                addMessage('system', 'Initializing AI services...');
+                
+                // Show progress bar
+                showProgress('🚀 Initializing AI Assistant');
+                updateProgress(5, 'Starting initialization...', 'step-token');
+                
+                addMessage('system', '🇰🇼 Ready with Kuwaiti Arabic support!');
+                addMessage('system', 'مرحباً! المساعد الذكي جاهز للحديث بالعربية');
+                
+                // Enable start button early to avoid long wait
+                document.getElementById('startBtn').disabled = false;
+                addMessage('system', '🚀 Quick start enabled - click "Start Conversation" anytime!');
+                
+                updateProgress(10, 'Testing server connectivity...');
+
+                // Test server connectivity first
+                try {
+                    const response = await fetch('/health');
+                    if (response.ok) {
+                        addMessage('system', '✅ Server connection OK');
+                        updateProgress(15, 'Server connection established');
+                    } else {
+                        throw new Error(`Server health check failed: ${response.status}`);
+                    }
+                } catch (error) {
+                    addMessage('system', `⚠️ Server connection issue: ${error.message}`);
+                    addMessage('system', 'Continuing with local services...');
+                    updateProgress(15, 'Server connection limited');
+                }
+
+                updateProgress(20, 'Initializing TTS services...');
+                
+                // Initialize TTS services with OpenAI TTS priority for Arabic
+                try {
+                    await window.ttsService.preloadVoices();
+                    
+                    // Test OpenAI TTS availability with timeout to avoid hanging
+                    addMessage('system', '🔄 Testing OpenAI TTS...');
+                    updateProgress(25, 'Testing OpenAI TTS availability...');
+                    try {
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout')), 3000)
+                        );
+                        const healthPromise = window.openaiTTSClient.isServiceAvailable();
+                        
+                        const openaiTTSAvailable = await Promise.race([healthPromise, timeoutPromise]);
+                        
+                        if (openaiTTSAvailable) {
+                            addMessage('system', '✅ OpenAI TTS available - Premium quality Arabic voice!');
+                            addMessage('system', '🤖 Using OpenAI TTS-HD with Nova voice for natural Arabic');
+                            window.useOpenAITTS = true;
+                            window.useGoogleTTS = false;
+                        } else {
+                            throw new Error('OpenAI TTS not available');
+                        }
+                    } catch (openaiError) {
+                        addMessage('system', `⚠️ OpenAI TTS check failed: ${openaiError.message}`);
+                        
+                        // Fallback to Google TTS
+                        try {
+                            const googleTTSAvailable = await window.googleTTSClient.isAvailable();
+                            if (googleTTSAvailable) {
+                                addMessage('system', '✅ Google Cloud TTS available - High quality Arabic voice!');
+                                addMessage('system', '🇸🇦 Using Neural Arabic voice (ar-XA-Neural2-A)');
+                                window.useGoogleTTS = true;
+                                window.useOpenAITTS = false;
+                            } else {
+                                throw new Error('Google TTS also not available');
+                            }
+                        } catch (googleError) {
+                            addMessage('system', '⚠️ Premium TTS unavailable - Arabic text-only mode');
+                            addMessage('system', '🔇 No robotic voice fallback for Arabic');
+                            window.useGoogleTTS = false;
+                            window.useOpenAITTS = false;
+                        }
+                    }
+                    
+                    addMessage('system', '✅ TTS Service ready');
+                    
+                    // Show selected voice in debug
+                    if (window.ttsService.currentVoice) {
+                        addMessage('system', `🗣️ Browser voice: ${window.ttsService.currentVoice.name} (${window.ttsService.currentVoice.lang})`);
+                    }
+                } catch (error) {
+                    addMessage('system', `⚠️ TTS initialization warning: ${error.message}`);
+                    window.useGoogleTTS = false;
+                    window.useOpenAITTS = false;
+                }
+
+                // Check speech recognition availability and request permissions
+                if (window.speechService.isAvailable) {
+                    addMessage('system', '✅ Speech Recognition available');
+                    
+                        // Get detailed microphone device information
+                        try {
+                            const micInfo = await window.speechService.getMicrophoneDevices();
+                            
+                            addMessage('system', `🎙️ Found ${micInfo.devices.length} audio input device(s)`);
+                            
+                            if (micInfo.devices.length > 0) {
+                                // Show default device if available
+                                const defaultDevice = micInfo.devices.find(d => d.isDefault) || micInfo.devices[0];
+                                addMessage('system', `🎤 Default microphone: ${defaultDevice.label}`);
+                                
+                                // Refresh the microphone selector
+                                await refreshMicrophones();
+                                
+                                if (config.debug) {
+                                    micInfo.devices.forEach((device, index) => {
+                                        addMessage('system', `  Device ${index + 1}: ${device.label} ${device.isDefault ? '(default)' : ''}`);
+                                    });
+                                }
+                            }
+                        
+                        // Test microphone permission
+                        if (micInfo.hasPermission) {
+                            addMessage('system', '✅ Microphone permission already granted');
+                        } else {
+                            addMessage('system', '🔒 Requesting microphone permission...');
+                            await window.speechService.requestMicrophonePermission();
+                            addMessage('system', '✅ Microphone permission granted');
+                        }
+                        
+                    } catch (error) {
+                        addMessage('system', `⚠️ Microphone setup error: ${error.message}`);
+                        addMessage('system', 'Please check microphone connection and browser settings');
+                        
+                        if (error.code === 'permission-denied') {
+                            addMessage('system', '🚫 To fix: Click the microphone icon in your browser address bar and allow access');
+                        }
+                    }
+                } else {
+                    addMessage('system', '⚠️ Speech Recognition not available in this browser');
+                    addMessage('system', 'Voice input will be disabled');
+                }
+
+                updateProgress(50, 'Loading menu data...', 'step-menu');
+                
+                // Load menu data for fast local access
+                try {
+                    addMessage('system', '📊 Loading menu data for AI assistant...');
+                    
+                    // We need a token first to load menu data
+                    updateProgress(55, 'Requesting AI token...');
+                    const deviceId = 'web-ai-chat-' + Math.random().toString(36).substr(2, 9);
+                    const tokenResponse = await fetch(`${window.API_BASE_URL}/ai/token`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Tenant-Id': 'f8578f9c-782b-4d31-b04f-3b2d890c5896'
+                        },
+                        body: JSON.stringify({
+                            device_id: deviceId,
+                            branch_name: 'Koobs Main'
+                        })
+                    });
+                    
+                    if (tokenResponse.ok) {
+                        const tokenData = await tokenResponse.json();
+                        window.tempAIToken = tokenData.token; // Store for menu loading
+                        updateProgress(65, 'AI token received, loading menu data...');
+                        
+                        // Load menu data
+                        try {
+                            await window.menuDataManager.loadMenuData(tokenData.token);
+                            const stats = window.menuDataManager.getMenuStats();
+                            updateProgress(85, `Menu data loaded: ${stats.categories_count} categories, ${stats.products_count} products`);
+                            addMessage('system', `✅ Menu data loaded: ${stats.categories_count} categories, ${stats.products_count} products`);
+                            addMessage('system', '🍽️ AI can now answer questions about menu and prices instantly!');
+                        } catch (menuError) {
+                            updateProgress(85, 'Menu loading failed, continuing...');
+                            addMessage('system', `⚠️ Menu data loading failed: ${menuError.message}`);
+                            addMessage('system', 'AI will still work but may be slower for menu questions');
+                        }
+                    } else {
+                        updateProgress(70, 'Token request failed, continuing...');
+                        addMessage('system', '⚠️ Could not get AI token for menu loading');
+                    }
+                    
+                } catch (error) {
+                    addMessage('system', `⚠️ Menu data initialization error: ${error.message}`);
+                }
+                
+                // Check tool handlers (they initialize automatically)
+                try {
+                    if (window.toolHandlers) {
+                        // Wait a moment for catalog initialization
+                        setTimeout(() => {
+                            if (window.toolHandlers.isInitialized) {
+                                addMessage('system', '✅ Tool Handlers ready');
+                            } else {
+                                addMessage('system', '⚠️ Tool Handlers still initializing catalog...');
+                            }
+                        }, 1000);
+                    }
+                } catch (error) {
+                    addMessage('system', `⚠️ Tool Handlers warning: ${error.message}`);
+                    addMessage('system', 'Product search may be limited');
+                }
+
+                // Initialize conversation manager with error handling
+                try {
+                    // Don't auto-initialize - wait for user to start conversation
+                    addMessage('system', '✅ Conversation Manager ready (will initialize on start)');
+                } catch (error) {
+                    addMessage('system', `⚠️ Conversation Manager initialization warning: ${error.message}`);
+                }
+
+                updateProgress(95, 'Finalizing initialization...', 'step-complete');
+                
+                updateStatus('Ready');
+                addMessage('system', '🎉 Services initialized! Click "Start Conversation" to begin.');
+
+                // Complete progress and hide progress bar
+                updateProgress(100, 'Ready to start!');
+                setTimeout(() => hideProgress(), 2000);
+
+                // Enable start button
+                document.getElementById('startBtn').disabled = false;
+
+            } catch (error) {
+                updateProgress(100, 'Initialization completed with warnings', 'step-complete');
+                setTimeout(() => hideProgress(), 2000);
+                
+                updateStatus('Ready (Limited)');
+                addMessage('system', `⚠️ Partial initialization: ${error.message}`);
+                addMessage('system', 'Some features may be limited, but basic conversation should work.');
+                updateMicIndicator('idle');
+                
+                // Enable start button anyway for limited functionality
+                document.getElementById('startBtn').disabled = false;
+            }
+        }
+    </script>
+
+    <script>
+        // Speech-based language detection
+        let detectedSpeechLanguage = null;
+        let speechSamples = [];
+        let isDetectingLanguage = true;
+        
+        function detectLanguageFromSpeech(transcript) {
+            if (!transcript || transcript.trim().length < 5) {
+                return null; // Need enough text to detect
+            }
+            
+            const text = transcript.toLowerCase().trim();
+            console.log('[SpeechDetection] Analyzing text:', text);
+            
+            // Arabic language patterns
+            const arabicPatterns = {
+                // Common Kuwaiti/Gulf Arabic words and phrases
+                'ar-KW': [
+                    'شلونك', 'وين', 'شنو', 'هاي', 'يالله', 'حبيبي', 'حياك', 'صج',
+                    'شدرايك', 'يا خوي', 'أكيد', 'علي', 'الله يعطيك العافية',
+                    'شكد', 'وايد', 'هني', 'ماكو', 'كان', 'جان', 'زين'
+                ],
+                // Standard Arabic and other dialects
+                'ar-SA': [
+                    'إيش', 'وش', 'كيفك', 'إنت', 'هذا', 'ذاك', 'الحين', 'أبغى',
+                    'بس', 'مادري', 'الله يعطيك العافية', 'مشكور', 'تسلم'
+                ],
+                'ar-EG': [
+                    'إزيك', 'إيه', 'دا', 'دي', 'كدا', 'بقى', 'يعني', 'أهو',
+                    'حاضر', 'ماشي', 'طيب', 'إزاي', 'فين'
+                ],
+                'ar-AE': [
+                    'شلونك', 'شو', 'هاي', 'يالله', 'ماشي', 'تمام', 'زين',
+                    'إنشالله', 'يا خوي', 'حياك الله'
+                ]
+            };
+            
+            // Check for Arabic script
+            const hasArabicScript = /[\u0600-\u06FF]/.test(text);
+            if (hasArabicScript) {
+                // Score each dialect
+                let maxScore = 0;
+                let detectedDialect = 'ar-KW'; // Default to Kuwaiti
+                
+                for (const [dialect, patterns] of Object.entries(arabicPatterns)) {
+                    let score = 0;
+                    for (const pattern of patterns) {
+                        if (text.includes(pattern)) {
+                            score += 1;
+                        }
+                    }
+                    
+                    if (score > maxScore) {
+                        maxScore = score;
+                        detectedDialect = dialect;
+                    }
+                }
+                
+                console.log('[SpeechDetection] Arabic detected, dialect scores:', {
+                    'ar-KW': arabicPatterns['ar-KW'].filter(p => text.includes(p)).length,
+                    'ar-SA': arabicPatterns['ar-SA'].filter(p => text.includes(p)).length,
+                    'ar-EG': arabicPatterns['ar-EG'].filter(p => text.includes(p)).length,
+                    'ar-AE': arabicPatterns['ar-AE'].filter(p => text.includes(p)).length,
+                    'selected': detectedDialect
+                });
+                
+                return detectedDialect;
+            }
+            
+            // Check for English patterns
+            const englishPatterns = ['hello', 'how', 'what', 'where', 'when', 'why', 'the', 'and', 'can', 'you', 'help', 'please', 'thank'];
+            const englishScore = englishPatterns.filter(word => text.includes(word)).length;
+            
+            if (englishScore > 2) {
+                console.log('[SpeechDetection] English detected, score:', englishScore);
+                return 'en-US';
+            }
+            
+            // Check for Spanish patterns
+            const spanishPatterns = ['hola', 'como', 'que', 'donde', 'cuando', 'por', 'gracias', 'ayuda', 'puedo'];
+            const spanishScore = spanishPatterns.filter(word => text.includes(word)).length;
+            
+            if (spanishScore > 1) {
+                console.log('[SpeechDetection] Spanish detected, score:', spanishScore);
+                return 'es-ES';
+            }
+            
+            return null; // Could not determine
+        }
+        
+        function switchToDetectedLanguage(newLanguage) {
+            if (newLanguage && newLanguage !== config.language) {
+                console.log('[SpeechDetection] Switching from', config.language, 'to', newLanguage);
+                
+                const langNames = {
+                    'ar-KW': 'Arabic (Kuwait) 🇰🇼',
+                    'ar-SA': 'Arabic (Saudi Arabia) 🇸🇦', 
+                    'ar-AE': 'Arabic (UAE) 🇦🇪',
+                    'ar-EG': 'Arabic (Egypt) 🇪🇬',
+                    'en-US': 'English (US) 🇺🇸',
+                    'es-ES': 'Spanish (ES) 🇪🇸'
+                };
+                
+                const languageName = langNames[newLanguage] || newLanguage;
+                addMessage('system', `🎯 Detected language: ${languageName}`);
+                
+                // Update config and services
+                updateLanguage(newLanguage);
+                
+                // Mark detection as complete for this session
+                isDetectingLanguage = false;
+                detectedSpeechLanguage = newLanguage;
+            }
+        }
+        
+        // Start with English as universal fallback for initial detection
+        function getInitialLanguage() {
+            return 'en-US'; // Start neutral for detection
+        }
+
+        // Global state
+        let continuousMode = false;
+        let conversationTimeout = null;
+        let messageCount = 0;
+        
+        // Default configuration with Kuwaiti Arabic
+        let config = {
+            language: 'ar-KW', // Kuwaiti Arabic by default
+            timeout: 8000,
+            autoRestart: true,
+            debug: false
+        };
+
+        // UI Helper functions (now in module scope)
+
+        function clearConversation() {
+            document.getElementById('conversationDisplay').innerHTML = '';
+            messageCount = 0;
+            document.getElementById('messageCount').textContent = '0';
+            addMessage('system', 'Conversation cleared');
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('configPanel');
+            panel.classList.toggle('show');
+        }
+
+        // Configuration functions
+        function updateLanguage(language) {
+            config.language = language;
+            document.getElementById('currentLanguage').textContent = language;
+            
+            // Update speech service language
+            if (window.speechService) {
+                window.speechService.setLanguage(language);
+            }
+            
+            // Update conversation manager language
+            if (window.conversationManager) {
+                window.conversationManager.updateConfig({ language: language });
+            }
+            
+            const langNames = {
+                'ar-KW': 'Arabic (Kuwait) 🇰🇼',
+                'ar-SA': 'Arabic (Saudi Arabia)',
+                'ar-AE': 'Arabic (UAE)',
+                'ar-EG': 'Arabic (Egypt)',
+                'ar': 'Arabic (Standard)',
+                'en-US': 'English (US)',
+                'es-ES': 'Spanish (ES)',
+                'fr-FR': 'French (FR)'
+            };
+            
+            const languageName = langNames[language] || language;
+            addMessage('system', `Language changed to ${languageName}`);
+        }
+
+        function updateTimeout(timeout) {
+            config.timeout = parseInt(timeout) * 1000;
+            addMessage('system', `Listening timeout set to ${timeout} seconds`);
+        }
+
+        function updateAutoRestart(enabled) {
+            config.autoRestart = enabled;
+            addMessage('system', `Auto-restart ${enabled ? 'enabled' : 'disabled'}`);
+        }
+
+        function updateDebugMode(enabled) {
+            config.debug = enabled;
+            addMessage('system', `Debug mode ${enabled ? 'enabled' : 'disabled'}`);
+        }
+        
+        // smartSpeak function now defined in module scope above
+        
+        // Test microphone function
+        async function testMicrophone() {
+            try {
+                addMessage('system', '🔍 Testing microphone setup...');
+                
+                const micInfo = await window.speechService.getMicrophoneDevices();
+                
+                addMessage('system', `🎙️ Available devices: ${micInfo.devices.length}`);
+                
+                if (micInfo.devices.length === 0) {
+                    addMessage('system', '❌ No microphone devices found');
+                    return;
+                }
+                
+                micInfo.devices.forEach((device, index) => {
+                    const status = device.isDefault ? ' (DEFAULT)' : '';
+                    addMessage('system', `  ${index + 1}. ${device.label}${status}`);
+                });
+                
+                addMessage('system', `Permission status: ${micInfo.hasPermission ? 'Granted' : 'Not granted'}`);
+                
+                if (!micInfo.hasPermission) {
+                    addMessage('system', '🔒 Requesting microphone permission...');
+                    await window.speechService.requestMicrophonePermission();
+                    addMessage('system', '✅ Permission granted!');
+                }
+                
+                // Test speech recognition start
+                addMessage('system', '🎤 Testing speech recognition start...');
+                
+                try {
+                    await window.speechService.start();
+                    addMessage('system', '✅ Speech recognition started successfully');
+                    
+                    // Stop after 2 seconds
+                    setTimeout(() => {
+                        window.speechService.stop();
+                        addMessage('system', '✅ Microphone test completed successfully');
+                    }, 2000);
+                    
+                } catch (startError) {
+                    addMessage('system', `❌ Speech recognition start failed: ${startError.message}`);
+                    
+                    if (startError.code === 'not-allowed') {
+                        addMessage('system', '🚫 Fix: Allow microphone access in browser settings');
+                    } else if (startError.code === 'no-speech') {
+                        addMessage('system', 'ℹ️ This is normal - no speech detected during test');
+                    }
+                }
+                
+            } catch (error) {
+                addMessage('system', `❌ Microphone test failed: ${error.message}`);
+                console.error('Microphone test error:', error);
+            }
+        }
+
+        // Main conversation functions
+        async function startContinuousConversation() {
+            try {
+                continuousMode = true;
+                updateStatus('Starting...');
+                addMessage('system', '🚀 Starting continuous conversation mode...');
+
+                // Disable start button, enable stop button
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+
+                // FIRST: Unlock audio context with user gesture
+                try {
+                    await window.ttsService.unlockAudio();
+                    addMessage('system', '✅ Audio unlocked successfully');
+                } catch (error) {
+                    addMessage('system', `⚠️ Audio unlock warning: ${error.message}`);
+                }
+
+                // Try to initialize conversation manager with services (may fail if backend not available)
+                let backendAvailable = false;
+                try {
+                    if (window.conversationManager) {
+                        await window.conversationManager.initialize({
+                            aiClient: window.aiClient,
+                            speechService: window.speechService,
+                            ttsService: window.ttsService,
+                            toolHandlers: window.toolHandlers
+                        });
+                        backendAvailable = true;
+                        addMessage('system', '✅ AI backend connected');
+                    }
+                } catch (error) {
+                    addMessage('system', `⚠️ AI backend not available: ${error.message}`);
+                    addMessage('system', 'Continuing with local TTS and speech recognition...');
+                }
+
+                // Set up conversation callbacks
+                setupConversationCallbacks(backendAvailable);
+
+                // Give welcome greeting based on language
+                let welcomeMessage;
+                if (config.language.startsWith('ar')) {
+                    // Use Koobs greeting for all Arabic configurations
+                    welcomeMessage = "مرحبا في كوبز .. شلون نخدمك اليوم";
+                } else {
+                    if (window.useOpenAITTS) {
+                        welcomeMessage = "Hello! I'm your AI assistant with premium OpenAI voice quality. I'll keep listening continuously for your questions in any language and help with anything you need. The microphone is always on and you can interrupt me anytime by speaking. How can I assist you today?";
+                    } else if (backendAvailable) {
+                        welcomeMessage = "Hello! I'm your AI assistant with premium voice quality. I'll keep listening for your questions and help you with anything you need. How can I assist you today?";
+                    } else {
+                        welcomeMessage = "Hello! I'm in continuous listening mode like ChatGPT. The microphone stays on and you can interrupt me anytime by speaking. I'm using your browser's voice - for premium quality, the full backend would be needed. Try interrupting me right now or wait for me to finish, then speak!";
+                    }
+                }
+                
+                updateStatus('Speaking');
+                updateMicIndicator('speaking');
+                addMessage('assistant', welcomeMessage);
+                
+                try {
+                    await smartSpeak(welcomeMessage);
+                } catch (error) {
+                    addMessage('system', `⚠️ TTS error: ${error.message}`);
+                }
+                
+                // Wait a moment after greeting, then start listening
+                setTimeout(() => {
+                    if (continuousMode) {
+                        if (backendAvailable && window.conversationManager) {
+                            // Use conversation manager's startListening
+                            window.conversationManager.startListening();
+                        } else {
+                            // Use local startListening
+                            startListening();
+                        }
+                    }
+                }, 1000);
+
+            } catch (error) {
+                addMessage('system', `❌ Error starting conversation: ${error.message}`);
+                updateStatus('Error');
+                updateMicIndicator('error');
+                resetButtons();
+            }
+        }
+
+        function stopContinuousConversation() {
+            continuousMode = false;
+            updateStatus('Stopping...');
+            addMessage('system', '⏹️ Stopping continuous conversation...');
+
+            // Clear timeout
+            if (conversationTimeout) {
+                clearTimeout(conversationTimeout);
+                conversationTimeout = null;
+            }
+
+            // Stop services
+            try {
+                window.speechService.stop();
+                window.ttsService.stop();
+                if (window.openaiTTSClient) {
+                    window.openaiTTSClient.stop();
+                }
+            } catch (error) {
+                console.error('Error stopping services:', error);
+            }
+
+            // End session
+            try {
+                window.conversationManager.endSession();
+            } catch (error) {
+                console.error('Error ending session:', error);
+            }
+
+            updateStatus('Stopped');
+            updateMicIndicator('idle');
+            resetButtons();
+            addMessage('system', '✅ Conversation stopped');
+        }
+
+        function resetButtons() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+        }
+
+        function setupConversationCallbacks(backendAvailable = false) {
+            if (backendAvailable && window.conversationManager) {
+                // Use conversation manager's built-in callbacks
+                window.conversationManager.onTranscript(({ type, text }) => {
+                    if (!continuousMode) return;
+                    
+                    if (type === 'partial') {
+                        updateStatus(`Listening: ${text.substring(0, 30)}...`);
+                    } else if (type === 'final') {
+                        addMessage('user', text);
+                        updateStatus('Processing...');
+                        updateMicIndicator('processing');
+                    }
+                });
+                
+                window.conversationManager.onAssistantText(({ type, text }) => {
+                    if (!continuousMode) return;
+                    
+                    if (type === 'complete') {
+                        addMessage('assistant', text);
+                        updateStatus('Speaking');
+                        updateMicIndicator('speaking');
+                        
+                        // The conversation manager will handle TTS and continuation automatically
+                    }
+                });
+                
+                window.conversationManager.onStateChange(({ oldState, newState }) => {
+                    if (!continuousMode) return;
+                    
+                    switch (newState) {
+                        case 'listening':
+                            updateMicIndicator('listening');
+                            updateStatus('Listening...');
+                            break;
+                        case 'processing':
+                            updateMicIndicator('processing');
+                            updateStatus('Processing...');
+                            break;
+                        case 'speaking':
+                            updateMicIndicator('speaking');
+                            updateStatus('Speaking');
+                            break;
+                        case 'idle':
+                            updateMicIndicator('idle');
+                            updateStatus('Ready');
+                            break;
+                        case 'error':
+                            updateMicIndicator('error');
+                            updateStatus('Error');
+                            break;
+                    }
+                });
+                
+                window.conversationManager.onError(({ type, error }) => {
+                    if (!continuousMode) return;
+                    addMessage('system', `AI error (${type}): ${error.message}`);
+                });
+                
+            } else {
+                // Local mode - handle speech directly
+                window.speechService.onPartial((transcript) => {
+                    if (!continuousMode) return;
+                    updateStatus(`Listening: ${transcript.substring(0, 30)}...`);
+                });
+
+                window.speechService.onFinal(async (transcript) => {
+                    if (!continuousMode) return;
+                    
+                    // Language detection disabled - keeping Kuwaiti Arabic default
+                    // if (isDetectingLanguage) {
+                    //     const detectedLang = detectLanguageFromSpeech(transcript);
+                    //     if (detectedLang) {
+                    //         switchToDetectedLanguage(detectedLang);
+                    //     }
+                    // }
+                    
+                    addMessage('user', transcript);
+                    updateStatus('Processing...');
+                    updateMicIndicator('processing');
+                    
+                    // Local echo mode
+                    handleLocalEcho(transcript);
+                });
+
+                // Handle errors with smart recovery
+                window.speechService.onError((error) => {
+                    if (!continuousMode) return;
+                    
+                    console.error('[SpeechError]', error);
+                    
+                    // Don't show error messages for common recoverable issues
+                    const isRecoverable = error.code === 'no-speech' || error.code === 'aborted' || error.code === 'network';
+                    
+                    if (!isRecoverable || config.debug) {
+                        addMessage('system', `Speech error: ${error.message}`);
+                    }
+                    
+                    updateMicIndicator('error');
+                    
+                    if (config.autoRestart && error.code !== 'not-allowed') {
+                        const delay = isRecoverable ? 1000 : 3000;
+                        restartListening(error.code || 'error');
+                    } else if (error.code === 'not-allowed') {
+                        addMessage('system', '🚫 Please enable microphone permission in your browser settings');
+                        updateStatus('Permission denied');
+                    }
+                });
+
+                // Handle TTS events for local mode with robust restart
+                window.ttsService.onStart(() => {
+                    if (continuousMode) {
+                        updateMicIndicator('speaking');
+                        updateStatus('Speaking');
+                    }
+                });
+
+                window.ttsService.onEnd(() => {
+                    if (continuousMode) {
+                        updateStatus('Restarting mic...');
+                        // Auto-restart listening after TTS finishes with slight delay
+                        setTimeout(() => {
+                            if (continuousMode) {
+                                startListening();
+                            }
+                        }, 300);
+                    }
+                });
+                
+                window.ttsService.onError((error) => {
+                    if (continuousMode) {
+                        console.error('[TTS Error]', error);
+                        addMessage('system', `TTS error: ${error.message}`);
+                        // Still restart listening even if TTS fails
+                        setTimeout(() => {
+                            if (continuousMode) {
+                                startListening();
+                            }
+                        }, 1000);
+                    }
+                });
+            }
+        }
+        
+        // Local echo function for when AI backend is not available
+        async function handleLocalEcho(transcript) {
+            let responses;
+            
+            if (config.language.startsWith('ar')) {
+                // Arabic responses for Kuwaiti/Gulf speakers
+                responses = [
+                    "سمعتك تقول: '" + transcript + "'. هذا ممتع!",
+                    "قلت: '" + transcript + "'. شكراً لك على التحدث!",
+                    "فهمت: '" + transcript + "'. التعرف على الصوت يعمل!",
+                    "رسالتك كانت: '" + transcript + "'. أنا أستمع باستمرار!",
+                    "التقطت: '" + transcript + "'. هذا يوضح تدفق الصوت!"
+                ];
+            } else {
+                // English responses
+                responses = [
+                    "I heard you say: '" + transcript + "'. That's interesting!",
+                    "You said: '" + transcript + "'. Thank you for speaking!",
+                    "I understood: '" + transcript + "'. The speech recognition is working!",
+                    "Your message was: '" + transcript + "'. I'm listening continuously!",
+                    "I captured: '" + transcript + "'. This demonstrates the voice flow!"
+                ];
+            }
+            
+            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+            
+            addMessage('assistant', randomResponse);
+            updateStatus('Speaking');
+            updateMicIndicator('speaking');
+            
+            try {
+                await smartSpeak(randomResponse);
+            } catch (error) {
+                addMessage('system', `TTS error: ${error.message}`);
+                // Continue listening even if TTS fails
+                setTimeout(() => {
+                    if (continuousMode) {
+                        startListening();
+                    }
+                }, 1000);
+            }
+        }
+
+        let speechStartAttempts = 0;
+        let maxSpeechAttempts = 5;
+        let restartTimer = null;
+        
+        function startListening() {
+            if (!continuousMode) {
+                addMessage('system', '🛑 Not in continuous mode, skipping listening');
+                return;
+            }
+            
+            if (!window.speechService.isAvailable) {
+                addMessage('system', '❌ Speech service not available');
+                return;
+            }
+
+            // Clear any existing restart timer
+            if (restartTimer) {
+                clearTimeout(restartTimer);
+                restartTimer = null;
+            }
+
+            // Clear any existing conversation timeout
+            if (conversationTimeout) {
+                clearTimeout(conversationTimeout);
+                conversationTimeout = null;
+            }
+
+            // Check if we've exceeded max attempts
+            if (speechStartAttempts >= maxSpeechAttempts) {
+                addMessage('system', `⚠️ Speech recognition failed ${maxSpeechAttempts} times. Taking a break...`);
+                updateMicIndicator('error');
+                
+                // Reset after longer delay
+                setTimeout(() => {
+                    speechStartAttempts = 0;
+                    if (continuousMode) {
+                        addMessage('system', '🔄 Retrying speech recognition...');
+                        startListening();
+                    }
+                }, 10000);
+                return;
+            }
+
+            startListeningAttempt();
+        }
+        
+        async function startListeningAttempt() {
+            try {
+                speechStartAttempts++;
+                
+                if (config.debug || speechStartAttempts > 1) {
+                    addMessage('system', `🎙️ Starting speech recognition (attempt ${speechStartAttempts})...`);
+                }
+                
+                updateStatus('Starting mic...');
+                updateMicIndicator('listening');
+                
+                // Start speech recognition with timeout
+                const startPromise = window.speechService.start();
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Start timeout')), 6000);
+                });
+                
+                await Promise.race([startPromise, timeoutPromise]);
+                
+                // If we get here, speech started successfully
+                speechStartAttempts = 0; // Reset on success
+                updateStatus('Listening...');
+                
+                if (config.debug) {
+                    addMessage('system', '✅ Speech recognition active');
+                }
+
+                // Set timeout to restart if no speech detected
+                conversationTimeout = setTimeout(() => {
+                    if (continuousMode && window.speechService.state !== 'listening') {
+                        if (config.debug) {
+                            addMessage('system', '🔄 Restarting listening (no activity timeout)');
+                        }
+                        restartListening('timeout');
+                    }
+                }, config.timeout);
+
+            } catch (error) {
+                console.error('[StartListening] Error:', error);
+                
+                const errorMsg = error.code || error.message || 'Unknown error';
+                
+                if (config.debug || speechStartAttempts >= 3) {
+                    addMessage('system', `❌ Speech start failed (${speechStartAttempts}/${maxSpeechAttempts}): ${errorMsg}`);
+                }
+                
+                updateMicIndicator('error');
+                
+                // Handle specific error types
+                if (error.code === 'not-allowed') {
+                    addMessage('system', '🚫 Microphone permission denied. Please allow microphone access.');
+                    speechStartAttempts = maxSpeechAttempts; // Stop trying
+                    return;
+                }
+                
+                // Exponential backoff for retries
+                const delay = Math.min(1000 * Math.pow(1.5, speechStartAttempts - 1), 8000);
+                
+                if (continuousMode && config.autoRestart) {
+                    restartTimer = setTimeout(() => {
+                        if (continuousMode) {
+                            startListening();
+                        }
+                    }, delay);
+                } else {
+                    updateStatus('Error - not retrying');
+                }
+            }
+        }
+        
+        function restartListening(reason = 'unknown') {
+            if (!continuousMode) return;
+            
+            if (config.debug) {
+                console.log(`[RestartListening] Reason: ${reason}`);
+            }
+            
+            // Stop current recognition
+            try {
+                window.speechService.stop();
+            } catch (error) {
+                console.warn('Error stopping speech service:', error);
+            }
+            
+            // Clear any existing timers
+            if (conversationTimeout) {
+                clearTimeout(conversationTimeout);
+                conversationTimeout = null;
+            }
+            if (restartTimer) {
+                clearTimeout(restartTimer);
+                restartTimer = null;
+            }
+            
+            // Restart after short delay
+            restartTimer = setTimeout(() => {
+                if (continuousMode) {
+                    startListening();
+                }
+            }, 500);
+        }
+
+        // Handle page visibility change (pause/resume when tab is hidden/shown)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && continuousMode) {
+                // Page is hidden, pause conversation
+                addMessage('system', 'Tab hidden, pausing conversation...');
+                window.speechService.stop();
+                if (conversationTimeout) {
+                    clearTimeout(conversationTimeout);
+                }
+            } else if (!document.hidden && continuousMode) {
+                // Page is visible again, resume conversation
+                addMessage('system', 'Tab visible, resuming conversation...');
+                setTimeout(() => {
+                    if (continuousMode) {
+                        startListening();
+                    }
+                }, 1000);
+            }
+        });
+
+        // Handle beforeunload to clean up properly
+        window.addEventListener('beforeunload', () => {
+            if (continuousMode) {
+                stopContinuousConversation();
+            }
+        });
+    </script>
+</body>
+</html>

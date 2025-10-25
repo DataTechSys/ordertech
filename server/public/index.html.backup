@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderTech Dashboard - Super Pro Monitoring</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 3rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .status {
+            display: flex;
+            justify-content: space-between;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .status-item {
+            flex: 1;
+            min-width: 120px;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            background: #28a745;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin: 0.2rem;
+        }
+        
+        .badge.down {
+            background: #dc3545;
+        }
+        
+        .badge.degraded {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .footer {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .api-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .api-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 OrderTech Dashboard</h1>
+        <p class="subtitle">Super Pro Monitoring & Control Center</p>
+        
+        <div class="status">
+            <div class="status-item">
+                <div class="status-label">Total Services</div>
+                <div class="status-value" id="total-services">
+                    <span class="loading"></span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Online</div>
+                <div class="status-value" id="online-services">
+                    <span class="loading"></span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Issues</div>
+                <div class="status-value" id="down-services">
+                    <span class="loading"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="service-badges">
+            <div class="badge">Express Server</div>
+            <div class="badge">PostgreSQL</div>
+            <div class="badge">Redis</div>
+            <div class="badge">MinIO</div>
+            <div class="badge down">LiveKit</div>
+            <div class="badge">Cloud Run</div>
+            <div class="badge">Cloud SQL</div>
+            <div class="badge degraded">OpenAI API</div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Status:</strong> Dashboard is initializing... <span class="loading"></span></p>
+            <p>API: <a href="/api/dashboard/summary" class="api-link">/api/dashboard/summary</a></p>
+            <p>Health: <a href="/health" class="api-link">/health</a></p>
+            <p><strong>Access:</strong> http://localhost/server (production: app.ordertech.me/server)</p>
+        </div>
+    </div>
+
+    <script>
+        // Basic functionality to test API connection
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/summary');
+                const data = await response.json();
+                
+                document.getElementById('total-services').textContent = data.services.total || '0';
+                document.getElementById('online-services').textContent = data.services.up || '0';
+                document.getElementById('down-services').textContent = 
+                    (data.services.down || 0) + (data.services.degraded || 0);
+                
+                // Update status message
+                document.querySelector('.footer p').innerHTML = 
+                    '<strong>Status:</strong> Dashboard connected ✅ Last updated: ' + 
+                    new Date(data.lastUpdated).toLocaleTimeString();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                document.querySelector('.footer p').innerHTML = 
+                    '<strong>Status:</strong> ⚠️ Failed to connect to API';
+            }
+        }
+        
+        // Load data immediately and then every 30 seconds
+        loadDashboardData();
+        setInterval(loadDashboardData, 30000);
+        
+        // Test WebSocket connection
+        if (typeof io !== 'undefined') {
+            const socket = io();
+            
+            socket.on('connect', () => {
+                console.log('WebSocket connected');
+            });
+            
+            socket.on('server:hello', (data) => {
+                console.log('Received greeting:', data);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('WebSocket disconnected');
+            });
+        }
+    </script>
+</body>
+</html>

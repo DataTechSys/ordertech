@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tenant Orders</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    body{ font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding:16px; }
+    h1{ margin: 0 0 12px 0; }
+    .toolbar{ display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+    table{ width:100%; border-collapse: collapse; }
+    th, td{ border-bottom:1px solid #e5e7eb; padding:8px; text-align:left; vertical-align: top; }
+    th{ background:#f8fafc; font-weight:700; }
+    .muted{ color:#6b7280; font-size:12px; }
+    .nowrap{ white-space: nowrap; }
+    .items{ font-size: 12px; color:#374151; }
+    .pager{ display:flex; gap:8px; margin-top:12px; }
+    button{ padding:6px 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <h1>Orders</h1>
+  <div class="toolbar">
+    <label>Tenant ID:</label>
+    <input id="tenantId" type="text" style="width:420px" placeholder="tenant UUID" />
+    <button id="loadBtn">Load</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Ticket</th>
+        <th>Paid At</th>
+        <th>OSN</th>
+        <th>Branch</th>
+        <th>Location</th>
+        <th>Total</th>
+        <th>Items</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="pager">
+    <button id="prevBtn">Prev</button>
+    <span id="pageInfo" class="muted"></span>
+    <button id="nextBtn">Next</button>
+  </div>
+
+<script>
+(function(){
+  const tbody = document.getElementById('tbody');
+  const tenantInput = document.getElementById('tenantId');
+  const loadBtn = document.getElementById('loadBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const pageInfo = document.getElementById('pageInfo');
+  let offset = 0; const limit = 50; let count = 0;
+
+  function fmtKwd(n){ try { return (Math.round(Number(n)*1000)/1000).toFixed(3) + ' KWD'; } catch { return String(n); } }
+  function fmtTime(s){ try { return new Date(s).toLocaleString(); } catch { return s; } }
+
+  async function load(){
+    const tenantId = tenantInput.value.trim(); if (!tenantId){ alert('Enter tenant id'); return; }
+    const url = `/admin/tenants/${encodeURIComponent(tenantId)}/orders?limit=${limit}&offset=${offset}`;
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+    try {
+      const r = await fetch(url, { credentials: 'include' });
+      const j = await r.json();
+      const items = Array.isArray(j.items) ? j.items : [];
+      count = items.length;
+      tbody.innerHTML = items.map(it => {
+        const itms = Array.isArray(it.items) ? it.items : [];
+        const itemsStr = itms.map(x => `${x.name} × ${x.qty} (${(Math.round(Number(x.price)*1000)/1000).toFixed(3)})`).join('<br/>');
+        return `<tr>
+          <td class="nowrap">${it.ticket_no ?? ''}</td>
+          <td class="nowrap">${fmtTime(it.paid_at)}</td>
+          <td>${it.osn||''}</td>
+          <td>${it.branch||''}</td>
+          <td>${it.location||''}</td>
+          <td class="nowrap">${fmtKwd(it.total)} ${it.currency||''}</td>
+          <td class="items">${itemsStr||''}</td>
+        </tr>`;
+      }).join('');
+      pageInfo.textContent = `offset ${offset} — showing ${items.length}`;
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="7" class="muted">Failed to load</td></tr>';
+    }
+  }
+
+  function parseTenantFromUrl(){ try { const u = new URL(location.href); const id = u.searchParams.get('id')||''; if (id) tenantInput.value=id; } catch {} }
+
+  loadBtn.addEventListener('click', () => { offset = 0; load(); });
+  prevBtn.addEventListener('click', () => { offset = Math.max(0, offset - limit); load(); });
+  nextBtn.addEventListener('click', () => { offset += limit; load(); });
+
+  parseTenantFromUrl();
+  if (tenantInput.value) load();
+})();
+</script>
+</body>
+</html>
+

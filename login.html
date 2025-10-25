@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderTech - Login To Your Account</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 8px;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            font-size: 18px;
+            color: #4a5568;
+            margin-bottom: 32px;
+            font-weight: 500;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            color: #2d3748;
+            background: #f7fafc;
+            transition: all 0.2s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 24px;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .login-btn:active {
+            transform: translateY(0);
+        }
+        
+        .forgot-password {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 24px;
+            display: inline-block;
+        }
+        
+        .forgot-password:hover {
+            text-decoration: underline;
+        }
+        
+        .signup-link {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        .signup-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .signup-link a:hover {
+            text-decoration: underline;
+        }
+        
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 32px 24px;
+                margin: 20px 10px;
+            }
+            
+            .logo {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">ORDERTECH</div>
+        <div class="subtitle">Login To Your Account</div>
+        
+        <div id="successMessage" class="success-message">
+            Logged Out Successfully!
+        </div>
+        
+        <div id="errorMessage" class="error-message">
+            Invalid credentials. Please try again.
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label class="form-label" for="accountNumber">Account Number</label>
+                <input 
+                    type="text" 
+                    id="accountNumber" 
+                    class="form-input" 
+                    placeholder="494675"
+                    value="494675"
+                    required
+                >
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="email">Email</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    class="form-input" 
+                    placeholder="mosawi@koobs.cafe"
+                    value="mosawi@koobs.cafe"
+                    required
+                >
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    class="form-input" 
+                    placeholder="••••••••••"
+                    value="password"
+                    required
+                >
+            </div>
+            
+            <button type="submit" class="login-btn" id="loginBtn">
+                Log In
+            </button>
+            
+            <a href="#" class="forgot-password">Forgot Password ?</a>
+            
+            <div class="signup-link">
+                Don't have an account? <a href="#">Try OrderTech for free</a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Show success message if redirected from logout
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('logged_out') === '1') {
+            document.getElementById('successMessage').style.display = 'block';
+        }
+
+        // Handle login form submission
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('loginBtn');
+            const errorMsg = document.getElementById('errorMessage');
+            const form = document.getElementById('loginForm');
+            
+            // Show loading state
+            btn.textContent = 'Logging In...';
+            btn.disabled = true;
+            form.classList.add('loading');
+            errorMsg.style.display = 'none';
+            
+            // Get form data
+            const accountNumber = document.getElementById('accountNumber').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                // Simulate API call (replace with real authentication)
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // For demo, accept any credentials
+                if (email && password && accountNumber) {
+                    // Store auth token (demo)
+                    localStorage.setItem('AUTH_TOKEN', 'demo-token-' + Date.now());
+                    localStorage.setItem('USER_EMAIL', email);
+                    localStorage.setItem('ACCOUNT_NUMBER', accountNumber);
+                    
+                    // Find tenant by account number
+                    let tenantId = 'f8578f9c-782b-4d31-b04f-3b2d890c5896'; // Default to Koobs
+                    if (accountNumber === '532342') {
+                        tenantId = '56ac557e-589d-4602-bc9b-946b201fb6f6'; // Fouzi Cafe
+                    }
+                    
+                    localStorage.setItem('SELECTED_TENANT_ID', tenantId);
+                    
+                    // Redirect to admin dashboard at root
+                    window.location.href = '/';
+                } else {
+                    throw new Error('Invalid credentials');
+                }
+            } catch (error) {
+                // Show error
+                errorMsg.textContent = error.message || 'Login failed. Please try again.';
+                errorMsg.style.display = 'block';
+                
+                // Reset form
+                btn.textContent = 'Log In';
+                btn.disabled = false;
+                form.classList.remove('loading');
+            }
+        });
+    </script>
+</body>
+</html>

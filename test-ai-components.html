@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Components Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .status.success { background: #d1fae5; color: #065f46; }
+        .status.error { background: #fecaca; color: #991b1b; }
+        .status.info { background: #dbeafe; color: #1e40af; }
+        
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 4px 8px 4px 0;
+        }
+        .test-button:hover {
+            background: #2563eb;
+        }
+        .test-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .test-output {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .transcript-area {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 12px;
+            min-height: 60px;
+            margin: 8px 0;
+        }
+        
+        .transcript-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .config-section {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 16px 0;
+        }
+        
+        .config-item {
+            margin: 8px 0;
+        }
+        
+        .config-item label {
+            display: inline-block;
+            width: 200px;
+            font-weight: 500;
+        }
+        
+        .config-item input, .config-item select {
+            width: 200px;
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>OrderTech AI Components Test</h1>
+    <p>This page tests the individual AI components we've built before full integration.</p>
+    
+    <!-- Configuration -->
+    <div class="config-section">
+        <h4>Configuration (stored in localStorage)</h4>
+        <div class="config-item">
+            <label>Enable AI:</label>
+            <input type="checkbox" id="aiEnabled" onchange="updateConfig('DRIVE_AI_ENABLED', this.checked ? '1' : '0')">
+        </div>
+        <div class="config-item">
+            <label>Language:</label>
+            <select id="aiLang" onchange="updateConfig('DRIVE_AI_LANG', this.value)">
+                <option value="en-US">English (US)</option>
+                <option value="ar-SA">Arabic (SA)</option>
+                <option value="es-ES">Spanish (ES)</option>
+            </select>
+        </div>
+        <div class="config-item">
+            <label>Push to Talk:</label>
+            <input type="checkbox" id="pushToTalk" onchange="updateConfig('DRIVE_AI_PUSH_TO_TALK', this.checked ? '1' : '0')" checked>
+        </div>
+        <div class="config-item">
+            <label>Debug Mode:</label>
+            <input type="checkbox" id="debugMode" onchange="updateConfig('DRIVE_AI_DEBUG', this.checked ? '1' : '0')">
+        </div>
+    </div>
+
+    <!-- AI Client Test -->
+    <div class="test-section">
+        <h3>AI Client <span id="aiClientStatus" class="status info">Not tested</span></h3>
+        <p>Test backend communication, token management, and session handling.</p>
+        
+        <button class="test-button" onclick="testAIClient()">Test AI Client</button>
+        <button class="test-button" onclick="testAISession()">Test Session Creation</button>
+        
+        <div class="test-output" id="aiClientOutput">Click a button to test AI Client functionality...</div>
+    </div>
+
+    <!-- Speech Service Test -->
+    <div class="test-section">
+        <h3>Speech Service <span id="speechStatus" class="status info">Not tested</span></h3>
+        <p>Test speech recognition capabilities and browser compatibility.</p>
+        
+        <button class="test-button" onclick="testSpeechSupport()">Check Support</button>
+        <button class="test-button" onclick="testSpeechRecognition()" id="speechBtn">Start Listening</button>
+        
+        <div class="transcript-area">
+            <div class="transcript-label">Transcript:</div>
+            <div id="speechTranscript">No speech detected yet...</div>
+        </div>
+        
+        <div class="test-output" id="speechOutput">Click "Check Support" to test Speech Recognition...</div>
+    </div>
+
+    <!-- TTS Service Test -->
+    <div class="test-section">
+        <h3>TTS Service <span id="ttsStatus" class="status info">Not tested</span></h3>
+        <p>Test text-to-speech functionality and voice management.</p>
+        
+        <button class="test-button" onclick="testTTSSupport()">Check Support</button>
+        <button class="test-button" onclick="testTTSSpeak()">Test Speaking</button>
+        <button class="test-button" onclick="testTTSStop()">Stop</button>
+        
+        <div class="test-output" id="ttsOutput">Click "Check Support" to test Text-to-Speech...</div>
+    </div>
+
+    <!-- Tool Handlers Test -->
+    <div class="test-section">
+        <h3>AI Tool Handlers <span id="toolsStatus" class="status info">Not tested</span></h3>
+        <p>Test product search and cart operations (mocked).</p>
+        
+        <button class="test-button" onclick="testToolsInit()">Initialize Tools</button>
+        <button class="test-button" onclick="testProductSearch()">Search Products</button>
+        <button class="test-button" onclick="testAddItem()">Test Add Item</button>
+        
+        <div class="test-output" id="toolsOutput">Click "Initialize Tools" to test AI Tool Handlers...</div>
+    </div>
+
+    <!-- Import our AI modules -->
+    <script type="module">
+        import { AIClient } from './js/ai/ai-client.js';
+        import { createSpeechService } from './js/ai/ai-speech.js';
+        import { createTTSService } from './js/ai/ai-tts.js';
+        import { AIToolHandlersWeb } from './js/ai/ai-tools-web.js';
+
+        // Global instances for testing
+        window.aiClient = new AIClient();
+        window.speechService = createSpeechService();
+        window.ttsService = createTTSService();
+        window.toolHandlers = new AIToolHandlersWeb();
+
+        // Initialize AI client
+        window.aiClient.initialize('test-device-' + Date.now(), 'Test Drive-Thru');
+
+        // Load current config
+        window.addEventListener('load', loadCurrentConfig);
+    </script>
+
+    <script>
+        // Configuration management
+        function loadCurrentConfig() {
+            document.getElementById('aiEnabled').checked = localStorage.getItem('DRIVE_AI_ENABLED') === '1';
+            document.getElementById('aiLang').value = localStorage.getItem('DRIVE_AI_LANG') || 'en-US';
+            document.getElementById('pushToTalk').checked = localStorage.getItem('DRIVE_AI_PUSH_TO_TALK') !== '0';
+            document.getElementById('debugMode').checked = localStorage.getItem('DRIVE_AI_DEBUG') === '1';
+        }
+
+        function updateConfig(key, value) {
+            localStorage.setItem(key, value);
+            log(`Config updated: ${key} = ${value}`);
+        }
+
+        function log(message) {
+            console.log(`[Test] ${message}`);
+        }
+
+        function updateStatus(elementId, status, text = '') {
+            const el = document.getElementById(elementId);
+            el.className = `status ${status}`;
+            el.textContent = text || status;
+        }
+
+        function updateOutput(elementId, content) {
+            document.getElementById(elementId).textContent = content;
+        }
+
+        // AI Client Tests
+        async function testAIClient() {
+            updateStatus('aiClientStatus', 'info', 'Testing...');
+            updateOutput('aiClientOutput', 'Testing AI Client connection...\n');
+            
+            try {
+                const tokenResponse = await window.aiClient.getToken();
+                updateOutput('aiClientOutput', `✅ AI Client Test Passed!\n\nToken Response:\n${JSON.stringify(tokenResponse, null, 2)}`);
+                updateStatus('aiClientStatus', 'success', 'Connected');
+            } catch (error) {
+                updateOutput('aiClientOutput', `❌ AI Client Test Failed!\n\nError: ${error.message}`);
+                updateStatus('aiClientStatus', 'error', 'Failed');
+            }
+        }
+
+        async function testAISession() {
+            try {
+                updateOutput('aiClientOutput', 'Creating AI session...\n');
+                const sessionResponse = await window.aiClient.startSession();
+                updateOutput('aiClientOutput', `✅ Session Created!\n\nSession Response:\n${JSON.stringify(sessionResponse, null, 2)}`);
+            } catch (error) {
+                updateOutput('aiClientOutput', `❌ Session Creation Failed!\n\nError: ${error.message}`);
+            }
+        }
+
+        // Speech Service Tests
+        function testSpeechSupport() {
+            const isAvailable = window.speechService.isAvailable;
+            const browserInfo = window.speechService.getBrowserInfo();
+            
+            if (isAvailable) {
+                updateStatus('speechStatus', 'success', 'Supported');
+                updateOutput('speechOutput', `✅ Speech Recognition Supported!\n\nBrowser Info:\n${JSON.stringify(browserInfo, null, 2)}`);
+            } else {
+                updateStatus('speechStatus', 'error', 'Not Supported');
+                updateOutput('speechOutput', `❌ Speech Recognition Not Supported\n\nBrowser Info:\n${JSON.stringify(browserInfo, null, 2)}\n\nNote: This is normal for Firefox and some other browsers.`);
+            }
+        }
+
+        async function testSpeechRecognition() {
+            if (!window.speechService.isAvailable) {
+                alert('Speech recognition not supported in this browser');
+                return;
+            }
+
+            const btn = document.getElementById('speechBtn');
+            
+            if (window.speechService.state === 'listening') {
+                window.speechService.stop();
+                btn.textContent = 'Start Listening';
+                return;
+            }
+
+            try {
+                btn.textContent = 'Listening...';
+                btn.disabled = true;
+                
+                // Set up event listeners
+                window.speechService.onPartial((data) => {
+                    document.getElementById('speechTranscript').textContent = `Interim: ${data.transcript}`;
+                });
+                
+                window.speechService.onFinal((data) => {
+                    document.getElementById('speechTranscript').textContent = `Final: ${data.transcript}`;
+                    updateOutput('speechOutput', `✅ Speech Recognized!\n\nTranscript: "${data.transcript}"\nConfidence: ${(data.confidence * 100).toFixed(1)}%`);
+                    btn.textContent = 'Start Listening';
+                    btn.disabled = false;
+                });
+                
+                window.speechService.onError((error) => {
+                    updateOutput('speechOutput', `❌ Speech Error: ${error.message}`);
+                    btn.textContent = 'Start Listening';
+                    btn.disabled = false;
+                });
+                
+                await window.speechService.start();
+                btn.textContent = 'Stop Listening';
+                btn.disabled = false;
+                
+            } catch (error) {
+                updateOutput('speechOutput', `❌ Failed to start speech recognition: ${error.message}`);
+                btn.textContent = 'Start Listening';
+                btn.disabled = false;
+            }
+        }
+
+        // TTS Service Tests
+        async function testTTSSupport() {
+            const isAvailable = window.ttsService.isAvailable;
+            
+            if (isAvailable) {
+                await window.ttsService.preloadVoices();
+                const voices = window.ttsService.voices;
+                const settings = window.ttsService.getSettings();
+                
+                updateStatus('ttsStatus', 'success', 'Supported');
+                updateOutput('ttsOutput', `✅ Text-to-Speech Supported!\n\nVoices found: ${voices.length}\nCurrent voice: ${settings.currentVoiceName}\nAudio unlocked: ${window.ttsService.audioUnlocked}`);
+            } else {
+                updateStatus('ttsStatus', 'error', 'Not Supported');
+                updateOutput('ttsOutput', `❌ Text-to-Speech Not Supported`);
+            }
+        }
+
+        async function testTTSSpeak() {
+            if (!window.ttsService.isAvailable) {
+                alert('Text-to-speech not supported in this browser');
+                return;
+            }
+
+            try {
+                // Unlock audio if needed
+                if (!window.ttsService.audioUnlocked) {
+                    await window.ttsService.unlockAudio();
+                }
+                
+                const testText = "Hello! This is a test of the text to speech system. Can you hear me clearly?";
+                await window.ttsService.speak(testText);
+                
+                updateOutput('ttsOutput', `✅ Text-to-Speech Test Completed!\n\nSpoke: "${testText}"`);
+                
+            } catch (error) {
+                updateOutput('ttsOutput', `❌ TTS Error: ${error.message}\n\nNote: You may need to interact with the page first to unlock audio.`);
+            }
+        }
+
+        function testTTSStop() {
+            window.ttsService.stop();
+            updateOutput('ttsOutput', 'TTS stopped.');
+        }
+
+        // Tool Handlers Tests
+        async function testToolsInit() {
+            try {
+                const stats = window.toolHandlers.getCatalogStats();
+                updateStatus('toolsStatus', 'info', 'Initializing...');
+                
+                // Mock some products for testing
+                window.toolHandlers.products = [
+                    { id: 'burger-001', name: 'Classic Burger', price: 8.99, category: 'burgers' },
+                    { id: 'fries-001', name: 'French Fries', price: 3.99, category: 'sides' },
+                    { id: 'drink-001', name: 'Cola', price: 2.99, category: 'drinks' }
+                ];
+                window.toolHandlers.buildSearchIndexes();
+                
+                const newStats = window.toolHandlers.getCatalogStats();
+                updateStatus('toolsStatus', 'success', 'Ready');
+                updateOutput('toolsOutput', `✅ Tool Handlers Initialized!\n\nCatalog Stats:\n${JSON.stringify(newStats, null, 2)}`);
+                
+            } catch (error) {
+                updateStatus('toolsStatus', 'error', 'Failed');
+                updateOutput('toolsOutput', `❌ Tool Handlers Error: ${error.message}`);
+            }
+        }
+
+        async function testProductSearch() {
+            try {
+                const results = await window.toolHandlers.find_products({ query: 'burger', limit: 5 });
+                updateOutput('toolsOutput', `✅ Product Search Test!\n\nSearch Results:\n${JSON.stringify(results, null, 2)}`);
+            } catch (error) {
+                updateOutput('toolsOutput', `❌ Product Search Error: ${error.message}`);
+            }
+        }
+
+        async function testAddItem() {
+            try {
+                // Mock the event listener for ai:add-item
+                document.addEventListener('ai:add-item', (event) => {
+                    console.log('Mock cart received add-item:', event.detail);
+                    // Simulate success
+                    setTimeout(() => {
+                        document.dispatchEvent(new CustomEvent('ai:cart-updated', {
+                            detail: { items: [{ sku: event.detail.productId, name: event.detail.product.name, qty: event.detail.qty }] }
+                        }));
+                    }, 100);
+                });
+                
+                const result = await window.toolHandlers.add_item({ 
+                    productId: 'burger-001', 
+                    quantity: 1 
+                });
+                
+                updateOutput('toolsOutput', `✅ Add Item Test!\n\nResult:\n${JSON.stringify(result, null, 2)}`);
+            } catch (error) {
+                updateOutput('toolsOutput', `❌ Add Item Error: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

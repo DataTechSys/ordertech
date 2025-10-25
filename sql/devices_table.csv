@@ -1,0 +1,11 @@
+Field Name,Type,Description
+device_id,UUID,Primary key
+tenant_id,UUID (FK),Belongs to tenant
+branch_id,UUID (FK),Device location
+device_name,VARCHAR(100),Friendly name
+uuid,TEXT,Unique hardware ID
+activation_token,VARCHAR(100),Used for setup
+status,VARCHAR(20),active / inactive / pending
+expiry_date,DATE,Optional
+last_checkin,TIMESTAMP,Last sync
+created_at,TIMESTAMP,Registered time

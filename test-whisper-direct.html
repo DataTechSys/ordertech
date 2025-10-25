@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct Whisper API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .button { padding: 15px 25px; margin: 10px; font-size: 18px; border-radius: 5px; border: none; cursor: pointer; }
+        .start { background: #28a745; color: white; }
+        .stop { background: #dc3545; color: white; }
+        .test { background: #007bff; color: white; }
+        .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; font-family: monospace; font-size: 14px; white-space: pre-wrap; max-height: 500px; overflow-y: auto; margin-top: 20px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .transcript { background: #e7f3ff; border-left: 4px solid #007bff; padding: 10px; margin: 10px 0; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>🎙️ Direct Whisper API Test</h1>
+    
+    <div>
+        <button class="button start" onclick="startRecording()" id="startBtn">▶️ Start Recording</button>
+        <button class="button stop" onclick="stopRecording()" id="stopBtn" disabled>⏹️ Stop Recording</button>
+        <button class="button test" onclick="testEndpoint()">🔗 Test Whisper Endpoint</button>
+        <button class="button" onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+    
+    <div id="transcript" class="transcript" style="display: none;">
+        <strong>Transcript:</strong> <span id="transcriptText">...</span>
+    </div>
+    
+    <h3>Debug Log:</h3>
+    <div class="log" id="log"></div>
+
+    <script>
+        let mediaRecorder = null;
+        let audioStream = null;
+        let audioChunks = [];
+        let isRecording = false;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : (type === 'success' ? 'success' : '');
+            logDiv.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[Direct Whisper] ${message}`);
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('transcript').style.display = 'none';
+        }
+        
+        function showTranscript(text) {
+            const transcriptDiv = document.getElementById('transcript');
+            const transcriptText = document.getElementById('transcriptText');
+            transcriptText.textContent = text;
+            transcriptDiv.style.display = 'block';
+        }
+        
+        async function testEndpoint() {
+            try {
+                log('Testing Whisper endpoint...');
+                const response = await fetch('http://localhost:3000/ai/whisper/transcribe', {
+                    method: 'OPTIONS'
+                });
+                if (response.ok) {
+                    log('✅ Whisper endpoint is accessible', 'success');
+                } else {
+                    log('❌ Whisper endpoint error: ' + response.status, 'error');
+                }
+            } catch (error) {
+                log('❌ Whisper endpoint connection failed: ' + error.message, 'error');
+            }
+        }
+        
+        async function startRecording() {
+            try {
+                if (isRecording) return;
+                
+                log('=== Starting Direct Recording ===');
+                
+                // Get microphone access
+                audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 16000,
+                        channelCount: 1
+                    }
+                });
+                
+                // Create MediaRecorder
+                const mimeType = 'audio/webm;codecs=opus';
+                mediaRecorder = new MediaRecorder(audioStream, {
+                    mimeType: mimeType,
+                    audioBitsPerSecond: 16000
+                });
+                
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        log(`📦 Audio chunk: ${event.data.size} bytes`);
+                    }
+                };
+                
+                mediaRecorder.onstart = () => {
+                    log('✅ Recording started', 'success');
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    isRecording = true;
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    log('⏹️ Recording stopped');
+                    
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    log(`📄 Total audio size: ${audioBlob.size} bytes`);
+                    
+                    if (audioBlob.size > 0) {
+                        await sendToWhisper(audioBlob);
+                    } else {
+                        log('❌ No audio data recorded', 'error');
+                    }
+                    
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    isRecording = false;
+                };
+                
+                // Start recording
+                mediaRecorder.start(100);
+                
+            } catch (error) {
+                log(`❌ Recording failed: ${error.message}`, 'error');
+                isRecording = false;
+            }
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+        
+        async function getAIToken() {
+            try {
+                log('🔑 Getting AI token...');
+                const response = await fetch('http://localhost:3000/ai/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        device_id: 'web-ai-test-' + Date.now(),
+                        branch_name: 'Test Branch'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Token request failed: ${response.status} - ${errorText}`);
+                }
+                
+                const result = await response.json();
+                log(`✅ AI token obtained: expires at ${result.expires_at}`, 'success');
+                return result.token;
+                
+            } catch (error) {
+                log(`❌ Token request failed: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        async function sendToWhisper(audioBlob) {
+            try {
+                log('📡 Sending audio to Whisper API...');
+                log(`Audio blob details: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+                
+                // Get AI token first
+                const token = await getAIToken();
+                
+                // Convert to ArrayBuffer for raw sending
+                const audioBuffer = await audioBlob.arrayBuffer();
+                log(`Audio buffer size: ${audioBuffer.byteLength} bytes`);
+                
+                const headers = {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': audioBlob.type,
+                    'X-Language': 'ar',
+                    'X-Response-Format': 'verbose_json'
+                };
+                
+                log('Headers: ' + JSON.stringify(headers, null, 2));
+                
+                const response = await fetch('http://localhost:3000/ai/whisper/transcribe', {
+                    method: 'POST',
+                    body: audioBuffer,
+                    headers: headers
+                });
+                
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`❌ Server error: ${errorText}`, 'error');
+                    return;
+                }
+                
+                const result = await response.json();
+                log(`✅ Whisper response: ${JSON.stringify(result, null, 2)}`, 'success');
+                
+                if (result.text) {
+                    showTranscript(result.text);
+                    log(`🎯 Transcribed: "${result.text}"`, 'success');
+                } else {
+                    log('❌ No text in response', 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Whisper API error: ${error.message}`, 'error');
+                log(`Error details: ${error.stack}`);
+            }
+        }
+        
+        window.startRecording = startRecording;
+        window.stopRecording = stopRecording;
+        window.testEndpoint = testEndpoint;
+        window.clearLog = clearLog;
+        
+        // Initialize
+        window.onload = function() {
+            log('Direct Whisper test loaded');
+            log('This test bypasses authentication and sends audio directly to the API');
+            log('');
+            log('Instructions:');
+            log('1. Click "Test Whisper Endpoint" to verify server connection');
+            log('2. Click "Start Recording" and speak in Arabic');
+            log('3. Click "Stop Recording" when done');
+            log('4. Wait for transcription result');
+        };
+    </script>
+</body>
+</html>

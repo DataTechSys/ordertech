@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Step by Step Test</title>
+</head>
+<body>
+    <h1>🤖 Step by Step Test</h1>
+    
+    <button onclick="test1()">Test 1</button>
+    <button onclick="testTauri()">Test Tauri</button>
+    <button onclick="startConversation()">Start AI</button>
+    
+    <div id="result" style="background: yellow; padding: 10px; margin: 10px;">Waiting...</div>
+    
+    <script>
+        console.log('🚀 Script starting...');
+        
+        // Check if we're running in Tauri
+        const isTauri = window.__TAURI__ !== undefined;
+        console.log('Running in Tauri:', isTauri);
+        
+        // State management
+        let isActive = false;
+        let token = null;
+        let sessionId = null;
+        
+        function test1() {
+            document.getElementById('result').innerHTML = 'Test 1 clicked! isTauri: ' + isTauri;
+        }
+        
+        function testTauri() {
+            console.log('testTauri called');
+            const result = document.getElementById('result');
+            
+            if (isTauri) {
+                result.innerHTML = '✅ Tauri detected!<br>';
+                
+                // Use the CORRECT Tauri API
+                window.__TAURI__.tauri.invoke('greet', { name: 'World' })
+                    .then(response => {
+                        result.innerHTML += '✅ Greet result: ' + response + '<br>';
+                    })
+                    .catch(error => {
+                        result.innerHTML += '❌ Greet error: ' + error + '<br>';
+                    });
+            } else {
+                result.innerHTML = '❌ Tauri not detected';
+            }
+        }
+        
+        function startConversation() {
+            console.log('startConversation called');
+            document.getElementById('result').innerHTML = 'AI conversation starting...';
+            
+            // Test async function
+            (async function() {
+                try {
+                    isActive = true;
+                    
+                    // Initialize VAD if available
+                    if (isTauri) {
+                        try {
+                            await window.__TAURI__.tauri.invoke('initialize_vad');
+                            document.getElementById('result').innerHTML += '<br>✅ Native VAD initialized';
+                        } catch (vadError) {
+                            document.getElementById('result').innerHTML += '<br>⚠️ VAD failed: ' + vadError;
+                        }
+                    }
+                    
+                    document.getElementById('result').innerHTML += '<br>AI session ready!';
+                    
+                } catch (error) {
+                    document.getElementById('result').innerHTML += '<br>❌ Error: ' + error.message;
+                }
+            })();
+        }
+        
+        // Auto test
+        document.getElementById('result').innerHTML = 'JavaScript loaded! Tauri: ' + (isTauri ? 'YES' : 'NO');
+        
+        console.log('✅ Script finished successfully!');
+    </script>
+</body>
+</html>

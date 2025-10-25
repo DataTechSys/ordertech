@@ -13,8 +13,8 @@ WHERE short_code IS NULL;
 -- Create device_events table for activity logs
 CREATE TABLE IF NOT EXISTS device_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  device_id uuid NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  device_id uuid NOT NULL,
+  tenant_id uuid NOT NULL,
   event_type text NOT NULL,
   meta jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()

@@ -15,7 +15,7 @@
 <body data-page="start-trial">
   <main style="max-width:460px;margin:120px auto;padding:0 16px;">
     <div style="display:grid;place-items:center;margin-bottom:28px;">
-      <img src="/images/OrderTech.png" onerror="this.onerror=null;this.src='/favicon.ico';" alt="OrderTech" style="width:100px;height:100px;object-fit:contain;border-radius:8px;" />
+      <img src="https://storage.googleapis.com/ordertech.me/images/OrderTech.png" onerror="this.onerror=null;this.src='/favicon.ico';" alt="OrderTech" style="width:100px;height:100px;object-fit:contain;border-radius:8px;" />
     </div>
     <div id="statusWrap" style="display:flex;justify-content:center;margin:10px 0;">
       <span id="msg" class="chip" style="display:none"></span>
@@ -89,7 +89,8 @@
           await saveMobileProfile(mobile);
           // Create tenant trial
           setMsg('Creating your demo account...');
-          const res = await fetch('/auth/bootstrap-trial', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ company: brandName }) });
+          const API_BASE = (window.apiBase || '');
+          const res = await fetch(API_BASE + '/auth/bootstrap-trial', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ company: brandName }) });
           const j = await res.json().catch(()=>({}));
           if (!res.ok || !j.ok) throw new Error('failed');
           if (j.tenant_id) {

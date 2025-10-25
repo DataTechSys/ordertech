@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Abort Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Stream Abort Error Fix Test</h1>
+    <p>This test verifies that the AI conversation manager properly handles stream cancellation and prevents AbortError spam.</p>
+
+    <div class="test-section">
+        <h3>Test 1: Rapid Successive Stream Requests</h3>
+        <p>This test simulates what happens when multiple streams are requested quickly (e.g., rapid user speech input).</p>
+        <button onclick="testRapidStreams()">Start Rapid Stream Test</button>
+        <div id="rapidStreamLogs" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Tool Call Stream Recursion</h3>
+        <p>This test simulates the tool call scenario that was causing recursive stream requests.</p>
+        <button onclick="testToolCallRecursion()">Start Tool Call Test</button>
+        <div id="toolCallLogs" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: Stream Cancellation During Processing</h3>
+        <p>This test verifies proper cleanup when streams are cancelled mid-processing.</p>
+        <button onclick="testStreamCancellation()">Start Cancellation Test</button>
+        <div id="cancellationLogs" class="log"></div>
+    </div>
+
+    <script src="js/ai/ai-client.js"></script>
+    <script src="js/ai/ai-conversation.js"></script>
+    <script>
+        // Mock environment for testing
+        let mockClient;
+        let mockConversation;
+        let testResults = {
+            rapidStreams: { passed: false, errors: [] },
+            toolCalls: { passed: false, errors: [] },
+            cancellation: { passed: false, errors: [] }
+        };
+
+        // Mock AI Client that simulates streaming responses
+        class MockAIClient {
+            constructor() {
+                this.streamCount = 0;
+                this.abortedStreams = 0;
+            }
+
+            async *streamChat({ sessionId, messages, signal }) {
+                const streamId = ++this.streamCount;
+                console.log(`[MockAIClient] Starting stream ${streamId}`);
+                
+                try {
+                    // Simulate processing delay
+                    for (let i = 0; i < 5; i++) {
+                        if (signal?.aborted) {
+                            console.log(`[MockAIClient] Stream ${streamId} aborted at step ${i}`);
+                            this.abortedStreams++;
+                            return;
+                        }
+                        
+                        yield {
+                            type: 'content_delta',
+                            delta: `Stream ${streamId} content part ${i} `
+                        };
+                        
+                        // Small delay to simulate real streaming
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    yield { type: 'complete' };
+                    console.log(`[MockAIClient] Stream ${streamId} completed successfully`);
+                    
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log(`[MockAIClient] Stream ${streamId} properly aborted`);
+                        this.abortedStreams++;
+                    } else {
+                        console.error(`[MockAIClient] Stream ${streamId} error:`, error);
+                        throw error;
+                    }
+                }
+            }
+
+            sendEvent(eventData) {
+                // Mock event sending
+                console.log('[MockAIClient] Event:', eventData.eventType);
+            }
+        }
+
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toTimeString().substr(0, 8);
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            element.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        async function testRapidStreams() {
+            const logId = 'rapidStreamLogs';
+            document.getElementById(logId).innerHTML = '';
+            log(logId, '🧪 Starting Rapid Stream Test...');
+            
+            try {
+                mockClient = new MockAIClient();
+                mockConversation = new AIConversationManager({
+                    apiClient: mockClient,
+                    speechService: null, // No speech for this test
+                    ttsService: null,    // No TTS for this test
+                    language: 'en'
+                });
+
+                // Initialize with mock session
+                await mockConversation.initialize();
+                mockConversation.sessionId = 'test-session-rapid';
+                
+                log(logId, '✅ Mock conversation manager initialized');
+
+                // Add a test message to conversation history
+                mockConversation.conversationHistory = [
+                    { role: 'user', content: 'Test message 1', timestamp: Date.now() }
+                ];
+
+                let processPromises = [];
+                let abortErrors = 0;
+
+                // Track AbortError occurrences
+                const originalConsoleError = console.error;
+                console.error = function(...args) {
+                    if (args.some(arg => typeof arg === 'string' && arg.includes('AbortError'))) {
+                        abortErrors++;
+                        log(logId, `❌ AbortError detected: ${args.join(' ')}`, 'error');
+                    }
+                    originalConsoleError.apply(console, args);
+                };
+
+                // Rapidly fire 5 processing requests
+                log(logId, '🚀 Firing 5 rapid stream requests...');
+                for (let i = 0; i < 5; i++) {
+                    mockConversation.conversationHistory.push({
+                        role: 'user', 
+                        content: `Rapid message ${i}`, 
+                        timestamp: Date.now()
+                    });
+                    processPromises.push(mockConversation._processWithAI());
+                    
+                    // Small delay between requests
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
+                // Wait for all to complete
+                await Promise.allSettled(processPromises);
+                
+                // Wait a bit more for any delayed processing
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Restore console.error
+                console.error = originalConsoleError;
+
+                // Check results
+                log(logId, `📊 Total streams created: ${mockClient.streamCount}`);
+                log(logId, `📊 Total streams aborted: ${mockClient.abortedStreams}`);
+                log(logId, `📊 AbortError count in logs: ${abortErrors}`);
+
+                if (abortErrors === 0 && mockClient.abortedStreams >= 4) {
+                    log(logId, '✅ PASSED: No AbortErrors in logs, proper stream cancellation', 'success');
+                    testResults.rapidStreams.passed = true;
+                } else {
+                    log(logId, `❌ FAILED: Expected 0 AbortErrors, got ${abortErrors}`, 'error');
+                    testResults.rapidStreams.passed = false;
+                    testResults.rapidStreams.errors.push(`AbortError count: ${abortErrors}`);
+                }
+
+            } catch (error) {
+                log(logId, `❌ Test failed with error: ${error.message}`, 'error');
+                testResults.rapidStreams.passed = false;
+                testResults.rapidStreams.errors.push(error.message);
+            }
+        }
+
+        async function testToolCallRecursion() {
+            const logId = 'toolCallLogs';
+            document.getElementById(logId).innerHTML = '';
+            log(logId, '🧪 Starting Tool Call Recursion Test...');
+            
+            try {
+                // Mock client that returns tool calls
+                class MockToolCallClient extends MockAIClient {
+                    async *streamChat({ sessionId, messages, signal }) {
+                        const streamId = ++this.streamCount;
+                        console.log(`[MockToolCallClient] Starting stream ${streamId}`);
+                        
+                        if (signal?.aborted) {
+                            console.log(`[MockToolCallClient] Stream ${streamId} immediately aborted`);
+                            this.abortedStreams++;
+                            return;
+                        }
+                        
+                        // First stream returns a tool call
+                        if (streamId === 1) {
+                            yield {
+                                type: 'tool_call',
+                                tool: {
+                                    id: 'test-tool-1',
+                                    name: 'get_menu_items',
+                                    arguments: { category: 'coffee' }
+                                }
+                            };
+                            yield { type: 'complete' };
+                        } else {
+                            // Subsequent streams return normal content
+                            yield {
+                                type: 'content_delta',
+                                delta: 'Here are the menu items based on your request.'
+                            };
+                            yield { type: 'complete' };
+                        }
+                        
+                        console.log(`[MockToolCallClient] Stream ${streamId} completed`);
+                    }
+                }
+
+                mockClient = new MockToolCallClient();
+                mockConversation = new AIConversationManager({
+                    apiClient: mockClient,
+                    speechService: null,
+                    ttsService: null,
+                    language: 'en'
+                });
+
+                // Mock tool execution
+                mockConversation._executeToolCalls = async function(toolCalls) {
+                    log(logId, `🔧 Executing ${toolCalls.length} tool call(s)`);
+                    
+                    for (const tool of toolCalls) {
+                        // Add mock tool result to conversation history
+                        this.conversationHistory.push({
+                            role: 'tool',
+                            content: `Mock result for ${tool.name}: Found 5 coffee items`,
+                            timestamp: Date.now()
+                        });
+                    }
+                };
+
+                await mockConversation.initialize();
+                mockConversation.sessionId = 'test-session-tools';
+                
+                log(logId, '✅ Mock tool call manager initialized');
+
+                mockConversation.conversationHistory = [
+                    { role: 'user', content: 'Show me coffee items', timestamp: Date.now() }
+                ];
+
+                let abortErrors = 0;
+                const originalConsoleError = console.error;
+                console.error = function(...args) {
+                    if (args.some(arg => typeof arg === 'string' && arg.includes('AbortError'))) {
+                        abortErrors++;
+                        log(logId, `❌ AbortError detected: ${args.join(' ')}`, 'error');
+                    }
+                    originalConsoleError.apply(console, args);
+                };
+
+                log(logId, '🔄 Starting processing with tool calls...');
+                await mockConversation._processWithAI();
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                console.error = originalConsoleError;
+
+                log(logId, `📊 Total streams created: ${mockClient.streamCount}`);
+                log(logId, `📊 Total streams aborted: ${mockClient.abortedStreams}`);
+                log(logId, `📊 AbortError count in logs: ${abortErrors}`);
+
+                if (abortErrors === 0 && mockClient.streamCount >= 2) {
+                    log(logId, '✅ PASSED: Tool call recursion handled without AbortErrors', 'success');
+                    testResults.toolCalls.passed = true;
+                } else {
+                    log(logId, `❌ FAILED: Expected 0 AbortErrors, got ${abortErrors}`, 'error');
+                    testResults.toolCalls.passed = false;
+                    testResults.toolCalls.errors.push(`AbortError count: ${abortErrors}`);
+                }
+
+            } catch (error) {
+                log(logId, `❌ Test failed with error: ${error.message}`, 'error');
+                testResults.toolCalls.passed = false;
+                testResults.toolCalls.errors.push(error.message);
+            }
+        }
+
+        async function testStreamCancellation() {
+            const logId = 'cancellationLogs';
+            document.getElementById(logId).innerHTML = '';
+            log(logId, '🧪 Starting Stream Cancellation Test...');
+            
+            try {
+                mockClient = new MockAIClient();
+                mockConversation = new AIConversationManager({
+                    apiClient: mockClient,
+                    speechService: null,
+                    ttsService: null,
+                    language: 'en'
+                });
+
+                await mockConversation.initialize();
+                mockConversation.sessionId = 'test-session-cancel';
+                
+                log(logId, '✅ Mock cancellation manager initialized');
+
+                mockConversation.conversationHistory = [
+                    { role: 'user', content: 'Start long processing', timestamp: Date.now() }
+                ];
+
+                let abortErrors = 0;
+                const originalConsoleError = console.error;
+                console.error = function(...args) {
+                    if (args.some(arg => typeof arg === 'string' && arg.includes('AbortError'))) {
+                        abortErrors++;
+                        log(logId, `❌ AbortError detected: ${args.join(' ')}`, 'error');
+                    }
+                    originalConsoleError.apply(console, args);
+                };
+
+                log(logId, '▶️ Starting stream...');
+                const processPromise = mockConversation._processWithAI();
+
+                // Cancel after a short delay
+                setTimeout(() => {
+                    log(logId, '🛑 Cancelling stream...');
+                    if (mockConversation.currentStreamController) {
+                        mockConversation.currentStreamController.abort();
+                    }
+                }, 200);
+
+                await processPromise;
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+                console.error = originalConsoleError;
+
+                log(logId, `📊 Total streams created: ${mockClient.streamCount}`);
+                log(logId, `📊 Total streams aborted: ${mockClient.abortedStreams}`);
+                log(logId, `📊 AbortError count in logs: ${abortErrors}`);
+
+                if (abortErrors === 0 && mockClient.abortedStreams >= 1) {
+                    log(logId, '✅ PASSED: Stream cancellation handled gracefully', 'success');
+                    testResults.cancellation.passed = true;
+                } else {
+                    log(logId, `❌ FAILED: Expected 0 AbortErrors, got ${abortErrors}`, 'error');
+                    testResults.cancellation.passed = false;
+                    testResults.cancellation.errors.push(`AbortError count: ${abortErrors}`);
+                }
+
+            } catch (error) {
+                log(logId, `❌ Test failed with error: ${error.message}`, 'error');
+                testResults.cancellation.passed = false;
+                testResults.cancellation.errors.push(error.message);
+            }
+        }
+
+        // Run all tests automatically after page load
+        window.addEventListener('load', () => {
+            console.log('🧪 Stream Abort Fix Test Page Loaded');
+            console.log('📋 Available tests:');
+            console.log('  • Rapid Stream Test: Tests multiple rapid stream requests');
+            console.log('  • Tool Call Test: Tests recursive stream calls from tool execution');
+            console.log('  • Cancellation Test: Tests proper stream cancellation cleanup');
+            console.log('');
+            console.log('👆 Click the buttons above to run individual tests');
+        });
+    </script>
+</body>
+</html>

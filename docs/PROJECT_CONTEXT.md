@@ -1,4 +1,4 @@
-# Smart Order Project Context
+# OrderTech Project Context
 
 Last updated: 2025-08-29T08:20:14Z
 

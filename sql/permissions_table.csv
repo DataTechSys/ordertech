@@ -1,0 +1,4 @@
+Field Name,Type,Description
+permission_id,UUID,Primary key
+code,VARCHAR(100),e.g. can_edit_menu
+description,TEXT,What the permission allows

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Direct API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            direction: rtl;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .start-btn { background: #4CAF50; color: white; }
+        .stop-btn { background: #f44336; color: white; }
+        .test-btn { background: #2196F3; color: white; }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.success { background: #e8f5e8; color: #388e3c; }
+        .status.error { background: #ffebee; color: #d32f2f; }
+        .status.info { background: #e3f2fd; color: #1976d2; }
+        .results {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fafafa;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #ddd;
+            background: white;
+        }
+        .log-entry.success { border-left-color: #4CAF50; }
+        .log-entry.error { border-left-color: #f44336; }
+        .log-entry.info { border-left-color: #2196F3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Direct API Test - اختبار مباشر للذكاء الاصطناعي</h1>
+        
+        <div class="controls">
+            <button id="testTokenBtn" class="test-btn" onclick="testToken()">🔑 اختبار التوكن</button>
+            <button id="testSessionBtn" class="test-btn" onclick="testSession()">💬 اختبار الجلسة</button>
+            <button id="testChatBtn" class="test-btn" onclick="testChat()">🤖 اختبار المحادثة</button>
+            <button id="testWhisperBtn" class="test-btn" onclick="testWhisper()">🎤 اختبار التعرف الصوتي</button>
+            <button id="testTTSBtn" class="test-btn" onclick="testTTS()">🔊 اختبار التحدث</button>
+        </div>
+        
+        <div id="status" class="status info">جاهز للاختبار</div>
+        
+        <div id="results" class="results"></div>
+        
+        <div style="margin-top: 20px; text-align: center;">
+            <button onclick="clearResults()" style="background: #666; color: white; padding: 5px 15px; border: none; border-radius: 3px;">مسح النتائج</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - switch between local and cloud
+        const USE_CLOUD = false; // Set to true to use cloud AI service
+        const CLOUD_BASE_URL = 'https://ordertech-990993213888-uw.a.run.app'; // Update this with your cloud URL
+        const LOCAL_BASE_URL = 'http://localhost:3000';
+        
+        const BASE_URL = USE_CLOUD ? CLOUD_BASE_URL : LOCAL_BASE_URL;
+        
+        let currentToken = null;
+        let currentSessionId = null;
+        
+        function addLog(message, type = 'info') {
+            const results = document.getElementById('results');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            results.appendChild(entry);
+            results.scrollTop = results.scrollHeight;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            updateStatus('جاهز للاختبار', 'info');
+        }
+        
+        async function testToken() {
+            try {
+                updateStatus('جاري اختبار التوكن...', 'info');
+                addLog('🔑 Starting token test...', 'info');
+                
+                const response = await fetch(`${BASE_URL}/ai/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Device-Token': 'test-device-token'
+                    },
+                    body: JSON.stringify({
+                        device_id: 'web-ai-chat-' + Date.now(),
+                        branch_name: 'Test Branch'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentToken = data.token;
+                    addLog(`✅ Token received: ${data.token.substring(0, 20)}...`, 'success');
+                    addLog(`⏰ Expires: ${data.expires_at}`, 'info');
+                    updateStatus('نجح اختبار التوكن', 'success');
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(`${response.status}: ${error.error || response.statusText}`);
+                }
+                
+            } catch (error) {
+                addLog(`❌ Token test failed: ${error.message}`, 'error');
+                updateStatus('فشل اختبار التوكن', 'error');
+            }
+        }
+        
+        async function testSession() {
+            if (!currentToken) {
+                addLog('❌ No token available. Run token test first.', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('جاري اختبار الجلسة...', 'info');
+                addLog('💬 Starting session test...', 'info');
+                
+                const response = await fetch(`${BASE_URL}/ai/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify({
+                        language: 'ar-KW'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentSessionId = data.session_id;
+                    addLog(`✅ Session created: ${data.session_id}`, 'success');
+                    updateStatus('نجح اختبار الجلسة', 'success');
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(`${response.status}: ${error.error || response.statusText}`);
+                }
+                
+            } catch (error) {
+                addLog(`❌ Session test failed: ${error.message}`, 'error');
+                updateStatus('فشل اختبار الجلسة', 'error');
+            }
+        }
+        
+        async function testChat() {
+            if (!currentToken || !currentSessionId) {
+                addLog('❌ No token or session available. Run previous tests first.', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('جاري اختبار المحادثة...', 'info');
+                addLog('🤖 Starting chat test...', 'info');
+                
+                const response = await fetch(`${BASE_URL}/ai/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        messages: [
+                            { role: 'user', content: 'مرحبا، كيف الحال؟ أريد طلب قهوة' }
+                        ]
+                    })
+                });
+                
+                if (response.ok) {
+                    addLog('✅ Chat response received, processing stream...', 'success');
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let fullResponse = '';
+                    
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+                        
+                        for (const line of lines) {
+                            if (line.trim() === '' || line.startsWith(':')) continue;
+                            
+                            if (line === 'data: [DONE]') {
+                                addLog('🏁 Chat stream completed', 'success');
+                                addLog(`📝 Full response: "${fullResponse}"`, 'info');
+                                updateStatus('نجح اختبار المحادثة', 'success');
+                                return;
+                            }
+                            
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    if (data.type === 'content_delta') {
+                                        fullResponse += data.delta;
+                                        addLog(`💭 Delta: "${data.delta}"`, 'info');
+                                    } else if (data.type === 'complete') {
+                                        addLog(`✅ Message complete: "${data.message.content}"`, 'success');
+                                    } else if (data.type === 'error') {
+                                        throw new Error(data.error);
+                                    }
+                                } catch (parseError) {
+                                    addLog(`⚠️ Parse error: ${line}`, 'error');
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(`${response.status}: ${error.error || response.statusText}`);
+                }
+                
+            } catch (error) {
+                addLog(`❌ Chat test failed: ${error.message}`, 'error');
+                updateStatus('فشل اختبار المحادثة', 'error');
+            }
+        }
+        
+        async function testWhisper() {
+            if (!currentToken) {
+                addLog('❌ No token available. Run token test first.', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('جاري اختبار التعرف الصوتي...', 'info');
+                addLog('🎤 Starting Whisper test...', 'info');
+                addLog('📱 Requesting microphone access...', 'info');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                addLog('✅ Microphone access granted', 'success');
+                
+                let mediaRecorder;
+                
+                // Try different audio formats for Whisper compatibility (prefer MP4)
+                if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
+                    addLog('📊 Using audio/mp4 format (best for Whisper)', 'info');
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    addLog('📊 Using audio/webm format', 'info');
+                } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+                    addLog('📊 Using audio/webm;codecs=opus format', 'info');
+                } else {
+                    mediaRecorder = new MediaRecorder(stream);
+                    addLog('📊 Using default audio format', 'info');
+                }
+                
+                const audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    try {
+                        // Create blob with the same MIME type as the recorder
+                        const mimeType = mediaRecorder.mimeType || 'audio/webm;codecs=opus';
+                        const audioBlob = new Blob(audioChunks, { type: mimeType });
+                        addLog(`🎵 Audio recorded: ${audioBlob.size} bytes (${mimeType})`, 'info');
+                        
+                        // Send raw audio data as expected by the backend
+                        addLog(`📤 Sending raw audio data`, 'info');
+                        
+                        const response = await fetch(`${BASE_URL}/ai/whisper/transcribe`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${currentToken}`,
+                                'Content-Type': mimeType,
+                                'X-Language': 'ar'
+                            },
+                            body: audioBlob
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            addLog(`✅ Transcription: "${result.text}"`, 'success');
+                            addLog(`🌐 Language: ${result.language}`, 'info');
+                            addLog(`⏱️ Duration: ${result.duration}s`, 'info');
+                            updateStatus('نجح اختبار التعرف الصوتي', 'success');
+                        } else {
+                            const error = await response.json().catch(() => ({}));
+                            addLog(`❌ Whisper API Error: ${response.status} - ${error.error || response.statusText}`, 'error');
+                            addLog(`📋 Error details: ${JSON.stringify(error)}`, 'error');
+                            throw new Error(`${response.status}: ${error.error || response.statusText}`);
+                        }
+                        
+                    } catch (error) {
+                        addLog(`❌ Whisper processing failed: ${error.message}`, 'error');
+                        updateStatus('فشل معالجة الصوت', 'error');
+                    }
+                    
+                    // Stop microphone stream
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                addLog('🔴 Recording started - speak now!', 'info');
+                updateStatus('جاري التسجيل - تحدث الآن!', 'info');
+                
+                // Stop recording after 5 seconds
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                    addLog('⏹️ Recording stopped', 'info');
+                }, 5000);
+                
+            } catch (error) {
+                addLog(`❌ Whisper test failed: ${error.message}`, 'error');
+                updateStatus('فشل اختبار التعرف الصوتي', 'error');
+            }
+        }
+        
+        async function testTTS() {
+            try {
+                updateStatus('جاري اختبار التحدث...', 'info');
+                addLog('🔊 Starting TTS test...', 'info');
+                
+                const testText = 'مرحباً في كوبز! شلون نخدمك اليوم؟';
+                
+                const response = await fetch(`${BASE_URL}/tts/synthesize`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: testText,
+                        language: 'ar-KW',
+                        voice: 'nova',
+                        speed: 0.95
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    addLog(`✅ TTS audio generated: ${audioBlob.size} bytes`, 'success');
+                    
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onplay = () => addLog('▶️ Playing TTS audio...', 'info');
+                    audio.onended = () => {
+                        addLog('🏁 TTS playback completed', 'success');
+                        updateStatus('نجح اختبار التحدث', 'success');
+                        URL.revokeObjectURL(audioUrl);
+                    };
+                    audio.onerror = (error) => {
+                        addLog(`❌ TTS playback failed: ${error}`, 'error');
+                        updateStatus('فشل تشغيل الصوت', 'error');
+                    };
+                    
+                    await audio.play();
+                    
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(`${response.status}: ${error.error || response.statusText}`);
+                }
+                
+            } catch (error) {
+                addLog(`❌ TTS test failed: ${error.message}`, 'error');
+                updateStatus('فشل اختبار التحدث', 'error');
+            }
+        }
+        
+        // Initialize
+        addLog('🚀 AI Direct API Test initialized', 'info');
+        addLog(`🌐 Using ${USE_CLOUD ? 'CLOUD' : 'LOCAL'} service: ${BASE_URL}`, 'info');
+        addLog('📋 Click buttons above to test each component', 'info');
+    </script>
+</body>
+</html>

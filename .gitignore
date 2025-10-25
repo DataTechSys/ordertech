@@ -1,6 +1,11 @@
 # Node
 node_modules/
 
+# Environment files with sensitive data
+.env.local
+.env
+*.env
+
 # Logs
 logs/
 *.log
@@ -22,3 +27,4 @@ nohup.out
 .server.log
 scripts/dev_db.env
 
+.backups/

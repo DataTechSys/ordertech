@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Full 2-Way Conversation - محادثة كاملة مع الذكاء الاصطناعي</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            direction: rtl;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .start-btn { background: #4CAF50; color: white; }
+        .stop-btn { background: #f44336; color: white; }
+        .interrupt-btn { 
+            background: #FF9800; 
+            color: white; 
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: none;
+        }
+        .status {
+            text-align: center;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            background: #f0f0f0;
+        }
+        .status.listening { background: #e3f2fd; color: #1976d2; }
+        .status.speaking { background: #e8f5e8; color: #388e3c; }
+        .status.thinking { background: #fff3e0; color: #f57c00; }
+        
+        .conversation {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+        .message {
+            margin: 15px 0;
+            padding: 12px;
+            border-radius: 8px;
+            animation: fadeIn 0.3s ease-in;
+        }
+        .message.user { 
+            background: #e3f2fd; 
+            border-left: 4px solid #2196F3;
+        }
+        .message.assistant { 
+            background: #e8f5e8; 
+            border-left: 4px solid #4CAF50;
+        }
+        .message.system { 
+            background: #f5f5f5; 
+            color: #666; 
+            font-style: italic;
+            border-left: 4px solid #9E9E9E;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .voice-indicator {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 10px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .voice-indicator.listening {
+            background: linear-gradient(45deg, #e3f2fd, #2196F3);
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-indicator.speaking {
+            background: linear-gradient(45deg, #e8f5e8, #4CAF50);
+            animation: speaking 0.8s infinite alternate;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+        
+        @keyframes speaking {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+        
+        .debug {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Full Conversation - محادثة كاملة</h1>
+        <p>محادثة مستمرة ثنائية الاتجاه مع إمكانية المقاطعة</p>
+        
+        <!-- Interrupt Button (Fixed Position) -->
+        <button id="interruptBtn" class="interrupt-btn" onclick="interrupt()">
+            ⏹️ مقاطعة / إيقاف
+        </button>
+        
+        <div class="controls">
+            <button id="startBtn" class="start-btn" onclick="startConversation()">
+                🎤 بدء المحادثة
+            </button>
+            <button id="stopBtn" class="stop-btn" onclick="stopConversation()" disabled>
+                ⏹️ إنهاء المحادثة
+            </button>
+        </div>
+        
+        <div id="voiceIndicator" class="voice-indicator">
+            🤖
+        </div>
+        
+        <div id="status" class="status">جاهز للبداية - اضغط "بدء المحادثة"</div>
+        
+        <div id="conversation" class="conversation"></div>
+        
+        <div id="debug" class="debug">Debug: Ready to start...</div>
+    </div>
+
+    <script>
+        console.log('AI Full Conversation loaded');
+        
+        const BASE_URL = 'http://localhost:3000';
+        
+        // State management
+        let isActive = false;
+        let token = null;
+        let sessionId = null;
+        let isListening = false;
+        let isSpeaking = false;
+        let currentMediaRecorder = null;
+        let currentStream = null;
+        let currentAudio = null;
+        let listeningTimeout = null;
+        
+        // Voice Activity Detection state
+        let vadStream = null;
+        let vadAnalyser = null;
+        let vadDataArray = null;
+        let vadThreshold = 40; // Higher threshold for better accuracy
+        let vadCheckInterval = null;
+        let vadSilenceCounter = 0;
+        let vadMaxSilence = 12; // ~1.2 seconds of silence before stopping
+        let vadSpeechCounter = 0;
+        let vadMinSpeechDuration = 3; // Require 300ms of speech before triggering
+        
+        // Voice consistency - select once per conversation
+        let conversationVoice = null;
+        
+        function log(message) {
+            console.log(message);
+            const debug = document.getElementById('debug');
+            debug.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+        }
+        
+        function addMessage(type, text) {
+            const conversation = document.getElementById('conversation');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.innerHTML = `<strong>${type === 'user' ? '🗣️ أنت' : type === 'assistant' ? '🤖 كوبز' : '💻 النظام'}:</strong> ${text}`;
+            conversation.appendChild(div);
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+        
+        function updateStatus(text, type = '') {
+            const status = document.getElementById('status');
+            const indicator = document.getElementById('voiceIndicator');
+            
+            status.textContent = text;
+            status.className = `status ${type}`;
+            
+            // Update voice indicator
+            if (type === 'listening') {
+                indicator.innerHTML = '🎤';
+                indicator.className = 'voice-indicator listening';
+            } else if (type === 'speaking') {
+                indicator.innerHTML = '🔊';
+                indicator.className = 'voice-indicator speaking';
+            } else if (type === 'thinking') {
+                indicator.innerHTML = '🤔';
+                indicator.className = 'voice-indicator thinking';
+            } else {
+                indicator.innerHTML = '🤖';
+                indicator.className = 'voice-indicator';
+            }
+        }
+        
+        async function startConversation() {
+            try {
+                log('Starting full conversation...');
+                isActive = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('interruptBtn').style.display = 'block';
+                
+                updateStatus('جاري التهيئة...');
+                
+                // Step 1: Get token
+                const tokenResponse = await fetch(`${BASE_URL}/ai/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_id: 'web-full-conversation-' + Date.now(),
+                        branch_name: 'Koobs Restaurant'
+                    })
+                });
+                
+                if (!tokenResponse.ok) throw new Error('Token request failed');
+                const tokenData = await tokenResponse.json();
+                token = tokenData.token;
+                log('✅ Token received');
+                
+                // Step 2: Create session
+                const sessionResponse = await fetch(`${BASE_URL}/ai/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        language: 'ar', // Standard Arabic
+                        settings: {
+                            conversation_mode: 'continuous',
+                            interrupt_enabled: true
+                        }
+                    })
+                });
+                
+                if (!sessionResponse.ok) throw new Error('Session creation failed');
+                const sessionData = await sessionResponse.json();
+                sessionId = sessionData.session_id;
+                log('✅ Session created: ' + sessionId);
+                
+                // Step 3: Select voice for this entire conversation
+                const voices = [
+                    { name: 'shimmer', displayName: 'روان', gender: 'female' }, // Rawan - soft and gentle
+                    { name: 'alloy', displayName: 'أحمد', gender: 'male' }        // Ahmad - clear and neutral
+                ];
+                conversationVoice = voices[Math.floor(Math.random() * voices.length)];
+                log(`🎭 Selected voice for conversation: ${conversationVoice.displayName} (${conversationVoice.name})`);
+                
+                // Step 4: AI starts the conversation
+                addMessage('system', `بدء المحادثة مع ${conversationVoice.displayName}...`);
+                await speakAIMessage('مرحباً وأهلاً وسهلاً في مطعم كوبز! كيف يمكنني مساعدتك اليوم؟');
+                
+                // Step 5: Start Voice Activity Detection for hands-free experience
+                setTimeout(() => {
+                    if (isActive) startVoiceActivation();
+                }, 500);
+                
+            } catch (error) {
+                log('❌ Startup error: ' + error.message);
+                addMessage('system', 'خطأ في بدء المحادثة: ' + error.message);
+                resetConversation();
+            }
+        }
+        
+        async function stopConversation() {
+            log('🛑 Stopping conversation...');
+            isActive = false;
+            
+            // Stop any ongoing processes
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            if (currentMediaRecorder && currentMediaRecorder.state === 'recording') {
+                currentMediaRecorder.stop();
+            }
+            
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            clearTimeout(listeningTimeout);
+            
+            // Stop all monitoring
+            stopVADMonitoring();
+            stopSilenceDetection();
+            
+            resetConversation();
+            addMessage('system', 'تم إنهاء المحادثة');
+            updateStatus('تم إنهاء المحادثة');
+        }
+        
+        function interrupt() {
+            log('⏸️ User interrupt!');
+            
+            // Stop AI speaking immediately
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+                isSpeaking = false;
+            }
+            
+            // Start listening immediately
+            if (isActive && !isListening) {
+                addMessage('system', 'تم المقاطعة - يمكنك التكلم الآن');
+                updateStatus('تم المقاطعة - تكلم الآن', 'listening');
+                setTimeout(() => startListening(), 100);
+            }
+        }
+        
+        function resetConversation() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('interruptBtn').style.display = 'none';
+            isListening = false;
+            isSpeaking = false;
+            
+            // Stop all monitoring
+            stopVADMonitoring();
+            stopSilenceDetection();
+            
+            // Reset voice selection for next conversation
+            conversationVoice = null;
+        }
+        
+        async function speakAIMessage(text) {
+            if (!isActive) return;
+            
+            try {
+                // Use consistent voice selected for this conversation
+                if (!conversationVoice) {
+                    // Fallback if voice not selected (shouldn't happen)
+                    const voices = [
+                        { name: 'shimmer', displayName: 'روان', gender: 'female' },
+                        { name: 'alloy', displayName: 'أحمد', gender: 'male' }
+                    ];
+                    conversationVoice = voices[0]; // Default to Rawan
+                }
+                
+                log(`🔊 ${conversationVoice.displayName} يتكلم: ` + text.substring(0, 50) + '...');
+                isSpeaking = true;
+                updateStatus(`${conversationVoice.displayName} يتكلم...`, 'speaking');
+                addMessage('assistant', text);
+                
+                // Detect if the text is Arabic or English
+                const isArabic = /[\u0600-\u06FF]/.test(text);
+                const ttsLanguage = isArabic ? 'ar' : 'en';
+                
+                // Use appropriate voice for the language
+                let ttsVoice = conversationVoice.name;
+                if (!isArabic) {
+                    // Use clearer voices for English
+                    if (conversationVoice.name === 'shimmer') {
+                        ttsVoice = 'echo'; // Warm and expressive for Rawan in English
+                    } else if (conversationVoice.name === 'alloy') {
+                        ttsVoice = 'onyx'; // Deep and clear for Ahmad in English
+                    }
+                }
+                
+                log(`🔊 TTS: Language=${ttsLanguage}, Voice=${ttsVoice}`);
+                
+                const response = await fetch(`${BASE_URL}/tts/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        language: ttsLanguage, // Dynamic language based on text
+                        voice: ttsVoice, // Appropriate voice for language
+                        model: 'tts-1', // Standard model - stable and clear
+                        speed: 1.0 // Perfect speed
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    currentAudio = new Audio(audioUrl);
+                    
+                    return new Promise((resolve, reject) => {
+                        currentAudio.onended = () => {
+                            URL.revokeObjectURL(audioUrl);
+                            currentAudio = null;
+                            isSpeaking = false;
+                            log('✅ AI finished speaking');
+                            resolve();
+                        };
+                        
+                        currentAudio.onerror = () => {
+                            isSpeaking = false;
+                            reject(new Error('Audio playback failed'));
+                        };
+                        
+                        currentAudio.play().catch(reject);
+                    });
+                } else {
+                    throw new Error('TTS request failed');
+                }
+            } catch (error) {
+                log('❌ TTS error: ' + error.message);
+                isSpeaking = false;
+                throw error;
+            }
+        }
+        
+        async function startListening() {
+            if (!isActive || isListening || isSpeaking) return;
+            
+            try {
+                log('👂 Starting to listen...');
+                isListening = true;
+                updateStatus('جاري الاستماع - تكلم الآن', 'listening');
+                
+                // Get microphone
+                const constraints = {
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 44100,
+                        channelCount: 1
+                    }
+                };
+                
+                // Try to get built-in microphone
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const builtInMic = devices.find(device => 
+                        device.kind === 'audioinput' && 
+                        (device.label.toLowerCase().includes('built-in') || 
+                         device.label.toLowerCase().includes('imac'))
+                    );
+                    
+                    if (builtInMic && builtInMic.deviceId) {
+                        constraints.audio.deviceId = { exact: builtInMic.deviceId };
+                        log('🎤 Using: ' + builtInMic.label);
+                    }
+                } catch (deviceError) {
+                    log('⚠️ Device enumeration failed: ' + deviceError.message);
+                }
+                
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Setup recorder
+                currentMediaRecorder = new MediaRecorder(currentStream, {
+                    mimeType: MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm'
+                });
+                
+                const audioChunks = [];
+                currentMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                currentMediaRecorder.onstop = async () => {
+                    if (currentStream) {
+                        currentStream.getTracks().forEach(track => track.stop());
+                        currentStream = null;
+                    }
+                    
+                    isListening = false;
+                    
+                    if (!isActive) return;
+                    
+                    try {
+                        if (audioChunks.length === 0) {
+                            log('⚠️ No audio recorded');
+                            setTimeout(() => startVoiceActivation(), 1000);
+                            return;
+                        }
+                        
+                        updateStatus('جاري معالجة الكلام...', 'thinking');
+                        
+                        const audioBlob = new Blob(audioChunks, { type: currentMediaRecorder.mimeType });
+                        log(`📦 Audio: ${audioBlob.size} bytes`);
+                        
+                        if (audioBlob.size < 1000) {
+                            log('🔇 Audio too small, continuing with voice activation...');
+                            setTimeout(() => startVoiceActivation(), 800);
+                            return;
+                        }
+                        
+                        // Transcribe with OpenAI Whisper
+                        const transcribeResponse = await fetch(`${BASE_URL}/ai/whisper/transcribe`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': currentMediaRecorder.mimeType,
+                                'X-Language': 'ar'
+                            },
+                            body: audioBlob
+                        });
+                        
+                        if (transcribeResponse.ok) {
+                            const result = await transcribeResponse.json();
+                            log(`🗣️ Transcribed: "${result.text}"`);
+                            
+                            // Filter background noise phrases
+                            const backgroundPhrases = [
+                                'شكرا على المشاهدة',
+                                'ترجمة نانسي قنقر',
+                                'اشتركوا في القناة',
+                                'اشترك في القناة', 
+                                'subscribe',
+                                'like and subscribe',
+                                'music',
+                                'موسيقى',
+                                'تابعونا',
+                                'للمزيد من الفيديوهات'
+                            ];
+                            
+                            const isBackground = backgroundPhrases.some(phrase => 
+                                result.text.toLowerCase().includes(phrase.toLowerCase())
+                            );
+                            
+                            if (result.text && result.text.trim().length > 2 && !isBackground) {
+                                log('✅ Valid speech detected');
+                                addMessage('user', result.text);
+                                
+                                // Get AI response
+                                await getAIResponse(result.text.trim());
+                            } else {
+                                if (isBackground) {
+                                    log('🚫 Background audio filtered');
+                                } else {
+                                    log('🔇 No clear speech');
+                                }
+                                // Continue with voice activation
+                                setTimeout(() => startVoiceActivation(), 1000);
+                            }
+                        } else {
+                            throw new Error('Transcription failed');
+                        }
+                        
+                    } catch (processError) {
+                        log('❌ Processing error: ' + processError.message);
+                        setTimeout(() => startVoiceActivation(), 2000);
+                    }
+                };
+                
+                // Start recording
+                currentMediaRecorder.start();
+                log('🔴 Recording started');
+                
+                // Start silence detection during recording
+                startSilenceDetection();
+                
+                // Fallback timeout after 10 seconds (longer since we have silence detection)
+                listeningTimeout = setTimeout(() => {
+                    if (currentMediaRecorder && currentMediaRecorder.state === 'recording') {
+                        currentMediaRecorder.stop();
+                        log('⏰ Recording stopped (max timeout - 10s)');
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                log('❌ Listen error: ' + error.message);
+                isListening = false;
+                stopSilenceDetection();
+                if (isActive) {
+                    setTimeout(() => startVoiceActivation(), 3000);
+                }
+            }
+        }
+        
+        async function getAIResponse(userText) {
+            if (!isActive) return;
+            
+            try {
+                log('🤖 Getting AI response...');
+                updateStatus('AI يفكر...', 'thinking');
+                
+                const response = await fetch(`${BASE_URL}/ai/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        messages: [{
+                            role: 'user',
+                            content: userText
+                        }]
+                    })
+                });
+                
+                if (!response.ok) throw new Error('AI request failed');
+                
+                let aiResponse = '';
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line === 'data: [DONE]') {
+                            log(`🤖 AI response ready (${aiResponse.length} chars): "${aiResponse.substring(0, 100)}..."`);
+                            
+                            if (aiResponse.trim() && isActive) {
+                                // Speak AI response
+                                await speakAIMessage(aiResponse);
+                                
+                                // Start VAD monitoring after speaking
+                                if (isActive && !isSpeaking) {
+                                    setTimeout(() => startVoiceActivation(), 500);
+                                }
+                            } else {
+                                log('⚠️ Empty AI response - continuing to listen...');
+                                addMessage('system', 'AI لم يقدم إجابة - سأستمر في الاستماع');
+                                if (isActive) {
+                                    setTimeout(() => startVoiceActivation(), 1000);
+                                }
+                            }
+                            return;
+                        }
+                        
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.type === 'content_delta') {
+                                    aiResponse += data.delta;
+                                } else if (data.type === 'error') {
+                                    log('❌ AI stream error: ' + JSON.stringify(data));
+                                }
+                            } catch (parseError) {
+                                log('❌ Parse error for line: ' + line);
+                            }
+                        } else if (line.trim()) {
+                            log('📝 Raw stream line: ' + line);
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                log('❌ AI error: ' + error.message);
+                addMessage('system', 'خطأ في الذكاء الاصطناعي: ' + error.message);
+                if (isActive) {
+                    setTimeout(() => startVoiceActivation(), 2000);
+                }
+            }
+        }
+        
+        // Voice Activity Detection Functions
+        async function startVoiceActivation() {
+            if (!isActive || isSpeaking || isListening) return;
+            
+            try {
+                log('🎙️ Starting Voice Activity Detection...');
+                updateStatus('في انتظار صوتك... تكلم وسأسمعك 🎙️', '');
+                
+                // Get microphone with same constraints as recording
+                const constraints = {
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 44100,
+                        channelCount: 1
+                    }
+                };
+                
+                // Try to use the same built-in microphone
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const builtInMic = devices.find(device => 
+                        device.kind === 'audioinput' && 
+                        (device.label.toLowerCase().includes('built-in') || 
+                         device.label.toLowerCase().includes('imac'))
+                    );
+                    
+                    if (builtInMic && builtInMic.deviceId) {
+                        constraints.audio.deviceId = { exact: builtInMic.deviceId };
+                        log('🎤 VAD Using: ' + builtInMic.label);
+                    }
+                } catch (deviceError) {
+                    log('⚠️ VAD Device enumeration failed: ' + deviceError.message);
+                }
+                
+                vadStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Create audio analysis
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(vadStream);
+                vadAnalyser = audioContext.createAnalyser();
+                
+                vadAnalyser.fftSize = 512;
+                vadAnalyser.smoothingTimeConstant = 0.3;
+                source.connect(vadAnalyser);
+                
+                vadDataArray = new Uint8Array(vadAnalyser.frequencyBinCount);
+                
+                // Start monitoring for voice activity
+                startVADMonitoring();
+                
+            } catch (error) {
+                log('❌ VAD setup error: ' + error.message);
+                // Fallback to regular listening
+                setTimeout(() => {
+                    if (isActive) startListening();
+                }, 2000);
+            }
+        }
+        
+        function startVADMonitoring() {
+            if (!isActive || !vadAnalyser || !vadDataArray) return;
+            
+            vadCheckInterval = setInterval(() => {
+                if (!isActive || isSpeaking || isListening) {
+                    return;
+                }
+                
+                vadAnalyser.getByteFrequencyData(vadDataArray);
+                
+                // Calculate average volume
+                let sum = 0;
+                for (let i = 0; i < vadDataArray.length; i++) {
+                    sum += vadDataArray[i];
+                }
+                const average = sum / vadDataArray.length;
+                
+                // Debug: occasionally log the volume level
+                if (Math.random() < 0.01) { // 1% chance to log
+                    log(`🔊 VAD Level: ${average.toFixed(1)} (threshold: ${vadThreshold})`);
+                }
+                
+                if (average > vadThreshold) {
+                    vadSilenceCounter = 0;
+                    vadSpeechCounter++;
+                    
+                    // Only trigger after sustained speech (prevent false positives)
+                    if (vadSpeechCounter >= vadMinSpeechDuration) {
+                        log(`🎤 Voice detected! Level: ${average.toFixed(1)} (sustained for ${vadSpeechCounter * 100}ms)`);
+                        stopVADMonitoring();
+                        startListening();
+                    }
+                } else {
+                    vadSpeechCounter = 0; // Reset speech counter on silence
+                    vadSilenceCounter++;
+                    
+                    // Auto-adjust threshold based on ambient noise
+                    if (vadSilenceCounter > 150) { // After ~15 seconds of silence
+                        const ambientLevel = average + 8; // Larger buffer for stability
+                        if (ambientLevel < vadThreshold * 0.9) {
+                            vadThreshold = Math.max(25, ambientLevel); // Higher minimum threshold
+                            log(`🔧 Adjusted VAD threshold to: ${vadThreshold.toFixed(1)} (ambient: ${average.toFixed(1)})`);
+                        }
+                        vadSilenceCounter = 75; // Reset counter
+                    }
+                }
+            }, 100); // Check every 100ms
+        }
+        
+        function stopVADMonitoring() {
+            if (vadCheckInterval) {
+                clearInterval(vadCheckInterval);
+                vadCheckInterval = null;
+            }
+            
+            if (vadStream) {
+                vadStream.getTracks().forEach(track => track.stop());
+                vadStream = null;
+            }
+            
+            vadAnalyser = null;
+            vadDataArray = null;
+            vadSilenceCounter = 0;
+            vadSpeechCounter = 0;
+        }
+        
+        // Silence Detection During Recording
+        let silenceAnalyser = null;
+        let silenceDataArray = null;
+        let silenceCheckInterval = null;
+        let silenceCounter = 0;
+        let silenceThreshold = 25; // Slightly lower than VAD threshold
+        let maxSilenceDuration = 20; // ~2 seconds of silence before stopping recording
+        
+        function startSilenceDetection() {
+            if (!currentStream || !isListening) return;
+            
+            try {
+                // Create audio analysis for the recording stream
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(currentStream);
+                silenceAnalyser = audioContext.createAnalyser();
+                
+                silenceAnalyser.fftSize = 512;
+                silenceAnalyser.smoothingTimeConstant = 0.3;
+                source.connect(silenceAnalyser);
+                
+                silenceDataArray = new Uint8Array(silenceAnalyser.frequencyBinCount);
+                silenceCounter = 0;
+                
+                log('🔇 Silence detection started during recording');
+                
+                // Monitor for silence during recording
+                silenceCheckInterval = setInterval(() => {
+                    if (!isListening || !currentMediaRecorder || currentMediaRecorder.state !== 'recording') {
+                        stopSilenceDetection();
+                        return;
+                    }
+                    
+                    silenceAnalyser.getByteFrequencyData(silenceDataArray);
+                    
+                    // Calculate average volume
+                    let sum = 0;
+                    for (let i = 0; i < silenceDataArray.length; i++) {
+                        sum += silenceDataArray[i];
+                    }
+                    const average = sum / silenceDataArray.length;
+                    
+                    if (average > silenceThreshold) {
+                        // Voice detected, reset silence counter
+                        silenceCounter = 0;
+                    } else {
+                        // Silence detected, increment counter
+                        silenceCounter++;
+                        
+                        // Stop recording if silent for too long
+                        if (silenceCounter >= maxSilenceDuration) {
+                            log(`🔇 Silence detected for ${(maxSilenceDuration * 100 / 1000).toFixed(1)}s - stopping recording`);
+                            if (currentMediaRecorder && currentMediaRecorder.state === 'recording') {
+                                currentMediaRecorder.stop();
+                            }
+                            stopSilenceDetection();
+                        }
+                    }
+                }, 100); // Check every 100ms
+                
+            } catch (error) {
+                log('⚠️ Silence detection setup failed: ' + error.message);
+            }
+        }
+        
+        function stopSilenceDetection() {
+            if (silenceCheckInterval) {
+                clearInterval(silenceCheckInterval);
+                silenceCheckInterval = null;
+            }
+            
+            silenceAnalyser = null;
+            silenceDataArray = null;
+            silenceCounter = 0;
+        }
+        
+        // Initialize
+        log('Page ready for full conversation');
+        updateStatus('جاهز للبداية - اضغط "بدء المحادثة"');
+        
+        // Show available microphones
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                    log(`Available microphones: ${audioInputs.length}`);
+                    audioInputs.forEach((device, index) => {
+                        console.log(`Mic ${index + 1}: ${device.label || 'Unknown Device'}`);
+                    });
+                });
+        }
+    </script>
+</body>
+</html>

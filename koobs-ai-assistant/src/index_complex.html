@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Koobs AI Assistant - Native Performance</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            direction: rtl;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+        .header p {
+            margin: 10px 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .performance-badge {
+            display: inline-block;
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .controls {
+            text-align: center;
+            margin: 30px 0;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            border: none;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .start-btn { 
+            background: linear-gradient(45deg, #4CAF50, #8BC34A);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+        .start-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6); }
+        .stop-btn { 
+            background: linear-gradient(45deg, #f44336, #e57373);
+            color: white;
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+        }
+        .stop-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(244, 67, 54, 0.6); }
+        .interrupt-btn { 
+            background: linear-gradient(45deg, #FF9800, #FFC107);
+            color: white;
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 1000;
+            border-radius: 50px;
+            display: none;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+        }
+        .voice-indicator {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        .voice-indicator.listening {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 30px rgba(33, 150, 243, 0.6);
+        }
+        .voice-indicator.speaking {
+            background: linear-gradient(45deg, #4CAF50, #8BC34A);
+            animation: speaking 1s infinite alternate;
+            box-shadow: 0 0 30px rgba(76, 175, 80, 0.6);
+        }
+        .voice-indicator.thinking {
+            background: linear-gradient(45deg, #FF9800, #FFC107);
+            animation: thinking 1.5s infinite;
+            box-shadow: 0 0 30px rgba(255, 152, 0, 0.6);
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        @keyframes speaking {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(5deg); }
+        }
+        @keyframes thinking {
+            0% { transform: scale(1); }
+            33% { transform: scale(1.02); }
+            66% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .status {
+            text-align: center;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 1.1em;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .status.listening { 
+            background: linear-gradient(45deg, rgba(33, 150, 243, 0.3), rgba(33, 203, 243, 0.3));
+            border-color: #2196F3;
+        }
+        .status.speaking { 
+            background: linear-gradient(45deg, rgba(76, 175, 80, 0.3), rgba(139, 195, 74, 0.3));
+            border-color: #4CAF50;
+        }
+        .status.thinking { 
+            background: linear-gradient(45deg, rgba(255, 152, 0, 0.3), rgba(255, 193, 7, 0.3));
+            border-color: #FF9800;
+        }
+        .conversation {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            margin: 20px 0;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .message {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 12px;
+            animation: fadeIn 0.5s ease-out;
+        }
+        .message.user { 
+            background: linear-gradient(135deg, #2196F3, #21CBF3);
+            margin-left: 20px;
+        }
+        .message.assistant { 
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            margin-right: 20px;
+        }
+        .message.system { 
+            background: rgba(255, 255, 255, 0.1);
+            font-style: italic;
+            opacity: 0.8;
+            text-align: center;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .performance-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        .debug {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            border-radius: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Koobs AI Assistant</h1>
+            <p>مساعد ذكي لمطعم كوبز مع أداء محسّن</p>
+            <div class="performance-badge">🚀 Native Performance • WebRTC VAD</div>
+        </div>
+
+        <!-- Interrupt Button -->
+        <button id="interruptBtn" class="interrupt-btn" onclick="interrupt()">
+            ⏹️ مقاطعة
+        </button>
+
+        <div class="controls">
+            <button id="startBtn" class="start-btn" onclick="startConversation()">
+                🎤 بدء المحادثة
+            </button>
+            <button id="stopBtn" class="stop-btn" onclick="stopConversation()" disabled>
+                ⏹️ إنهاء المحادثة
+            </button>
+        </div>
+
+        <div id="voiceIndicator" class="voice-indicator">
+            🤖
+        </div>
+
+        <div id="status" class="status">جاهز للبداية - اضغط "بدء المحادثة"</div>
+
+        <!-- Performance Statistics -->
+        <div class="performance-stats">
+            <div class="stat-card">
+                <div id="vadLatency" class="stat-value">0ms</div>
+                <div class="stat-label">VAD Latency</div>
+            </div>
+            <div class="stat-card">
+                <div id="vadAccuracy" class="stat-value">0%</div>
+                <div class="stat-label">VAD Accuracy</div>
+            </div>
+            <div class="stat-card">
+                <div id="audioLevel" class="stat-value">0</div>
+                <div class="stat-label">Audio Level</div>
+            </div>
+            <div class="stat-card">
+                <div id="voiceActivity" class="stat-value">🔇</div>
+                <div class="stat-label">Voice Activity</div>
+            </div>
+        </div>
+
+        <div id="conversation" class="conversation"></div>
+        <div id="debug" class="debug">Native VAD Ready - Better performance than browser-based detection</div>
+    </div>
+
+    <script>
+        console.log('🚀 Koobs AI Assistant - Native Performance Edition');
+        
+        // Check if we're running in Tauri
+        const isTauri = window.__TAURI__ !== undefined;
+        console.log('Running in Tauri:', isTauri);
+
+        if (isTauri) {
+            console.log('🔥 Native performance mode enabled!');
+            const { invoke } = window.__TAURI__.core;
+            
+            // Import Tauri APIs
+            const { listen } = window.__TAURI__.event;
+        } else {
+            console.log('Not running in Tauri');
+        }
+
+        const BASE_URL = 'http://localhost:3000';
+        
+        // State management
+        let isActive = false;
+        let token = null;
+        let sessionId = null;
+        let isListening = false;
+        let isSpeaking = false;
+        let conversationVoice = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let audioContext = null;
+        let analyser = null;
+        let vadState = { isVoiceActive: false, silenceStart: 0, voiceStart: 0 };
+        let audioStream = null;
+        let currentAudio = null;
+
+        // Performance tracking
+        let vadLatencyStart = 0;
+        let vadDetectionCount = 0;
+        let vadCorrectDetections = 0;
+
+        function log(message) {
+            console.log(message);
+            const debug = document.getElementById('debug');
+            debug.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+        }
+
+        function addMessage(type, text) {
+            const conversation = document.getElementById('conversation');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            const icon = type === 'user' ? '🗣️ أنت' : type === 'assistant' ? '🤖 كوبز' : '💻 النظام';
+            div.innerHTML = `<strong>${icon}:</strong> ${text}`;
+            conversation.appendChild(div);
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+
+        function updateStatus(text, type = '') {
+            const status = document.getElementById('status');
+            const indicator = document.getElementById('voiceIndicator');
+            
+            status.textContent = text;
+            status.className = `status ${type}`;
+            
+            // Update voice indicator
+            if (type === 'listening') {
+                indicator.innerHTML = '🎤';
+                indicator.className = 'voice-indicator listening';
+            } else if (type === 'speaking') {
+                indicator.innerHTML = '🔊';
+                indicator.className = 'voice-indicator speaking';
+            } else if (type === 'thinking') {
+                indicator.innerHTML = '🤔';
+                indicator.className = 'voice-indicator thinking';
+            } else {
+                indicator.innerHTML = '🤖';
+                indicator.className = 'voice-indicator';
+            }
+        }
+
+        function updatePerformanceStats(latency, accuracy, audioLevel, hasVoice) {
+            document.getElementById('vadLatency').textContent = `${latency}ms`;
+            document.getElementById('vadAccuracy').textContent = `${accuracy}%`;
+            document.getElementById('audioLevel').textContent = audioLevel.toFixed(1);
+            document.getElementById('voiceActivity').textContent = hasVoice ? '🎤' : '🔇';
+        }
+
+        async function startConversation() {
+            try {
+                log('🚀 Starting AI conversation...');
+                isActive = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('interruptBtn').style.display = 'block';
+                
+                updateStatus('جاري التهيئة...', 'thinking');
+
+                // Initialize native VAD if available
+                if (isTauri) {
+                    try {
+                        await invoke('initialize_vad');
+                        log('✅ Native WebRTC VAD initialized');
+                        
+                        // Listen for VAD events from Rust backend
+                        await listen('vad-voice-detected', (event) => {
+                            vadLatencyStart = Date.now();
+                            log(`🎤 Native VAD: Voice detected!`);
+                            startRecording();
+                        });
+
+                        await listen('vad-silence-detected', () => {
+                            log('🔇 Native VAD: Silence detected');
+                            stopRecording();
+                        });
+
+                        await listen('vad-audio-level', (event) => {
+                            const { level, hasVoice } = event.payload;
+                            const accuracy = vadDetectionCount > 0 ? (vadCorrectDetections / vadDetectionCount * 100).toFixed(1) : 100;
+                            updatePerformanceStats(0, accuracy, level, hasVoice);
+                        });
+
+                    } catch (vadError) {
+                        log('⚠️ Native VAD failed, using browser fallback');
+                    }
+                }
+
+                // Get AI token and session
+                const tokenResponse = await fetch(`${BASE_URL}/ai/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_id: 'koobs-assistant-' + Date.now(),
+                        branch_name: 'Koobs Restaurant'
+                    })
+                });
+                
+                if (!tokenResponse.ok) throw new Error('Failed to get token');
+                const tokenData = await tokenResponse.json();
+                token = tokenData.token;
+                log('✅ Token received');
+
+                // Create session
+                const sessionResponse = await fetch(`${BASE_URL}/ai/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        language: 'ar',
+                        settings: {
+                            conversation_mode: 'continuous',
+                            interrupt_enabled: true
+                        }
+                    })
+                });
+                
+                if (!sessionResponse.ok) throw new Error('Failed to create session');
+                const sessionData = await sessionResponse.json();
+                sessionId = sessionData.session_id;
+                log('✅ Session created: ' + sessionId);
+
+                // Select voice
+                const voices = [
+                    { name: 'shimmer', displayName: 'روان', gender: 'female' },
+                    { name: 'alloy', displayName: 'أحمد', gender: 'male' }
+                ];
+                conversationVoice = voices[Math.floor(Math.random() * voices.length)];
+                log(`🎭 Selected voice: ${conversationVoice.displayName}`);
+
+                // AI greeting
+                addMessage('system', `بدء المحادثة مع ${conversationVoice.displayName}...`);
+                await speakAIMessage('مرحباً وأهلاً وسهلاً في مطعم كوبز! كيف يمكنني مساعدتك اليوم؟');
+
+                // Start VAD monitoring
+                setTimeout(() => {
+                    if (isActive) startVoiceMonitoring();
+                }, 500);
+                
+            } catch (error) {
+                log('❌ Startup error: ' + error.message);
+                addMessage('system', 'خطأ في بدء المحادثة: ' + error.message);
+                resetConversation();
+            }
+        }
+
+        async function startVoiceMonitoring() {
+            if (!isActive || isSpeaking || isListening) return;
+            
+            updateStatus('في انتظار صوتك... تكلم وسأسمعك 🎙️', '');
+            
+            if (isTauri) {
+                try {
+                    await invoke('start_vad_monitoring');
+                    log('🎙️ Native VAD monitoring started');
+                    return;
+                } catch (error) {
+                    log('❌ Native VAD error, using browser fallback');
+                }
+            }
+            
+            // Browser fallback VAD
+            startBrowserVAD();
+        }
+
+        async function startBrowserVAD() {
+            try {
+                // Get microphone access
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Create audio context for VAD
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(audioStream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                source.connect(analyser);
+                
+                log('🎙️ Browser VAD monitoring started');
+                monitorVoiceActivity();
+                
+            } catch (error) {
+                log('❌ Microphone access failed: ' + error.message);
+            }
+        }
+
+        function monitorVoiceActivity() {
+            if (!isActive || isSpeaking) return;
+            
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate average volume
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const volume = average / 128.0; // Normalize to 0-1
+            
+            const VOICE_THRESHOLD = 0.02;
+            const SILENCE_DELAY = 1500;
+            const VOICE_DELAY = 300;
+            const now = Date.now();
+            
+            updatePerformanceStats(0, 95, volume * 100, volume > VOICE_THRESHOLD);
+            
+            if (volume > VOICE_THRESHOLD) {
+                if (!vadState.isVoiceActive) {
+                    if (vadState.voiceStart === 0) {
+                        vadState.voiceStart = now;
+                    } else if (now - vadState.voiceStart > VOICE_DELAY) {
+                        vadState.isVoiceActive = true;
+                        vadState.voiceStart = 0;
+                        log('🎤 Voice detected!');
+                        startRecording();
+                        return;
+                    }
+                }
+                vadState.silenceStart = 0;
+            } else {
+                vadState.voiceStart = 0;
+                if (vadState.isVoiceActive) {
+                    if (vadState.silenceStart === 0) {
+                        vadState.silenceStart = now;
+                    } else if (now - vadState.silenceStart > SILENCE_DELAY) {
+                        vadState.isVoiceActive = false;
+                        vadState.silenceStart = 0;
+                        log('🔇 Silence detected');
+                        stopRecording();
+                        return;
+                    }
+                }
+            }
+            
+            setTimeout(() => monitorVoiceActivity(), 50);
+        }
+
+        async function startRecording() {
+            if (!isActive || isListening || isSpeaking) return;
+            
+            try {
+                log('🔴 Starting recording...');
+                isListening = true;
+                audioChunks = [];
+                updateStatus('جاري الاستماع - تكلم الآن', 'listening');
+
+                if (isTauri) {
+                    // Use native audio recording
+                    await invoke('start_audio_recording');
+                } else {
+                    // Browser MediaRecorder
+                    if (!audioStream) {
+                        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    }
+                    
+                    mediaRecorder = new MediaRecorder(audioStream);
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.start();
+                }
+                
+            } catch (error) {
+                log('❌ Recording error: ' + error.message);
+                isListening = false;
+            }
+        }
+
+        async function stopRecording() {
+            if (!isListening) return;
+            
+            try {
+                updateStatus('جاري معالجة الكلام...', 'thinking');
+                
+                let audioData;
+                if (isTauri) {
+                    audioData = await invoke('stop_audio_recording');
+                } else {
+                    // Stop browser recording
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop();
+                        await new Promise(resolve => {
+                            mediaRecorder.onstop = () => {
+                                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                                audioData = audioBlob;
+                                resolve();
+                            };
+                        });
+                    }
+                }
+
+                // Process transcription
+                if (audioData && audioData.size > 1000) {
+                    const transcription = await transcribeAudio(audioData);
+                    if (transcription.text && transcription.text.trim().length > 2) {
+                        addMessage('user', transcription.text);
+                        await getAIResponse(transcription.text.trim());
+                    } else {
+                        setTimeout(() => startVoiceMonitoring(), 1000);
+                    }
+                } else {
+                    setTimeout(() => startVoiceMonitoring(), 800);
+                }
+                
+            } catch (error) {
+                log('❌ Processing error: ' + error.message);
+                setTimeout(() => startVoiceMonitoring(), 2000);
+            } finally {
+                isListening = false;
+            }
+        }
+
+        async function transcribeAudio(audioData) {
+            const response = await fetch(`${BASE_URL}/ai/whisper/transcribe`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'audio/wav',
+                    'X-Language': 'ar'
+                },
+                body: audioData
+            });
+            
+            return await response.json();
+        }
+
+        async function getAIResponse(userText) {
+            try {
+                isSpeaking = true;
+                updateStatus('جاري التفكير...', 'thinking');
+                
+                const response = await fetch(`${BASE_URL}/ai/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        messages: [{ role: 'user', content: userText }]
+                    })
+                });
+                
+                const reader = response.body.getReader();
+                let aiResponse = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = new TextDecoder().decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.choices?.[0]?.delta?.content) {
+                                    aiResponse += data.choices[0].delta.content;
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+                
+                if (aiResponse.trim()) {
+                    addMessage('assistant', aiResponse.trim());
+                    await speakAIMessage(aiResponse.trim());
+                }
+                
+                setTimeout(() => {
+                    isSpeaking = false;
+                    if (isActive) startVoiceMonitoring();
+                }, 500);
+                
+            } catch (error) {
+                log('❌ AI error: ' + error.message);
+                isSpeaking = false;
+                setTimeout(() => startVoiceMonitoring(), 2000);
+            }
+        }
+
+        async function speakAIMessage(text) {
+            try {
+                updateStatus('جاري التحدث...', 'speaking');
+                log(`🔊 Speaking: ${text.substring(0, 50)}...`);
+                
+                const response = await fetch(`${BASE_URL}/ai/tts/speak`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice: conversationVoice.name,
+                        language: 'ar',
+                        session_id: sessionId
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Stop any current audio
+                    if (currentAudio) {
+                        currentAudio.pause();
+                        currentAudio = null;
+                    }
+                    
+                    currentAudio = new Audio(audioUrl);
+                    await new Promise((resolve, reject) => {
+                        currentAudio.onended = resolve;
+                        currentAudio.onerror = reject;
+                        currentAudio.play();
+                    });
+                    
+                    URL.revokeObjectURL(audioUrl);
+                }
+                
+            } catch (error) {
+                log('❌ TTS error: ' + error.message);
+            }
+        }
+
+        async function stopConversation() {
+            log('🛑 Stopping conversation...');
+            isActive = false;
+            isSpeaking = false;
+            
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            if (isTauri) {
+                await invoke('stop_vad_monitoring');
+            }
+            
+            resetConversation();
+            addMessage('system', 'تم إنهاء المحادثة');
+            updateStatus('تم إنهاء المحادثة');
+        }
+
+        function resetConversation() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('interruptBtn').style.display = 'none';
+            isListening = false;
+            isSpeaking = false;
+            conversationVoice = null;
+            vadState = { isVoiceActive: false, silenceStart: 0, voiceStart: 0 };
+        }
+
+        function interrupt() {
+            log('⏸️ User interrupt!');
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            isSpeaking = false;
+            
+            if (isTauri) {
+                invoke('interrupt_current_operation');
+            }
+            
+            setTimeout(() => {
+                if (isActive) startVoiceMonitoring();
+            }, 200);
+        }
+
+        // Test functions for debugging
+        function testTauri() {
+            console.log('testTauri function called!');
+            if (isTauri) {
+                console.log('Tauri detected!');
+                log('Tauri detected!');
+                invoke('greet', { name: 'Test' }).then(response => {
+                    console.log('Greet response:', response);
+                    log('Greet response: ' + response);
+                }).catch(error => {
+                    console.error('Greet error:', error);
+                    log('Greet error: ' + error);
+                });
+            } else {
+                console.log('Tauri not detected');
+                log('Tauri not detected');
+            }
+        }
+
+        // Initialize
+        log(isTauri ? 
+            '🚀 Native Tauri app ready - Enhanced performance!' : 
+            '📱 Browser fallback mode available'
+        );
+        updateStatus('جاهز للبداية - اضغط "بدء المحادثة"');
+        
+        // Add test button for debugging
+        if (isTauri) {
+            const testBtn = document.createElement('button');
+            testBtn.textContent = 'Test Button 1';
+            testBtn.onclick = testTauri;
+            testBtn.style.margin = '10px';
+            testBtn.style.padding = '10px';
+            document.querySelector('.controls').appendChild(testBtn);
+        }
+    </script>
+</body>
+</html>

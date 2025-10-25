@@ -2,9 +2,10 @@
 <nav class="menu" role="tree">
   <div class="brand">
     <div class="logo" aria-label="OrderTech"></div>
+    <div id="companyIdUnderLogo" class="company-id" aria-label="Company ID" title="Company ID"></div>
   </div>
   <div class="menu-section" data-section>
-    <a class="menu-item" href="/"><span class="icon ri ri-dashboard-line"></span><span class="label">Dashboard</span></a>
+    <a class="menu-item" href="/admin" id="dashboardMenuItem"><span class="icon ri ri-dashboard-line"></span><span class="label">Dashboard</span></a>
   </div>
 
 
@@ -28,6 +29,8 @@
       <span class="label">Organization</span>
     </button>
     <div class="menu-body" id="sec-org">
+      <a class="menu-item" href="/orders/"><span class="icon ri ri-bill-line"></span><span class="label">Orders</span></a>
+      <a class="menu-item" href="/unified-orders.html"><span class="icon ri ri-file-list-2-line"></span><span class="label">All Orders</span></a>
       <a class="menu-item" href="/company/"><span class="icon ri ri-building-2-line"></span><span class="label">Company</span></a>
       <a class="menu-item" href="/users/"><span class="icon ri ri-user-3-line"></span><span class="label">Users</span></a>
       <a class="menu-item" href="/roles/"><span class="icon ri ri-shield-user-line"></span><span class="label">Roles</span></a>

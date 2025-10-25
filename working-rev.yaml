@@ -1,0 +1,122 @@
+apiVersion: serving.knative.dev/v1
+kind: Revision
+metadata:
+  annotations:
+    autoscaling.knative.dev/maxScale: '10'
+    autoscaling.knative.dev/minScale: '1'
+    run.googleapis.com/build-source-location: '{"ordertech-1":"gs://run-sources-smart-order-469705-me-central1/services/ordertech/1759653708.744238-a388f7a8b0804c3fb74554dc349214af.zip#1759654181092320"}'
+    run.googleapis.com/client-name: gcloud
+    run.googleapis.com/client-version: 535.0.0
+    run.googleapis.com/cloudsql-instances: smart-order-469705:me-central1:ordertech-db
+    run.googleapis.com/operation-id: 7ade6400-52d8-43a7-beca-dea2bb11cae3
+    run.googleapis.com/startup-cpu-boost: 'true'
+    serving.knative.dev/creator: hussain@mosawi.com
+  creationTimestamp: '2025-10-05T09:02:17.321122Z'
+  generation: 1
+  labels:
+    client.knative.dev/nonce: tfyrgifout
+    cloud.googleapis.com/location: me-central1
+    run.googleapis.com/satisfiesPzs: 'true'
+    run.googleapis.com/startupProbeType: Default
+    serving.knative.dev/configuration: ordertech
+    serving.knative.dev/configurationGeneration: '585'
+    serving.knative.dev/route: ordertech
+    serving.knative.dev/service: ordertech
+    serving.knative.dev/serviceUid: dbcad6d6-1b25-4ae4-8135-628d1bd190e8
+  name: ordertech-00585-mkj
+  namespace: '715493130630'
+  ownerReferences:
+  - apiVersion: serving.knative.dev/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Configuration
+    name: ordertech
+    uid: 8cbb8cc9-6d15-4d42-a8f0-6e3cbabc6f0a
+  resourceVersion: AAZAZZ6kYrk
+  selfLink: /apis/serving.knative.dev/v1/namespaces/715493130630/revisions/ordertech-00585-mkj
+  uid: cb03216c-6c4d-4f64-a060-ac53ec789f97
+spec:
+  containerConcurrency: 80
+  containers:
+  - env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: DATABASE_URL
+    - name: LIVEKIT_API_KEY
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-api-key
+    - name: LIVEKIT_API_SECRET
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-api-secret
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: openai-api-key
+    - name: OPENAI_ASSISTANT_ID
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: openai-assistant-id
+    - name: LIVEKIT_WS_URL
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-ws-url
+    - name: NODE_ENV
+      value: production
+    image: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/ordertech@sha256:cbbe56b17d74dd1169bf617d672411c8598b308834543689b963884befda2068
+    name: ordertech-1
+    ports:
+    - containerPort: 8080
+      name: http1
+    resources:
+      limits:
+        cpu: '1'
+        memory: 512Mi
+    startupProbe:
+      failureThreshold: 1
+      periodSeconds: 240
+      tcpSocket:
+        port: 8080
+      timeoutSeconds: 240
+  serviceAccountName: 715493130630-compute@developer.gserviceaccount.com
+  timeoutSeconds: 300
+status:
+  conditions:
+  - lastTransitionTime: '2025-10-05T09:04:16.485754Z'
+    message: Deploying revision succeeded in 1m59.16s.
+    status: 'True'
+    type: Ready
+  - lastTransitionTime: '2025-10-05T09:04:16.540535Z'
+    severity: Info
+    status: 'True'
+    type: Active
+  - lastTransitionTime: '2025-10-05T09:04:15.276252Z'
+    message: Containers became healthy.
+    status: 'True'
+    type: ContainerHealthy
+  - lastTransitionTime: '2025-10-05T09:04:10.893650Z'
+    message: Container image import completed in 1m53.14s.
+    status: 'True'
+    type: ContainerReady
+  - lastTransitionTime: '2025-10-05T09:04:16.444388Z'
+    message: Min instances provisioned successfully  in 5.43s.
+    status: 'True'
+    type: MinInstancesProvisioned
+  - lastTransitionTime: '2025-10-05T09:04:14.337365Z'
+    message: Provisioning imported containers completed in 3.44s. Checking container
+      health. This will wait for up to 4m for the configured startup probe, including
+      an initial delay of 0s.
+    status: 'True'
+    type: ResourcesAvailable
+  desiredReplicas: 1
+  imageDigest: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/ordertech@sha256:cbbe56b17d74dd1169bf617d672411c8598b308834543689b963884befda2068
+  logUrl: https://console.cloud.google.com/logs/viewer?project=smart-order-469705&resource=cloud_run_revision/service_name/ordertech/revision_name/ordertech-00585-mkj&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22ordertech%22%0Aresource.labels.revision_name%3D%22ordertech-00585-mkj%22
+  observedGeneration: 1

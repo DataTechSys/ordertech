@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Conversation Test - Simple</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .start-btn { background: #4CAF50; color: white; }
+        .stop-btn { background: #f44336; color: white; }
+        .start-btn:disabled, .stop-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.listening { background: #e3f2fd; color: #1976d2; }
+        .status.processing { background: #fff3e0; color: #f57c00; }
+        .status.speaking { background: #e8f5e8; color: #388e3c; }
+        .status.error { background: #ffebee; color: #d32f2f; }
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fafafa;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .message.user { background: #e3f2fd; text-align: right; }
+        .message.assistant { background: #e8f5e8; text-align: left; }
+        .message.system { background: #f5f5f5; font-style: italic; color: #666; }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .ar { direction: rtl; }
+    </style>
+</head>
+<body class="ar">
+    <div class="container">
+        <h1>AI Conversation Test - مختبر المحادثة الذكية</h1>
+        
+        <div class="controls">
+            <button id="startBtn" class="start-btn" onclick="startConversation()">🎤 بدء المحادثة</button>
+            <button id="stopBtn" class="stop-btn" onclick="stopConversation()" disabled>⏹️ إيقاف المحادثة</button>
+        </div>
+        
+        <div id="status" class="status">جاهز للبداية</div>
+        
+        <div id="messages" class="messages"></div>
+        
+        <div class="debug-info">
+            <strong>Debug Info:</strong>
+            <div id="debugInfo">Waiting for conversation to start...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import AI modules
+        import { AIClient } from './js/ai/ai-client.js';
+        import { SpeechService } from './js/ai/ai-speech.js';
+        import { AIConversationManager } from './js/ai/ai-conversation.js';
+        import { WhisperSTTClient } from './js/ai/openai-whisper-client.js';
+        import { OpenAITTSClient } from './js/ai/openai-tts-client.js';
+        
+        // Make them globally available for the rest of the script
+        window.AIClient = AIClient;
+        window.SpeechService = SpeechService;
+        window.AIConversationManager = AIConversationManager;
+        window.WhisperSTTClient = WhisperSTTClient;
+        window.OpenAITTSClient = OpenAITTSClient;
+        let conversationActive = false;
+        let conversationManager;
+        let aiClient;
+        let speechService;
+        let ttsService;
+
+        // Initialize services
+        async function initializeServices() {
+            try {
+                // Initialize AI client
+                aiClient = new AIClient({
+                    baseURL: 'http://localhost:3000',
+                    deviceId: 'test-device-' + Date.now(),
+                    branchName: 'Test Branch'
+                });
+
+                // Initialize speech service
+                speechService = new SpeechService({
+                    whisperConfig: {
+                        baseURL: 'http://localhost:3000',
+                        language: 'ar-KW'
+                    }
+                });
+
+                // Initialize TTS service
+                ttsService = new OpenAITTSClient({
+                    baseURL: 'http://localhost:3000',
+                    language: 'ar-KW',
+                    voice: 'nova',
+                    speed: 0.95
+                });
+
+                // Initialize conversation manager
+                conversationManager = new AIConversationManager({
+                    language: 'ar-KW',
+                    continuousMode: true,
+                    autoRestartListening: true,
+                    silenceTimeout: 3000,
+                    maxRetries: 3
+                });
+
+                await conversationManager.initialize({
+                    aiClient,
+                    speechService,
+                    ttsService
+                });
+
+                // Set up callbacks
+                conversationManager.onTranscript(({ type, text }) => {
+                    if (type === 'final') {
+                        addMessage('user', text);
+                        updateStatus('جاري المعالجة...', 'processing');
+                    }
+                });
+
+                conversationManager.onAssistantText(({ type, text }) => {
+                    if (type === 'complete') {
+                        addMessage('assistant', text);
+                        updateStatus('جاري التحدث...', 'speaking');
+                    }
+                });
+
+                conversationManager.onStateChange(({ oldState, newState }) => {
+                    updateDebugInfo(`State changed: ${oldState} → ${newState}`);
+                    
+                    switch (newState) {
+                        case 'listening':
+                            updateStatus('جاري الاستماع...', 'listening');
+                            break;
+                        case 'processing':
+                            updateStatus('جاري المعالجة...', 'processing');
+                            break;
+                        case 'speaking':
+                            updateStatus('جاري التحدث...', 'speaking');
+                            break;
+                        case 'idle':
+                            updateStatus('جاري الاستماع...', 'listening');
+                            break;
+                        case 'error':
+                            updateStatus('خطأ في النظام', 'error');
+                            break;
+                    }
+                });
+
+                conversationManager.onError(({ type, error }) => {
+                    addMessage('system', `خطأ (${type}): ${error.message}`);
+                    updateDebugInfo(`Error: ${type} - ${error.message}`);
+                });
+
+                addMessage('system', '✅ تم تهيئة النظام بنجاح');
+                updateDebugInfo('Services initialized successfully');
+                return true;
+
+            } catch (error) {
+                addMessage('system', `❌ فشل في تهيئة النظام: ${error.message}`);
+                updateDebugInfo(`Initialization failed: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function startConversation() {
+            if (conversationActive) return;
+
+            try {
+                conversationActive = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+
+                addMessage('system', '🚀 بدء المحادثة...');
+                
+                // Initialize services if not already done
+                if (!conversationManager) {
+                    const initialized = await initializeServices();
+                    if (!initialized) {
+                        throw new Error('Failed to initialize services');
+                    }
+                }
+
+                // Start conversation with welcome message
+                const welcomeMessage = "مرحباً في كوبز! شلون نخدمك اليوم؟";
+                addMessage('assistant', welcomeMessage);
+                updateStatus('جاري التحدث...', 'speaking');
+                
+                // Speak welcome and then start listening
+                try {
+                    await ttsService.speak(welcomeMessage);
+                } catch (error) {
+                    console.warn('TTS failed:', error);
+                }
+
+                // Start continuous listening
+                await conversationManager.startListening();
+                updateDebugInfo('Conversation started successfully');
+
+            } catch (error) {
+                addMessage('system', `❌ فشل في بدء المحادثة: ${error.message}`);
+                updateDebugInfo(`Failed to start conversation: ${error.message}`);
+                resetButtons();
+            }
+        }
+
+        async function stopConversation() {
+            if (!conversationActive) return;
+
+            try {
+                conversationActive = false;
+                addMessage('system', '⏹️ إيقاف المحادثة...');
+                
+                if (conversationManager) {
+                    await conversationManager.endSession();
+                }
+
+                updateStatus('تم الإيقاف', 'error');
+                updateDebugInfo('Conversation stopped');
+                resetButtons();
+                
+            } catch (error) {
+                addMessage('system', `❌ خطأ في إيقاف المحادثة: ${error.message}`);
+                updateDebugInfo(`Failed to stop conversation: ${error.message}`);
+            }
+        }
+
+        function resetButtons() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+        }
+
+        function addMessage(role, text) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = `${role === 'user' ? 'أنت' : role === 'assistant' ? 'كوبز' : 'النظام'}: ${text}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(text, type = '') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function updateDebugInfo(text) {
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.textContent = `${new Date().toLocaleTimeString()}: ${text}`;
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            updateDebugInfo('Page loaded, ready to initialize services');
+        });
+    </script>
+</body>
+</html>

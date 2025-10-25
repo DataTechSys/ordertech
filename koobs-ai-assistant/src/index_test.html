@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Test</title>
+</head>
+<body style="padding: 20px; font-family: Arial;">
+    <h1>🧪 Simple Test Page</h1>
+    
+    <button onclick="testAlert()">Test Alert</button>
+    <br><br>
+    
+    <button onclick="testConsole()">Test Console</button>
+    <br><br>
+    
+    <button onclick="testTauri()">Test Tauri</button>
+    <br><br>
+    
+    <div id="output" style="background: #f0f0f0; padding: 10px; margin: 10px 0;"></div>
+    
+    <script>
+        console.log('🚀 Script loaded!');
+        
+        function testAlert() {
+            console.log('Alert test clicked');
+            document.getElementById('output').innerHTML = 'Alert button clicked!';
+        }
+        
+        function testConsole() {
+            console.log('Console test clicked');
+            document.getElementById('output').innerHTML = 'Console button clicked!';
+        }
+        
+        function testTauri() {
+            console.log('Tauri test clicked');
+            const output = document.getElementById('output');
+            
+            if (window.__TAURI__) {
+                output.innerHTML = 'Tauri detected!';
+                try {
+                    const { invoke } = window.__TAURI__.core;
+                    invoke('greet', { name: 'World' }).then(result => {
+                        output.innerHTML += '<br>Greet result: ' + result;
+                    }).catch(error => {
+                        output.innerHTML += '<br>Greet error: ' + error;
+                    });
+                } catch (e) {
+                    output.innerHTML += '<br>Tauri API error: ' + e.message;
+                }
+            } else {
+                output.innerHTML = 'Tauri NOT detected';
+            }
+        }
+        
+        // Auto-test on load
+        setTimeout(() => {
+            document.getElementById('output').innerHTML = 'JavaScript is working!';
+        }, 1000);
+    </script>
+</body>
+</html>

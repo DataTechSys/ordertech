@@ -1,0 +1,98 @@
+# OrderTech Development Stack - Caddy Configuration
+# Provides stable HTTPS URLs for all development services
+# Caddy automatically issues local certificates for localhost domains
+
+{
+  # Global options
+  admin localhost:2019
+}
+
+# OrderTech API (mirrors Cloud Run environment)
+api.localhost {
+  tls internal
+  encode zstd gzip
+  
+  reverse_proxy 127.0.0.1:3000 {
+    # Add headers that match Cloud Run environment
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-For {remote}
+    header_up X-Real-IP {remote}
+    
+    # Cloud Run-style request ID for tracing
+    header_up X-Cloud-Trace-Context {uuid}
+    
+    # Development environment indicators
+    header_up X-Development-Mode true
+    header_up X-Local-Environment true
+  }
+  
+  # CORS headers removed - handled by Express server
+  # Express server provides proper origin-based CORS with credentials support
+  
+  # Response headers
+  header X-Development-Stack "OrderTech-Local"
+}
+
+# Database Admin (pgAdmin)
+db.localhost {
+  tls internal
+  reverse_proxy 127.0.0.1:5050
+  
+  header X-Frame-Options DENY
+  header X-Content-Type-Options nosniff
+}
+
+# Redis Admin (Redis Commander)
+redis.localhost {
+  tls internal
+  reverse_proxy 127.0.0.1:8081
+  
+  header X-Frame-Options DENY
+  header X-Content-Type-Options nosniff
+}
+
+# MinIO Console (Storage Admin)
+storage.localhost {
+  tls internal
+  reverse_proxy 127.0.0.1:9001
+  
+  header X-Frame-Options SAMEORIGIN
+}
+
+# MinIO S3 API (for applications)
+s3.localhost {
+  tls internal
+  reverse_proxy 127.0.0.1:9000
+  
+  # S3-compatible headers
+  header Access-Control-Allow-Origin *
+  header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, HEAD"
+  header Access-Control-Allow-Headers "Authorization, Content-Type, Content-MD5, Date, X-Amz-*"
+  header Access-Control-Expose-Headers "ETag, Last-Modified"
+}
+
+# LiveKit Console (WebRTC Admin)
+livekit.localhost {
+  tls internal
+  reverse_proxy 127.0.0.1:3001
+}
+
+# LiveKit WebSocket Server (for applications)
+livekit-ws.localhost {
+  tls internal
+  reverse_proxy 127.0.0.1:7880 {
+    # WebSocket-specific headers
+    header_up Connection {>Connection}
+    header_up Upgrade {>Upgrade}
+  }
+}
+
+# Optional: If using remote LiveKit VM instead of local
+# Uncomment and replace with your LiveKit VM IP/domain:
+# livekit-ws.localhost {
+#   tls internal
+#   reverse_proxy YOUR_LIVEKIT_VM_IP:7880 {
+#     header_up Connection {>Connection}
+#     header_up Upgrade {>Upgrade}
+#   }
+# }

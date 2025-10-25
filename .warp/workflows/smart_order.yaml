@@ -1,14 +1,14 @@
 workflows:
   - name: Start Smart Order (dev)
-    command: node server.js
+    command: bash -lc '. scripts/dev_db.sh start && PORT=8080 node server.js'
     tags: [smart_order]
 
   - name: Open Cashier (cache-busted)
-    command: open "http://localhost:5050/cashier?v=$(date +%s)"
+    command: open "http://localhost:8080/cashier?v=$(date +%s)"
     tags: [smart_order]
 
-  - name: Free port 5050
-    command: lsof -t -i:5050 | xargs -r kill
+  - name: Free port 8080
+    command: lsof -t -i:8080 | xargs -r kill
     tags: [smart_order]
 
   - name: Bust Browser Cache Tip

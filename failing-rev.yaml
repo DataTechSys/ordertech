@@ -1,0 +1,128 @@
+apiVersion: serving.knative.dev/v1
+kind: Revision
+metadata:
+  annotations:
+    autoscaling.knative.dev/maxScale: '10'
+    autoscaling.knative.dev/minScale: '1'
+    run.googleapis.com/build-source-location: '{"ordertech-1":"gs://run-sources-smart-order-469705-me-central1/services/ordertech/1759659471.709377-f413177010ff4decab13106088114a7b.zip#1759659474457060"}'
+    run.googleapis.com/client-name: gcloud
+    run.googleapis.com/client-version: 535.0.0
+    run.googleapis.com/cloudsql-instances: smart-order-469705:me-central1:ordertech-db
+    run.googleapis.com/operation-id: daa14ee4-a1a2-497e-a990-c870e214880c
+    run.googleapis.com/startup-cpu-boost: 'true'
+    serving.knative.dev/creator: hussain@mosawi.com
+  creationTimestamp: '2025-10-05T10:19:20.050339Z'
+  generation: 1
+  labels:
+    client.knative.dev/nonce: wroazjfvro
+    cloud.googleapis.com/location: me-central1
+    run.googleapis.com/satisfiesPzs: 'true'
+    run.googleapis.com/startupProbeType: Default
+    serving.knative.dev/configuration: ordertech
+    serving.knative.dev/configurationGeneration: '593'
+    serving.knative.dev/route: ordertech
+    serving.knative.dev/service: ordertech
+    serving.knative.dev/serviceUid: dbcad6d6-1b25-4ae4-8135-628d1bd190e8
+  name: ordertech-00593-wbc
+  namespace: '715493130630'
+  ownerReferences:
+  - apiVersion: serving.knative.dev/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Configuration
+    name: ordertech
+    uid: 8cbb8cc9-6d15-4d42-a8f0-6e3cbabc6f0a
+  resourceVersion: AAZAZq1ildQ
+  selfLink: /apis/serving.knative.dev/v1/namespaces/715493130630/revisions/ordertech-00593-wbc
+  uid: f66ed718-7ff6-4cab-8130-09fde5fe914d
+spec:
+  containerConcurrency: 80
+  containers:
+  - env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: DATABASE_URL
+    - name: LIVEKIT_API_KEY
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-api-key
+    - name: LIVEKIT_API_SECRET
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-api-secret
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: openai-api-key
+    - name: OPENAI_ASSISTANT_ID
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: openai-assistant-id
+    - name: NODE_ENV
+      value: production
+    image: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/ordertech@sha256:adec69916b99f5ed30010260df86595f650695522f13417fc50ec6edff6a389d
+    name: ordertech-1
+    ports:
+    - containerPort: 8080
+      name: http1
+    resources:
+      limits:
+        cpu: '1'
+        memory: 1Gi
+    startupProbe:
+      failureThreshold: 1
+      periodSeconds: 240
+      tcpSocket:
+        port: 8080
+      timeoutSeconds: 240
+  serviceAccountName: 715493130630-compute@developer.gserviceaccount.com
+  timeoutSeconds: 300
+status:
+  conditions:
+  - lastTransitionTime: '2025-10-05T10:19:59.360535Z'
+    message: |-
+      The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=smart-order-469705&resource=cloud_run_revision/service_name/ordertech/revision_name/ordertech-00593-wbc&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22ordertech%22%0Aresource.labels.revision_name%3D%22ordertech-00593-wbc%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+    reason: HealthCheckContainerError
+    status: 'False'
+    type: Ready
+  - lastTransitionTime: '2025-10-05T10:19:59.395566Z'
+    severity: Info
+    status: 'False'
+    type: Active
+  - lastTransitionTime: '2025-10-05T10:19:59.360535Z'
+    message: |-
+      The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=smart-order-469705&resource=cloud_run_revision/service_name/ordertech/revision_name/ordertech-00593-wbc&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22ordertech%22%0Aresource.labels.revision_name%3D%22ordertech-00593-wbc%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+    reason: HealthCheckContainerError
+    status: 'False'
+    type: ContainerHealthy
+  - lastTransitionTime: '2025-10-05T10:19:46.258013Z'
+    message: Container image import completed.
+    status: 'True'
+    type: ContainerReady
+  - lastTransitionTime: '2025-10-05T10:19:59.417227Z'
+    reason: MinInstancesWarming
+    severity: Info
+    status: Unknown
+    type: MinInstancesProvisioned
+  - lastTransitionTime: '2025-10-05T10:19:49.204138Z'
+    message: Provisioning imported containers completed in 3.22s. Checking container
+      health. This will wait for up to 4m for the configured startup probe, including
+      an initial delay of 0s.
+    status: 'True'
+    type: ResourcesAvailable
+  desiredReplicas: 1
+  imageDigest: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/ordertech@sha256:adec69916b99f5ed30010260df86595f650695522f13417fc50ec6edff6a389d
+  logUrl: https://console.cloud.google.com/logs/viewer?project=smart-order-469705&resource=cloud_run_revision/service_name/ordertech/revision_name/ordertech-00593-wbc&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22ordertech%22%0Aresource.labels.revision_name%3D%22ordertech-00593-wbc%22
+  observedGeneration: 1

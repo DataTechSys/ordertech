@@ -34,6 +34,8 @@ body {
   background-color: var(--bg);
   color: var(--ink);
   font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   margin: 0;
   height: 100vh;
   display: flex;
@@ -110,6 +112,8 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 20; /* keep basket panel visually above other elements after connect */
 }
 
 .video-panel {
@@ -155,6 +159,16 @@ body {
   touch-action: none; /* prevent scroll during drag */
 }
 
+/* iOS-friendly Arabic and Latin font fallbacks for menu and prices */
+.grid .tile .names .name-ar,
+.grid .tile .names .name-en,
+.grid .tile .price,
+#optionsCard .names .name-ar,
+#optionsCard .names .name-en,
+#optionsCard .price {
+  font-family: 'Almarai', 'SF Arabic', 'Noto Naskh Arabic', 'Geeza Pro', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
 /* iPhone portrait: shrink further */
 @media (max-width: 480px), (orientation: portrait) {
   .pip {
@@ -183,6 +197,10 @@ body {
 .branch-flags .flag.idle{background:#22c55e;border-color:#16a34a;color:#0b1220}
 .branch-flags .flag.waiting{background:#f59e0b;border-color:#d97706;color:#0b1220}
 .branch-flags .flag.in-session{background:#ef4444;border-color:#dc2626;color:#fff}
+/* Minimal connection indicator dot (used on display): green when connected */
+.branch-flags .conn-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; background:#22c55e; border:1px solid rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(0,0,0,0.06); align-self:center }
+.branch-flags .conn-dot.offline{ background:#ef4444 }
+.branch-flags .conn-dot.ready{ background:#f59e0b }
 
 .menu {
   flex: 2;
@@ -208,8 +226,8 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
-  row-gap: 4px;
-  max-height: calc((var(--tab-height, 42px) + 4px) * 3);
+  row-gap: 6px;
+  max-height: calc((var(--tab-height, 42px) + 6px) * 3);
   overflow-y: auto; /* allow scroll when >3 rows */
   overscroll-behavior: contain;
 }
@@ -242,33 +260,35 @@ body {
   .order-panel .actions{ grid-template-columns: 1fr 1fr 1fr 1.2fr; }
 }
 
-.tab {
+ .tab {
   appearance: none;
   background: #ffffff;
   color: var(--ink);
   padding: 8px 12px;
   height: var(--tab-height, 42px);
   line-height: calc(var(--tab-height, 42px) - 16px);
-  border-radius: 10px 10px 0 0;
+  border-radius: 12px;
   font-size: 15px;
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
   border: 1px solid var(--line);
-  border-bottom: 3px solid transparent;
-  transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  transition: background .12s ease, border-color .12s ease, box-shadow .12s ease, transform .06s ease;
   display: block;
   width: 100%;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .tab:hover { background: #f8fafc; border-color: #dbe0e5; }
+.tab:active { transform: translateY(0.5px); box-shadow: 0 0 0 rgba(0,0,0,0); }
 .tab:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .tab.active {
   border-color: var(--acc);
-  border-bottom-color: var(--acc);
-  background: #ffffff;
+  background: #f6f9f6;
   color: var(--ink);
+  box-shadow: 0 0 0 2px rgba(113,132,114,0.25), 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .grid {
@@ -302,6 +322,8 @@ body {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   border-radius: var(--radius);
+  border: 1px solid var(--line); /* light frame for white-background photos */
+  background: #fff;
 }
 
 .name {
@@ -322,7 +344,7 @@ body {
   gap: 2px;
   margin-top: var(--space-1);
   flex-grow: 1;
-  align-items: center; /* center horizontally */
+  align-items: stretch; /* stretch children so text-align center takes effect */
 }
 /* Apply Almarai to visible name lines and price */
 .tile .names .name-ar,
@@ -330,7 +352,9 @@ body {
 .tile .price {
   font-family: 'Almarai', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
-  .tile .names .name-ar {
+.tile .names .name-ar,
+.tile .names .name-en { width: 100%; }
+.tile .names .name-ar {
   direction: rtl;
   text-align: center !important; /* enforce center */
   font-weight: 700; /* bold */
@@ -342,6 +366,19 @@ body {
 }
 /* Ensure price in tiles is centered */
 .grid .tile .price { text-align: center !important; width: 100%; }
+/* Enforce single-line truncation for tile names (display page) */
+.grid .tile .names .name-ar,
+.grid .tile .names .name-en {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Center names and price inside the popup card */
+#optionsCard .names { text-align: center; }
+#optionsCard .names .name-ar,
+#optionsCard .names .name-en,
+#optionsCard .price { text-align: center !important; width: 100%; }
 
 @media (max-width: 768px) {
   .canvas {
@@ -380,11 +417,13 @@ body {
 
   .tab {
     font-size: 14px;
-    padding: 4px 10px;
+    padding: 6px 10px;
     height: var(--tab-height, 36px);
-    line-height: calc(var(--tab-height, 36px) - 8px);
+    line-height: calc(var(--tab-height, 36px) - 12px);
+    border-radius: 10px;
+    text-align: center;
   }
-  .tabs { gap: 8px; row-gap: 4px; max-height: calc((var(--tab-height, 36px) + 4px) * 3); }
+  .tabs, .tabs-grid { gap: 8px; row-gap: 4px; max-height: calc((var(--tab-height, 36px) + 6px) * 3); }
 
   .tile {
     padding: 4px;

@@ -1,5 +1,14 @@
 # OrderTech
 
+## ⚠️ CRITICAL: Region Configuration
+
+**ALL CLOUD RUN SERVICES MUST BE DEPLOYED TO `me-central1` REGION ONLY!**
+
+- ✅ Correct region: `me-central1`
+- ❌ Never use: `us-central1`, `us-east1`, or any other region
+- 📄 See `REGION_CONFIG.md` for complete details
+- 🚀 Use `./deploy-cloud-run.sh` for safe deployments
+
 ## Google Cloud Storage (assets) — CORS & IAM
 
 We use a Google Cloud Storage bucket (default from `ASSETS_BUCKET`, falling back to `ordertech.me`) to host tenant UI assets like logos and product images.

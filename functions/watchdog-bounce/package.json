@@ -1,0 +1,11 @@
+{
+  "name": "ordertech-watchdog-bounce",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "google-auth-library": "^9.14.1"
+  }
+}
+

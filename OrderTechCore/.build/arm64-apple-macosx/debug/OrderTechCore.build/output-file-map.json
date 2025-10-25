@@ -1,0 +1,47 @@
+{
+  "": {
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/master.swiftdeps"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/Core.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/Core.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsCacheStore.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsCacheStore.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsClient.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsClient.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsModels.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsModels.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsRelations.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsRelations.dia"
+  },
+  "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/Sources/OrderTechCore/FoodicsSyncer.swift": {
+    "dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer.d",
+    "object": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer.swift.o",
+    "swiftmodule": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer.swiftdeps",
+    "diagnostics": "/Users/mosawi/DATATECH/OrderTech/OrderTechCore/.build/arm64-apple-macosx/debug/OrderTechCore.build/FoodicsSyncer.dia"
+  }
+}

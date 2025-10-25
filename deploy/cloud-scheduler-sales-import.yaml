@@ -1,0 +1,23 @@
+# Cloud Scheduler configuration for automated Foodics sales import
+# This will trigger the sales import job every 5 minutes for all tenants
+
+name: foodics-sales-import
+displayName: "Foodics Sales Import (Every 5 Minutes)"
+description: "Automatically import Foodics sales data for all tenants every 5 minutes"
+schedule: "*/5 * * * *"  # Every 5 minutes
+timeZone: "UTC"
+attemptDeadline: "300s"  # 5 minutes timeout
+
+httpTarget:
+  uri: "https://ordertech-715493130630.me-central1.run.app/admin/integrations/foodics/auto-import-sales"
+  httpMethod: "POST"
+  headers:
+    Content-Type: "application/json"
+    x-admin-token: "${ADMIN_TOKEN}"
+  body: "{}"
+
+retryConfig:
+  retryCount: 3
+  maxRetryDuration: "60s"
+  minBackoffDuration: "5s"
+  maxBackoffDuration: "60s"

@@ -106,8 +106,12 @@
         };
         const rows = items.map(t => {
           const status = (t.status || '').trim();
-          const branches = Number.isFinite(Number(t.branch_count)) ? Number(t.branch_count) : '';
-          const devices = Number.isFinite(Number(t.device_count)) ? Number(t.device_count) : '';
+          const usedBranches = Number.isFinite(Number(t.branch_count)) ? Number(t.branch_count) : 0;
+          const totalBranches = Number.isFinite(Number(t.branch_limit)) ? Number(t.branch_limit) : 0;
+          const branches = `${usedBranches}/${totalBranches}`;
+          const used = Number.isFinite(Number(t.device_count)) ? Number(t.device_count) : 0;
+          const total = Number.isFinite(Number(t.license_limit)) ? Number(t.license_limit) : 0;
+          const devices = `${used}/${total}`;
           const code = normCode(t);
           return `
             <tr class="row-click" data-id="${t.id}">
@@ -127,8 +131,8 @@
                   <th style="text-align:left">Company ID</th>
                   <th>Company Name</th>
                   <th>Status</th>
-                  <th>Branches</th>
-                  <th>Devices</th>
+                  <th>Branches (used/total)</th>
+                  <th>Devices (used/total)</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>

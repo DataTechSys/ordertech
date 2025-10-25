@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Product Editor</title>
+    <link rel="stylesheet" href="/css/admin.css?v=20251009-2" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" />
+    <style>
+      /* Layout styles for full-page editor */
+      #productEditor .box { 
+        border: 1px solid #e5e7eb; 
+        border-radius: 12px; 
+        padding: 20px; 
+        margin: 16px 0; 
+        background: #fff;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+      }
+      #productEditor .box .box-title { 
+        font-weight: 700; 
+        font-size: 14px; 
+        text-transform: uppercase; 
+        letter-spacing: .02em; 
+        color: var(--subtle, #6b7280); 
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+      #productEditor .box .box-title-row { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+      
+      /* Professional Form Grid System */
+      .form-grid {
+        display: grid;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .form-grid.cols-1 { grid-template-columns: 1fr; }
+      .form-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+      .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+      .form-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+      .form-grid.cols-auto { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+      
+      /* Responsive breakpoints */
+      @media (max-width: 1200px) {
+        .form-grid.cols-4 { grid-template-columns: 1fr 1fr; }
+        .form-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 768px) {
+        .form-grid.cols-4,
+        .form-grid.cols-3,
+        .form-grid.cols-2 { grid-template-columns: 1fr; }
+      }
+      
+      /* Field styling */
+      .field {
+        display: flex;
+        flex-direction: column;
+      }
+      .field .label { 
+        display: block; 
+        margin-bottom: 6px; 
+        font-weight: 600; 
+        font-size: 13px;
+        color: var(--text, #374151);
+        line-height: 1.2; 
+      }
+      .field input.input,
+      .field textarea.textarea,
+      .field select.select { 
+        margin-top: 0;
+        min-height: 40px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border, #e5e7eb);
+        font-size: 14px;
+        transition: border-color 0.2s ease;
+      }
+      .field input.input:focus,
+      .field textarea.textarea:focus,
+      .field select.select:focus {
+        border-color: var(--primary, #3b82f6);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      .field small.muted { 
+        display: block; 
+        margin-top: 4px; 
+        font-size: 11px; 
+        color: var(--subtle, #6b7280); 
+      }
+      
+      /* Control dropdown widths */
+      .field select.select {
+        max-width: 100%;
+        min-width: 120px;
+      }
+      .field select.select.sm {
+        min-height: 32px;
+        padding: 4px 8px;
+        font-size: 13px;
+      }
+      .field select.select.lg {
+        min-width: 200px;
+      }
+      
+      /* Legacy support for existing table layout */
+      #productEditor .grid-table.compact { width: 100%; border-collapse: collapse; }
+      #productEditor .grid-table.compact th, #productEditor .grid-table.compact td { border: 1px solid var(--divider, #eef2f7); }
+      #productEditor .grid-table.compact td { padding: 8px; vertical-align: top; }
+      #productEditor .grid-table.compact .label { font-size: 11px; color: var(--subtle, #6b7280); }
+      #productEditor .grid-table.compact .input.sm, #productEditor .grid-table.compact .select.sm { padding: 4px 8px; min-height: 28px; font-size: 13px; }
+      
+      /* Legacy row support */
+      #productEditor .row { margin-bottom: 12px; }
+      #productEditor .row.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      #productEditor .row.cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+      #productEditor .grid .label { display:block; margin-bottom: 6px; font-weight:600; line-height:1.2; }
+      #productEditor .grid input.input,
+      #productEditor .grid textarea.textarea,
+      #productEditor .grid select.select { margin-top: 0; }
+      /* Media cards */
+      #productEditor .media-trio { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+      #productEditor .media-card { border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+      #productEditor .media-card .title { font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--subtle, #6b7280); }
+      #productEditor .media-card .preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; background: var(--chip, #f1f5f9); border: 1px solid var(--border, #e5e7eb); border-radius: 10px; overflow: hidden; }
+      #productEditor .media-card .preview img, #productEditor .media-card .preview video { width: 100%; height: 100%; object-fit: cover; }
+      /* Advanced toggle */
+      #advancedWrap[hidden] { display: none; }
+      
+      /* Product Editor Tabs */
+      #productTabs {
+        display: flex;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+        margin-bottom: 16px;
+        gap: 0;
+      }
+      #productTabs .tab {
+        padding: 12px 20px;
+        border: none;
+        background: none;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--subtle, #6b7280);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s ease;
+      }
+      #productTabs .tab:hover {
+        color: var(--primary, #3b82f6);
+        background: var(--chip, #f1f5f9);
+      }
+      #productTabs .tab.active {
+        color: var(--primary, #3b82f6);
+        border-bottom-color: var(--primary, #3b82f6);
+        font-weight: 600;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      
+      /* Page title styling */
+      .page-title {
+        margin-bottom: 20px;
+      }
+      .page-title h1 {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text, #374151);
+        margin: 0;
+        line-height: 1.2;
+      }
+    </style>
+    <script src="/config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="breadcrumbs"><a href="/products/">Products</a><span class="sep">›</span><span>Editor</span></nav>
+      <div class="searchbar">
+        <select id="tenantSelect" class="select"></select>
+      </div>
+    </header>
+    <main class="main">
+      <div class="page-title">
+        <h1>Edit Product</h1>
+      </div>
+      <section class="card">
+        <div class="body" id="productEditor">
+          <!-- Product Editor Tabs -->
+          <div class="tabs" id="productTabs">
+            <button class="tab active" data-tab="basicInfo">Basic Info</button>
+            <button class="tab" data-tab="modifiers">Modifiers</button>
+            <button class="tab" data-tab="nutrition">Nutrition</button>
+            <button class="tab" data-tab="settings">Settings</button>
+          </div>
+          
+          <!-- Basic Info Tab -->
+          <div id="basicInfoTab" class="tab-content active">
+          <div class="box">
+            <div class="box-title-row">
+              <div class="box-title">Basic Information</div>
+              <label class="switch-row"><span class="label">Active</span>
+                <input id="prodFormActive" type="checkbox" class="switch"/>
+              </label>
+            </div>
+            
+            <!-- Product Names -->
+            <div class="form-grid cols-2">
+              <div class="field">
+                <label class="label" for="prodFormName">Name (English)</label>
+                <input id="prodFormName" class="input" type="text" placeholder="Enter product name in English"/>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormNameLocalized">الاسم (عربي)</label>
+                <input id="prodFormNameLocalized" class="input" type="text" placeholder="أدخل اسم المنتج بالعربية"/>
+              </div>
+            </div>
+            
+            <!-- Category and Pricing -->
+            <div class="form-grid cols-4">
+              <div class="field">
+                <label class="label" for="prodFormCategory">Category</label>
+                <select id="prodFormCategory" class="select lg"></select>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormPrice">Price (KWD)</label>
+                <input id="prodFormPrice" class="input" type="number" step="0.001" min="0" placeholder="0.000"/>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormCost">Cost (KWD)</label>
+                <input id="prodFormCost" class="input" type="number" step="0.001" min="0" placeholder="0.000"/>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormTax">Tax Group Ref</label>
+                <input id="prodFormTax" class="input" type="text" placeholder="Tax reference"/>
+              </div>
+            </div>
+            
+            <!-- Product Details -->
+            <div class="form-grid cols-4">
+              <div class="field">
+                <label class="label" for="prodFormSku">SKU</label>
+                <input id="prodFormSku" class="input" type="text" placeholder="Unique SKU (auto-generated if empty)"/>
+                <small class="muted">Leave empty for auto-generation</small>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormBarcode">Barcode</label>
+                <input id="prodFormBarcode" class="input" type="text" placeholder="Product barcode"/>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormPackagingFee">Packaging Fee (KWD)</label>
+                <input id="prodFormPackagingFee" class="input" type="number" step="0.001" min="0" placeholder="0.000"/>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormPrepTime">Prep Time (min)</label>
+                <input id="prodFormPrepTime" class="input" type="number" step="1" min="0" placeholder="0"/>
+              </div>
+            </div>
+            
+            <!-- Additional Details -->
+            <div class="form-grid cols-3">
+              <div class="field">
+                <label class="label" for="prodFormSpiceLevel">Spice Level</label>
+                <select id="prodFormSpiceLevel" class="select">
+                  <option value="">Select spice level</option>
+                  <option value="none">None</option>
+                  <option value="mild">Mild</option>
+                  <option value="medium">Medium</option>
+                  <option value="hot">Hot</option>
+                  <option value="extra_hot">Extra Hot</option>
+                </select>
+              </div>
+              <div class="field">
+                <!-- Placeholder for future fields -->
+              </div>
+              <div class="field">
+                <!-- Placeholder for future fields -->
+              </div>
+            </div>
+            
+            <!-- Descriptions -->
+            <div class="box-title" style="margin-top: 24px;">Descriptions</div>
+            <div class="form-grid cols-2">
+              <div class="field">
+                <label class="label" for="prodFormDescription">Description (English)</label>
+                <textarea id="prodFormDescription" class="textarea" rows="4" placeholder="Product description in English"></textarea>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormDescriptionLocalized">الوصف (عربي)</label>
+                <textarea id="prodFormDescriptionLocalized" class="textarea" rows="4" placeholder="وصف المنتج باللغة العربية"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="box-title">Media</div>
+            <div class="media-trio">
+              <div class="media-card">
+                <div class="title">Menu</div>
+                <div class="preview"><img id="prodMenuPreview" alt="Menu"/></div>
+                <div class="flex center">
+                  <input id="prodMenuFile" type="file" accept="image/*" style="display:none" />
+                  <button id="prodMenuUpload" class="btn">Upload</button>
+                  <input id="prodMenuCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
+                  <button id="prodMenuFromCsv" class="btn ghost">From CSV</button>
+                </div>
+              </div>
+              <div class="media-card">
+                <div class="title">Beauty</div>
+                <div class="preview"><img id="prodBeautyPreview" alt="Beauty"/></div>
+                <div class="flex center">
+                  <input id="prodBeautyFile" type="file" accept="image/*" style="display:none" />
+                  <button id="prodBeautyUpload" class="btn">Upload</button>
+                  <input id="prodBeautyCsvFile" type="file" accept=".csv,text/csv" style="display:none" />
+                  <button id="prodBeautyFromCsv" class="btn ghost">From CSV</button>
+                </div>
+              </div>
+              <div class="media-card">
+                <div class="title">Video</div>
+                <div class="preview">
+                  <video id="prodVideoPreview" controls playsinline preload="metadata" poster="/placeholder.jpg"></video>
+                </div>
+                <div class="flex center">
+                  <input id="prodVideoFile" type="file" accept="video/*" style="display:none" />
+                  <button id="prodVideoUpload" class="btn">Upload</button>
+                </div>
+                <small class="muted">Recommended ≤ 20 MB, up to ~10 seconds.</small>
+              </div>
+            </div>
+            <input id="prodFormImageUrl" type="hidden" />
+            <input id="prodFormImageBeauty" type="hidden" />
+            <input id="prodFormImageWhite" type="hidden" />
+            <input id="prodFormVideoUrl" type="hidden" />
+
+            <div class="row">
+              <label class="grid"><span class="label">Additional Images (URLs)</span>
+                <div id="prodFormExtraImages" class="grid">
+                  <div id="prodFormExtraImagesTags" class="tags"></div>
+                  <div class="flex" style="gap:8px; align-items:center;">
+                    <input id="prodFormExtraImagesInput" class="input" placeholder="Paste URL and click Add"/>
+                    <button id="prodFormExtraImagesAdd" class="btn">Add</button>
+                  </div>
+                  <small class="muted">Use complete URLs (https://...). Add multiple images as needed.</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="box-title">Ingredients & Allergens</div>
+            <div class="form-grid cols-2">
+              <div class="field">
+                <label class="label" for="prodFormIngredientsEn">Ingredients (English)</label>
+                <textarea id="prodFormIngredientsEn" class="textarea" rows="4" placeholder="List all ingredients in English"></textarea>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormIngredientsAr">المكونات (عربي)</label>
+                <textarea id="prodFormIngredientsAr" class="textarea" rows="4" placeholder="قائمة جميع المكونات باللغة العربية"></textarea>
+              </div>
+            </div>
+            <div class="form-grid cols-2">
+              <div class="field">
+                <label class="label" for="prodFormAllergens">Allergens</label>
+                <input id="prodFormAllergens" class="input" type="text" placeholder="e.g., milk, eggs, nuts"/>
+                <small class="muted">Comma-separated list of allergens</small>
+              </div>
+              <div class="field">
+                <label class="label" for="prodFormServingSize">Serving Size</label>
+                <input id="prodFormServingSize" class="input" type="text" placeholder="e.g., 250ml / 1 piece"/>
+                <small class="muted">Typical serving size for nutritional info</small>
+              </div>
+            </div>
+          </div>
+          </div> <!-- End Basic Info Tab -->
+          
+          <!-- Modifiers Tab -->
+          <div id="modifiersTab" class="tab-content">
+            <div class="box">
+              <div class="box-title">Product Modifier Groups</div>
+              <div class="form-grid cols-1">
+                <div class="field">
+                  <label class="label" for="prodFormModifierGroupSelect">Available Modifier Groups</label>
+                  <div class="flex" style="gap: 12px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                      <select id="prodFormModifierGroupSelect" class="select lg" style="min-width: 300px; max-width: 400px;"></select>
+                    </div>
+                    <button id="prodFormModifierGroupAdd" class="btn primary">Add Group</button>
+                  </div>
+                  <small class="muted">Select modifier groups that will be available for this product. Groups are automatically filtered to show only active options.</small>
+                </div>
+              </div>
+              <div class="form-grid cols-1">
+                <div class="field">
+                  <label class="label">Selected Modifier Groups</label>
+                  <div id="prodFormModifierGroupsTags" class="tags"></div>
+                </div>
+              </div>
+            </div>
+          </div> <!-- End Modifiers Tab -->
+          
+          <!-- Nutrition Tab -->
+          <div id="nutritionTab" class="tab-content">
+          <div class="box">
+            <div class="box-title">Nutrition</div>
+            <table class="grid-table compact" id="prodNutritionTable">
+              <tr>
+                <td><span class="label">Calories</span>
+                  <input id="prodFormCalories" type="number" step="1" min="0" class="input sm"/>
+                </td>
+                <td><span class="label">Fat (g)</span>
+                  <input id="prodFormFat" type="number" step="0.001" min="0" class="input sm"/>
+                </td>
+                <td><span class="label">Carbs (g)</span>
+                  <input id="prodFormCarbs" type="number" step="0.001" min="0" class="input sm"/>
+                </td>
+                <td><span class="label">Protein (g)</span>
+                  <input id="prodFormProtein" type="number" step="0.001" min="0" class="input sm"/>
+                </td>
+              </tr>
+              <tr>
+                <td><span class="label">Sugar (g)</span>
+                  <input id="prodFormSugar" type="number" step="0.001" min="0" class="input sm"/>
+                </td>
+                <td><span class="label">Sodium (mg)</span>
+                  <input id="prodFormSodium" type="number" step="1" min="0" class="input sm"/>
+                </td>
+                <td><span class="label">Salt (g)</span>
+                  <input id="prodFormSalt" type="number" step="0.001" min="0" class="input sm" placeholder="auto" />
+                </td>
+                <td><span class="label">Walk Minutes</span>
+                  <input id="prodFormWalkMins" type="number" step="1" min="0" class="input sm"/>
+                </td>
+              </tr>
+            </table>
+            <div class="row">
+              <div class="grid">
+                <span class="label">Nutrition per Serving</span>
+                <div id="prodNutritionSummary" class="muted" style="padding:8px 0;">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="box-title">Flags & Visibility</div>
+            <div class="row cols-3">
+              <label class="switch-row"><span class="label">Sold by Weight</span>
+                <input id="prodFormSoldByWeight" type="checkbox" class="switch"/>
+              </label>
+              <label class="switch-row"><span class="label">Stock Product</span>
+                <input id="prodFormStockProduct" type="checkbox" class="switch"/>
+              </label>
+              <label class="switch-row"><span class="label">High Salt</span>
+                <input id="prodFormHighSalt" type="checkbox" class="switch"/>
+              </label>
+            </div>
+            <div class="row cols-3">
+              <label class="switch-row"><span class="label">Visible (POS)</span>
+                <input id="prodFormPosVisible" type="checkbox" class="switch"/>
+              </label>
+              <label class="switch-row"><span class="label">Visible (Online)</span>
+                <input id="prodFormOnlineVisible" type="checkbox" class="switch"/>
+              </label>
+              <label class="switch-row"><span class="label">Visible (Delivery)</span>
+                <input id="prodFormDeliveryVisible" type="checkbox" class="switch"/>
+              </label>
+            </div>
+          </div>
+          </div> <!-- End Nutrition Tab -->
+          
+          <!-- Settings Tab -->
+          <div id="settingsTab" class="tab-content">
+          <div class="box">
+            <div class="box-title">External References</div>
+            <div class="row cols-3">
+              <label class="grid"><span class="label">Talabat Ref</span>
+                <input id="prodFormTalabatRef" class="input"/>
+              </label>
+              <label class="grid"><span class="label">Jahez Ref</span>
+                <input id="prodFormJahezRef" class="input"/>
+              </label>
+              <label class="grid"><span class="label">V-thru Ref</span>
+                <input id="prodFormVthruRef" class="input"/>
+              </label>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="box-title">Per-Branch Availability</div>
+            <div class="row">
+              <div class="grid">
+                <div id="prodFormBranchAvailability" class="list"></div>
+                <small class="muted">Uncheck to hide at a branch; optionally set price/packaging fee overrides.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced section -->
+          <div id="advancedWrap" hidden>
+            <div class="box">
+              <div class="box-title">Advanced — Classification & Sync</div>
+              <div class="row cols-3">
+                <label class="grid"><span class="label">Sort Order</span>
+                  <input id="prodFormSortOrder" type="number" step="1" class="input sm"/>
+                </label>
+                <label class="switch-row"><span class="label">Featured</span>
+                  <input id="prodFormIsFeatured" type="checkbox" class="switch"/>
+                </label>
+                <label class="grid"><span class="label">Product Type</span>
+                  <select id="prodFormType" class="select sm">
+                    <option value="standard">Standard</option>
+                    <option value="combo">Combo</option>
+                    <option value="modifier">Modifier</option>
+                    <option value="digital">Digital</option>
+                  </select>
+                </label>
+              </div>
+              <div class="row cols-3">
+                <label class="grid"><span class="label">Sync Status</span>
+                  <select id="prodFormSyncStatus" class="select sm">
+                    <option value="pending">Pending</option>
+                    <option value="synced">Synced</option>
+                    <option value="error">Error</option>
+                  </select>
+                </label>
+                <label class="grid"><span class="label">Published Channels (comma separated)</span>
+                  <input id="prodFormPublishedChannels" class="input" placeholder="pos, online, talabat"/>
+                </label>
+                <label class="grid"><span class="label">Tags (comma separated)</span>
+                  <input id="prodFormTags" class="input" placeholder="keto, breakfast, limited"/>
+                </label>
+              </div>
+              <div class="row">
+                <label class="grid"><span class="label">Diet Flags</span>
+                  <select id="prodFormDietFlags" class="select" multiple>
+                    <option value="vegan">Vegan</option>
+                    <option value="gluten_free">Gluten Free</option>
+                    <option value="keto">Keto</option>
+                  </select>
+                  <small class="muted">Hold Cmd/Ctrl to select multiple</small>
+                </label>
+              </div>
+            </div>
+
+            <div class="box">
+              <div class="box-title">Notes</div>
+              <div class="row cols-2">
+                <label class="grid"><span class="label">Internal Notes (admin-only)</span>
+                  <textarea id="prodFormInternalNotes" class="textarea" placeholder="Visible only to admins"></textarea>
+                </label>
+                <label class="grid"><span class="label">Staff Notes (POS)</span>
+                  <textarea id="prodFormStaffNotes" class="textarea" placeholder="Visible in POS"></textarea>
+                </label>
+              </div>
+            </div>
+
+            <div class="box">
+              <div class="box-title">System Info</div>
+              <div class="row cols-3">
+                <div class="grid"><span class="label">Version</span><div id="prodSysVersion" class="chip">—</div></div>
+                <div class="grid"><span class="label">Created At</span><div id="prodSysCreatedAt" class="chip">—</div></div>
+                <div class="grid"><span class="label">Updated At</span><div id="prodSysUpdatedAt" class="chip">—</div></div>
+              </div>
+              <div class="row cols-2">
+                <div class="grid"><span class="label">Last Updated By</span><div id="prodSysLastBy" class="chip">—</div></div>
+              </div>
+            </div>
+          </div>
+          </div> <!-- End Settings Tab -->
+        </div>
+        <div class="footer">
+          <button id="productDelete" class="btn danger hidden">Delete</button>
+          <button id="productActivate" class="btn hidden">Activate</button>
+          <span class="spacer"></span>
+          <a class="btn" href="/products/">Cancel</a>
+          <button id="productSave" class="btn primary">Save</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/admin-common.js?v=20251009-6"></script>
+    <script src="/js/admin-shell.js?v=20251009-6"></script>
+    <script src="/js/products-extended.js?v=20251009-6"></script>
+    <script src="/js/product-edit.js?v=20251009-6"></script>
+    
+    <script>
+      // Product Editor Tabs Functionality
+      function switchTab(tabName) {
+        // Remove active class from all tabs and content
+        document.querySelectorAll('#productTabs .tab').forEach(tab => {
+          tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.remove('active');
+        });
+        
+        // Add active class to clicked tab and corresponding content
+        document.querySelector(`#productTabs .tab[data-tab="${tabName}"]`).classList.add('active');
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+      }
+      
+      // Initialize tabs on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        // Set up tab click listeners
+        document.querySelectorAll('#productTabs .tab').forEach(tab => {
+          tab.addEventListener('click', function() {
+            const tabName = this.dataset.tab;
+            switchTab(tabName);
+          });
+        });
+        
+        // Activate first tab by default
+        switchTab('basicInfo');
+      });
+    </script>
+  </body>
+</html>

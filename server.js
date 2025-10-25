@@ -4920,11 +4920,19 @@ addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
       if (groupIds.length) {
         opts = await db(
           `select id, group_id, name, price, is_active, sort_order
-             from modifier_options
-            where tenant_id=$1
-              and group_id = any($2::uuid[])
-              and coalesce(is_active,true)
-            order by coalesce(sort_order,999999) asc, name asc`,
+             from modifier_options o
+            where o.tenant_id=$1
+              and o.group_id = any($2::uuid[])
+              and coalesce(o.is_active,true)
+              and o.deleted_at is null
+              and exists (
+                    select 1 from tenant_external_mappings m
+                     where m.tenant_id=$1
+                       and m.provider='foodics'
+                       and m.entity_type='modifier_option'
+                       and m.entity_id=o.id
+                  )
+            order by coalesce(o.sort_order,999999) asc, o.name asc`,
           [tenantId, groupIds]
         );
       }
@@ -5026,6 +5034,13 @@ addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuth, req
   } catch {}
 
   const tenantId = req.params.id;
+  // Block CSV-based catalog syncs when catalog source is locked to Foodics
+  try {
+    const r = await db("select (coalesce((meta->>'catalog_source'),'')='foodics') as locked from tenant_api_integrations where tenant_id=$1 and provider='foodics' and revoked_at is null order by updated_at desc limit 1", [tenantId]);
+    if (Array.isArray(r) && r.length && (r[0].locked === true || r[0].locked === 't')) {
+      return res.status(409).json({ error: 'catalog_locked_to_foodics' });
+    }
+  } catch {}
   function csvLine(s){
     const out = []; let cur=''; let i=0; let inQ=false;
     while (i < s.length) {
@@ -6373,11 +6388,529 @@ addRoute('post', '/admin/tenants/:id/integrations/foodics/sync', verifyAuthOpen,
   const forceImages = forceRaw === '1' || forceRaw === 'true' || forceRaw === 'yes';
   const phase = String(req.query?.phase || req.body?.phase || 'full').toLowerCase();
   try {
+// Lock catalog source to Foodics to avoid non-Foodics catalog syncs
+    try { await db("update tenant_api_integrations set meta = coalesce(meta,'{}'::jsonb) || jsonb_build_object('catalog_source','foodics') where tenant_id=$1 and provider='foodics'", [tenantId]); } catch {}
     const result = await runTenantFoodicsSync(tenantId, { force_images: forceImages, phase });
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: 'sync_failed', message: e?.message||String(e) });
   }
+});
+
+// Ensure Foodics sales schema exists
+async function ensureSalesSchema(){
+  if (!HAS_DB) return;
+  try {
+    // Customers table
+    await db(`
+      CREATE TABLE IF NOT EXISTS customers (
+        customer_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        external_id text,
+        external_ref text,
+        full_name text,
+        first_name text,
+        last_name text,
+        email text,
+        phone text,
+        phone_normalized text,
+        country_code text,
+        tags text[],
+        last_seen_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+        UNIQUE (tenant_id, external_id)
+      )
+    `);
+    
+    // Sales orders table
+    await db(`
+      CREATE TABLE IF NOT EXISTS sales_orders (
+        order_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        external_id text NOT NULL,
+        external_ref text,
+        branch_id uuid REFERENCES branches(branch_id) ON DELETE SET NULL,
+        customer_id uuid REFERENCES customers(customer_id) ON DELETE SET NULL,
+        currency text DEFAULT 'KWD',
+        status text,
+        source_channel text,
+        service_type text,
+        order_no text,
+        receipt_no text,
+        table_name text,
+        waiter_name text,
+        driver_name text,
+        
+        -- Monetary amounts
+        subtotal numeric(12,3) DEFAULT 0,
+        discount_total numeric(12,3) DEFAULT 0,
+        tax_total numeric(12,3) DEFAULT 0,
+        service_charge numeric(12,3) DEFAULT 0,
+        delivery_fee numeric(12,3) DEFAULT 0,
+        rounding numeric(12,3) DEFAULT 0,
+        tip_amount numeric(12,3) DEFAULT 0,
+        total numeric(12,3) DEFAULT 0,
+        paid_total numeric(12,3) DEFAULT 0,
+        balance_due numeric(12,3) DEFAULT 0,
+        
+        -- Timestamps
+        placed_at timestamptz,
+        paid_at timestamptz,
+        closed_at timestamptz,
+        pos_created_at timestamptz,
+        pos_updated_at timestamptz,
+        
+        -- Status flags
+        is_voided boolean DEFAULT false,
+        is_refunded boolean DEFAULT false,
+        is_deleted boolean DEFAULT false,
+        
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+        
+        UNIQUE (tenant_id, external_id)
+      )
+    `);
+    
+    // Sales order items table
+    await db(`
+      CREATE TABLE IF NOT EXISTS sales_order_items (
+        item_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        order_id uuid NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
+        external_id text NOT NULL,
+        line_no integer,
+        product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+        product_external_id text,
+        product_name text NOT NULL,
+        product_ref text,
+        sku text,
+        
+        -- Quantities and pricing
+        qty numeric(12,3) NOT NULL DEFAULT 1,
+        unit_price numeric(12,3) NOT NULL DEFAULT 0,
+        base_price numeric(12,3) DEFAULT 0,
+        discount_total numeric(12,3) DEFAULT 0,
+        tax_total numeric(12,3) DEFAULT 0,
+        total numeric(12,3) NOT NULL DEFAULT 0,
+        
+        is_voided boolean DEFAULT false,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+        
+        UNIQUE (tenant_id, order_id, external_id)
+      )
+    `);
+    
+    // Create indexes
+    await db('CREATE INDEX IF NOT EXISTS ix_customers_tenant_external ON customers(tenant_id, external_id)');
+    await db('CREATE INDEX IF NOT EXISTS ix_sales_orders_tenant_placed ON sales_orders(tenant_id, placed_at DESC)');
+    await db('CREATE INDEX IF NOT EXISTS ix_sales_order_items_tenant_order ON sales_order_items(tenant_id, order_id)');
+    
+  } catch (e) {
+    console.error('Error ensuring sales schema:', e);
+  }
+}
+
+// Debug: Test Foodics API connectivity
+addRoute('post', '/admin/tenants/:id/integrations/foodics/test-api', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  
+  try {
+    console.log(`[${tenantId}] Testing Foodics API connectivity...`);
+    
+    // Get Foodics token for this tenant
+    const token = await getTenantFoodicsToken(tenantId);
+    if (!token) {
+      return res.status(409).json({ error: 'foodics_token_missing' });
+    }
+    console.log(`[${tenantId}] Foodics token found`);
+    
+    const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
+    if (!client) {
+      return res.status(503).json({ error: 'foodics_client_unavailable' });
+    }
+    console.log(`[${tenantId}] Foodics client created`);
+    
+    // Test basic API calls
+    const results = {};
+    
+    // Test 1: Try to fetch categories
+    try {
+      const categories = await client.listCategories();
+      results.categories = { success: true, count: categories?.items?.length || 0 };
+      console.log(`[${tenantId}] Categories: ${categories?.items?.length || 0}`);
+    } catch (e) {
+      results.categories = { success: false, error: e.message };
+      console.log(`[${tenantId}] Categories error: ${e.message}`);
+    }
+    
+    // Test 2: Try to fetch products
+    try {
+      const products = await client.listProducts();
+      results.products = { success: true, count: products?.items?.length || 0 };
+      console.log(`[${tenantId}] Products: ${products?.items?.length || 0}`);
+    } catch (e) {
+      results.products = { success: false, error: e.message };
+      console.log(`[${tenantId}] Products error: ${e.message}`);
+    }
+    
+    // Test 3: Try different order endpoints manually
+    const orderEndpoints = ['/orders', '/pos/orders', '/sales', '/transactions'];
+    results.endpoints = {};
+    
+    for (const endpoint of orderEndpoints) {
+      try {
+        const response = await fetch(`https://api.foodics.com/v5${endpoint}?per_page=1`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        results.endpoints[endpoint] = { 
+          status: response.status, 
+          success: response.ok,
+          statusText: response.statusText
+        };
+        console.log(`[${tenantId}] ${endpoint}: ${response.status} ${response.statusText}`);
+      } catch (e) {
+        results.endpoints[endpoint] = { success: false, error: e.message };
+        console.log(`[${tenantId}] ${endpoint} error: ${e.message}`);
+      }
+    }
+    
+    return res.json({ ok: true, results });
+    
+  } catch (e) {
+    console.error(`[${tenantId}] API test failed:`, e?.message || e);
+    return res.status(500).json({ error: 'test_failed', message: e?.message||String(e) });
+  }
+});
+
+// Import Foodics sales orders
+addRoute('post', '/admin/tenants/:id/integrations/foodics/import-sales', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const tenantId = String(req.params.id||'').trim();
+  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
+  
+  try {
+    console.log(`[${tenantId}] Starting Foodics sales import...`);
+    
+    // Ensure sales schema exists
+    try {
+      await ensureSalesSchema();
+      console.log(`[${tenantId}] Sales schema ensured`);
+    } catch (schemaError) {
+      console.error(`[${tenantId}] Schema error:`, schemaError);
+      throw schemaError;
+    }
+    
+    // Get Foodics token for this tenant
+    const token = await getTenantFoodicsToken(tenantId);
+    if (!token) {
+      console.error(`[${tenantId}] No Foodics token found`);
+      return res.status(409).json({ error: 'foodics_token_missing' });
+    }
+    console.log(`[${tenantId}] Foodics token found`);
+    
+    const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
+    if (!client) {
+      console.error(`[${tenantId}] Foodics client unavailable`);
+      return res.status(503).json({ error: 'foodics_client_unavailable' });
+    }
+    console.log(`[${tenantId}] Foodics client created`);
+    
+    // Parameters
+    const fromDate = req.body?.from_date || req.query?.from_date || '2024-10-13';
+    const toDate = req.body?.to_date || req.query?.to_date || new Date().toISOString().split('T')[0];
+    const limit = Math.min(parseInt(req.body?.limit || req.query?.limit || 50), 100);
+    const dryRun = req.body?.dry_run || req.query?.dry_run || false;
+    
+    console.log(`[${tenantId}] Importing Foodics sales from ${fromDate} to ${toDate} (limit: ${limit}, dry_run: ${dryRun})`);
+    
+    // Fetch orders from Foodics
+    console.log(`[${tenantId}] Calling Foodics API...`);
+    let orders;
+    try {
+      orders = await client.listOrders({
+        updated_at_from: fromDate + 'T00:00:00Z',
+        updated_at_to: toDate + 'T23:59:59Z',
+        limit: limit
+      });
+      console.log(`[${tenantId}] Foodics API returned ${orders?.items?.length || 0} orders`);
+    } catch (apiError) {
+      console.error(`[${tenantId}] Foodics API error:`, apiError.message || apiError);
+      
+      // Check if this is a 404 error on all endpoints (likely API plan limitation)
+      if (apiError.message && apiError.message.includes('404 Not found')) {
+        throw new Error('Orders API not available. Your Foodics API plan may not include orders/transactions access. Contact your Foodics provider to upgrade your API access.');
+      }
+      
+      throw apiError;
+    }
+    
+    const stats = {
+      fetched: orders.items?.length || 0,
+      imported: 0,
+      skipped: 0,
+      errors: 0
+    };
+    
+    if (dryRun) {
+      console.log(`[${tenantId}] Dry run completed, returning ${stats.fetched} orders`);
+      return res.json({ ok: true, dry_run: true, stats, sample_orders: orders.items?.slice(0, 3) });
+    }
+    
+    // Import orders to sales_orders table
+    console.log(`[${tenantId}] Starting real import of ${stats.fetched} orders`);
+    for (const order of (orders.items || [])) {
+      try {
+        // Check if order already exists
+        const existing = await db('SELECT order_id FROM sales_orders WHERE tenant_id = $1 AND external_id = $2', [tenantId, order.id]);
+        if (existing.length > 0) {
+          stats.skipped++;
+          continue;
+        }
+        
+        // Insert customer if exists
+        let customerId = null;
+        if (order.customer && order.customer.id) {
+          const customerResult = await db(`
+            INSERT INTO customers (tenant_id, external_id, full_name, phone, email, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (tenant_id, external_id) DO NOTHING
+            RETURNING customer_id
+          `, [
+            tenantId,
+            order.customer.id,
+            order.customer.name || null,
+            order.customer.phone || null,
+            order.customer.email || null,
+            order.customer.created_at || new Date().toISOString()
+          ]);
+          
+          if (customerResult.length > 0) {
+            customerId = customerResult[0].customer_id;
+          } else {
+            // Get existing customer
+            const existingCustomer = await db('SELECT customer_id FROM customers WHERE tenant_id = $1 AND external_id = $2', [tenantId, order.customer.id]);
+            if (existingCustomer.length > 0) {
+              customerId = existingCustomer[0].customer_id;
+            }
+          }
+        }
+        
+        // Insert sales order
+        const orderResult = await db(`
+          INSERT INTO sales_orders (
+            tenant_id, external_id, external_ref, currency, status, source_channel, service_type,
+            order_no, receipt_no, subtotal, tax_total, total, paid_total,
+            placed_at, paid_at, closed_at, pos_created_at, pos_updated_at, customer_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          RETURNING order_id
+        `, [
+          tenantId,
+          order.id,
+          order.reference || null,
+          order.currency || 'KWD',
+          order.status || 'closed',
+          order.source || 'online',
+          order.service_type || 'delivery',
+          order.number || null,
+          order.receipt_number || null,
+          parseFloat(order.subtotal || 0),
+          parseFloat(order.tax || 0),
+          parseFloat(order.total || 0),
+          parseFloat(order.paid || order.total || 0),
+          order.created_at || new Date().toISOString(),
+          order.paid_at || order.created_at || new Date().toISOString(),
+          order.closed_at || null,
+          order.created_at || new Date().toISOString(),
+          order.updated_at || new Date().toISOString(),
+          customerId
+        ]);
+        
+        const newOrderId = orderResult[0].order_id;
+        
+        // Insert order items if they exist
+        if (order.items && Array.isArray(order.items)) {
+          for (const [index, item] of order.items.entries()) {
+            await db(`
+              INSERT INTO sales_order_items (
+                tenant_id, order_id, external_id, line_no, product_name, product_ref, sku,
+                qty, unit_price, base_price, tax_total, total
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              ON CONFLICT (tenant_id, order_id, external_id) DO NOTHING
+            `, [
+              tenantId,
+              newOrderId,
+              item.id || `item_${index}`,
+              index + 1,
+              item.name || item.product_name || 'Unknown Item',
+              item.product_id || null,
+              item.sku || null,
+              parseFloat(item.quantity || 1),
+              parseFloat(item.unit_price || item.price || 0),
+              parseFloat(item.unit_price || item.price || 0),
+              parseFloat(item.tax || 0),
+              parseFloat(item.total || (item.quantity || 1) * (item.price || 0))
+            ]);
+          }
+        }
+        
+        stats.imported++;
+        
+      } catch (error) {
+        console.error(`Error importing order ${order.id}:`, error.message);
+        stats.errors++;
+      }
+    }
+    
+    return res.json({ ok: true, stats });
+    
+  } catch (e) {
+    console.error(`[${tenantId}] Import failed:`, e?.message || e, e?.stack || '');
+    return res.status(500).json({ error: 'import_failed', message: e?.message||String(e) });
+  }
+});
+
+// Admin: Get sales orders for a tenant
+addRoute('get', '/admin/tenants/:id/sales-orders', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  const tenantId = req.params.id;
+  const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 50)));
+  const offset = Math.max(0, Number(req.query.offset || 0));
+  
+  try {
+    const rows = await db(`
+      SELECT 
+        so.order_id as id,
+        so.external_id,
+        so.external_ref,
+        so.currency,
+        so.status,
+        so.source_channel,
+        so.service_type,
+        so.order_no,
+        so.receipt_no,
+        so.total,
+        so.paid_total,
+        so.placed_at as created_at,
+        so.paid_at,
+        so.closed_at,
+        c.full_name as customer_name,
+        'Unknown' as branch_name
+      FROM sales_orders so
+      LEFT JOIN customers c ON c.customer_id = so.customer_id
+      WHERE so.tenant_id = $1
+      ORDER BY so.placed_at DESC
+      LIMIT $2 OFFSET $3
+    `, [tenantId, limit, offset]);
+    
+    res.json({ items: rows || [] });
+  } catch (e) {
+    console.error('[admin/tenants/sales-orders] Error:', e);
+    res.json({ items: [] }); // Don't fail completely if sales_orders table doesn't exist
+  }
+});
+
+// Sample data insertion endpoint for testing
+addRoute('post', '/admin/insert-sample-data/:tenantId', verifyAuthOpen, async (req, res) => {
+    const tenantId = req.params.tenantId;
+    
+    try {
+        console.log(`Inserting sample data for tenant ${tenantId}`);
+        
+        // Check if tenant exists
+        const tenantResult = await db('SELECT * FROM tenants WHERE id = $1', [tenantId]);
+        if (tenantResult.length === 0) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+        
+        // Insert sample local orders (paid_orders table)
+        const localOrdersSQL = `
+            INSERT INTO paid_orders (
+                tenant_id, basket_id, osn, cashier_name, customer_name, source, location, branch, items, total, currency, paid_at
+            ) VALUES 
+            ($1, 'BASKET_001', 'OSN001', 'Ahmad Ahmed', 'Walk-in Customer', 'local', 'Koobs Main Branch', 'Main',
+             '[{"name": "Chicken Sandwich", "price": 2.500, "quantity": 2}, {"name": "French Fries", "price": 1.200, "quantity": 1}, {"name": "Coca Cola", "price": 0.800, "quantity": 2}]'::jsonb,
+             7.800, 'KWD', NOW() - INTERVAL '2 hours'),
+            ($1, 'BASKET_002', 'OSN002', 'Fatima Al-Zahra', 'Mohammed Ali', 'local', 'Koobs Main Branch', 'Main',
+             '[{"name": "Beef Burger", "price": 3.200, "quantity": 1}, {"name": "Onion Rings", "price": 1.500, "quantity": 1}, {"name": "Orange Juice", "price": 1.000, "quantity": 1}]'::jsonb,
+             5.700, 'KWD', NOW() - INTERVAL '1 hour')
+            ON CONFLICT DO NOTHING
+        `;
+        
+        await db(localOrdersSQL, [tenantId, tenantId]);
+        
+        // Insert sample customers
+        const customersSQL = `
+            INSERT INTO customers (tenant_id, external_id, full_name, first_name, last_name, phone, email) VALUES 
+            ($1, 'CUST_001', 'Ahmed Al-Rashid', 'Ahmed', 'Al-Rashid', '+96599123456', 'ahmed@example.com'),
+            ($1, 'CUST_002', 'Nour Al-Sabah', 'Nour', 'Al-Sabah', '+96599789012', 'nour@example.com')
+            ON CONFLICT (tenant_id, external_id) DO NOTHING
+        `;
+        
+        await db(customersSQL, [tenantId, tenantId]);
+        
+        // Get customer IDs for references
+        const customers = await db('SELECT customer_id, external_id FROM customers WHERE tenant_id = $1', [tenantId]);
+        const customerMap = {};
+        customers.forEach(c => customerMap[c.external_id] = c.customer_id);
+        
+        // Insert sample Foodics orders
+        const foodicsOrdersSQL = `
+            INSERT INTO sales_orders (
+                tenant_id, external_id, external_ref, currency, status, source_channel, service_type, 
+                order_no, receipt_no, subtotal, tax_total, total, paid_total, 
+                placed_at, paid_at, closed_at, pos_created_at, pos_updated_at, customer_id
+            ) VALUES 
+            ($1, 'FDX_001', 'REF_001', 'KWD', 'closed', 'online', 'delivery', 'ORD-001', 'RCP-001',
+             12.500, 1.250, 13.750, 13.750, NOW() - INTERVAL '3 hours', NOW() - INTERVAL '2 hours 50 minutes',
+             NOW() - INTERVAL '2 hours 30 minutes', NOW() - INTERVAL '3 hours', NOW() - INTERVAL '2 hours 30 minutes', $2),
+            ($1, 'FDX_002', 'REF_002', 'KWD', 'closed', 'dine_in', 'dine_in', 'ORD-002', 'RCP-002',
+             8.500, 0.850, 9.350, 9.350, NOW() - INTERVAL '1 hour 30 minutes', NOW() - INTERVAL '1 hour 20 minutes',
+             NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour 30 minutes', NOW() - INTERVAL '1 hour', $3)
+            ON CONFLICT (tenant_id, external_id) DO NOTHING
+        `;
+        
+        await db(foodicsOrdersSQL, [
+            tenantId, customerMap['CUST_001'], customerMap['CUST_002'], tenantId
+        ]);
+        
+        // Get summary stats
+        const [localOrdersResult] = await db('SELECT COUNT(*) as count, SUM(total) as total_amount FROM paid_orders WHERE tenant_id = $1', [tenantId]);
+        const [foodicsOrdersResult] = await db('SELECT COUNT(*) as count, SUM(total) as total_amount FROM sales_orders WHERE tenant_id = $1', [tenantId]);
+        
+        res.json({
+            success: true,
+            message: 'Sample data inserted successfully',
+            data: {
+                tenant: tenantResult[0].name || 'N/A',
+                localOrders: {
+                    count: parseInt(localOrdersResult.count || 0),
+                    totalAmount: parseFloat(localOrdersResult.total_amount || 0)
+                },
+                foodicsOrders: {
+                    count: parseInt(foodicsOrdersResult.count || 0),
+                    totalAmount: parseFloat(foodicsOrdersResult.total_amount || 0)
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error inserting sample data:', error);
+        res.status(500).json({ 
+            error: 'Failed to insert sample data', 
+            details: error.message 
+        });
+    }
 });
 
 // Sync run history
@@ -6545,6 +7078,22 @@ addRoute('get', '/admin/tenants/:id/integrations/foodics/sync-runs', verifyAuthO
     const rows = await db('select id, provider, started_at, finished_at, ok, error, stats from integration_sync_runs where tenant_id=$1 and provider=$2 order by started_at desc limit 50', [tenantId, 'foodics']);
     return res.json({ items: rows });
   } catch { return res.json({ items: [] }); }
+});
+
+// Auto-import Foodics sales for all tenants (cron-triggered)
+addRoute('post', '/admin/integrations/foodics/auto-import-sales', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  const adminTok = String(req.header('x-admin-token')||'');
+  if (ADMIN_TOKEN && adminTok !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  
+  try {
+    const { autoImportAllTenants } = require('./scripts/auto_import_foodics_sales.js');
+    const result = await autoImportAllTenants();
+    return res.json(result);
+  } catch (error) {
+    console.error('Auto import sales endpoint failed:', error);
+    return res.status(500).json({ error: 'auto_import_failed', message: error.message });
+  }
 });
 
 // Sync-all (cron-triggered). Evaluates per-tenant schedule stored in tenant_api_integrations.meta.sync
@@ -6787,6 +7336,9 @@ async function ensureModifiersSchema(){
   // New optional columns used for Foodics-like option creation
   try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS tax_group_reference text'); } catch {}
   try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS costing_method text'); } catch {}
+  // Soft-delete support (Foodics uses soft deletes)
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS deleted_at timestamptz'); } catch {}
+  try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS deleted_at timestamptz'); } catch {}
   // Localized names
   try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS name_localized text'); } catch {}
   try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS name_localized text'); } catch {}
@@ -8602,6 +9154,15 @@ addRoute('get', '/display', (_req, res) => res.sendFile(path.join(__dirname, 'dr
 addRoute('get', /^\/cashier\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier/', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
+// Unified Orders page
+addRoute('get', '/unified-orders.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'unified-orders.html'));
+});
 // Login page (root-level) — support /login and /login/
 addRoute('get', /^\/login\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
 addRoute('get', '/login', (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
@@ -9481,6 +10042,13 @@ if (JOB_COMMAND) {
           console.log('✅ Database schema update job completed successfully');
           break;
           
+        case 'auto-import-foodics-sales':
+          console.log('🔄 Starting automated Foodics sales import job...');
+          const { autoImportAllTenants } = require('./scripts/auto_import_foodics_sales.js');
+          const result = await autoImportAllTenants();
+          console.log('✅ Automated sales import job completed:', result);
+          break;
+          
         default:
           console.log(`❌ Unknown job command: ${JOB_COMMAND}`);
           process.exit(1);
@@ -9512,6 +10080,7 @@ if (HAS_DB) {
     try { await ensureRBACSchema(); } catch (e) { console.error('ensureRBACSchema failed', e); }
     try { await ensureInvitesSchema(); } catch (e) { console.error('ensureInvitesSchema failed', e); }
     try { await ensurePaidOrdersSchema(); } catch (e) { console.error('ensurePaidOrdersSchema failed', e); }
+    try { await ensureSalesSchema(); } catch (e) { console.error('ensureSalesSchema failed', e); }
     try { await ensureAdminPerfIndexes(); } catch (e) { console.error('ensureAdminPerfIndexes failed', e); }
     // Fail fast if DB is required but unreachable
     try { if (REQUIRE_DB_EFFECTIVE) { await db('select 1'); } } catch (e) {

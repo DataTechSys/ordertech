@@ -1,0 +1,115 @@
+apiVersion: serving.knative.dev/v1
+kind: Revision
+metadata:
+  annotations:
+    autoscaling.knative.dev/maxScale: '10'
+    autoscaling.knative.dev/minScale: '1'
+    run.googleapis.com/build-source-location: '{"ordertech-1":"gs://run-sources-smart-order-469705-me-central1/services/ordertech/1759659994.759546-8ac629e0ed7e4fcdbb708224679ec9bf.zip#1759659996518243"}'
+    run.googleapis.com/client-name: gcloud
+    run.googleapis.com/client-version: 535.0.0
+    run.googleapis.com/cloudsql-instances: smart-order-469705:me-central1:ordertech-db
+    run.googleapis.com/operation-id: eb956e50-82ca-4022-b939-860e5d523570
+    run.googleapis.com/startup-cpu-boost: 'true'
+    serving.knative.dev/creator: hussain@mosawi.com
+  creationTimestamp: '2025-10-05T10:28:32.253008Z'
+  generation: 1
+  labels:
+    client.knative.dev/nonce: bydpzsnitn
+    cloud.googleapis.com/location: me-central1
+    run.googleapis.com/satisfiesPzs: 'true'
+    run.googleapis.com/startupProbeType: Default
+    serving.knative.dev/configuration: ordertech
+    serving.knative.dev/configurationGeneration: '594'
+    serving.knative.dev/service: ordertech
+    serving.knative.dev/serviceUid: dbcad6d6-1b25-4ae4-8135-628d1bd190e8
+  name: ordertech-00594-f6h
+  namespace: '715493130630'
+  ownerReferences:
+  - apiVersion: serving.knative.dev/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Configuration
+    name: ordertech
+    uid: 8cbb8cc9-6d15-4d42-a8f0-6e3cbabc6f0a
+  resourceVersion: AAZAZwyH/k0
+  selfLink: /apis/serving.knative.dev/v1/namespaces/715493130630/revisions/ordertech-00594-f6h
+  uid: 410b8a4d-bac0-4c47-8aa1-e902384d86c1
+spec:
+  containerConcurrency: 80
+  containers:
+  - env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: DATABASE_URL
+    - name: LIVEKIT_API_KEY
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-api-key
+    - name: LIVEKIT_API_SECRET
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: livekit-api-secret
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: openai-api-key
+    - name: OPENAI_ASSISTANT_ID
+      valueFrom:
+        secretKeyRef:
+          key: latest
+          name: openai-assistant-id
+    - name: REQUIRE_DB
+      value: 'false'
+    - name: SKIP_DEFAULT_TENANT
+      value: '1'
+    image: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/ordertech@sha256:9715c96999ab5e2d022fb0a8c4ee2fe4e4a292e5141646d76971e3ea4e2ab24e
+    name: ordertech-1
+    ports:
+    - containerPort: 8080
+      name: http1
+    resources:
+      limits:
+        cpu: '1'
+        memory: 2Gi
+    startupProbe:
+      failureThreshold: 1
+      periodSeconds: 240
+      tcpSocket:
+        port: 8080
+      timeoutSeconds: 240
+  serviceAccountName: 715493130630-compute@developer.gserviceaccount.com
+  timeoutSeconds: 300
+status:
+  conditions:
+  - lastTransitionTime: '2025-10-05T10:46:36.312141Z'
+    reason: Retired
+    status: 'True'
+    type: Ready
+  - lastTransitionTime: '2025-10-05T10:46:36.312141Z'
+    message: Revision retired.
+    reason: Retired
+    severity: Info
+    status: 'False'
+    type: Active
+  - lastTransitionTime: '2025-10-05T10:28:39.507813Z'
+    message: Container image import completed in 6.89s.
+    status: 'True'
+    type: ContainerReady
+  - lastTransitionTime: '2025-10-05T10:46:36.312141Z'
+    reason: NotProvisioned
+    severity: Info
+    status: 'False'
+    type: MinInstancesProvisioned
+  - lastTransitionTime: '2025-10-05T10:46:36.312141Z'
+    message: Revision retired.
+    reason: Retired
+    status: Unknown
+    type: ResourcesAvailable
+  imageDigest: me-central1-docker.pkg.dev/smart-order-469705/cloud-run-source-deploy/ordertech@sha256:9715c96999ab5e2d022fb0a8c4ee2fe4e4a292e5141646d76971e3ea4e2ab24e
+  logUrl: https://console.cloud.google.com/logs/viewer?project=smart-order-469705&resource=cloud_run_revision/service_name/ordertech/revision_name/ordertech-00594-f6h&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22ordertech%22%0Aresource.labels.revision_name%3D%22ordertech-00594-f6h%22
+  observedGeneration: 1

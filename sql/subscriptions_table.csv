@@ -1,0 +1,9 @@
+Field Name,Type,Description
+subscription_id,UUID,Primary key
+tenant_id,UUID (FK),Linked tenant
+start_date,DATE,Start of subscription
+end_date,DATE,End of subscription
+is_active,BOOLEAN,Active status
+devices_allowed,INT,Optional cap
+branches_allowed,INT,Optional cap
+notes,TEXT,Internal notes

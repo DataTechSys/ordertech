@@ -1,0 +1,345 @@
+{
+  "timestamp": "2025-10-02T06:28:41.031Z",
+  "summary": {
+    "total_products": 425,
+    "products_with_modifiers": 0,
+    "total_modifier_groups": 70,
+    "total_modifier_options": 442,
+    "assignment_records": 0
+  },
+  "products_with_modifiers": [],
+  "matching_products": [
+    {
+      "id": "9285e4ca-b130-4b87-b2af-3ffee1ce7d11",
+      "name": "ICED | Black Spanish (M)",
+      "has_modifiers": false
+    },
+    {
+      "id": "928603ef-4939-4671-94e4-0744ec3c275e",
+      "name": "ICED | Spanish Latte (M)",
+      "has_modifiers": false
+    },
+    {
+      "id": "92862a65-9ed0-4492-90b8-019799af42f5",
+      "name": "ICED |  Cacao Latte",
+      "has_modifiers": false
+    },
+    {
+      "id": "92862fd0-d21b-447e-a2ff-97a14e9a4c7e",
+      "name": "ICED | Latte (M)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9286304a-d8cd-418b-adee-4a438353af99",
+      "name": "Tea - ICED",
+      "has_modifiers": false
+    },
+    {
+      "id": "92863121-43e2-4144-a830-52c41d1cb812",
+      "name": "ICED | Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "9286319b-30c9-4bb8-8927-e4e24ac729c6",
+      "name": "ICED | Espresso",
+      "has_modifiers": false
+    },
+    {
+      "id": "9286330e-6071-4bce-98f4-6b7356e1bad8",
+      "name": "ICED | Salted Caramel (M)",
+      "has_modifiers": false
+    },
+    {
+      "id": "928633e3-79b0-4ff4-9871-972cedb73299",
+      "name": "ICED | Vanilla Shaken (M)",
+      "has_modifiers": false
+    },
+    {
+      "id": "92863740-318c-45a7-864a-630177309f5e",
+      "name": "HOT | Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "9291e52f-4014-48af-9d10-6cdf35ea1fe0",
+      "name": "Cacao Latte - ICED",
+      "has_modifiers": false
+    },
+    {
+      "id": "9291f3c2-0290-438a-8153-c6c70ed1e7fd",
+      "name": "Iced Tea - Green",
+      "has_modifiers": false
+    },
+    {
+      "id": "9292b99b-c737-480b-8af2-1b62cba75ffe",
+      "name": "ICED | Americano (M)",
+      "has_modifiers": false
+    },
+    {
+      "id": "92d2afc3-e77c-4884-ab5e-599b038ed774",
+      "name": "Matcha Frappe",
+      "has_modifiers": false
+    },
+    {
+      "id": "931c8672-d6ba-4a74-950a-782d5c20df23",
+      "name": "ICED | Vanilla Cappuccino",
+      "has_modifiers": false
+    },
+    {
+      "id": "95561945-0fc9-419a-bcd8-5cad47281f67",
+      "name": "Iced Americano - 12oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "958edd96-9be7-484a-8432-af8af85575b5",
+      "name": "Iced Latte - 12oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "95df2ffc-34f4-4461-9431-f9b64e9c19ae",
+      "name": "ICED | Vanilla Almond Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "95f201fd-61fe-443e-a54b-4f7097e13329",
+      "name": "Iced Spanish Latte - 12oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "95f2041c-50cc-4f8f-9e58-1db6c098da5f",
+      "name": "Cacao Latte - Iced",
+      "has_modifiers": false
+    },
+    {
+      "id": "95f207de-786a-4661-8adb-0f9dcd77b704",
+      "name": "Iced Salted Caramel - 12oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "96101970-6223-4e1f-bf89-bc3bdf1bc1a4",
+      "name": "Iced Latte - 12oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "96b02886-98f6-4efb-9b14-c868e0ac04b0",
+      "name": "Matcha Pistachio Frappe",
+      "has_modifiers": false
+    },
+    {
+      "id": "96e896d8-0460-4d97-b169-2ffca7198bfd",
+      "name": "Purple Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "96fd6343-fa27-406a-9a43-9c5b36eb7c82",
+      "name": "Purple Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "98b93515-9d34-4476-8e89-04bd16f1f642",
+      "name": "1 Liter | Iced Salted Caramel",
+      "has_modifiers": false
+    },
+    {
+      "id": "98b93544-afb1-4987-ba35-8d639411923b",
+      "name": "1 Liter | Iced Spanish Latte",
+      "has_modifiers": false
+    },
+    {
+      "id": "98b93571-687f-4075-ad16-e6fe8787d81a",
+      "name": "1 Liter | Iced Americano",
+      "has_modifiers": false
+    },
+    {
+      "id": "98b935dc-0948-4aa6-b2b0-b0d17f990855",
+      "name": "1 Liter | Iced Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "98f3ac59-da06-4bdb-8803-504186c0a07a",
+      "name": "ICED | Cacao",
+      "has_modifiers": false
+    },
+    {
+      "id": "98f3ae84-505c-4cc0-b957-b38b7a98acb7",
+      "name": "Iced Vanilla Cappucino",
+      "has_modifiers": false
+    },
+    {
+      "id": "993c4d6b-6d02-40e9-8f0f-ad1047b3609c",
+      "name": "ICED | V60",
+      "has_modifiers": false
+    },
+    {
+      "id": "993c4fde-bf50-4e0d-ba09-dd9797491319",
+      "name": "ICED | Chemex",
+      "has_modifiers": false
+    },
+    {
+      "id": "99b0e6b1-2ece-4630-8e0a-00933ac1bc21",
+      "name": "Creamy Iced Espresso",
+      "has_modifiers": false
+    },
+    {
+      "id": "99ba9599-f5f0-4a87-8f17-f1a0162bf7e2",
+      "name": "Spanish Latte - Iced (Promo)",
+      "has_modifiers": false
+    },
+    {
+      "id": "99baebba-0900-44f9-b131-4bd764929729",
+      "name": "Americano - Iced (Promo)",
+      "has_modifiers": false
+    },
+    {
+      "id": "99f7ada1-5fa6-46e2-a761-50401d7cfad4",
+      "name": "Vega Matcha",
+      "has_modifiers": false
+    },
+    {
+      "id": "9a4fdd82-5a35-4b52-a57a-59a752403d61",
+      "name": "ICED | Cold Foam Americano",
+      "has_modifiers": false
+    },
+    {
+      "id": "9a7e35df-57c0-442d-ac14-6989660148ae",
+      "name": "ICED | Creamy Americano",
+      "has_modifiers": false
+    },
+    {
+      "id": "9b6fe57b-f932-4152-8472-6562b8ba8624",
+      "name": "Latte - Iced (Medium) - TEST",
+      "has_modifiers": false
+    },
+    {
+      "id": "9bc0a5c9-f5a0-41bb-85cf-60813a8d1925",
+      "name": "ICED | Brown Sugar Latte",
+      "has_modifiers": false
+    },
+    {
+      "id": "9bdc0dd7-7eee-4cdc-93f3-be081680932a",
+      "name": "ICED | Kubbar  Tea",
+      "has_modifiers": false
+    },
+    {
+      "id": "9c6f3629-f076-4f41-91bf-c85ceda74fba",
+      "name": "ICED | Sweet Milk FF-12oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "9c6f3710-b98b-4241-bdb3-c9d02eb28ae6",
+      "name": "ICED | Sweet Milk FF-16oz",
+      "has_modifiers": false
+    },
+    {
+      "id": "9d426429-af11-4356-b6f3-8c2f19886849",
+      "name": "ICED | Vanilla Shaken (L)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9d42672d-7e7e-4912-9b30-7c0fc19971c9",
+      "name": "ICED | Latte (L)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9d426fd1-cfdc-469b-b817-49123cd136d6",
+      "name": "ICED | Salted Caramel (L)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9d427596-4b21-437d-b5ad-576378b4febe",
+      "name": "ICED | Black Spanish (L)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9d43e85b-d5f1-44c7-aadd-7c29887d96a7",
+      "name": "ICED | Spanish Latte (L)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9d43edeb-a667-41cc-93d9-e84ffee8938f",
+      "name": "ICED | Americano (L)",
+      "has_modifiers": false
+    },
+    {
+      "id": "9e415101-6739-46d8-b523-725eae373681",
+      "name": "1 Liter | Kubbar Iced Tea",
+      "has_modifiers": false
+    }
+  ],
+  "milk_groups": [
+    {
+      "id": "92888392-06ea-47e1-8b7d-e4a261835634",
+      "name": "Milk - Iced",
+      "reference": "23"
+    },
+    {
+      "id": "92ba1420-9bb9-44ad-89b9-a272fdcebffe",
+      "name": "8oz Size Milk",
+      "reference": "13"
+    },
+    {
+      "id": "9a325b5b-2d67-4264-9047-4295a6c8162f",
+      "name": "Almarai Full Fat Milk (Normal)",
+      "reference": null
+    },
+    {
+      "id": "9a325b9e-a67e-4998-8822-47e46d1d1dfe",
+      "name": "Almarai Full Fat Milk (Normal)",
+      "reference": null
+    },
+    {
+      "id": "9b69a79a-5d22-41f0-9b6f-868f5a62b0b5",
+      "name": ".Milk",
+      "reference": "m"
+    },
+    {
+      "id": "9b6fea58-b13a-4efc-97d5-fc741bf2feec",
+      "name": "Milk (Medium)",
+      "reference": null
+    },
+    {
+      "id": "9b6fea84-4775-47dd-884e-b1f0c94cc4b2",
+      "name": "Milk (LARGE)",
+      "reference": null
+    },
+    {
+      "id": "9b71bbdc-b17c-4eb6-99e0-285ae05e67fa",
+      "name": "MILK - HOT",
+      "reference": null
+    },
+    {
+      "id": "9b73addd-02a8-4df4-a8a8-d98705dc3815",
+      "name": "MILK - HOT",
+      "reference": null
+    },
+    {
+      "id": "9b73b8e0-82c4-4c5a-910c-31d5e7f7940b",
+      "name": "Cold - Milk",
+      "reference": null
+    },
+    {
+      "id": "9b73d230-eb52-47a1-8621-9830f3a5ee37",
+      "name": "Hot Milk",
+      "reference": "hot_milk"
+    },
+    {
+      "id": "9c6f3466-bc5d-4b6b-bb57-1a3873ad4d03",
+      "name": "Milk",
+      "reference": null
+    },
+    {
+      "id": "9cdf625b-9d33-4049-97c2-ee63ff4f8386",
+      "name": "Milk | Large",
+      "reference": "milk_large"
+    },
+    {
+      "id": "9cdfc461-cd9d-44e4-85f2-6f2f1503b467",
+      "name": "Milk | Medium",
+      "reference": "milk_medium"
+    },
+    {
+      "id": "9f815227-3b59-40b7-a522-390bf80da02d",
+      "name": "Pro | Milk",
+      "reference": "pro_milk"
+    }
+  ]
+}

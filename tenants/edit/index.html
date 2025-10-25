@@ -24,33 +24,51 @@
 
       <section id="editor" class="card hidden">
         <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700;">Basics</div>
-            <span class="spacer"></span>
-            <span id="basicsStatus" class="muted">—</span>
+          <!-- Tab navigation -->
+          <div class="tabs">
+            <button class="tab active" data-tab="basics">Basics</button>
+            <button class="tab" data-tab="limits">Limits</button>
+            <button class="tab" data-tab="owner">Owner</button>
+            <button class="tab" data-tab="integrations">Integrations</button>
+            <button class="tab" data-tab="domains">Domains</button>
+            <button class="tab" data-tab="subscription">Subscription</button>
+            <button class="tab" data-tab="danger">Danger</button>
           </div>
+          
+          <!-- Tab content: Basics -->
+          <div id="tab-basics" class="tab-content">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700;">Basics</div>
+              <span class="spacer"></span>
+              <span id="basicsStatus" class="muted">—</span>
+            </div>
           <div class="row cols-3">
+            <label class="grid">
+              <span class="label" style="font-weight:800;">Company ID</span>
+              <small class="muted">Required — 6 digits</small>
+              <div class="flex" style="gap:8px; align-items:center;">
+                <input id="tCode" class="input" maxlength="6" inputmode="numeric" pattern="\d{6}" placeholder="123456" />
+                <button id="btnSuggestCode" class="btn sm" type="button">Suggest</button>
+                <small id="codeAvailability" class="muted">—</small>
+              </div>
+            </label>
             <label class="grid"><span class="label">Name</span>
               <input id="tName" class="input" placeholder="Tenant name" />
             </label>
             <label class="grid"><span class="label">Slug</span>
               <input id="tSlug" class="input" placeholder="tenant-slug" />
             </label>
-            <label class="grid"><span class="label">Short Code (6 digits)</span>
-              <input id="tCode" class="input" maxlength="6" placeholder="123456" />
-            </label>
           </div>
-          <div class="row"><button id="saveBasics" class="btn primary">Save Basics</button></div>
-        </div>
-      </section>
-
-      <section id="limitsCard" class="card hidden mt-2">
-        <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700;">Limits</div>
-            <span class="spacer"></span>
-            <span id="limitsStatus" class="muted">—</span>
+            <div class="row"><button id="saveBasics" class="btn primary">Save Basics</button></div>
           </div>
+          
+          <!-- Tab content: Limits -->
+          <div id="tab-limits" class="tab-content hidden">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700;">Limits</div>
+              <span class="spacer"></span>
+              <span id="limitsStatus" class="muted">—</span>
+            </div>
           <div class="row cols-2">
             <label class="grid"><span class="label">Branch limit</span>
               <input id="tBranchLimit" class="input" type="number" min="0" />
@@ -59,17 +77,16 @@
               <input id="tLicLimit" class="input" type="number" min="0" />
             </label>
           </div>
-          <div class="row"><button id="saveLimits" class="btn primary">Save Limits</button></div>
-        </div>
-      </section>
-
-      <section id="ownerCard" class="card hidden mt-2">
-        <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700;">Owner</div>
-            <span class="spacer"></span>
-            <span id="ownerStatus" class="muted">—</span>
+            <div class="row"><button id="saveLimits" class="btn primary">Save Limits</button></div>
           </div>
+          
+          <!-- Tab content: Owner -->
+          <div id="tab-owner" class="tab-content hidden">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700;">Owner</div>
+              <span class="spacer"></span>
+              <span id="ownerStatus" class="muted">—</span>
+            </div>
           <div class="row cols-2">
             <div>
               <div class="label">Current Owner</div>
@@ -79,80 +96,115 @@
               <input id="ownerEmail" class="input" placeholder="owner@example.com" />
             </label>
           </div>
-          <div class="row"><button id="saveOwner" class="btn">Save Owner</button></div>
-        </div>
-      </section>
-
-      <section id="integrationsCard" class="card hidden mt-2">
-        <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700;">Integrations</div>
-            <span class="spacer"></span>
-            <span id="intStatus" class="muted">—</span>
+            <div class="row"><button id="saveOwner" class="btn">Save Owner</button></div>
           </div>
-          <div class="stack" style="gap:16px;">
-            <div class="stack" style="gap:8px; border:1px solid #eee; border-radius:8px; padding:12px;">
-              <div class="flex center" style="gap:8px;">
-                <div class="chip">Foodics</div>
-                <span id="foodicsBadge" class="chip">—</span>
-              </div>
-              <div class="row cols-2">
-                <label class="grid"><span class="label">API Token</span>
-                  <input id="foodicsToken" class="input" type="password" placeholder="paste token" />
-                </label>
-                <label class="grid"><span class="label">Label (optional)</span>
-                  <input id="foodicsLabel" class="input" placeholder="e.g. HQ Account" />
-                </label>
-              </div>
-              <div class="row">
-                <button id="saveFoodics" class="btn primary">Save/Rotate</button>
-                <button id="revokeFoodics" class="btn danger">Revoke</button>
-                <span class="muted" style="margin-left:8px;">Token is stored securely and never shown after saving.</span>
-              </div>
-              <div class="stack" style="gap:12px; border-top:1px solid #eee; padding-top:12px;">
-                <div class="row cols-3">
-                  <label class="grid"><span class="label">Catalog Source</span>
-                    <select id="catalogSource" class="select">
-                      <option value="foodics">Foodics API</option>
-                      <option value="csv">CSV</option>
+          
+          <!-- Tab content: Integrations -->
+          <div id="tab-integrations" class="tab-content hidden">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700;">Integrations</div>
+              <span class="spacer"></span>
+              <button id="btnAddIntegration" class="btn primary sm">Add Integration</button>
+            </div>
+            
+            <small class="muted" style="font-size:11px; display:block; margin:4px 0 12px;">API tokens are stored securely and encrypted. Never shown after saving.</small>
+            
+            <!-- Integrations Table -->
+            <div class="table-wrapper" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+              <table class="table" style="width: 100%; border-collapse: collapse;">
+                <thead style="background: #f9fafb;">
+                  <tr>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Service</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Status</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Last Updated</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; border-bottom: 1px solid #e5e7eb;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="integrationsTableBody">
+                  <tr id="noIntegrationsRow">
+                    <td colspan="4" style="padding: 24px; text-align: center; color: #6b7280;">No integrations configured</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Add/Edit Integration Modal -->
+            <div id="integrationModal" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000;">
+              <div class="modal-content" style="background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                  <h3 id="modalTitle" style="margin: 0; font-weight: 600;">Add Integration</h3>
+                  <button id="closeModal" class="btn icon ghost" style="padding: 4px;">&times;</button>
+                </div>
+                
+                <div class="stack" style="gap: 16px;">
+                  <label class="grid">
+                    <span class="label">Service</span>
+                    <select id="integrationService" class="select">
+                      <option value="foodics">Foodics POS</option>
                     </select>
                   </label>
-                  <label class="grid"><span class="label">Sync Mode</span>
-                    <select id="foodicsSyncMode" class="select">
-                      <option value="manual">Manual</option>
-                      <option value="hourly">Hourly</option>
-                      <option value="daily">Daily</option>
-                    </select>
+                  
+                  <label class="grid">
+                    <span class="label">API Token</span>
+                    <textarea id="integrationToken" class="textarea" placeholder="Paste your API token here" rows="4" spellcheck="false"></textarea>
+                    <small class="muted">Token will be encrypted and stored securely</small>
                   </label>
-                  <label class="grid"><span class="label">Daily time (UTC)</span>
-                    <input id="foodicsSyncTime" class="input" type="time" value="00:00" />
+                  
+                  <label class="grid">
+                    <span class="label">Label (optional)</span>
+                    <input id="integrationLabel" class="input" placeholder="e.g. Main Account, Branch 1" />
+                    <small class="muted">Helps identify this integration if you have multiple</small>
                   </label>
+                  
+                  <div id="catalogSourceSection" class="hidden">
+                    <label class="grid">
+                      <span class="label">Catalog Source</span>
+                      <select id="catalogSource" class="select">
+                        <option value="foodics">Use this Foodics account</option>
+                        <option value="csv">Manual CSV import</option>
+                      </select>
+                      <small class="muted">Choose whether to sync products from this Foodics account</small>
+                    </label>
+                  </div>
                 </div>
-                <div class="row" style="gap:8px; align-items:center;">
-                  <label style="display:flex; align-items:center; gap:6px;">
-                    <input id="foodicsSyncEnabled" type="checkbox" /> Enable scheduled sync
-                  </label>
-                  <button id="saveFoodicsSchedule" class="btn">Save Schedule</button>
-                  <button id="runFoodicsSyncNow" class="btn primary">Run Sync Now</button>
-                </div>
-                <div>
-                  <div class="label">Recent syncs</div>
-                  <div id="foodicsRuns" class="muted" style="max-height:160px; overflow:auto; border:1px solid #eee; border-radius:8px; padding:8px;">—</div>
+                
+                <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                  <button id="cancelModal" class="btn">Cancel</button>
+                  <button id="saveIntegration" class="btn primary">Save Integration</button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-
-      <section id="subscriptionCard" class="card hidden mt-2">
-        <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700;">Subscription</div>
-            <span class="spacer"></span>
-            <span id="subStatus" class="muted">—</span>
+          
+          <!-- Tab content: Domains -->
+          <div id="tab-domains" class="tab-content hidden">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700;">Subdomain</div>
+              <span class="spacer"></span>
+              <span id="domainsStatus" class="muted">—</span>
+            </div>
+          <div class="stack" style="gap:12px;">
+            <div style="display:flex; flex-wrap:nowrap; align-items:center; gap:10px;">
+              <span class="label" style="margin:0;">Subdomain</span>
+              <div style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
+                <input id="tSubdomain" class="input" placeholder="e.g. koobs" style="max-width:200px;" />
+                <span class="muted">.ordertech.me</span>
+              </div>
+              <button id="btnSaveSubdomain" class="btn primary sm">Set</button>
+              <small id="tSubdomainHint" class="muted">—</small>
+            </div>
+            <div style="border-top:1px solid var(--border); margin-top:8px;"></div>
+            <div id="domainsListWrap" class="stack" style="margin-top:8px;"></div>
+            <small id="domainsSingleWarning" class="muted" style="display:none;">Multiple domains configured — first row is primary.</small>
           </div>
+          
+          <!-- Tab content: Subscription -->
+          <div id="tab-subscription" class="tab-content hidden">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700;">Subscription</div>
+              <span class="spacer"></span>
+              <span id="subStatus" class="muted">—</span>
+            </div>
           <div class="row cols-3">
             <label class="grid"><span class="label">Tier</span>
               <select id="subTier" class="select">
@@ -172,19 +224,18 @@
               </div>
             </div>
           </div>
-          <div class="row" style="justify-content:flex-end;">
-            <button id="saveSub" class="btn primary">Save Subscription</button>
+            <div class="row" style="justify-content:flex-end;">
+              <button id="saveSub" class="btn primary">Save Subscription</button>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <section id="dangerCard" class="card hidden mt-2">
-        <div class="body">
-          <div class="toolbar">
-            <div class="title" style="font-weight:700; color:#b91c1c;">Danger zone</div>
-            <span class="spacer"></span>
-            <span id="dangerStatus" class="muted">—</span>
-          </div>
+          
+          <!-- Tab content: Danger -->
+          <div id="tab-danger" class="tab-content hidden">
+            <div class="toolbar">
+              <div class="title" style="font-weight:700; color:#b91c1c;">Danger zone</div>
+              <span class="spacer"></span>
+              <span id="dangerStatus" class="muted">—</span>
+            </div>
           <div class="stack" style="gap:12px;">
             <div class="row" style="gap:8px; align-items:center;">
               <button id="btnExportTenant" class="btn">Export configuration (JSON)</button>
@@ -198,15 +249,16 @@
               <button id="btnExportAndDelete" class="btn danger">Export & Delete Catalog</button>
               <button id="btnDeleteTenant" class="btn danger outline">Delete Tenant</button>
             </div>
-            <small class="muted">Deletes categories, products, modifier groups/options, drive-thru state. Keeps settings, brand, domains, users, devices.</small>
+              <small class="muted">Deletes categories, products, modifier groups/options, drive-thru state. Keeps settings, brand, domains, users, devices.</small>
+            </div>
           </div>
         </div>
       </section>
     </main>
 
-    <script src="/js/admin-common.js"></script>
-    <script src="/js/admin-shell.js"></script>
-    <script src="/js/tenant-edit.js"></script>
+    <script src="/js/admin-common.js?v=20250922-2"></script>
+    <script src="/js/admin-shell.js?v=20250922-2"></script>
+    <script src="/js/tenant-edit.js?v=20250922-2"></script>
   </body>
 </html>
 

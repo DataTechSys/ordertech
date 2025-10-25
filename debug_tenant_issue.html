@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Tenant Issue</title>
+</head>
+<body>
+    <h1>Tenant Selection Debug</h1>
+    <div id="results"></div>
+
+    <script>
+        async function debugTenantIssue() {
+            const results = document.getElementById('results');
+            
+            // Check localStorage tenant selection
+            const selectedTenantId = localStorage.getItem('SELECTED_TENANT_ID');
+            results.innerHTML += `<p><strong>Selected Tenant ID from localStorage:</strong> ${selectedTenantId}</p>`;
+            
+            // Check if admin token is set
+            const adminToken = localStorage.getItem('ADMIN_TOKEN');
+            results.innerHTML += `<p><strong>Admin Token:</strong> ${adminToken ? 'Set' : 'Not set'}</p>`;
+            
+            // Test API calls to both tenants
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (adminToken) {
+                headers['x-admin-token'] = adminToken;
+            }
+            
+            try {
+                // Test Fouzi Cafe tenant
+                const fouziFetch = await fetch('http://app.localhost:8080/admin/products', {
+                    headers: {
+                        ...headers,
+                        'x-tenant-id': '56ac557e-589d-4602-bc9b-946b201fb6f6'
+                    }
+                });
+                const fouziData = await fouziFetch.json();
+                results.innerHTML += `<p><strong>Fouzi Cafe API (correct tenant):</strong> ${fouziData.items ? fouziData.items.length : 0} products</p>`;
+                
+                // Test Koobs tenant  
+                const koobsFetch = await fetch('http://app.localhost:8080/admin/products', {
+                    headers: {
+                        ...headers,
+                        'x-tenant-id': 'f8578f9c-782b-4d31-b04f-3b2d890c5896'
+                    }
+                });
+                const koobsData = await koobsFetch.json();
+                results.innerHTML += `<p><strong>Koobs API (wrong tenant):</strong> ${koobsData.items ? koobsData.items.length : 0} products</p>`;
+                
+                // Check what happens with no tenant header
+                const noTenantFetch = await fetch('http://app.localhost:8080/admin/products', {
+                    headers: headers
+                });
+                const noTenantData = await noTenantFetch.json();
+                results.innerHTML += `<p><strong>No tenant header (defaults to):</strong> ${noTenantData.items ? noTenantData.items.length : 'Error: ' + JSON.stringify(noTenantData)}</p>`;
+                
+            } catch (error) {
+                results.innerHTML += `<p><strong>Error:</strong> ${error.message}</p>`;
+            }
+            
+            // Check what the current tenant selection should be
+            results.innerHTML += `<p><strong>Expected Fouzi Cafe ID:</strong> 56ac557e-589d-4602-bc9b-946b201fb6f6</p>`;
+            results.innerHTML += `<p><strong>Expected Koobs ID:</strong> f8578f9c-782b-4d31-b04f-3b2d890c5896</p>`;
+        }
+        
+        // Force set Fouzi Cafe as selected tenant
+        function fixTenantSelection() {
+            localStorage.setItem('SELECTED_TENANT_ID', '56ac557e-589d-4602-bc9b-946b201fb6f6');
+            localStorage.setItem('ADMIN_TOKEN', 'test-admin-token');
+            alert('Fixed tenant selection! Refresh the dashboard page.');
+        }
+        
+        debugTenantIssue();
+    </script>
+    
+    <button onclick="fixTenantSelection()">Fix Tenant Selection</button>
+    <button onclick="debugTenantIssue()">Re-run Debug</button>
+    
+    <h2>Quick Fixes:</h2>
+    <p>1. ✅ Fixed: Dashboard now uses app.localhost:8080 (correct subdomain pattern)</p>
+    <p>2. Click "Fix Tenant Selection" then refresh your dashboard.</p>
+    <p>3. ✅ Server is running on port 8080.</p>
+    <p>4. Access dashboard at: <a href="http://app.localhost:8080/admin-dashboard.html">http://app.localhost:8080/admin-dashboard.html</a></p>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# Cloud Scheduler configuration for Foodics sales sync
+# Run this job every 5 minutes to sync sales data
+
+# Create the scheduler job
+apiVersion: cloudscheduler.googleapis.com/v1
+kind: Job
+metadata:
+  name: foodics-sales-sync
+  project: smart-order-469705
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  timeZone: "Asia/Kuwait"   # Adjust to your timezone
+  httpTarget:
+    uri: "https://ordertech.me/cron/foodics-sales-sync"
+    httpMethod: POST
+    headers:
+      Content-Type: "application/json"
+      # Add authentication header if needed
+      # Authorization: "Bearer {{AUTH_TOKEN}}"
+    body: |
+      {
+        "trigger": "cloud-scheduler",
+        "job_name": "foodics-sales-sync",
+        "scheduled_at": "{{.ScheduleTime}}"
+      }
+  retryConfig:
+    retryCount: 3
+    maxRetryDuration: "300s"
+    minBackoffDuration: "30s"
+    maxBackoffDuration: "120s"
+    maxDoublings: 3
+
+---
+
+# Alternative using gcloud command (run this to create the job)
+# 
+# gcloud scheduler jobs create http foodics-sales-sync \
+#   --schedule="*/5 * * * *" \
+#   --uri="https://ordertech.me/cron/foodics-sales-sync" \
+#   --http-method=POST \
+#   --headers="Content-Type=application/json" \
+#   --message-body='{"trigger":"cloud-scheduler","job_name":"foodics-sales-sync"}' \
+#   --time-zone="Asia/Kuwait" \
+#   --max-retry-attempts=3 \
+#   --max-retry-duration=300s \
+#   --min-backoff-duration=30s \
+#   --max-backoff-duration=120s \
+#   --project=smart-order-469705
+
+# To update an existing job:
+# gcloud scheduler jobs update http foodics-sales-sync \
+#   --schedule="*/5 * * * *" \
+#   --uri="https://ordertech.me/cron/foodics-sales-sync" \
+#   --time-zone="Asia/Kuwait" \
+#   --project=smart-order-469705
+
+# To pause/resume the job:
+# gcloud scheduler jobs pause foodics-sales-sync --project=smart-order-469705
+# gcloud scheduler jobs resume foodics-sales-sync --project=smart-order-469705
+
+# To check job status:
+# gcloud scheduler jobs describe foodics-sales-sync --project=smart-order-469705
+
+# To view job logs:
+# gcloud logging read "resource.type=cloud_scheduler_job AND resource.labels.job_id=foodics-sales-sync" --limit=50 --format=json

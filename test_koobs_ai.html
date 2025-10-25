@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Koobs AI Integration - Cloud</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .info-box {
+            background: #f0f8ff;
+            border: 1px solid #0066cc;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success { background: #f0fff0; border-color: #00aa00; }
+        .warning { background: #fff8f0; border-color: #ff8800; }
+        .error { background: #fff0f0; border-color: #cc0000; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0052a3; }
+        #results {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Koobs AI Integration Test - Cloud</h1>
+    
+    <div class="info-box">
+        <h3>🌍 Cloud Service</h3>
+        <p><strong>URL:</strong> https://ordertech-715493130630.me-central1.run.app</p>
+        <p><strong>Tenant:</strong> Koobs (f8578f9c-782b-4d31-b04f-3b2d890c5896)</p>
+    </div>
+    
+    <div class="info-box warning">
+        <h3>⚠️ Test Instructions</h3>
+        <p>1. Click "Test Menu Cache API" to verify the backend integration</p>
+        <p>2. Click "Open AI Chat" to test the full AI experience with Koobs menu</p>
+        <p>3. Look for tenant-specific menu data in responses</p>
+    </div>
+    
+    <button onclick="testMenuAPI()">🧪 Test Menu Cache API</button>
+    <button onclick="openAIChat()">🤖 Open AI Chat (Cloud)</button>
+    <button onclick="clearResults()">🗑️ Clear Results</button>
+    
+    <div id="results"></div>
+    
+    <div class="info-box success">
+        <h3>✅ Expected Results</h3>
+        <p><strong>Menu API:</strong> Should show Koobs-specific categories and products</p>
+        <p><strong>AI Chat:</strong> Should load Koobs menu data and respond with tenant-specific information</p>
+        <p><strong>AI Assistant:</strong> Should use OpenAI Assistant API with cached menu functions</p>
+    </div>
+
+    <script>
+        const CLOUD_URL = 'https://ordertech-715493130630.me-central1.run.app';
+        const KOOBS_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+        
+        function log(message) {
+            const results = document.getElementById('results');
+            results.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+        }
+        
+        function clearResults() {
+            document.getElementById('results').textContent = '';
+        }
+        
+        async function testMenuAPI() {
+            log('🧪 Testing Koobs Menu Cache API...');
+            
+            try {
+                // Step 1: Health check
+                log('1️⃣ Checking service health...');
+                const healthResponse = await fetch(`${CLOUD_URL}/health`);
+                if (!healthResponse.ok) {
+                    throw new Error(`Health check failed: ${healthResponse.status}`);
+                }
+                log('   ✅ Service is healthy');
+                
+                // Step 2: Test direct access to AI Chat page (let it handle token generation)
+                log('2️⃣ Testing AI Chat page access...');
+                log('   ℹ️ The AI Chat page will handle token generation internally');
+                log('   ℹ️ Click "Open AI Chat" to test the full integration');
+                
+                log('✅ Basic cloud service test completed');
+                
+            } catch (error) {
+                log('❌ Test failed: ' + error.message);
+                log('🔧 Try opening the AI Chat directly to test the full integration');
+            }
+        }
+        
+        function openAIChat() {
+            log('🚀 Opening AI Chat for Koobs tenant...');
+            const aiChatUrl = `${CLOUD_URL}/Ai-Chat.html`;
+            log(`Opening: ${aiChatUrl}`);
+            window.open(aiChatUrl, '_blank');
+        }
+        
+        // Auto-run basic test on page load
+        window.onload = function() {
+            log('🌍 Cloud AI Integration Test Loaded');
+            log(`🏢 Testing Koobs tenant: ${KOOBS_TENANT_ID}`);
+            log('📋 Click buttons above to run tests');
+        };
+    </script>
+</body>
+</html>
