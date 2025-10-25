@@ -29,11 +29,9 @@
 		4D26460CC02E8B4C0DB27A1E /* ModifiersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 396F98EF0F1598C1E9B45A28 /* ModifiersAPI.swift */; };
 		5094D696D3471E9D854C141B /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7CCA3B8EA9AA86F9D9C8FBA7 /* LiveKit */; };
 		5550B49E70965E0E87B48D0E /* RTCProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22508D082178718BEE0B0D9B /* RTCProvider.swift */; };
-		556D934106B717542A5953C8 /* WebRTC.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C230447F328EDB16305C525 /* WebRTC.xcframework */; };
 		59666F0A990A536D7CE239E6 /* DisplaySessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBEB341A7BC87468B8CFF4E /* DisplaySessionStore.swift */; };
 		5D401272D81D9D45974B3474 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D373A175C0597BE842A19C /* KeychainStore.swift */; };
 		5D795FA3F5FC929A049C7FA2 /* ModalPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA26B12BE5364DBC357C56D5 /* ModalPresenter.swift */; };
-		631B7EEC6557E16D2C598072 /* WebRTC.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1C230447F328EDB16305C525 /* WebRTC.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		63A9F20E3B91EA5F730FA0A7 /* ProductTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C548B8115C095A5D1ED1B6 /* ProductTileView.swift */; };
 		65C51387E8DF3FC1B186E77C /* HttpClient+Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD599EE1E1289CBDA2FE3DA9 /* HttpClient+Endpoints.swift */; };
 		6933CA1B4AB6F9A43B9483C5 /* LiveKitRTC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29ED3F1FC1018BF67305DF18 /* LiveKitRTC.swift */; };
@@ -66,7 +64,6 @@
 		EDAD52D82BEF6456BC08D33F /* ActivationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6922B69B061BC3B64A6E754 /* ActivationManager.swift */; };
 		EEBE2DF0CF8DC4BE513B0718 /* ImageDiskCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71CC13ED181559AAFEF1EEE /* ImageDiskCache.swift */; };
 		F3BF1C811819782AA649A09C /* Pods_OrderTech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C526D45C27DA0CC99F9B79E5 /* Pods_OrderTech.framework */; };
-		F45DDB182EAAA47000629595 /* WebRTC.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C230447F328EDB16305C525 /* WebRTC.xcframework */; };
 		FD83931267A9AD1BABA4B9B2 /* ModifierReferenceTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1DE61BD110498F8611A643 /* ModifierReferenceTable.swift */; };
 /* End PBXBuildFile section */
 
@@ -77,7 +74,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				631B7EEC6557E16D2C598072 /* WebRTC.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -93,7 +89,6 @@
 		16DB0DFBC79D292AB97BB7E8 /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		1A1EF9AAC36BB95B06E22031 /* BasketStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BasketStore.swift; sourceTree = "<group>"; };
 		1AE1AE67C97DE44060760871 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
-		1C230447F328EDB16305C525 /* WebRTC.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = WebRTC.xcframework; path = "../V-Cashier/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework"; sourceTree = "<group>"; };
 		22508D082178718BEE0B0D9B /* RTCProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTCProvider.swift; sourceTree = "<group>"; };
 		278ED48C6A731DD5CBC88999 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		29ED3F1FC1018BF67305DF18 /* LiveKitRTC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitRTC.swift; sourceTree = "<group>"; };
@@ -158,8 +153,6 @@
 			files = (
 				5094D696D3471E9D854C141B /* LiveKit in Frameworks */,
 				97BEA1E1B2DBA0AD27889A31 /* OrderTechCore in Frameworks */,
-				556D934106B717542A5953C8 /* WebRTC.xcframework in Frameworks */,
-				F45DDB182EAAA47000629595 /* WebRTC.xcframework in Frameworks */,
 				F3BF1C811819782AA649A09C /* Pods_OrderTech.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -330,8 +323,6 @@
 		9643E422AAF4444F44330636 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				F45DDB152EAAA3B000629595 /* MobileVLCKit.xcframework */,
-				1C230447F328EDB16305C525 /* WebRTC.xcframework */,
 				C526D45C27DA0CC99F9B79E5 /* Pods_OrderTech.framework */,
 			);
 			name = Frameworks;
@@ -718,7 +709,6 @@
 				DEVELOPMENT_TEAM = 6U3RG4S826;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"../V-Cashier/SourcePackages/artifacts/webrtc/WebRTC\"",
 				);
 				INFOPLIST_FILE = Config/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -743,7 +733,6 @@
 				DEVELOPMENT_TEAM = 6U3RG4S826;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"../V-Cashier/SourcePackages/artifacts/webrtc/WebRTC\"",
 				);
 				INFOPLIST_FILE = Config/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
