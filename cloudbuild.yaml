@@ -104,6 +104,7 @@ steps:
         '--region','${_REGION}',
         '--platform','managed',
         '--port','3000',
+        '--timeout','3600',
         '--set-secrets','DATABASE_URL=${_DB_SECRET}:latest,LIVEKIT_API_KEY=${_LK_KEY_SECRET}:latest,LIVEKIT_API_SECRET=${_LK_SEC_SECRET}:latest,OPENAI_API_KEY=${_OPENAI_API_SECRET}:latest,OPENAI_ASSISTANT_ID=${_OPENAI_ASSISTANT_SECRET}:latest',
         '--add-cloudsql-instances','${_DB_INSTANCE}',
         '--update-env-vars','ASSETS_BUCKET=${_ASSETS_BUCKET}',
