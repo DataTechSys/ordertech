@@ -1,8 +1,21 @@
 // api/server.js — clean Express API + static UI for Drive‑Thru & Cashier
 
+// Load environment variables from .env.local for development
+try {
+  if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config({ path: '.env.local' });
+    console.log('[boot] Loaded .env.local for development');
+  }
+} catch (e) {
+  console.log('[boot] No dotenv or .env.local file, using system env vars');
+}
+
 // Startup diagnostics
 try {
   console.log('[boot] Starting OrderTech server... PORT env=', process.env.PORT);
+  console.log('[boot] NODE_ENV=', process.env.NODE_ENV);
+  console.log('[boot] JOB_COMMAND=', process.env.JOB_COMMAND);
+  console.log('[boot] REQUIRE_DB=', process.env.REQUIRE_DB);
   process.on('exit', (code) => { try { console.log('[boot] Process exit', code); } catch {} });
   process.on('uncaughtException', (err) => { try { console.error('[boot] Uncaught exception', err); } catch {} });
   process.on('unhandledRejection', (reason) => { try { console.error('[boot] Unhandled rejection', reason); } catch {} });
@@ -26,12 +39,17 @@ try {
 const app = express();
 // Treat "/path" and "/path/" as different, so UI at trailing-slash paths don't get eaten by API JSON routes
 try { app.enable('strict routing'); } catch {}
-const PORT = process.env.PORT || 3000;
-const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || '56ac557e-589d-4602-bc9b-946b201fb6f6';
+const PORT = process.env.PORT || 8080;
+const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
 // Skip seeding a default tenant by default in production
 const SKIP_DEFAULT_TENANT = /^(1|true|yes|on)$/i.test(String(process.env.SKIP_DEFAULT_TENANT || (String(process.env.NODE_ENV||'').toLowerCase()==='production' ? '1' : '')));
 const crypto = require('crypto');
 const cryptoUtil = require('./server/crypto-util');
+
+// Import TTS service (OpenAI only)
+const openaiTTSService = require('./openai-tts-service');
+
+// AI endpoints will be initialized after db function is defined
 
 // Route registry for /__routes
 const routes = [];
@@ -76,7 +94,7 @@ const corsOptions = {
   credentials: true,
   methods: ['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'],
   // Let cors reflect request headers if not specified; include common ones explicitly
-  allowedHeaders: ['Authorization','Content-Type','X-Requested-With','X-Admin-Token','X-Tenant-Id','X-Platform-Admin','X-Device-Id','X-Client-Id','X-Client-Version'],
+  allowedHeaders: ['Authorization','Content-Type','X-Requested-With','X-Admin-Token','X-Tenant-Id','X-Platform-Admin','X-Device-Id','X-Client-Id','X-Client-Version','X-Language','X-Response-Format','X-Prompt'],
   exposedHeaders: ['X-Total-Count'],
   maxAge: 86400,
 };
@@ -314,13 +332,34 @@ const pool = HAS_DB ? new Pool({
   ...__dbCfg,
   // Keep connections healthy and fail fast on bad sockets
   keepAlive: true,
-  idleTimeoutMillis: Number(process.env.PG_IDLE_MS || 30000),
+  idleTimeoutMillis: Number(process.env.PG_IDLE_MS || 5000), // Shorter idle timeout
   connectionTimeoutMillis: Number(process.env.PG_CONN_MS || 8000),
-  max: Number(process.env.PGPOOL_MAX || 20)
+  max: Number(process.env.PGPOOL_MAX || 10), // Smaller pool
+  // Handle connection errors more aggressively
+  idleInTransactionSessionTimeout: 10000, // 10 seconds
+  query_timeout: 30000 // 30 seconds query timeout
 }) : null;
-// Development bypass toggles (for local testing only)
+
+// Add error handling to the pool
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('[Pool] Database connection error:', err.message);
+    // Pool will automatically remove bad connections
+  });
+  
+  pool.on('connect', (client) => {
+    console.log('[Pool] New database connection established');
+    // Set up client-specific error handling
+    client.on('error', (err) => {
+      console.error('[Pool] Client connection error:', err.message);
+    });
+  });
+}
+// Development bypass toggles (MUST be explicitly enabled for local testing only)
 // Set DEV_OPEN_ADMIN=1 to bypass auth on selected admin routes (Tenants)
-const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || process.env.DEV_OPEN || ''))
+// SECURITY: This bypass is DISABLED by default and requires explicit activation
+const DEV_OPEN_ADMIN = /^(1|true|yes|on)$/i.test(String(process.env.DEV_OPEN_ADMIN || ''))
+  && /^(1|true|yes|on)$/i.test(String(process.env.ENABLE_DEV_BYPASS || ''))
   && String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 // In dev-open mode, do not enforce DB-required gates
 const REQUIRE_DB_EFFECTIVE = REQUIRE_DB && !DEV_OPEN_ADMIN;
@@ -331,9 +370,170 @@ async function db(sql, params = []) {
   try {
     const r = await c.query(sql, params);
     return r.rows;
+  } catch (error) {
+    // Handle aborted transaction state
+    if (error.message && error.message.includes('transaction is aborted')) {
+      console.warn('[DB] Transaction aborted, rolling back and retrying:', error.message);
+      try {
+        // Rollback the failed transaction
+        await c.query('ROLLBACK');
+        console.log('[DB] Successfully rolled back transaction');
+        
+        // Retry the original query
+        const r = await c.query(sql, params);
+        console.log('[DB] Retry succeeded after rollback');
+        return r.rows;
+      } catch (retryError) {
+        console.error('[DB] Retry failed after rollback:', retryError.message);
+        throw error; // Throw original error
+      }
+    }
+    console.error('[DB] Query error:', error.message, 'SQL:', sql.slice(0, 100));
+    throw error;
   } finally {
     c.release();
   }
+}
+
+// Import AI endpoints (OpenAI version) and initialize
+const aiEndpoints = require('./openai-ai-endpoints');
+const {
+  handleAITokenRequest,
+  handleAISessionStart,
+  handleAIChatStream,
+  handleAIEventLog,
+  handleAISessionEnd,
+  handleCustomerProfileLookup,
+  handleMenuDataLookup,
+  handleWhisperTranscribe,
+  ensureAISchema
+} = aiEndpoints;
+
+// Initialize AI endpoints with database connection
+aiEndpoints.initializeDatabase(db, HAS_DB);
+
+// Display status endpoint for iOS DisplayApp
+addRoute('get', '/display/status', async (req, res) => {
+  const deviceId = req.header('x-device-id');
+  const tenantId = req.header('x-tenant-id');
+  
+  if (!deviceId) {
+    return res.status(400).json({ error: 'device_id_required' });
+  }
+  
+  if (!tenantId) {
+    return res.status(400).json({ error: 'tenant_id_required' });
+  }
+  
+  if (!HAS_DB || !db) {
+    return res.status(503).json({ error: 'database_not_configured' });
+  }
+  
+  try {
+    // Set tenant context for RLS (Row Level Security) - must use string interpolation
+    await db(`SET app.tenant_id = '${tenantId}'`);
+    
+    const result = await db(`
+      SELECT device_id, device_name as name, role::text as role, status::text as status, 
+             connection_status, current_session_id, cashier_name, cashier_device_id,
+             last_seen, connected_at
+      FROM devices 
+      WHERE device_id = $1 AND tenant_id = $2
+    `, [deviceId, tenantId]);
+    
+    if (!result.length) {
+      return res.status(404).json({ error: 'device_not_found' });
+    }
+    
+    const device = result[0];
+    
+    // Update last_seen (tenant context already set above)
+    await db('UPDATE devices SET last_seen = now() WHERE device_id = $1 AND tenant_id = $2', 
+      [deviceId, tenantId]);
+    
+    const isOnline = device.last_seen && new Date(device.last_seen).getTime() > (Date.now() - 15000);
+    const isConnected = device.connection_status === 'connected' || device.connection_status === 'busy';
+    
+    const response = {
+      device_id: device.device_id,
+      name: device.name,
+      role: device.role,
+      status: device.status,
+      online: isOnline,
+      connected: isConnected,
+      connection_status: device.connection_status || 'offline',
+      session_id: device.current_session_id,
+      cashier_name: device.cashier_name,
+      cashier_device_id: device.cashier_device_id,
+      connected_at: device.connected_at,
+      last_seen: device.last_seen
+    };
+    
+    console.log(`[${new Date().toISOString()}] Display status: ${device.connection_status || 'offline'}${device.cashier_name ? ` (cashier: ${device.cashier_name})` : ''}`);
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Database error in /display/status:', error.message);
+    res.status(500).json({ error: 'database_error' });
+  }
+});
+
+// Import and initialize enhanced device status management
+const DeviceStatusManager = require('./server-device-status');
+let deviceStatusManager = null; // Will be initialized after WebSocket server setup
+
+// Ensure enhanced device status schema exists (idempotent)
+async function ensureEnhancedDeviceStatusSchema(){
+  if (!HAS_DB) return;
+  try {
+    // Apply the enhanced device status migration
+    const fs = require('fs');
+    const path = require('path');
+    const migrationPath = path.join(__dirname, 'migrations', '20251005_enhanced_device_status.sql');
+    
+    if (fs.existsSync(migrationPath)) {
+      console.log('[Server] Applying enhanced device status migration...');
+      const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+      // Execute the migration SQL (it's written to be idempotent)
+      await db(migrationSQL);
+      console.log('[Server] Enhanced device status migration applied successfully');
+    } else {
+      console.warn('[Server] Enhanced device status migration file not found, creating basic structure...');
+      // Fallback: create basic enhanced structure
+      await db(`
+        ALTER TABLE devices 
+        ADD COLUMN IF NOT EXISTS connection_status TEXT DEFAULT 'offline' 
+            CHECK (connection_status IN ('offline', 'online', 'connected', 'busy')),
+        ADD COLUMN IF NOT EXISTS current_session_id TEXT NULL,
+        ADD COLUMN IF NOT EXISTS connected_at TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS disconnected_at TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS connected_peer_info JSONB DEFAULT NULL
+      `);
+      
+      await db(`
+        CREATE INDEX IF NOT EXISTS ix_devices_connection_status 
+        ON devices(tenant_id, connection_status, last_seen DESC)
+      `);
+      
+      console.log('[Server] Basic enhanced device status structure created');
+    }
+  } catch (error) {
+    console.error('[Server] Failed to ensure enhanced device status schema:', error.message);
+    // Don't throw - allow server to continue with basic functionality
+  }
+}
+
+// Initialize local Whisper service
+const LocalWhisperService = require('./local-whisper-service');
+const localWhisperService = new LocalWhisperService();
+app.locals.localWhisperService = localWhisperService;
+console.log('[Server] Local Whisper service initialized for faster transcription');
+
+// Test local Whisper availability
+if (localWhisperService.isAvailable()) {
+  console.log('[Server] ✅ Local Whisper.cpp is available and ready!');
+} else {
+  console.log('[Server] ⚠️  Local Whisper.cpp not available, will use OpenAI fallback');
 }
 
 // ---- tiny state table for drive‑thru (jsonb per tenant)
@@ -585,7 +785,9 @@ async function ensureProductExtendedSchema(){
         ADD COLUMN IF NOT EXISTS talabat_reference           text,
         ADD COLUMN IF NOT EXISTS jahez_reference             text,
         ADD COLUMN IF NOT EXISTS vthru_reference             text,
-        ADD COLUMN IF NOT EXISTS nutrition                   jsonb
+        ADD COLUMN IF NOT EXISTS nutrition                   jsonb,
+        ADD COLUMN IF NOT EXISTS deleted_at                  timestamptz,
+        ADD COLUMN IF NOT EXISTS external_id                 text
     `);
   } catch (_) {}
   // Basic non-breaking constraint for packaging_fee
@@ -1046,12 +1248,21 @@ function getForwardedProto(req) {
 }
 
 function isLocalRequest(req) {
+  // SECURITY: Automatic localhost bypass is DISABLED to prevent unauthorized access
+  // This function now always returns false to enforce proper authentication
+  // even on localhost or local network requests
+  return false;
+  
+  /*
+  // DISABLED: Legacy local request detection for automatic bypass
+  // This was allowing automatic authentication bypass for localhost requests
   try {
     const host = getForwardedHost(req);
     const h = String(host||'').toLowerCase();
     // Treat localhost, *.localhost, loopbacks, and *.local as local
     return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.localhost') || /\.local$/i.test(h);
   } catch { return false; }
+  */
 }
 
 async function requireTenant(req, res, next) {
@@ -1102,7 +1313,22 @@ async function verifyAuth(req, res, next){
     const h = String(req.headers.authorization||'');
     if (!h.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
     const idToken = h.slice(7);
-    if (!admin) return res.status(503).json({ error: 'auth_unavailable' });
+    
+    // Development fallback: if Firebase Admin is not available, try basic validation
+    if (!admin) {
+      const isDev = String(process.env.NODE_ENV || '').toLowerCase() === 'development';
+      const devEmail = process.env.DEV_USER_EMAIL;
+      
+      if (isDev && devEmail) {
+        // In development, accept any non-empty token and use the dev email
+        if (idToken && idToken.length > 10) {
+          req.user = { uid: 'dev-user', email: devEmail.toLowerCase() };
+          return next();
+        }
+      }
+      return res.status(503).json({ error: 'auth_unavailable' });
+    }
+    
     const decoded = await admin.auth().verifyIdToken(idToken);
     if (REQUIRE_VERIFIED_EMAIL && !decoded.email_verified) { return res.status(401).json({ error: 'email_unverified' }); }
     req.user = { uid: decoded.uid, email: (decoded.email||'').toLowerCase() };
@@ -1236,6 +1462,33 @@ async function ensureRtcSessionSchema(){
     `);
     await db('CREATE INDEX IF NOT EXISTS ix_rtc_session_stats_session_ts ON rtc_session_stats(session_id, ts)');
   } catch {}
+}
+
+// ---- LiveKit room pre-creation schema
+async function ensureLiveKitRoomsSchema(){
+  if (!HAS_DB) return;
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS livekit_rooms (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+        display_device_id text NOT NULL,
+        room_name text NOT NULL UNIQUE,
+        provider text NOT NULL DEFAULT 'livekit',
+        status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'error')),
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        last_heartbeat_at timestamptz,
+        metadata jsonb DEFAULT '{}'::jsonb
+      )
+    `);
+    await db('CREATE INDEX IF NOT EXISTS ix_livekit_rooms_tenant_status ON livekit_rooms(tenant_id, status)');
+    await db('CREATE INDEX IF NOT EXISTS ix_livekit_rooms_display_device ON livekit_rooms(display_device_id)');
+    await db('CREATE INDEX IF NOT EXISTS ix_livekit_rooms_status_heartbeat ON livekit_rooms(status, last_heartbeat_at)');
+    await db('CREATE INDEX IF NOT EXISTS ix_livekit_rooms_created ON livekit_rooms(created_at DESC)');
+  } catch (e) {
+    console.warn('[livekit_rooms] Schema creation error:', e.message);
+  }
 }
 
 addRoute('post', '/rtc/preflight/log', requireTenant, async (req, res) => {
@@ -1868,6 +2121,18 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
         }
       }
     } catch {}
+    
+    // Normalize image URLs to use cloud storage
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        if (r) {
+          r.image_url = normalizeImageUrl(r.image_url);
+          r.image_white_url = normalizeImageUrl(r.image_white_url);
+          r.image_beauty_url = normalizeImageUrl(r.image_beauty_url);
+        }
+      }
+    }
+    
     res.json(rows);
   } catch (_e) {
     res.json([]);
@@ -1995,6 +2260,17 @@ addRoute('get', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdmi
         }
       }
     } catch {}
+    
+    // Normalize image URLs to use cloud storage
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        if (r) {
+          r.image_url = normalizeImageUrl(r.image_url);
+          r.image_white_url = normalizeImageUrl(r.image_white_url);
+          r.image_beauty_url = normalizeImageUrl(r.image_beauty_url);
+        }
+      }
+    }
 
     return res.json(rows);
   } catch (_e) {
@@ -2134,6 +2410,149 @@ addRoute('get', '/suggestions', requireTenant, async (req, res) => {
     [req.tenantId, p.category_id]
   );
   res.json(rows);
+});
+
+// Local order processing endpoint for display app standalone mode
+addRoute('post', '/orders/local', requireTenant, async (req, res) => {
+  if (!HAS_DB) {
+    return res.status(503).json({ 
+      ok: false, 
+      error: 'Database not configured',
+      local_record: true
+    });
+  }
+  
+  try {
+    const { id: orderNumber, items, total, paymentMethod, timestamp, basketId } = req.body;
+    
+    if (!orderNumber || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Invalid order data. Required: orderNumber, items array'
+      });
+    }
+
+    // Get device info
+    const deviceId = basketId || 'local';
+    let device = null;
+    
+    if (deviceId && req.tenantId) {
+      try {
+        // Check if device exists
+        const [existingDevice] = await db(
+          `SELECT id, device_id, tenant_id, name, role, branch_id, branch 
+           FROM devices 
+           WHERE device_id = $1 AND tenant_id = $2`,
+          [deviceId, req.tenantId]
+        );
+        
+        if (existingDevice) {
+          device = existingDevice;
+        } else {
+          // Create device record if not exists
+          const [newDevice] = await db(
+            `INSERT INTO devices (device_id, tenant_id, name, role, created_at)
+             VALUES ($1, $2, $3, 'display', NOW())
+             RETURNING id, device_id, tenant_id, name, role`,
+            [deviceId, req.tenantId, `Local Display (${deviceId})`]
+          );
+          device = newDevice;
+        }
+      } catch (deviceErr) {
+        console.warn('Failed to get/create device for local order:', deviceErr);
+      }
+    }
+    
+    // Store order in database
+    const [orderRow] = await db(
+      `INSERT INTO orders (
+         tenant_id, 
+         user_id, 
+         total, 
+         status, 
+         created_at,
+         updated_at
+       )
+       VALUES ($1, null, $2, 'paid', NOW(), NOW()) 
+       RETURNING id, tenant_id, user_id, total, status, created_at`,
+      [
+        req.tenantId, 
+        parseFloat(total) || 0
+      ]
+    );
+    
+    // Store each item
+    const orderItems = [];
+    
+    for (const item of items) {
+      // Find product in database by SKU (if possible)
+      let productId = null;
+      let productName = item.name;
+      
+      // If sku format suggests it's a real product ID and not a modifier bundle
+      const baseId = String(item.sku || '').split('#')[0];
+      if (baseId) {
+        try {
+          const [product] = await db(
+            `SELECT id, name FROM products WHERE tenant_id = $1 AND (id = $2 OR sku = $2)`,
+            [req.tenantId, baseId]
+          );
+          
+          if (product) {
+            productId = product.id;
+            productName = item.name || product.name;
+          }
+        } catch (err) {
+          console.warn('Failed to find product for local order item:', err);
+        }
+      }
+      
+      // Insert order item
+      const [orderItem] = await db(
+        `INSERT INTO order_items (
+           order_id, 
+           product_id, 
+           quantity, 
+           price
+         )
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`,
+        [
+          orderRow.id,
+          productId,
+          parseInt(item.qty) || 1,
+          parseFloat(item.price) || 0
+        ]
+      );
+      
+      orderItems.push({
+        id: orderItem.id,
+        product_id: productId,
+        product_name: productName,
+        quantity: item.qty,
+        price: item.price,
+        line_total: item.price * item.qty
+      });
+    }
+    
+    return res.status(200).json({
+      ok: true,
+      order: {
+        ...orderRow,
+        items: orderItems,
+        local_order_number: orderNumber,
+        payment_method: paymentMethod
+      }
+    });
+  } catch (error) {
+    console.error('Error processing local order:', error);
+    return res.status(503).json({ 
+      ok: false, 
+      error: 'Database error',
+      local_record: true,
+      message: 'Order saved locally on device'
+    });
+  }
 });
 
 // ---- WebRTC signaling (use DB when available; fallback to in-memory)
@@ -2827,6 +3246,154 @@ function rlCheck(key, map, limit){
   return e.count <= limit;
 }
 
+// ---- LiveKit room pre-creation endpoints
+
+// Create/register a room when DisplayApp starts
+addRoute('post', '/rtc/room/create', requireTenant, async (req, res) => {
+  try {
+    if (!hasLivekitSecrets()) return res.status(503).json({ error: 'livekit_unavailable' });
+    
+    const b = req.body || {};
+    const displayDeviceId = String(b.displayDeviceId || b.deviceId || '').trim();
+    const roomName = String(b.roomName || displayDeviceId || '').trim();
+    
+    if (!displayDeviceId) return res.status(400).json({ error: 'displayDeviceId required' });
+    if (!roomName || !/^[a-zA-Z0-9._-]{1,64}$/.test(roomName)) return res.status(400).json({ error: 'invalid_roomName' });
+    
+    await ensureLiveKitRoomsSchema();
+    
+    // Check if room already exists for this display
+    const existing = await db(
+      'SELECT id, room_name, status FROM livekit_rooms WHERE tenant_id=$1 AND display_device_id=$2 AND status=\'active\'',
+      [req.tenantId, displayDeviceId]
+    );
+    
+    if (existing.length > 0) {
+      // Update heartbeat for existing room
+      await db(
+        'UPDATE livekit_rooms SET last_heartbeat_at=now(), updated_at=now() WHERE id=$1',
+        [existing[0].id]
+      );
+      return res.json({
+        ok: true,
+        room: {
+          id: existing[0].id,
+          roomName: existing[0].room_name,
+          status: existing[0].status,
+          created: false
+        }
+      });
+    }
+    
+    // Create new room record
+    const [newRoom] = await db(
+      `INSERT INTO livekit_rooms (tenant_id, display_device_id, room_name, status, last_heartbeat_at, metadata)
+       VALUES ($1, $2, $3, 'active', now(), $4)
+       RETURNING id, room_name, status, created_at`,
+      [req.tenantId, displayDeviceId, roomName, JSON.stringify({ created_by: 'display_app' })]
+    );
+    
+    try { await logConnectionEvent('livekit_room_created', { roomName, displayDeviceId, tenantId: req.tenantId }); } catch {}
+    
+    return res.json({
+      ok: true,
+      room: {
+        id: newRoom.id,
+        roomName: newRoom.room_name,
+        status: newRoom.status,
+        created: true
+      }
+    });
+  } catch (e) {
+    console.error('[rtc/room/create] Error:', e);
+    return res.status(500).json({ error: 'room_creation_failed' });
+  }
+});
+
+// Update room heartbeat (keep-alive from DisplayApp)
+addRoute('post', '/rtc/room/heartbeat', requireTenant, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const displayDeviceId = String(b.displayDeviceId || b.deviceId || '').trim();
+    
+    if (!displayDeviceId) return res.status(400).json({ error: 'displayDeviceId required' });
+    
+    await ensureLiveKitRoomsSchema();
+    
+    const updated = await db(
+      `UPDATE livekit_rooms 
+       SET last_heartbeat_at=now(), updated_at=now()
+       WHERE tenant_id=$1 AND display_device_id=$2 AND status='active'
+       RETURNING id, room_name`,
+      [req.tenantId, displayDeviceId]
+    );
+    
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'room_not_found' });
+    }
+    
+    return res.json({ ok: true, roomName: updated[0].room_name });
+  } catch (e) {
+    console.error('[rtc/room/heartbeat] Error:', e);
+    return res.status(500).json({ error: 'heartbeat_failed' });
+  }
+});
+
+// Cleanup room when DisplayApp disconnects
+addRoute('post', '/rtc/room/cleanup', requireTenant, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const displayDeviceId = String(b.displayDeviceId || b.deviceId || '').trim();
+    const reason = String(b.reason || 'app_disconnect').trim();
+    
+    if (!displayDeviceId) return res.status(400).json({ error: 'displayDeviceId required' });
+    
+    await ensureLiveKitRoomsSchema();
+    
+    // Mark room as inactive
+    const cleaned = await db(
+      `UPDATE livekit_rooms 
+       SET status='inactive', updated_at=now(), metadata=jsonb_set(metadata, '{cleanup_reason}', $3)
+       WHERE tenant_id=$1 AND display_device_id=$2 AND status='active'
+       RETURNING id, room_name`,
+      [req.tenantId, displayDeviceId, JSON.stringify(reason)]
+    );
+    
+    if (cleaned.length > 0) {
+      try { await logConnectionEvent('livekit_room_cleaned', { roomName: cleaned[0].room_name, displayDeviceId, reason, tenantId: req.tenantId }); } catch {}
+    }
+    
+    return res.json({ ok: true, cleaned: cleaned.length > 0 });
+  } catch (e) {
+    console.error('[rtc/room/cleanup] Error:', e);
+    return res.status(500).json({ error: 'cleanup_failed' });
+  }
+});
+
+// List active rooms for admin/monitoring
+addRoute('get', '/admin/rtc/rooms', verifyAuth, requireTenantAdminOrPlatform, async (req, res) => {
+  try {
+    const tenantId = req.params.id || req.tenantId;
+    
+    await ensureLiveKitRoomsSchema();
+    
+    const rooms = await db(
+      `SELECT id, display_device_id, room_name, status, created_at, last_heartbeat_at, metadata
+       FROM livekit_rooms 
+       WHERE tenant_id=$1 
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [tenantId]
+    );
+    
+    return res.json({ rooms });
+  } catch (e) {
+    console.error('[admin/rtc/rooms] Error:', e);
+    return res.status(500).json({ error: 'list_failed' });
+  }
+});
+
+// Enhanced token endpoint with room pre-creation awareness
 addRoute('post', '/rtc/token', async (req, res) => {
   try {
     const ip = String(req.headers['x-forwarded-for']||req.socket?.remoteAddress||'').split(',')[0].trim();
@@ -2834,8 +3401,10 @@ addRoute('post', '/rtc/token', async (req, res) => {
     await ensureLivekitSecretsLoaded();
     const basketId = String(b.basketId||'').trim();
     let provider = String(b.provider||'').trim().toLowerCase();
-    const role = (String(b.role||'drive').trim().toLowerCase() === 'cashier') ? 'cashier' : 'drive';
-    const identity = String(b.identity||'').trim() || `${role}-${Math.random().toString(36).slice(2,8)}`;
+    const role = (String(b.role||'drive').trim().toLowerCase() === 'cashier') ? 'cashier' : 'display';
+    const deviceId = String(b.deviceId||b.device_id||'').trim();
+    // Use device_id as identity for uniqueness in D2D, fallback to random
+    const identity = deviceId || String(b.identity||'').trim() || `${role}-${Math.random().toString(36).slice(2,8)}`;
     if (!basketId || !/^[a-zA-Z0-9._-]{1,64}$/.test(basketId)) return res.status(400).json({ error: 'invalid_basketId' });
 
     // Rate limits
@@ -2847,20 +3416,56 @@ addRoute('post', '/rtc/token', async (req, res) => {
       const order = getRtcFallbackOrder();
       provider = order.find(p => p !== 'p2p') || (hasLivekitSecrets() ? 'livekit' : (hasTwilioVideoSecrets() ? 'twilio' : ''));
     }
+    
     if (provider === 'livekit') {
       if (!hasLivekitSecrets()) return res.status(503).json({ error: 'livekit_unavailable' });
       let LK;
       try { LK = await import('livekit-server-sdk'); } catch (e) { return res.status(500).json({ error: 'livekit_sdk_missing' }); }
       try {
+        // For display role, check if there's a pre-created room
+        if (role === 'display' && HAS_DB) {
+          try {
+            await ensureLiveKitRoomsSchema();
+            // Try to find tenant ID from basketId (display device id)
+            let tenantId = DEFAULT_TENANT_ID;
+            try {
+              const deviceRows = await db('SELECT tenant_id FROM devices WHERE device_id=$1', [basketId]);
+              if (deviceRows && deviceRows[0] && deviceRows[0].tenant_id) tenantId = deviceRows[0].tenant_id;
+            } catch {}
+            
+            // Check for existing room
+            const roomRows = await db(
+              'SELECT room_name FROM livekit_rooms WHERE tenant_id=$1 AND display_device_id=$2 AND status=\'active\'',
+              [tenantId, basketId]
+            );
+            
+            if (roomRows.length === 0) {
+              // Auto-create room for display if none exists
+              await db(
+                `INSERT INTO livekit_rooms (tenant_id, display_device_id, room_name, status, last_heartbeat_at, metadata)
+                 VALUES ($1, $2, $3, 'active', now(), $4)
+                 ON CONFLICT (room_name) DO UPDATE SET last_heartbeat_at=now()`,
+                [tenantId, basketId, basketId, JSON.stringify({ auto_created: true, role })]
+              );
+              console.log(`[rtc/token] Auto-created room for display: ${basketId}`);
+            }
+          } catch (roomError) {
+            console.warn('[rtc/token] Room check/creation failed:', roomError.message);
+            // Continue with token generation even if room management fails
+          }
+        }
+        
         const at = new LK.AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, { identity, ttl: '1h' });
         // Role-based permissions: both roles can publish and subscribe for two-way video
         const canPublish = true;
         at.addGrant({ roomJoin: true, room: basketId, canPublish, canSubscribe: true });
         const token = await at.toJwt();
         const url = (process.env.LIVEKIT_WS_URL||'').trim();
+        console.log(`[rtc/token] Issued LiveKit token: room=${basketId}, identity=${identity}, role=${role}, deviceId=${deviceId}`);
         try { await logConnectionEvent('livekit_token_issued', { basketId, role, identity, url }); } catch {}
         return res.json({ provider: 'livekit', room: basketId, token, url });
       } catch (e) {
+        console.error('[rtc/token] LiveKit token generation failed:', e);
         return res.status(500).json({ error: 'livekit_token_error' });
       }
 } else if (provider === 'twilio') {
@@ -2892,7 +3497,7 @@ addRoute('post', '/rtc/token', async (req, res) => {
 
 // ---- Presence (lightweight discovery for Drive‑Thru displays)
 // In-memory per-tenant presence registry; entries expire after PRESENCE_TTL_MS of silence
-const PRESENCE_TTL_MS = 15000;
+const PRESENCE_TTL_MS = 60000; // Increased to 60s for reliability
 const presenceByTenant = new Map(); // tenant_id -> Map(displayId -> { id, name, branch, last_seen })
 function getPresenceMap(tenantId){
   let m = presenceByTenant.get(tenantId);
@@ -2963,8 +3568,12 @@ async function computeLiveDevices(tenantId){
   if (HAS_DB) {
     try {
       const rows = await db("select device_id as id, device_name as name, role::text as role, status::text as status, branch, branch_id, last_seen from devices where tenant_id=$1 order by device_name asc", [tenantId]);
+      console.log(`[computeLiveDevices] tenant=${tenantId} found ${rows.length} devices, now=${now}, PRESENCE_TTL_MS=${PRESENCE_TTL_MS}`);
       for (const d of rows) {
-        const online = d.last_seen ? (now - new Date(d.last_seen).getTime()) < PRESENCE_TTL_MS : false;
+        const lastSeenTime = d.last_seen ? new Date(d.last_seen).getTime() : 0;
+        const age = now - lastSeenTime;
+        const online = d.last_seen ? age < PRESENCE_TTL_MS : false;
+        console.log(`[computeLiveDevices] device=${d.name} last_seen=${d.last_seen} age=${age}ms online=${online}`);
         // infer connected/session and whether a cashier is present in the same basket
         let connected = false, session_id = null, busy = false;
         for (const [bid, set] of basketClients.entries()) {
@@ -3100,10 +3709,10 @@ addRoute('post', '/presence/display', requireTenant, async (req, res) => {
   let name = String(req.body?.name||'Car');
   let branch = String(req.body?.branch||'').trim();
 
-  // Validate token and role=display
+  // Validate token (accept any role for unified app)
   const rows = await db(`select device_id as id, tenant_id, role::text as role, device_name as name, branch from devices where device_token=$1 and status='active'`, [token]);
   if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
-  if (rows[0].role !== 'display') return res.status(403).json({ error: 'device_role_invalid' });
+  // Unified app - accept any role
   const id = rows[0].id;
   name = rows[0].name || name;
   branch = rows[0].branch || branch;
@@ -3168,23 +3777,44 @@ addRoute('post', '/device/pair/new', verifyAuth, async (req, res) => {
   }
 });
 
-// Cashier requests list of online displays for the tenant
-// Cashier requests list of online displays for the tenant.
-// If a device token is provided, it must be role=cashier.
+// Any authenticated device can request list of online displays (unified app)
 addRoute('get', '/presence/displays', requireTenant, async (req, res) => {
   const token = String(req.header('x-device-token') || '').trim();
   if (token && HAS_DB) {
     const rows = await db(`select role::text as role from devices where device_token=$1 and status='active'`, [token]);
     if (!rows.length) return res.status(401).json({ error: 'device_unauthorized' });
-    if (rows[0].role !== 'cashier') return res.status(403).json({ error: 'device_role_invalid' });
+    // Unified app - accept any role
     db(`update devices set last_seen=now() where device_token=$1`, [token]).catch(()=>{});
   }
-  // Include connection status by leveraging computeLiveDevices
-  let list = [];
-  try { list = await computeLiveDevices(req.tenantId); } catch {}
-  const items = (list || [])
-    .filter(it => String(it.role||'').toLowerCase() === 'display' && (it.online || it.connected))
-    .map(it => ({ id: it.id, name: it.name, branch: it.branch, branch_id: it.branch_id || null, online: !!it.online, connected: !!it.connected, busy: !!it.busy, session_id: it.session_id || null, last_seen: it.last_seen || null }));
+  
+  // SIMPLIFIED: Return all active devices from database directly
+  let items = [];
+  if (HAS_DB) {
+    try {
+      const rows = await db(`
+        SELECT device_id as id, device_name as name, branch, branch_id, last_seen,
+               EXTRACT(EPOCH FROM (NOW() - last_seen)) * 1000 < 60000 as online
+        FROM devices 
+        WHERE tenant_id=$1 AND status='active'
+        ORDER BY device_name
+      `, [req.tenantId]);
+      items = rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        branch: r.branch,
+        branch_id: r.branch_id,
+        online: !!r.online,
+        connected: false,
+        busy: false,
+        session_id: null,
+        last_seen: r.last_seen
+      }));
+      console.log(`[presence/displays] tenant=${req.tenantId} returning ${items.length} devices`);
+    } catch (err) {
+      console.error('[presence/displays] Error:', err.message);
+    }
+  }
+  
   try { broadcastAdminLive(); } catch {}
   res.json({ items });
 });
@@ -3537,6 +4167,20 @@ async function requireTenantAdminBodyTenant(req, res, next){
 // Backward-compat alias
 const requireAdmin = requirePlatformAdmin;
 
+// Combined middleware for tenant admin OR platform admin
+async function requireTenantAdminOrPlatform(req, res, next) {
+  // Check if platform admin first
+  if (await isPlatformAdmin(req)) return next();
+  
+  // Check if tenant admin for the current tenant
+  const email = (req.user?.email || '').toLowerCase();
+  const tenantId = req.tenantId || req.params.id;
+  if (!email || !tenantId) return res.status(401).json({ error: 'unauthorized' });
+  
+  if (await userHasTenantRole(email, tenantId)) return next();
+  return res.status(403).json({ error: 'forbidden' });
+}
+
 // Development bypass toggles (for local testing only)
 // Set DEV_OPEN_ADMIN=1 to bypass auth on selected admin routes (Tenants)
 // Wrapper middlewares used by admin routes below
@@ -3583,14 +4227,16 @@ addRoute('get', '/config.js', (req, res) => {
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
-  const apiBase = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE || 'https://app.ordertech.me';
-// Auto-enable devOpenAdmin on localhost; otherwise honor env in non-production
+  const host = req.get('host') || 'localhost';
+  const hostWithoutPort = host.split(':')[0]; // Remove port if present
+  const isLocalHost = hostWithoutPort === 'localhost' || hostWithoutPort === '127.0.0.1';
+  const apiBase = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE || (isLocalHost ? `http://${host}` : 'https://app.ordertech.me');
+// SECURITY: devOpenAdmin is now only enabled when DEV_OPEN_ADMIN is explicitly set
+  // No automatic bypass based on localhost or environment
   let devOpen = false;
   try {
-    const isLocal = isLocalRequest(req);
-    const isProd = /^production$/i.test(String(process.env.NODE_ENV || ''));
-    const allow = !!DEV_OPEN_ADMIN;
-    devOpen = isLocal || (allow && !isProd);
+    // Only enable when DEV_OPEN_ADMIN is explicitly enabled
+    devOpen = !!DEV_OPEN_ADMIN;
   } catch { devOpen = false; }
   if (apiKey && authDomain) {
     const cfg = { apiKey, authDomain };
@@ -3611,7 +4257,7 @@ addRoute('get', '/config.json', (_req, res) => {
   res.set('Pragma', 'no-cache');
   const apiKey = process.env.FIREBASE_API_KEY || '';
   const authDomain = process.env.FIREBASE_AUTH_DOMAIN || '';
-  const apiBase = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE || 'https://app.ordertech.me';
+  const apiBase = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE || 'http://app.localhost:8080';
   return res.json({ apiKey, authDomain, apiBase });
 });
 
@@ -3784,7 +4430,7 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
     const [brandRow] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
     const tok = String(req.header('x-device-token')||'').trim();
     const profileRows = tok ? await db(`
-      select d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
+      select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
         from devices d
         left join tenants t on t.tenant_id = d.tenant_id
        where d.device_token=$1 and d.status='active' and d.tenant_id=$2
@@ -4370,7 +5016,75 @@ function ensureMemCatalog(tenantId){
 }
 function slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 
-// List categories (already exists: /admin/tenants/:id/branches). New CRUD below.
+// Generate next available SKU in format SKU-XXX
+async function generateNextSku(tenantId) {
+  if (!HAS_DB) {
+    // For in-memory mode, use a simple counter
+    const mem = ensureMemCatalog(tenantId);
+    const existingSkus = mem.products.filter(p => p.sku && p.sku.startsWith('SKU-')).map(p => p.sku);
+    let nextNum = 1;
+    while (existingSkus.includes(`SKU-${String(nextNum).padStart(3, '0')}`)) {
+      nextNum++;
+    }
+    return `SKU-${String(nextNum).padStart(3, '0')}`;
+  }
+  
+  try {
+    // Find the highest existing SKU-XXX number for this tenant
+    const rows = await db(`
+      SELECT sku 
+      FROM products 
+      WHERE tenant_id = $1 
+        AND sku LIKE 'SKU-%' 
+        AND sku ~ '^SKU-[0-9]{3}$'
+      ORDER BY sku DESC 
+      LIMIT 1
+    `, [tenantId]);
+    
+    let nextNum = 1;
+    if (rows.length > 0) {
+      const lastSku = rows[0].sku;
+      const lastNum = parseInt(lastSku.substring(4), 10);
+      nextNum = lastNum + 1;
+    }
+    
+    // Ensure we don't exceed 999
+    if (nextNum > 999) {
+      throw new Error('Maximum SKU number reached (999)');
+    }
+    
+    return `SKU-${String(nextNum).padStart(3, '0')}`;
+  } catch (error) {
+    // Fallback to timestamp-based SKU if there's an error
+    console.warn('Failed to generate sequential SKU, using fallback:', error.message);
+    const timestamp = Date.now().toString().slice(-3);
+    return `SKU-${timestamp}`;
+  }
+}
+
+// List categories
+addRoute('get', '/admin/tenants/:id/categories', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  const tenantId = req.params.id;
+  if (HAS_DB) {
+    try {
+      await ensureCategoryStatusColumns();
+      const rows = await db(
+        'select id, name, reference, name_localized, image_url, created_at, coalesce(active,true) as active, coalesce(deleted,false) as deleted from categories where tenant_id=$1 and coalesce(deleted,false)=false order by name asc',
+        [tenantId]
+      );
+      return res.json(rows || []);
+    } catch (_e) {
+      return res.json([]);
+    }
+  } else {
+    const mem = ensureMemCatalog(tenantId);
+    const categories = (mem.categories || [])
+      .filter(c => c?.active !== false && c?.deleted !== true)
+      .map(c => ({ ...c }));
+    return res.json(categories);
+  }
+});
+
 // Admin Catalog CRUD (DB-backed and in-memory)
 addRoute('post', '/admin/tenants/:id/categories', verifyAuth, requireTenantAdminParam, async (req, res) => {
   const tenantId = req.params.id;
@@ -4575,7 +5289,16 @@ addRoute('get', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenan
       try { console.error('[product:get] not_found', { tenantId, pid }); } catch {}
       return res.status(404).json({ error: 'not_found' });
     }
-    return res.json(rows[0]);
+    
+    // Normalize image URLs to use cloud storage
+    const product = rows[0];
+    if (product) {
+      product.image_url = normalizeImageUrl(product.image_url);
+      product.image_white_url = normalizeImageUrl(product.image_white_url);
+      product.image_beauty_url = normalizeImageUrl(product.image_beauty_url);
+    }
+    
+    return res.json(product);
   } catch (_e) {
     try { console.error('[product:get] failed', { tenantId, pid }); } catch {}
     return res.status(404).json({ error: 'not_found' });
@@ -4596,6 +5319,13 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdm
     const cat = await db('select 1 from categories where tenant_id=$1 and id=$2', [tenantId, category_id]);
     if (!cat.length) return res.status(404).json({ error: 'category_not_found' });
     const id = require('crypto').randomUUID();
+    
+    // Generate SKU if not provided
+    const providedSku = String(body.sku||'').trim();
+    let sku = providedSku;
+    if (!sku) {
+      sku = await generateNextSku(tenantId);
+    }
     const row = await db(`insert into products (
         id,
         tenant_id, name, name_localized, category_id, price, cost,
@@ -4646,7 +5376,7 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdm
         (n=>Number.isFinite(n)?n:null)(parseInt(body.preparation_time,10)),
         (n=>Number.isFinite(n)?n:null)(parseInt(body.calories,10)),
         body.is_high_salt?true:false,
-        String(body.sku||'').trim()||null,
+        sku,
         image_url || null,
         String(body.image_white_url||'').trim()||null,
         String(body.image_beauty_url||'').trim()||null,
@@ -4685,9 +5415,17 @@ addRoute('post', '/admin/tenants/:id/products', verifyAuthOpen, requireTenantAdm
     const mem = ensureMemCatalog(tenantId);
     const cat = mem.categories.find(c => c.id === category_id);
     if (!cat) return res.status(404).json({ error: 'category_not_found' });
-    const id = (String(body.sku||'').trim()) || 'p-' + slugify(name) + '-' + Math.floor(Math.random()*10000);
-    if (mem.products.some(p => p.id === id)) return res.status(409).json({ error: 'sku_exists' });
-    const prod = { id, sku: id, name, category_id, category_name: cat.name, price, image_url, active };
+    
+    // Generate SKU if not provided
+    const providedSku = String(body.sku||'').trim();
+    let sku = providedSku;
+    if (!sku) {
+      sku = await generateNextSku(tenantId);
+    }
+    
+    const id = require('crypto').randomUUID();
+    if (mem.products.some(p => p.sku === sku)) return res.status(409).json({ error: 'sku_exists' });
+    const prod = { id, sku, name, category_id, category_name: cat.name, price, image_url, active };
     mem.products.push(prod);
     return res.json({ ok:true, product: prod });
   }
@@ -4716,6 +5454,7 @@ addRoute('put', '/admin/tenants/:id/products/:pid', verifyAuthOpen, requireTenan
     if (body.image_white_url != null) await tryUpdate('update products set image_white_url=$1 where tenant_id=$2 and id=$3', [String(body.image_white_url), tenantId, pid]);
     if (body.image_beauty_url != null) await tryUpdate('update products set image_beauty_url=$1 where tenant_id=$2 and id=$3', [String(body.image_beauty_url), tenantId, pid]);
     if (body.barcode != null) await tryUpdate('update products set barcode=$1 where tenant_id=$2 and id=$3', [String(body.barcode), tenantId, pid]);
+    if (body.sku != null) await tryUpdate('update products set sku=$1 where tenant_id=$2 and id=$3', [String(body.sku), tenantId, pid]);
     if (body.preparation_time != null) await tryUpdate('update products set preparation_time=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.preparation_time,10)), tenantId, pid]);
     if (body.calories != null) await tryUpdate('update products set calories=$1 where tenant_id=$2 and id=$3', [(n=>Number.isFinite(n)?n:null)(parseInt(body.calories,10)), tenantId, pid]);
     if (body.is_high_salt != null) await tryUpdate('update products set is_high_salt=$1 where tenant_id=$2 and id=$3', [Boolean(body.is_high_salt), tenantId, pid]);
@@ -4811,23 +5550,34 @@ addRoute('get', '/admin/tenants/:id/products/:pid/meta', verifyAuthOpen, require
 addRoute('put', '/admin/tenants/:id/products/:pid/meta', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   const tenantId = req.params.id; const pid = req.params.pid;
-  const ex = await db('select 1 from products where tenant_id=$1 and id=$2', [tenantId, pid]);
-  if (!ex.length) return res.status(404).json({ error: 'product_not_found' });
-  const extra_images = Array.isArray(req.body?.extra_images)
-    ? req.body.extra_images.map(s => String(s)).filter(Boolean)
-    : (req.body?.extra_images != null
-        ? String(req.body.extra_images).split(',').map(s => s.trim()).filter(Boolean)
-        : []);
-  const video_url = req.body?.video_url != null ? String(req.body.video_url).trim() : null;
-  await db(
-    `update products
-       set meta = coalesce(meta,'{}'::jsonb)
-                 || ($1::jsonb is not null ? jsonb_build_object('extra_images', $1::jsonb) : '{}'::jsonb)
-                 || (case when $2::text is not null and length($2::text) > 0 then jsonb_build_object('video_url', $2::text) else '{}'::jsonb end)
-     where tenant_id=$3 and id=$4`,
-    [JSON.stringify(extra_images), video_url, tenantId, pid]
-  );
-  return res.json({ ok: true });
+  
+  try {
+    const ex = await db('select 1 from products where tenant_id=$1 and id=$2', [tenantId, pid]);
+    if (!ex.length) return res.status(404).json({ error: 'product_not_found' });
+    
+    const extra_images = Array.isArray(req.body?.extra_images)
+      ? req.body.extra_images.map(s => String(s)).filter(Boolean)
+      : (req.body?.extra_images != null
+          ? String(req.body.extra_images).split(',').map(s => s.trim()).filter(Boolean)
+          : []);
+    const video_url = req.body?.video_url != null ? String(req.body.video_url).trim() : null;
+    
+    // Build the meta object and update in a simpler way
+    const metaUpdate = {};
+    if (extra_images.length > 0) metaUpdate.extra_images = extra_images;
+    if (video_url) metaUpdate.video_url = video_url;
+    
+    await db(
+      `update products
+         set meta = coalesce(meta,'{}'::jsonb) || $1::jsonb
+       where tenant_id=$2 and id=$3`,
+      [JSON.stringify(metaUpdate), tenantId, pid]
+    );
+    return res.json({ ok: true });
+  } catch (e) {
+    console.log('[meta] PUT error:', e.message);
+    return res.status(500).json({ error: 'db_error', message: e.message });
+  }
 });
 
 // ---- Per-branch availability
@@ -4835,6 +5585,14 @@ addRoute('get', '/admin/tenants/:id/products/:pid/availability', verifyAuthOpen,
   if (!HAS_DB) return res.json({ items: [] });
   const tenantId = req.params.id; const pid = req.params.pid;
   try {
+    // Check if branches table exists first
+    const tableExists = await db(
+      `select exists (select from information_schema.tables where table_name = 'branches')`
+    );
+    if (!tableExists[0]?.exists) {
+      return res.json({ items: [] });
+    }
+    
     const rows = await db(
 `select b.id as branch_id, b.name as branch_name,
               coalesce(pba.available, true) as available,
@@ -4847,41 +5605,61 @@ addRoute('get', '/admin/tenants/:id/products/:pid/availability', verifyAuthOpen,
       [tenantId, pid]
     );
     return res.json({ items: rows });
-  } catch (_e) { return res.json({ items: [] }); }
+  } catch (_e) { 
+    console.log('[availability] GET error:', _e.message);
+    return res.json({ items: [] }); 
+  }
 });
 addRoute('put', '/admin/tenants/:id/products/:pid/availability', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   const tenantId = req.params.id; const pid = req.params.pid;
-  const ex = await db('select 1 from products where tenant_id=$1 and id=$2', [tenantId, pid]);
-  if (!ex.length) return res.status(404).json({ error: 'product_not_found' });
-  const items = Array.isArray(req.body?.items) ? req.body.items : [];
-  const branchIds = items.map(i => String(i.branch_id||'').trim()).filter(Boolean);
-  // Remove any rows not present in the provided set for this product+tenant
-  await db(
-    `delete from product_branch_availability using branches b
-      where product_branch_availability.branch_id=b.id
-        and product_branch_availability.product_id=$1
-        and b.tenant_id=$2
-        ${branchIds.length ? 'and NOT (product_branch_availability.branch_id = ANY($3::uuid[]))' : ''}`,
-    branchIds.length ? [pid, tenantId, branchIds] : [pid, tenantId]
-  );
-  // Upsert provided rows
-  for (const it of items) {
-    const bid = String(it.branch_id||'').trim(); if (!bid) continue;
-    const available = it.available !== false;
-    const price_override = (v=>Number.isFinite(Number(v))?Number(v):null)(it.price_override);
-    const pkg_fee_override = (v=>Number.isFinite(Number(v))?Number(v):null)(it.packaging_fee_override);
-    await db(
-      `insert into product_branch_availability (product_id, branch_id, available, price_override, packaging_fee_override)
-       values ($1,$2,$3,$4,$5)
-       on conflict (product_id, branch_id)
-       do update set available=excluded.available,
-                     price_override=excluded.price_override,
-                     packaging_fee_override=excluded.packaging_fee_override`,
-      [pid, bid, available, price_override, pkg_fee_override]
+  
+  try {
+    const ex = await db('select 1 from products where tenant_id=$1 and id=$2', [tenantId, pid]);
+    if (!ex.length) return res.status(404).json({ error: 'product_not_found' });
+    
+    // Check if branches table exists first
+    const tableExists = await db(
+      `select exists (select from information_schema.tables where table_name = 'branches')`
     );
+    if (!tableExists[0]?.exists) {
+      return res.status(503).json({ error: 'branches_table_missing' });
+    }
+    
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const branchIds = items.map(i => String(i.branch_id||'').trim()).filter(Boolean);
+    
+    // Remove any rows not present in the provided set for this product+tenant
+    await db(
+      `delete from product_branch_availability using branches b
+        where product_branch_availability.branch_id=b.id
+          and product_branch_availability.product_id=$1
+          and b.tenant_id=$2
+          ${branchIds.length ? 'and NOT (product_branch_availability.branch_id = ANY($3::uuid[]))' : ''}`,
+      branchIds.length ? [pid, tenantId, branchIds] : [pid, tenantId]
+    );
+    
+    // Upsert provided rows
+    for (const it of items) {
+      const bid = String(it.branch_id||'').trim(); if (!bid) continue;
+      const available = it.available !== false;
+      const price_override = (v=>Number.isFinite(Number(v))?Number(v):null)(it.price_override);
+      const pkg_fee_override = (v=>Number.isFinite(Number(v))?Number(v):null)(it.packaging_fee_override);
+      await db(
+        `insert into product_branch_availability (product_id, branch_id, available, price_override, packaging_fee_override)
+         values ($1,$2,$3,$4,$5)
+         on conflict (product_id, branch_id)
+         do update set available=excluded.available,
+                       price_override=excluded.price_override,
+                       packaging_fee_override=excluded.packaging_fee_override`,
+        [pid, bid, available, price_override, pkg_fee_override]
+      );
+    }
+    return res.json({ ok: true });
+  } catch (e) {
+    console.log('[availability] PUT error:', e.message);
+    return res.status(500).json({ error: 'db_error', message: e.message });
   }
-  return res.json({ ok: true });
 });
 
 // Public: Product modifiers for ordering (groups + options)
@@ -4946,6 +5724,103 @@ addRoute('get', '/products/:pid/modifiers', requireTenant, async (req, res) => {
   } catch (_e) { return res.json({ items: [] }); }
 });
 
+// Database migration endpoint to fix foreign key constraints
+addRoute('post', '/debug/fix-modifier-constraints', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ error: 'no_db' });
+  
+  try {
+    console.log('[MIGRATION] Starting foreign key constraint fix...');
+    
+    // Read the migration file
+    const fs = require('fs');
+    const path = require('path');
+    const migrationPath = path.join(__dirname, 'migrations', '20251009_fix_modifier_groups_constraints.sql');
+    const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+    
+    console.log('[MIGRATION] Executing migration SQL...');
+    await db(migrationSQL);
+    
+    console.log('[MIGRATION] Migration completed successfully');
+    return res.json({ success: true, message: 'Foreign key constraints fixed' });
+  } catch (e) {
+    console.log('[MIGRATION] Migration failed:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Temporary workaround endpoint to insert modifier groups without FK constraints
+addRoute('post', '/debug/force-insert-modifier-group', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ error: 'no_db' });
+  const { tenantId, productId, groupId } = req.body;
+  
+  try {
+    // Temporarily disable foreign key checks, insert, then re-enable
+    await db('SET session_replication_role = replica;');
+    
+    const result = await db(
+      `INSERT INTO product_modifier_groups (product_id, group_id, sort_order, required, unique_options)
+       VALUES ($1, $2, 1, false, true)
+       ON CONFLICT (product_id, group_id) DO UPDATE SET sort_order = 1`,
+      [productId, groupId]
+    );
+    
+    await db('SET session_replication_role = DEFAULT;');
+    
+    return res.json({ success: true, result });
+  } catch (e) {
+    await db('SET session_replication_role = DEFAULT;');
+    console.log('[DEBUG] Force insert error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Debug endpoint to investigate FK constraint issues
+addRoute('get', '/debug/fk-constraint/:tenantId/:productId/:groupId', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ error: 'no_db' });
+  const { tenantId, productId, groupId } = req.params;
+  
+  try {
+    // Check if product exists
+    const productCheck = await db('SELECT id, tenant_id FROM products WHERE id = $1', [productId]);
+    console.log('[DEBUG] Product check:', productCheck);
+    
+    // Check if modifier group exists
+    const groupCheck = await db('SELECT id, tenant_id FROM modifier_groups WHERE id = $1', [groupId]);
+    console.log('[DEBUG] Group check:', groupCheck);
+    
+    // Check foreign key constraint details
+    const fkInfo = await db(`
+      SELECT tc.constraint_name, tc.table_name, kcu.column_name, 
+             ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name 
+      FROM information_schema.table_constraints AS tc 
+      JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name='product_modifier_groups'
+    `);
+    console.log('[DEBUG] FK constraints:', fkInfo);
+    
+    // Check actual table schema
+    const schemaInfo = await db(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'product_modifier_groups'
+      ORDER BY ordinal_position
+    `);
+    console.log('[DEBUG] Table schema:', schemaInfo);
+    
+    const testResult = { 
+      product: productCheck, 
+      group: groupCheck, 
+      constraints: fkInfo, 
+      schema: schemaInfo 
+    };
+    return res.json(testResult);
+  } catch (e) {
+    console.log('[DEBUG] FK debug error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 // ---- Product ↔ Modifier group linking
 addRoute('get', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
@@ -4960,18 +5835,24 @@ addRoute('get', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuthOp
               coalesce(pmg.max_select, mg.max_select) as max_select,
               pmg.default_option_reference as default_option_reference,
               pmg.unique_options as unique_options,
-              (pmg.product_id is not null) as linked
+              (pmg.product_id is not null) as linked,
+              mg.deleted_at
          from modifier_groups mg
     left join product_modifier_groups pmg
            on pmg.group_id=mg.id and pmg.product_id=$2
         where mg.tenant_id=$1
-        order by mg.name asc`,
+        order by (mg.deleted_at IS NULL) desc, (pmg.product_id is not null) desc, mg.name asc`,
       [tenantId, pid]
     );
-    return res.json({ items: rows });
+    // Ensure deleted_at is properly serialized (convert undefined to null)
+    const processedRows = (rows || []).map(row => ({
+      ...row,
+      deleted_at: row.deleted_at || null
+    }));
+    return res.json({ items: processedRows });
   } catch (_e) { return res.json({ items: [] }); }
 });
-addRoute('put', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, requireTenantAdminParam, async (req, res) => {
+addRoute('put', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   await ensureModifiersSchema();
   const tenantId = req.params.id; const pid = req.params.pid;
@@ -4994,7 +5875,8 @@ addRoute('put', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, 
     const min_select = (n=>Number.isFinite(n)?n:null)(parseInt(it.min_select,10));
     const max_select = (n=>Number.isFinite(n)?n:null)(parseInt(it.max_select,10));
     const default_option_reference = (it.default_option_reference || it.default_option || it.default_sku || null) ? String(it.default_option_reference || it.default_option || it.default_sku || '').trim() : null;
-    const unique_options = (it.unique_options != null) ? !!it.unique_options : null;
+    const unique_options = (it.unique_options != null) ? !!it.unique_options : true;
+    // Insert with clean foreign key constraints
     await db(
       `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select, default_option_reference, unique_options)
        values ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -5011,8 +5893,8 @@ addRoute('put', '/admin/tenants/:id/products/:pid/modifier-groups', verifyAuth, 
   return res.json({ ok: true });
 });
 
-// Import product-modifier links from CSV (tenant-scoped, admin only)
-addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuth, requireTenantAdminParam, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+// Import product-modifier links from CSV (tenant-scoped). Tenant admin only.
+addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuthOpen, requireTenantAdminParamOpen, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
   await ensureModifiersSchema();
   // Ensure link table exists (idempotent)
@@ -5034,13 +5916,6 @@ addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuth, req
   } catch {}
 
   const tenantId = req.params.id;
-  // Block CSV-based catalog syncs when catalog source is locked to Foodics
-  try {
-    const r = await db("select (coalesce((meta->>'catalog_source'),'')='foodics') as locked from tenant_api_integrations where tenant_id=$1 and provider='foodics' and revoked_at is null order by updated_at desc limit 1", [tenantId]);
-    if (Array.isArray(r) && r.length && (r[0].locked === true || r[0].locked === 't')) {
-      return res.status(409).json({ error: 'catalog_locked_to_foodics' });
-    }
-  } catch {}
   function csvLine(s){
     const out = []; let cur=''; let i=0; let inQ=false;
     while (i < s.length) {
@@ -5138,6 +6013,171 @@ addRoute('post', '/admin/tenants/:id/products/modifiers/import', verifyAuth, req
           [pid, gid, idxSort++, required, min, max]
         );
         linked++;
+      }
+    }
+
+    return res.json({ ok:true, linked, missing_products: missingProducts, missing_groups: missingGroups, created_groups: createdGroups });
+  } catch (e) {
+    return res.status(500).json({ error: 'import_failed', detail: e?.message||String(e) });
+  }
+});
+
+// Open version for dev mode - Import product-modifier links from CSV (tenant-scoped, debug token allowed)
+addRoute('post', '/admin/tenants/:id/products/modifiers/import-open', verifyAuthOpen, requireTenantAdminParamOpen, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+  await ensureModifiersSchema();
+  // Ensure link table exists (idempotent)
+  try {
+    await db(`
+      CREATE TABLE IF NOT EXISTS product_modifier_groups (
+        product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        group_id   uuid NOT NULL REFERENCES modifier_groups(id) ON DELETE CASCADE,
+        sort_order integer,
+        required   boolean,
+        min_select integer,
+        max_select integer,
+        default_option_reference text,
+        unique_options boolean NOT NULL DEFAULT true,
+        PRIMARY KEY (product_id, group_id)
+      )`);
+    await db("ALTER TABLE IF EXISTS product_modifier_groups ADD COLUMN IF NOT EXISTS default_option_reference text");
+    await db("ALTER TABLE IF EXISTS product_modifier_groups ADD COLUMN IF NOT EXISTS unique_options boolean NOT NULL DEFAULT true");
+  } catch {}
+
+  // Use tenant ID from URL parameter (same as other product endpoints)
+  const tenantId = req.params.id;
+  if (!tenantId) {
+    return res.status(400).json({ error: 'tenant_id_required' });
+  }
+  function csvLine(s){
+    const out = []; let cur=''; let i=0; let inQ=false;
+    while (i < s.length) {
+      const ch = s[i];
+      if (inQ) {
+        if (ch === '"') { if (s[i+1] === '"'){ cur += '"'; i+=2; continue; } inQ=false; i++; continue; }
+        cur += ch; i++; continue;
+      } else {
+        if (ch === '"') { inQ=true; i++; continue; }
+        if (ch === ',') { out.push(cur); cur=''; i++; continue; }
+        cur += ch; i++;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+  function normKey(k){ return String(k||'').trim().toLowerCase().replace(/\s+/g,'_'); }
+  function toInt(v){ const n = parseInt(String(v??'').trim(), 10); return Number.isFinite(n) ? n : null; }
+
+  try {
+    let text = '';
+    if (Buffer.isBuffer(req.body)) {
+      text = req.body.toString('utf8');
+    } else if (typeof req.body === 'string') {
+      text = req.body;
+    } else if (req.body && typeof req.body === 'object') {
+      text = JSON.stringify(req.body);
+    } else {
+      text = String(req.body || '');
+    }
+    
+    console.log(`[DEBUG] Received CSV text length: ${text.length}`);
+    console.log(`[DEBUG] First 200 chars:`, text.substring(0, 200));
+    const lines = String(text||'').split(/\r?\n/).filter(l => l.trim().length>0);
+    console.log(`[DEBUG] CSV lines count: ${lines.length}`);
+    console.log(`[DEBUG] First few lines:`, lines.slice(0, 3));
+    if (!lines.length) return res.json({ ok:false, error: 'empty_csv' });
+    const headers = csvLine(lines[0]).map(h => String(h||'').trim());
+    console.log(`[DEBUG] CSV headers:`, headers);
+    const idx = Object.fromEntries(headers.map((h,i)=>[normKey(h), i]));
+    console.log(`[DEBUG] Column index mapping:`, idx);
+    const rows = [];
+    for (let li=1; li<lines.length; li++) {
+      const cols = csvLine(lines[li]);
+      if (cols.length === 1 && cols[0] === '') continue;
+      const obj = {};
+      for (const [k,i] of Object.entries(idx)) obj[k] = cols[i] != null ? cols[i] : '';
+      rows.push(obj);
+    }
+    console.log(`[DEBUG] Parsed ${rows.length} CSV data rows:`, rows.slice(0, 3));
+
+    // Prefetch products & groups
+    console.log(`[DEBUG] Looking up products for tenant: ${tenantId}`);
+    const prods = await db('select id, sku, name from products where tenant_id=$1', [tenantId]);
+    console.log(`[DEBUG] Found ${prods.length} products`);
+    const bySku = new Map();
+    const byName = new Map();
+    for (const p of (prods||[])) {
+      if (p.sku) bySku.set(String(p.sku).toLowerCase(), p.id);
+      if (p.name) byName.set(String(p.name).toLowerCase(), p.id);
+    }
+    console.log(`[DEBUG] Product SKU map size: ${bySku.size}, Name map size: ${byName.size}`);
+    
+    console.log(`[DEBUG] Looking up modifier groups for tenant: ${tenantId}`);
+    console.log(`[DEBUG] DEFAULT_TENANT_ID is: ${DEFAULT_TENANT_ID}`);
+    console.log(`[DEBUG] req.params.id is: ${req.params.id}`);
+    
+    const groups = await db('select id, reference, name from modifier_groups where tenant_id=$1', [tenantId]);
+    const grpByRef = new Map();
+    const grpByName = new Map();
+    for (const g of (groups||[])) {
+      if (g.reference) grpByRef.set(String(g.reference).toLowerCase(), g.id);
+      if (g.name) grpByName.set(String(g.name).toLowerCase(), g.id);
+    }
+    console.log(`[DEBUG] Group ref map size: ${grpByRef.size}, Name map size: ${grpByName.size}`);
+    console.log(`[DEBUG] Sample groups:`, Array.from(grpByRef.entries()).slice(0, 3));
+
+    // Group by product key (sku preferred)
+    const byProduct = new Map();
+    for (const r of rows) {
+      const sku = String(r.product_sku||'').trim();
+      const name= String(r.product_name||'').trim();
+      const key = (sku||'').toLowerCase() || (name||'').toLowerCase();
+      if (!key) continue;
+      if (!byProduct.has(key)) byProduct.set(key, []);
+      byProduct.get(key).push(r);
+    }
+
+    let linked=0, missingProducts=0, createdGroups=0, missingGroups=0;
+
+    for (const [key, list] of byProduct.entries()) {
+      const pid = bySku.get(key) || byName.get(key);
+      if (!pid) { missingProducts++; continue; }
+
+      // Replace links for this product
+      await db('delete from product_modifier_groups where product_id=$1', [pid]);
+      let idxSort = 0;
+      for (const r of list) {
+        const ref = String(r.modifier_reference||'').trim();
+        const mname = String(r.modifier_name||'').trim();
+        let gid = ref ? (grpByRef.get(ref.toLowerCase()) || null) : null;
+        if (!gid && mname) gid = grpByName.get(mname.toLowerCase()) || null;
+        if (!gid && ref) {
+          const nameToUse = mname || ref;
+          const ins = await db(
+            `insert into modifier_groups (tenant_id, name, reference)
+             values ($1,$2,$3)
+             on conflict (tenant_id, reference) do update set name=excluded.name
+             returning id`, [tenantId, nameToUse, ref]
+          );
+          gid = ins && ins[0] && ins[0].id ? String(ins[0].id) : null;
+          if (gid) { grpByRef.set(ref.toLowerCase(), gid); createdGroups++; }
+        }
+        if (!gid) { missingGroups++; continue; }
+        const min = toInt(r.minimum_options);
+        const max = toInt(r.maximum_options);
+        const required = (min != null) ? (min > 0) : null;
+        try {
+          await db(
+            `insert into product_modifier_groups (product_id, group_id, sort_order, required, min_select, max_select)
+             values ($1,$2,$3,$4,$5,$6)
+             on conflict (product_id, group_id) do update set sort_order=excluded.sort_order, required=excluded.required, min_select=excluded.min_select, max_select=excluded.max_select`,
+            [pid, gid, idxSort++, required, min, max]
+          );
+          linked++;
+        } catch (linkError) {
+          console.error(`Failed to link product ${pid} to group ${gid}:`, linkError.message);
+          throw linkError;
+        }
       }
     }
 
@@ -5815,7 +6855,32 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const active = (String(c.is_active||c.active||'').toLowerCase() === 'yes') || (c.is_active === true) || (c.active === true);
       const name = c.name || c.title || '';
       const name_localized = c.name_localized || c.name_ar || null;
-      const image_url = pickImageUrlFromRecord(c);
+      let image_url = pickImageUrlFromRecord(c);
+      
+      // Copy image from Foodics to Google Cloud Storage when syncing with images
+      if (image_url && forceImages && ASSETS_BUCKET && bucket) {
+        try {
+          // Generate a filename based on category info
+          const categoryName = (name || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+          const categoryRef = (ref || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
+          const originalFilename = image_url.split('/').pop()?.split('?')[0] || 'image';
+          const fileExtension = originalFilename.split('.').pop() || 'jpg';
+          const customFilename = `category_${categoryRef || categoryName || 'cat'}_${Date.now()}.${fileExtension}`;
+          
+          console.log(`Copying image for category ${name}: ${image_url}`);
+          const cloudStorageUrl = await copyImageToCloudStorage(image_url, tenantId, customFilename);
+          
+          if (cloudStorageUrl) {
+            image_url = cloudStorageUrl;
+            console.log(`Successfully copied category image to: ${cloudStorageUrl}`);
+          } else {
+            console.warn(`Failed to copy image for category ${name}, keeping original URL`);
+          }
+        } catch (error) {
+          console.error(`Error copying image for category ${name}:`, error);
+          // Keep the original image_url as fallback
+        }
+      }
       const baseSlug = name || ref || String(extId);
       const slug = slugifyCategory(baseSlug) || (`cat-${String(extId).toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,20)}`);
       if (!id) {
@@ -5926,13 +6991,25 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const min_select = g.min_select != null ? Number(g.min_select) : (g.min != null ? Number(g.min) : null);
       const max_select = g.max_select != null ? Number(g.max_select) : (g.max != null ? Number(g.max) : null);
       const required = g.required != null ? !!g.required : !!g.is_required;
+      
+      // Handle Foodics deleted_at and is_ready status
+      const deleted_at = g.deleted_at ? new Date(g.deleted_at) : null;
+      const is_ready = g.is_ready != null ? !!g.is_ready : true;
+      
+      // Skip groups that are deleted in Foodics OR not ready
+      if (deleted_at || !is_ready) {
+        console.log(`[foodics] Skipping deleted/inactive group: ${name} (deleted_at: ${deleted_at}, is_ready: ${is_ready})`);
+        stats.modifier_groups.skipped++;
+        continue;
+      }
+      
       if (!id) {
         const newId = require('crypto').randomUUID();
-        await db('insert into modifier_groups (id, tenant_id, name, reference, min_select, max_select, required) values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing', [newId, tenantId, name||'Group', ref||null, min_select, max_select, required]);
+        await db('insert into modifier_groups (id, tenant_id, name, reference, min_select, max_select, required, deleted_at) values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing', [newId, tenantId, name||'Group', ref||null, min_select, max_select, required, deleted_at]);
         await setMapping('modifier_group', newId, extId, ref||null);
         stats.modifier_groups.created++;
       } else {
-        await db('update modifier_groups set name=$1, reference=$2, min_select=$3, max_select=$4, required=$5 where tenant_id=$6 and id=$7', [name||'Group', ref||null, min_select, max_select, required, tenantId, id]);
+        await db('update modifier_groups set name=$1, reference=$2, min_select=$3, max_select=$4, required=$5, deleted_at=$6 where tenant_id=$7 and id=$8', [name||'Group', ref||null, min_select, max_select, required, deleted_at, tenantId, id]);
         await setMapping('modifier_group', id, extId, ref||null);
         stats.modifier_groups.updated++;
       }
@@ -6026,13 +7103,24 @@ async function runTenantFoodicsSync(tenantId, opts={}){
       const price = (v=>Number.isFinite(v)?v:0)(Number(o.price ?? o.delta_price ?? o.price_kwd));
       const is_active = o.is_active != null ? !!o.is_active : (o.active != null ? !!o.active : true);
       const sort_order = (n=>Number.isFinite(n)?n:null)(parseInt(o.sort_order ?? o.position, 10));
+      
+      // Handle Foodics deleted_at status for options
+      const deleted_at = o.deleted_at ? new Date(o.deleted_at) : null;
+      
+      // Skip options that are deleted in Foodics OR inactive
+      if (deleted_at || !is_active) {
+        console.log(`[foodics] Skipping deleted/inactive option: ${name} (deleted_at: ${deleted_at}, is_active: ${is_active})`);
+        stats.modifier_options.skipped++;
+        continue;
+      }
+      
       if (!id) {
         const newId = require('crypto').randomUUID();
-        await db('insert into modifier_options (id, tenant_id, group_id, name, reference, price, is_active, sort_order) values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing', [newId, tenantId, group_id, name||'Option', ref||null, price, is_active, sort_order]);
+        await db('insert into modifier_options (id, tenant_id, group_id, name, reference, price, is_active, sort_order, deleted_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict do nothing', [newId, tenantId, group_id, name||'Option', ref||null, price, is_active, sort_order, deleted_at]);
         if (extId) { try { await setMapping('modifier_option', newId, extId, ref||null); } catch {} }
         stats.modifier_options.created++;
       } else {
-        await db('update modifier_options set group_id=$1, name=$2, reference=$3, price=$4, is_active=$5, sort_order=$6 where tenant_id=$7 and id=$8', [group_id, name||'Option', ref||null, price, is_active, sort_order, tenantId, id]);
+        await db('update modifier_options set group_id=$1, name=$2, reference=$3, price=$4, is_active=$5, sort_order=$6, deleted_at=$7 where tenant_id=$8 and id=$9', [group_id, name||'Option', ref||null, price, is_active, sort_order, deleted_at, tenantId, id]);
         if (extId) { try { await setMapping('modifier_option', id, extId, ref||null); } catch {} }
         stats.modifier_options.updated++;
       }
@@ -6137,6 +7225,7 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         id = r.length ? r[0].id : null;
       }
       const name = p.name || '';
+      const name_localized = p.name_localized || p.name_ar || null;
       const active = (p.is_active === true) || (String(p.is_active||p.active||'').toLowerCase()==='yes');
       const price = (v=>Number.isFinite(v)?v:0)(Number(p.price));
       let image_url = pickImageUrlFromRecord(p);
@@ -6151,6 +7240,32 @@ async function runTenantFoodicsSync(tenantId, opts={}){
           }
         } catch {}
       }
+      
+      // Copy image from Foodics to Google Cloud Storage when syncing with images
+      if (image_url && forceImages && ASSETS_BUCKET && bucket) {
+        try {
+          // Generate a filename based on product info
+          const productName = (p.name || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+          const productSku = (p.sku || p.reference || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
+          const originalFilename = image_url.split('/').pop()?.split('?')[0] || 'image';
+          const fileExtension = originalFilename.split('.').pop() || 'jpg';
+          const customFilename = `${productSku || productName || 'product'}_${Date.now()}.${fileExtension}`;
+          
+          console.log(`Copying image for product ${p.name}: ${image_url}`);
+          const cloudStorageUrl = await copyImageToCloudStorage(image_url, tenantId, customFilename);
+          
+          if (cloudStorageUrl) {
+            image_url = cloudStorageUrl;
+            console.log(`Successfully copied image to: ${cloudStorageUrl}`);
+          } else {
+            console.warn(`Failed to copy image for product ${p.name}, keeping original URL`);
+          }
+        } catch (error) {
+          console.error(`Error copying image for product ${p.name}:`, error);
+          // Keep the original image_url as fallback
+        }
+      }
+      
       if (image_url) __imgFound++; else __imgMissing++;
       if (!image_url && __imgLogCount < 5) {
         try {
@@ -6189,13 +7304,13 @@ async function runTenantFoodicsSync(tenantId, opts={}){
         const skuIns = deriveSkuForProduct(p, extId, ref, name);
         await db(
           `insert into products (
-             id, tenant_id, name, category_id, price, cost,
+             id, tenant_id, name, name_localized, category_id, price, cost,
              barcode, preparation_time, calories,
              sku, image_url, active
            ) values (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
            ) on conflict do nothing`,
-          [newId, tenantId, name||'Product', category_id, price, cost, barcode, preparation_time, calories, skuIns, image_url||null, active!==false]
+          [newId, tenantId, name||'Product', name_localized, category_id, price, cost, barcode, preparation_time, calories, skuIns, image_url||null, active!==false]
         );
         await setMapping('product', newId, extId, ref||null);
         stats.products.created++;
@@ -6205,33 +7320,35 @@ async function runTenantFoodicsSync(tenantId, opts={}){
           await db(
             `update products set
                name=$1,
-               category_id=coalesce($2, category_id),
-               price=$3,
-               cost=$4,
-               barcode=$5,
-               preparation_time=$6,
-               calories=$7,
-               sku=coalesce($8, sku),
-               image_url=$9,
-               active=$10
-             where tenant_id=$11 and id=$12`,
-            [name||'Product', category_id, price, cost, barcode, preparation_time, calories, skuCandidate, image_url||null, active!==false, tenantId, id]
+               name_localized=$2,
+               category_id=coalesce($3, category_id),
+               price=$4,
+               cost=$5,
+               barcode=$6,
+               preparation_time=$7,
+               calories=$8,
+               sku=coalesce($9, sku),
+               image_url=$10,
+               active=$11
+             where tenant_id=$12 and id=$13`,
+            [name||'Product', name_localized, category_id, price, cost, barcode, preparation_time, calories, skuCandidate, image_url||null, active!==false, tenantId, id]
           );
         } else {
           await db(
             `update products set
                name=$1,
-               category_id=coalesce($2, category_id),
-               price=$3,
-               cost=$4,
-               barcode=$5,
-               preparation_time=$6,
-               calories=$7,
-               sku=coalesce($8, sku),
-               image_url=coalesce($9, image_url),
-               active=$10
-             where tenant_id=$11 and id=$12`,
-            [name||'Product', category_id, price, cost, barcode, preparation_time, calories, skuCandidate, image_url||null, active!==false, tenantId, id]
+               name_localized=$2,
+               category_id=coalesce($3, category_id),
+               price=$4,
+               cost=$5,
+               barcode=$6,
+               preparation_time=$7,
+               calories=$8,
+               sku=coalesce($9, sku),
+               image_url=coalesce($10, image_url),
+               active=$11
+             where tenant_id=$12 and id=$13`,
+            [name||'Product', name_localized, category_id, price, cost, barcode, preparation_time, calories, skuCandidate, image_url||null, active!==false, tenantId, id]
           );
         }
         await setMapping('product', id, extId, ref||null);
@@ -6388,529 +7505,11 @@ addRoute('post', '/admin/tenants/:id/integrations/foodics/sync', verifyAuthOpen,
   const forceImages = forceRaw === '1' || forceRaw === 'true' || forceRaw === 'yes';
   const phase = String(req.query?.phase || req.body?.phase || 'full').toLowerCase();
   try {
-// Lock catalog source to Foodics to avoid non-Foodics catalog syncs
-    try { await db("update tenant_api_integrations set meta = coalesce(meta,'{}'::jsonb) || jsonb_build_object('catalog_source','foodics') where tenant_id=$1 and provider='foodics'", [tenantId]); } catch {}
     const result = await runTenantFoodicsSync(tenantId, { force_images: forceImages, phase });
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: 'sync_failed', message: e?.message||String(e) });
   }
-});
-
-// Ensure Foodics sales schema exists
-async function ensureSalesSchema(){
-  if (!HAS_DB) return;
-  try {
-    // Customers table
-    await db(`
-      CREATE TABLE IF NOT EXISTS customers (
-        customer_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-        external_id text,
-        external_ref text,
-        full_name text,
-        first_name text,
-        last_name text,
-        email text,
-        phone text,
-        phone_normalized text,
-        country_code text,
-        tags text[],
-        last_seen_at timestamptz,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
-        UNIQUE (tenant_id, external_id)
-      )
-    `);
-    
-    // Sales orders table
-    await db(`
-      CREATE TABLE IF NOT EXISTS sales_orders (
-        order_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-        external_id text NOT NULL,
-        external_ref text,
-        branch_id uuid REFERENCES branches(branch_id) ON DELETE SET NULL,
-        customer_id uuid REFERENCES customers(customer_id) ON DELETE SET NULL,
-        currency text DEFAULT 'KWD',
-        status text,
-        source_channel text,
-        service_type text,
-        order_no text,
-        receipt_no text,
-        table_name text,
-        waiter_name text,
-        driver_name text,
-        
-        -- Monetary amounts
-        subtotal numeric(12,3) DEFAULT 0,
-        discount_total numeric(12,3) DEFAULT 0,
-        tax_total numeric(12,3) DEFAULT 0,
-        service_charge numeric(12,3) DEFAULT 0,
-        delivery_fee numeric(12,3) DEFAULT 0,
-        rounding numeric(12,3) DEFAULT 0,
-        tip_amount numeric(12,3) DEFAULT 0,
-        total numeric(12,3) DEFAULT 0,
-        paid_total numeric(12,3) DEFAULT 0,
-        balance_due numeric(12,3) DEFAULT 0,
-        
-        -- Timestamps
-        placed_at timestamptz,
-        paid_at timestamptz,
-        closed_at timestamptz,
-        pos_created_at timestamptz,
-        pos_updated_at timestamptz,
-        
-        -- Status flags
-        is_voided boolean DEFAULT false,
-        is_refunded boolean DEFAULT false,
-        is_deleted boolean DEFAULT false,
-        
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
-        
-        UNIQUE (tenant_id, external_id)
-      )
-    `);
-    
-    // Sales order items table
-    await db(`
-      CREATE TABLE IF NOT EXISTS sales_order_items (
-        item_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id uuid NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-        order_id uuid NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
-        external_id text NOT NULL,
-        line_no integer,
-        product_id uuid REFERENCES products(id) ON DELETE SET NULL,
-        product_external_id text,
-        product_name text NOT NULL,
-        product_ref text,
-        sku text,
-        
-        -- Quantities and pricing
-        qty numeric(12,3) NOT NULL DEFAULT 1,
-        unit_price numeric(12,3) NOT NULL DEFAULT 0,
-        base_price numeric(12,3) DEFAULT 0,
-        discount_total numeric(12,3) DEFAULT 0,
-        tax_total numeric(12,3) DEFAULT 0,
-        total numeric(12,3) NOT NULL DEFAULT 0,
-        
-        is_voided boolean DEFAULT false,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-        meta jsonb NOT NULL DEFAULT '{}'::jsonb,
-        
-        UNIQUE (tenant_id, order_id, external_id)
-      )
-    `);
-    
-    // Create indexes
-    await db('CREATE INDEX IF NOT EXISTS ix_customers_tenant_external ON customers(tenant_id, external_id)');
-    await db('CREATE INDEX IF NOT EXISTS ix_sales_orders_tenant_placed ON sales_orders(tenant_id, placed_at DESC)');
-    await db('CREATE INDEX IF NOT EXISTS ix_sales_order_items_tenant_order ON sales_order_items(tenant_id, order_id)');
-    
-  } catch (e) {
-    console.error('Error ensuring sales schema:', e);
-  }
-}
-
-// Debug: Test Foodics API connectivity
-addRoute('post', '/admin/tenants/:id/integrations/foodics/test-api', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
-  const tenantId = String(req.params.id||'').trim();
-  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
-  
-  try {
-    console.log(`[${tenantId}] Testing Foodics API connectivity...`);
-    
-    // Get Foodics token for this tenant
-    const token = await getTenantFoodicsToken(tenantId);
-    if (!token) {
-      return res.status(409).json({ error: 'foodics_token_missing' });
-    }
-    console.log(`[${tenantId}] Foodics token found`);
-    
-    const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
-    if (!client) {
-      return res.status(503).json({ error: 'foodics_client_unavailable' });
-    }
-    console.log(`[${tenantId}] Foodics client created`);
-    
-    // Test basic API calls
-    const results = {};
-    
-    // Test 1: Try to fetch categories
-    try {
-      const categories = await client.listCategories();
-      results.categories = { success: true, count: categories?.items?.length || 0 };
-      console.log(`[${tenantId}] Categories: ${categories?.items?.length || 0}`);
-    } catch (e) {
-      results.categories = { success: false, error: e.message };
-      console.log(`[${tenantId}] Categories error: ${e.message}`);
-    }
-    
-    // Test 2: Try to fetch products
-    try {
-      const products = await client.listProducts();
-      results.products = { success: true, count: products?.items?.length || 0 };
-      console.log(`[${tenantId}] Products: ${products?.items?.length || 0}`);
-    } catch (e) {
-      results.products = { success: false, error: e.message };
-      console.log(`[${tenantId}] Products error: ${e.message}`);
-    }
-    
-    // Test 3: Try different order endpoints manually
-    const orderEndpoints = ['/orders', '/pos/orders', '/sales', '/transactions'];
-    results.endpoints = {};
-    
-    for (const endpoint of orderEndpoints) {
-      try {
-        const response = await fetch(`https://api.foodics.com/v5${endpoint}?per_page=1`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          }
-        });
-        results.endpoints[endpoint] = { 
-          status: response.status, 
-          success: response.ok,
-          statusText: response.statusText
-        };
-        console.log(`[${tenantId}] ${endpoint}: ${response.status} ${response.statusText}`);
-      } catch (e) {
-        results.endpoints[endpoint] = { success: false, error: e.message };
-        console.log(`[${tenantId}] ${endpoint} error: ${e.message}`);
-      }
-    }
-    
-    return res.json({ ok: true, results });
-    
-  } catch (e) {
-    console.error(`[${tenantId}] API test failed:`, e?.message || e);
-    return res.status(500).json({ error: 'test_failed', message: e?.message||String(e) });
-  }
-});
-
-// Import Foodics sales orders
-addRoute('post', '/admin/tenants/:id/integrations/foodics/import-sales', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
-  const tenantId = String(req.params.id||'').trim();
-  if (!tenantId) return res.status(400).json({ error: 'invalid_id' });
-  
-  try {
-    console.log(`[${tenantId}] Starting Foodics sales import...`);
-    
-    // Ensure sales schema exists
-    try {
-      await ensureSalesSchema();
-      console.log(`[${tenantId}] Sales schema ensured`);
-    } catch (schemaError) {
-      console.error(`[${tenantId}] Schema error:`, schemaError);
-      throw schemaError;
-    }
-    
-    // Get Foodics token for this tenant
-    const token = await getTenantFoodicsToken(tenantId);
-    if (!token) {
-      console.error(`[${tenantId}] No Foodics token found`);
-      return res.status(409).json({ error: 'foodics_token_missing' });
-    }
-    console.log(`[${tenantId}] Foodics token found`);
-    
-    const client = foodicsClient?.makeClient ? foodicsClient.makeClient(token) : null;
-    if (!client) {
-      console.error(`[${tenantId}] Foodics client unavailable`);
-      return res.status(503).json({ error: 'foodics_client_unavailable' });
-    }
-    console.log(`[${tenantId}] Foodics client created`);
-    
-    // Parameters
-    const fromDate = req.body?.from_date || req.query?.from_date || '2024-10-13';
-    const toDate = req.body?.to_date || req.query?.to_date || new Date().toISOString().split('T')[0];
-    const limit = Math.min(parseInt(req.body?.limit || req.query?.limit || 50), 100);
-    const dryRun = req.body?.dry_run || req.query?.dry_run || false;
-    
-    console.log(`[${tenantId}] Importing Foodics sales from ${fromDate} to ${toDate} (limit: ${limit}, dry_run: ${dryRun})`);
-    
-    // Fetch orders from Foodics
-    console.log(`[${tenantId}] Calling Foodics API...`);
-    let orders;
-    try {
-      orders = await client.listOrders({
-        updated_at_from: fromDate + 'T00:00:00Z',
-        updated_at_to: toDate + 'T23:59:59Z',
-        limit: limit
-      });
-      console.log(`[${tenantId}] Foodics API returned ${orders?.items?.length || 0} orders`);
-    } catch (apiError) {
-      console.error(`[${tenantId}] Foodics API error:`, apiError.message || apiError);
-      
-      // Check if this is a 404 error on all endpoints (likely API plan limitation)
-      if (apiError.message && apiError.message.includes('404 Not found')) {
-        throw new Error('Orders API not available. Your Foodics API plan may not include orders/transactions access. Contact your Foodics provider to upgrade your API access.');
-      }
-      
-      throw apiError;
-    }
-    
-    const stats = {
-      fetched: orders.items?.length || 0,
-      imported: 0,
-      skipped: 0,
-      errors: 0
-    };
-    
-    if (dryRun) {
-      console.log(`[${tenantId}] Dry run completed, returning ${stats.fetched} orders`);
-      return res.json({ ok: true, dry_run: true, stats, sample_orders: orders.items?.slice(0, 3) });
-    }
-    
-    // Import orders to sales_orders table
-    console.log(`[${tenantId}] Starting real import of ${stats.fetched} orders`);
-    for (const order of (orders.items || [])) {
-      try {
-        // Check if order already exists
-        const existing = await db('SELECT order_id FROM sales_orders WHERE tenant_id = $1 AND external_id = $2', [tenantId, order.id]);
-        if (existing.length > 0) {
-          stats.skipped++;
-          continue;
-        }
-        
-        // Insert customer if exists
-        let customerId = null;
-        if (order.customer && order.customer.id) {
-          const customerResult = await db(`
-            INSERT INTO customers (tenant_id, external_id, full_name, phone, email, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (tenant_id, external_id) DO NOTHING
-            RETURNING customer_id
-          `, [
-            tenantId,
-            order.customer.id,
-            order.customer.name || null,
-            order.customer.phone || null,
-            order.customer.email || null,
-            order.customer.created_at || new Date().toISOString()
-          ]);
-          
-          if (customerResult.length > 0) {
-            customerId = customerResult[0].customer_id;
-          } else {
-            // Get existing customer
-            const existingCustomer = await db('SELECT customer_id FROM customers WHERE tenant_id = $1 AND external_id = $2', [tenantId, order.customer.id]);
-            if (existingCustomer.length > 0) {
-              customerId = existingCustomer[0].customer_id;
-            }
-          }
-        }
-        
-        // Insert sales order
-        const orderResult = await db(`
-          INSERT INTO sales_orders (
-            tenant_id, external_id, external_ref, currency, status, source_channel, service_type,
-            order_no, receipt_no, subtotal, tax_total, total, paid_total,
-            placed_at, paid_at, closed_at, pos_created_at, pos_updated_at, customer_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-          RETURNING order_id
-        `, [
-          tenantId,
-          order.id,
-          order.reference || null,
-          order.currency || 'KWD',
-          order.status || 'closed',
-          order.source || 'online',
-          order.service_type || 'delivery',
-          order.number || null,
-          order.receipt_number || null,
-          parseFloat(order.subtotal || 0),
-          parseFloat(order.tax || 0),
-          parseFloat(order.total || 0),
-          parseFloat(order.paid || order.total || 0),
-          order.created_at || new Date().toISOString(),
-          order.paid_at || order.created_at || new Date().toISOString(),
-          order.closed_at || null,
-          order.created_at || new Date().toISOString(),
-          order.updated_at || new Date().toISOString(),
-          customerId
-        ]);
-        
-        const newOrderId = orderResult[0].order_id;
-        
-        // Insert order items if they exist
-        if (order.items && Array.isArray(order.items)) {
-          for (const [index, item] of order.items.entries()) {
-            await db(`
-              INSERT INTO sales_order_items (
-                tenant_id, order_id, external_id, line_no, product_name, product_ref, sku,
-                qty, unit_price, base_price, tax_total, total
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-              ON CONFLICT (tenant_id, order_id, external_id) DO NOTHING
-            `, [
-              tenantId,
-              newOrderId,
-              item.id || `item_${index}`,
-              index + 1,
-              item.name || item.product_name || 'Unknown Item',
-              item.product_id || null,
-              item.sku || null,
-              parseFloat(item.quantity || 1),
-              parseFloat(item.unit_price || item.price || 0),
-              parseFloat(item.unit_price || item.price || 0),
-              parseFloat(item.tax || 0),
-              parseFloat(item.total || (item.quantity || 1) * (item.price || 0))
-            ]);
-          }
-        }
-        
-        stats.imported++;
-        
-      } catch (error) {
-        console.error(`Error importing order ${order.id}:`, error.message);
-        stats.errors++;
-      }
-    }
-    
-    return res.json({ ok: true, stats });
-    
-  } catch (e) {
-    console.error(`[${tenantId}] Import failed:`, e?.message || e, e?.stack || '');
-    return res.status(500).json({ error: 'import_failed', message: e?.message||String(e) });
-  }
-});
-
-// Admin: Get sales orders for a tenant
-addRoute('get', '/admin/tenants/:id/sales-orders', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
-  if (!HAS_DB) return res.json({ items: [] });
-  const tenantId = req.params.id;
-  const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 50)));
-  const offset = Math.max(0, Number(req.query.offset || 0));
-  
-  try {
-    const rows = await db(`
-      SELECT 
-        so.order_id as id,
-        so.external_id,
-        so.external_ref,
-        so.currency,
-        so.status,
-        so.source_channel,
-        so.service_type,
-        so.order_no,
-        so.receipt_no,
-        so.total,
-        so.paid_total,
-        so.placed_at as created_at,
-        so.paid_at,
-        so.closed_at,
-        c.full_name as customer_name,
-        'Unknown' as branch_name
-      FROM sales_orders so
-      LEFT JOIN customers c ON c.customer_id = so.customer_id
-      WHERE so.tenant_id = $1
-      ORDER BY so.placed_at DESC
-      LIMIT $2 OFFSET $3
-    `, [tenantId, limit, offset]);
-    
-    res.json({ items: rows || [] });
-  } catch (e) {
-    console.error('[admin/tenants/sales-orders] Error:', e);
-    res.json({ items: [] }); // Don't fail completely if sales_orders table doesn't exist
-  }
-});
-
-// Sample data insertion endpoint for testing
-addRoute('post', '/admin/insert-sample-data/:tenantId', verifyAuthOpen, async (req, res) => {
-    const tenantId = req.params.tenantId;
-    
-    try {
-        console.log(`Inserting sample data for tenant ${tenantId}`);
-        
-        // Check if tenant exists
-        const tenantResult = await db('SELECT * FROM tenants WHERE id = $1', [tenantId]);
-        if (tenantResult.length === 0) {
-            return res.status(404).json({ error: 'Tenant not found' });
-        }
-        
-        // Insert sample local orders (paid_orders table)
-        const localOrdersSQL = `
-            INSERT INTO paid_orders (
-                tenant_id, basket_id, osn, cashier_name, customer_name, source, location, branch, items, total, currency, paid_at
-            ) VALUES 
-            ($1, 'BASKET_001', 'OSN001', 'Ahmad Ahmed', 'Walk-in Customer', 'local', 'Koobs Main Branch', 'Main',
-             '[{"name": "Chicken Sandwich", "price": 2.500, "quantity": 2}, {"name": "French Fries", "price": 1.200, "quantity": 1}, {"name": "Coca Cola", "price": 0.800, "quantity": 2}]'::jsonb,
-             7.800, 'KWD', NOW() - INTERVAL '2 hours'),
-            ($1, 'BASKET_002', 'OSN002', 'Fatima Al-Zahra', 'Mohammed Ali', 'local', 'Koobs Main Branch', 'Main',
-             '[{"name": "Beef Burger", "price": 3.200, "quantity": 1}, {"name": "Onion Rings", "price": 1.500, "quantity": 1}, {"name": "Orange Juice", "price": 1.000, "quantity": 1}]'::jsonb,
-             5.700, 'KWD', NOW() - INTERVAL '1 hour')
-            ON CONFLICT DO NOTHING
-        `;
-        
-        await db(localOrdersSQL, [tenantId, tenantId]);
-        
-        // Insert sample customers
-        const customersSQL = `
-            INSERT INTO customers (tenant_id, external_id, full_name, first_name, last_name, phone, email) VALUES 
-            ($1, 'CUST_001', 'Ahmed Al-Rashid', 'Ahmed', 'Al-Rashid', '+96599123456', 'ahmed@example.com'),
-            ($1, 'CUST_002', 'Nour Al-Sabah', 'Nour', 'Al-Sabah', '+96599789012', 'nour@example.com')
-            ON CONFLICT (tenant_id, external_id) DO NOTHING
-        `;
-        
-        await db(customersSQL, [tenantId, tenantId]);
-        
-        // Get customer IDs for references
-        const customers = await db('SELECT customer_id, external_id FROM customers WHERE tenant_id = $1', [tenantId]);
-        const customerMap = {};
-        customers.forEach(c => customerMap[c.external_id] = c.customer_id);
-        
-        // Insert sample Foodics orders
-        const foodicsOrdersSQL = `
-            INSERT INTO sales_orders (
-                tenant_id, external_id, external_ref, currency, status, source_channel, service_type, 
-                order_no, receipt_no, subtotal, tax_total, total, paid_total, 
-                placed_at, paid_at, closed_at, pos_created_at, pos_updated_at, customer_id
-            ) VALUES 
-            ($1, 'FDX_001', 'REF_001', 'KWD', 'closed', 'online', 'delivery', 'ORD-001', 'RCP-001',
-             12.500, 1.250, 13.750, 13.750, NOW() - INTERVAL '3 hours', NOW() - INTERVAL '2 hours 50 minutes',
-             NOW() - INTERVAL '2 hours 30 minutes', NOW() - INTERVAL '3 hours', NOW() - INTERVAL '2 hours 30 minutes', $2),
-            ($1, 'FDX_002', 'REF_002', 'KWD', 'closed', 'dine_in', 'dine_in', 'ORD-002', 'RCP-002',
-             8.500, 0.850, 9.350, 9.350, NOW() - INTERVAL '1 hour 30 minutes', NOW() - INTERVAL '1 hour 20 minutes',
-             NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour 30 minutes', NOW() - INTERVAL '1 hour', $3)
-            ON CONFLICT (tenant_id, external_id) DO NOTHING
-        `;
-        
-        await db(foodicsOrdersSQL, [
-            tenantId, customerMap['CUST_001'], customerMap['CUST_002'], tenantId
-        ]);
-        
-        // Get summary stats
-        const [localOrdersResult] = await db('SELECT COUNT(*) as count, SUM(total) as total_amount FROM paid_orders WHERE tenant_id = $1', [tenantId]);
-        const [foodicsOrdersResult] = await db('SELECT COUNT(*) as count, SUM(total) as total_amount FROM sales_orders WHERE tenant_id = $1', [tenantId]);
-        
-        res.json({
-            success: true,
-            message: 'Sample data inserted successfully',
-            data: {
-                tenant: tenantResult[0].name || 'N/A',
-                localOrders: {
-                    count: parseInt(localOrdersResult.count || 0),
-                    totalAmount: parseFloat(localOrdersResult.total_amount || 0)
-                },
-                foodicsOrders: {
-                    count: parseInt(foodicsOrdersResult.count || 0),
-                    totalAmount: parseFloat(foodicsOrdersResult.total_amount || 0)
-                }
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error inserting sample data:', error);
-        res.status(500).json({ 
-            error: 'Failed to insert sample data', 
-            details: error.message 
-        });
-    }
 });
 
 // Sync run history
@@ -6996,8 +7595,35 @@ addRoute('post', '/admin/tenants/:id/integrations/foodics/rehydrate-product', ve
     try {
       const img = pickImageUrlFromRecord(item);
       if (img) {
-        newUrl = img;
-        await db('update products set image_url=$1 where tenant_id=$2 and id=$3', [img, tenantId, pid]);
+        // Copy image from Foodics to Google Cloud Storage
+        if (ASSETS_BUCKET && bucket) {
+          try {
+            // Generate a filename based on product info
+            const productName = (prod.name || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50);
+            const productSku = (prod.sku || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
+            const originalFilename = img.split('/').pop()?.split('?')[0] || 'image';
+            const fileExtension = originalFilename.split('.').pop() || 'jpg';
+            const customFilename = `${productSku || productName || 'product'}_${Date.now()}.${fileExtension}`;
+            
+            console.log(`Copying image for product ${prod.name}: ${img}`);
+            const cloudStorageUrl = await copyImageToCloudStorage(img, tenantId, customFilename);
+            
+            if (cloudStorageUrl) {
+              newUrl = cloudStorageUrl;
+              console.log(`Successfully copied image to: ${cloudStorageUrl}`);
+            } else {
+              newUrl = img; // fallback to original URL
+              console.warn(`Failed to copy image for product ${prod.name}, keeping original URL`);
+            }
+          } catch (error) {
+            console.error(`Error copying image for product ${prod.name}:`, error);
+            newUrl = img; // fallback to original URL
+          }
+        } else {
+          newUrl = img; // no cloud storage available, use original URL
+        }
+        
+        await db('update products set image_url=$1 where tenant_id=$2 and id=$3', [newUrl, tenantId, pid]);
         updated = true;
       }
     } catch {}
@@ -7006,11 +7632,13 @@ addRoute('post', '/admin/tenants/:id/integrations/foodics/rehydrate-product', ve
     if (mode !== 'image') {
       try {
         const nameNew = item?.name || null;
+        const nameLocalizedNew = item?.name_localized || item?.name_ar || null;
         const priceNew = Number(item?.price);
         const barcodeNew = item?.barcode ? String(item.barcode) : null;
         const fields = [];
         const params = [];
         if (nameNew != null) { fields.push('name=$' + (params.length+1)); params.push(nameNew); }
+        if (nameLocalizedNew != null) { fields.push('name_localized=$' + (params.length+1)); params.push(nameLocalizedNew); }
         if (Number.isFinite(priceNew)) { fields.push('price=$' + (params.length+1)); params.push(priceNew); }
         if (barcodeNew != null) { fields.push('barcode=$' + (params.length+1)); params.push(barcodeNew); }
         if (fields.length) {
@@ -7080,22 +7708,6 @@ addRoute('get', '/admin/tenants/:id/integrations/foodics/sync-runs', verifyAuthO
   } catch { return res.json({ items: [] }); }
 });
 
-// Auto-import Foodics sales for all tenants (cron-triggered)
-addRoute('post', '/admin/integrations/foodics/auto-import-sales', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
-  if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
-  const adminTok = String(req.header('x-admin-token')||'');
-  if (ADMIN_TOKEN && adminTok !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
-  
-  try {
-    const { autoImportAllTenants } = require('./scripts/auto_import_foodics_sales.js');
-    const result = await autoImportAllTenants();
-    return res.json(result);
-  } catch (error) {
-    console.error('Auto import sales endpoint failed:', error);
-    return res.status(500).json({ error: 'auto_import_failed', message: error.message });
-  }
-});
-
 // Sync-all (cron-triggered). Evaluates per-tenant schedule stored in tenant_api_integrations.meta.sync
 addRoute('post', '/admin/integrations/foodics/sync-all', verifyAuthOpen, requirePlatformAdminOpen, async (req, res) => {
   if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
@@ -7157,6 +7769,555 @@ addRoute('get', '/admin/ping', verifyAuthOpen, requirePlatformAdminOpen, async (
   catch { return res.json({ ok: true }); }
 });
 
+// Debug endpoint to test image copying
+addRoute('post', '/admin/debug/copy-image', verifyAuthOpen, async (req, res) => {
+  const { sourceUrl, tenantId, filename } = req.body;
+  
+  if (!sourceUrl || !tenantId) {
+    return res.status(400).json({ error: 'sourceUrl and tenantId required' });
+  }
+  
+  try {
+    console.log('Debug: Testing image copy from', sourceUrl);
+    console.log('Debug: ASSETS_BUCKET =', ASSETS_BUCKET);
+    console.log('Debug: bucket exists =', !!bucket);
+    
+    if (!ASSETS_BUCKET || !bucket) {
+      return res.json({ 
+        error: 'cloud_storage_not_configured',
+        ASSETS_BUCKET: ASSETS_BUCKET || 'not_set',
+        bucket: !!bucket
+      });
+    }
+    
+    const result = await copyImageToCloudStorage(sourceUrl, tenantId, filename || 'test-image.jpg');
+    
+    return res.json({
+      success: !!result,
+      originalUrl: sourceUrl,
+      cloudUrl: result,
+      ASSETS_BUCKET: ASSETS_BUCKET
+    });
+  } catch (error) {
+    console.error('Debug image copy error:', error);
+    return res.status(500).json({ 
+      error: 'copy_failed', 
+      message: error.message,
+      ASSETS_BUCKET: ASSETS_BUCKET || 'not_set',
+      bucket: !!bucket
+    });
+  }
+});
+
+// Modifier sync endpoints
+// Debug endpoint for schema inspection
+addRoute('get', '/admin/sync-modifiers/debug', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    const debug = {};
+    
+    // Get table schemas
+    debug.modifier_groups_columns = await db(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'modifier_groups' 
+      ORDER BY ordinal_position
+    `);
+    
+    debug.product_modifier_groups_columns = await db(`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'product_modifier_groups' 
+      ORDER BY ordinal_position
+    `);
+    
+    // Get foreign key constraints
+    debug.foreign_keys = await db(`
+      SELECT 
+        tc.table_name, 
+        kcu.column_name, 
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name 
+      FROM 
+        information_schema.table_constraints AS tc 
+        JOIN information_schema.key_column_usage AS kcu
+          ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage AS ccu
+          ON ccu.constraint_name = tc.constraint_name
+          AND ccu.table_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY' 
+        AND tc.table_name = 'product_modifier_groups'
+    `);
+    
+    // Sample data from modifier_groups
+    debug.sample_modifier_groups = await db(`
+      SELECT id, reference, name, tenant_id FROM modifier_groups 
+      WHERE tenant_id = 'f8578f9c-782b-4d31-b04f-3b2d890c5896'
+      ORDER BY reference LIMIT 10
+    `);
+    
+    // Sample data from product_modifier_groups
+    debug.sample_product_modifier_groups = await db(`
+      SELECT * FROM product_modifier_groups LIMIT 5
+    `);
+    
+    res.json(debug);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+addRoute('post', '/admin/sync-modifiers/test', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    const tenantId = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+    const productSku = 'PIC-101';  // First product from the CSV
+    
+    // Get a product ID
+    const productResult = await db('SELECT id FROM products WHERE tenant_id = $1 AND sku = $2 LIMIT 1', [tenantId, productSku]);
+    if (!productResult.length) {
+      return res.json({ error: 'Product not found', productSku });
+    }
+    const productId = productResult[0].id;
+    
+    // Get a modifier group ID
+    const modifierResult = await db('SELECT id, reference FROM modifier_groups WHERE tenant_id = $1 AND reference = $2 LIMIT 1', [tenantId, 'extra']);
+    if (!modifierResult.length) {
+      return res.json({ error: 'Modifier group not found' });
+    }
+    const modifierGroupId = modifierResult[0].id;
+    
+    try {
+      // Try to insert using group_id
+      await db('INSERT INTO product_modifier_groups (product_id, group_id) VALUES ($1, $2)', [productId, modifierGroupId]);
+      res.json({ success: true, method: 'group_id', productId, modifierGroupId });
+    } catch (error1) {
+      try {
+        // Try to insert using modifier_group_id
+        await db('INSERT INTO product_modifier_groups (product_id, modifier_group_id) VALUES ($1, $2)', [productId, modifierGroupId]);
+        res.json({ success: true, method: 'modifier_group_id', productId, modifierGroupId });
+      } catch (error2) {
+        res.json({ 
+          success: false, 
+          error1: error1.message, 
+          error2: error2.message,
+          productId,
+          modifierGroupId,
+          modifierReference: modifierResult[0].reference
+        });
+      }
+    }
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+addRoute('get', '/admin/sync-modifiers/constraints', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    // Get detailed constraint information
+    const constraints = await db(`
+      SELECT 
+        tc.constraint_name,
+        tc.constraint_type,
+        tc.table_name,
+        tc.table_schema,
+        kcu.column_name,
+        ccu.table_schema AS foreign_table_schema,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name,
+        rc.delete_rule,
+        rc.update_rule
+      FROM 
+        information_schema.table_constraints tc
+        LEFT JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+        LEFT JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+          AND ccu.table_schema = tc.table_schema
+        LEFT JOIN information_schema.referential_constraints rc
+          ON tc.constraint_name = rc.constraint_name
+          AND tc.table_schema = rc.constraint_schema
+      WHERE tc.table_name = 'product_modifier_groups'
+        AND tc.constraint_type = 'FOREIGN KEY'
+      ORDER BY tc.constraint_name
+    `);
+    
+    // Check which tables exist and their schemas  
+    const tables = await db(`
+      SELECT schemaname, tablename, tableowner 
+      FROM pg_tables 
+      WHERE tablename IN ('modifier_groups', 'product_modifier_groups')
+      ORDER BY schemaname, tablename
+    `);
+    
+    // Get all modifier_groups in all schemas
+    const allModifierGroups = await db(`
+      SELECT current_schema() as schema_name, COUNT(*) as count
+      FROM modifier_groups
+      WHERE tenant_id = 'f8578f9c-782b-4d31-b04f-3b2d890c5896'
+    `);
+    
+    res.json({
+      constraints,
+      tables,
+      allModifierGroups,
+      current_schema: await db('SELECT current_schema()')
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+addRoute('get', '/admin/sync-modifiers/schemas', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    const tenantId = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+    
+    // Check products in each schema
+    const schemas = ['catalog', 'public', 'saas'];
+    const schemaData = {};
+    
+    for (const schema of schemas) {
+      try {
+        const productCount = await db(`SELECT COUNT(*) FROM ${schema}.products WHERE tenant_id = $1`, [tenantId]);
+        const modifierGroupCount = await db(`SELECT COUNT(*) FROM ${schema}.modifier_groups WHERE tenant_id = $1`, [tenantId]);
+        const pmgCount = await db(`SELECT COUNT(*) FROM ${schema}.product_modifier_groups`);
+        
+        schemaData[schema] = {
+          products: parseInt(productCount[0].count),
+          modifier_groups: parseInt(modifierGroupCount[0].count),
+          product_modifier_groups: parseInt(pmgCount[0].count)
+        };
+      } catch (error) {
+        schemaData[schema] = { error: error.message };
+      }
+    }
+    
+    // Check which schema our current queries are using by default
+    const defaultQueries = {
+      current_schema: await db('SELECT current_schema()'),
+      search_path: await db('SHOW search_path'),
+      products: await db('SELECT COUNT(*) FROM products WHERE tenant_id = $1', [tenantId]),
+      modifier_groups: await db('SELECT COUNT(*) FROM modifier_groups WHERE tenant_id = $1', [tenantId])
+    };
+    
+    res.json({
+      schemaData,
+      defaultQueries
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// SIMPLE WORKAROUND - Just bypass all the complexity!
+addRoute('post', '/admin/sync-modifiers/simple', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    const { simpleModifierSync } = require('./simple_modifier_sync');
+    
+    // Set response headers to stream output
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    res.write('🚀 Starting SIMPLE modifier sync...\n');
+    
+    // Override console.log to send updates to client
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args) => {
+      originalLog(...args);
+      res.write(args.join(' ') + '\n');
+    };
+    
+    console.error = (...args) => {
+      originalError(...args);
+      res.write('ERROR: ' + args.join(' ') + '\n');
+    };
+    
+    // Run the simple sync using the existing database connection
+    await simpleModifierSync(db);
+    
+    // Restore console functions
+    console.log = originalLog;
+    console.error = originalError;
+    
+    res.write('\n✅ SIMPLE sync completed!\n');
+    res.end();
+    
+  } catch (error) {
+    res.write('\n❌ SIMPLE sync failed: ' + error.message + '\n');
+    res.status(500).end();
+  }
+});
+
+// FINAL WORKING SYNC - The one that actually works!
+addRoute('post', '/admin/sync-modifiers/final', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    const { finalModifierSync } = require('./final_modifier_sync');
+    
+    // Set response headers to stream output
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    res.write('🎉 Starting FINAL working modifier sync...\n');
+    
+    // Override console.log to send updates to client
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args) => {
+      originalLog(...args);
+      res.write(args.join(' ') + '\n');
+    };
+    
+    console.error = (...args) => {
+      originalError(...args);
+      res.write('ERROR: ' + args.join(' ') + '\n');
+    };
+    
+    // Run the final sync
+    await finalModifierSync(db);
+    
+    // Restore console functions
+    console.log = originalLog;
+    console.error = originalError;
+    
+    res.write('\n🎆 FINAL sync completed successfully!\n');
+    res.end();
+    
+  } catch (error) {
+    res.write('\n❌ FINAL sync failed: ' + error.message + '\n');
+    res.status(500).end();
+  }
+});
+
+// DEBUG ENDPOINT - Check modifier relationships
+addRoute('post', '/admin/debug/modifiers', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    const { debugModifiers } = require('./debug_modifiers');
+    
+    // Set response headers to stream output
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    res.write('🔍 Starting modifier debug...\n');
+    
+    // Override console.log to send updates to client
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args) => {
+      originalLog(...args);
+      res.write(args.join(' ') + '\n');
+    };
+    
+    console.error = (...args) => {
+      originalError(...args);
+      res.write('ERROR: ' + args.join(' ') + '\n');
+    };
+    
+    // Run the debug
+    await debugModifiers(db);
+    
+    // Restore console functions
+    console.log = originalLog;
+    console.error = originalError;
+    
+    res.write('\n🎆 Debug completed!\n');
+    res.end();
+    
+  } catch (error) {
+    res.write('\n❌ Debug failed: ' + error.message + '\n');
+    res.status(500).end();
+  }
+});
+
+addRoute('get', '/admin/sync-modifiers/status', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    // Try to create tables first in case they don't exist
+    try {
+      await db(`CREATE TABLE IF NOT EXISTS modifier_groups (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        reference text NOT NULL,
+        name text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`);
+    } catch (createError1) {}
+    
+    // Always try to add constraints (will be ignored if they exist)
+    try {
+      await db(`CREATE UNIQUE INDEX IF NOT EXISTS idx_modifier_groups_reference ON modifier_groups(reference)`);
+    } catch (constraintError1) {}
+      
+    try {
+      await db(`CREATE TABLE IF NOT EXISTS modifier_options (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        modifier_group_id uuid,
+        name text NOT NULL,
+        price numeric(10,2) NOT NULL DEFAULT 0.00,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      
+      // Add modifier_group_id column if it doesn't exist
+      await db(`ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS modifier_group_id uuid`);
+      
+      // Try to add foreign key constraint (might fail if it already exists)
+      try {
+        await db(`ALTER TABLE modifier_options ADD CONSTRAINT fk_modifier_options_group FOREIGN KEY (modifier_group_id) REFERENCES modifier_groups(id) ON DELETE CASCADE`);
+      } catch {}
+    } catch (createError2) {}
+      
+    try {
+      await db(`CREATE UNIQUE INDEX IF NOT EXISTS idx_modifier_options_group_name ON modifier_options(modifier_group_id, name)`);
+    } catch (constraintError2) {}
+      
+    try {
+      await db(`CREATE TABLE IF NOT EXISTS product_modifier_groups (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        product_id uuid,
+        modifier_group_id uuid,
+        minimum_selections integer NOT NULL DEFAULT 0,
+        maximum_selections integer NOT NULL DEFAULT 1,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      
+      // Add columns if they don't exist
+      await db(`ALTER TABLE product_modifier_groups ADD COLUMN IF NOT EXISTS product_id uuid`);
+      await db(`ALTER TABLE product_modifier_groups ADD COLUMN IF NOT EXISTS modifier_group_id uuid`);
+      
+      // Try to add foreign key constraints (might fail if they already exist)
+      try {
+        await db(`ALTER TABLE product_modifier_groups ADD CONSTRAINT fk_pmg_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE`);
+      } catch {}
+      try {
+        await db(`ALTER TABLE product_modifier_groups ADD CONSTRAINT fk_pmg_modifier_group FOREIGN KEY (modifier_group_id) REFERENCES modifier_groups(id) ON DELETE CASCADE`);
+      } catch {}
+    } catch (createError3) {}
+      
+    try {
+      await db(`CREATE UNIQUE INDEX IF NOT EXISTS idx_product_modifier_groups_unique ON product_modifier_groups(product_id, modifier_group_id)`);
+    } catch (constraintError3) {}
+    
+    const modifierGroupCount = await db('SELECT COUNT(*) FROM modifier_groups');
+    const modifierOptionCount = await db('SELECT COUNT(*) FROM modifier_options');
+    const productModifierCount = await db('SELECT COUNT(*) FROM product_modifier_groups');
+    const productsWithModifiers = await db(`
+      SELECT COUNT(DISTINCT p.id) 
+      FROM products p 
+      INNER JOIN product_modifier_groups pmg ON p.id = pmg.product_id
+    `);
+    
+    res.json({
+      status: 'ok',
+      stats: {
+        modifier_groups: parseInt((modifierGroupCount.rows && modifierGroupCount.rows[0] && modifierGroupCount.rows[0].count) || '0'),
+        modifier_options: parseInt((modifierOptionCount.rows && modifierOptionCount.rows[0] && modifierOptionCount.rows[0].count) || '0'),
+        product_modifier_links: parseInt((productModifierCount.rows && productModifierCount.rows[0] && productModifierCount.rows[0].count) || '0'),
+        products_with_modifiers: parseInt((productsWithModifiers.rows && productsWithModifiers.rows[0] && productsWithModifiers.rows[0].count) || '0')
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+});
+
+addRoute('post', '/admin/sync-modifiers/trigger', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_required' });
+    
+    console.log('🚀 Starting modifier sync via HTTP endpoint...');
+    
+    // Set response headers to keep connection alive during long operation
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    // Send initial response
+    res.write('🚀 Starting modifier sync from CSV data...\n');
+    
+    // Override console.log to send updates to client
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args) => {
+      originalLog(...args);
+      try {
+        res.write(args.join(' ') + '\n');
+      } catch {}
+    };
+    
+    console.error = (...args) => {
+      originalError(...args);
+      try {
+        res.write('ERROR: ' + args.join(' ') + '\n');
+      } catch {}
+    };
+    
+    // Import the sync function
+    try {
+      const { syncModifiersFromCSV } = require('./scripts/sync_modifiers_from_csv');
+      
+      // Run the sync with the existing db connection and Koobs tenant ID
+      const koobsTenantId = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+      await syncModifiersFromCSV(db, koobsTenantId);
+      
+      // Restore console functions
+      console.log = originalLog;
+      console.error = originalError;
+      
+      res.write('\n✅ Modifier sync completed successfully!\n');
+      res.end();
+    } catch (importError) {
+      console.log = originalLog;
+      console.error = originalError;
+      
+      console.error('❌ Sync script import failed:', importError.message);
+      res.write('\n❌ Sync script import failed: ' + importError.message + '\n');
+      res.status(500).end();
+    }
+    
+  } catch (error) {
+    console.error('❌ Sync failed:', error.message);
+    res.write('\n❌ Sync failed: ' + error.message + '\n');
+    res.status(500).end();
+  }
+});
+
 // Signed upload URL for assets (logos, product images)
 const ASSETS_BUCKET = process.env.ASSETS_BUCKET || '';
 const ASSETS_CACHE_CONTROL = process.env.ASSETS_CACHE_CONTROL || 'public, max-age=31536000, immutable';
@@ -7171,6 +8332,95 @@ if (ASSETS_BUCKET) {
   }
 } else {
   try { console.warn('[assets] ASSETS_BUCKET not set; asset upload endpoints will be disabled'); } catch {}
+}
+
+// Image copying utilities - downloads from external sources and stores in cloud storage
+async function copyImageToCloudStorage(externalUrl, tenantId, filename) {
+  if (!ASSETS_BUCKET || !externalUrl) return null;
+  
+  try {
+    // Download the image from external URL
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(externalUrl);
+    
+    if (!response.ok) {
+      console.warn(`Failed to download image from ${externalUrl}: ${response.status}`);
+      return null;
+    }
+    
+    const buffer = await response.buffer();
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    
+    // Generate a unique filename if not provided
+    if (!filename) {
+      const urlParts = externalUrl.split('/');
+      const originalFilename = urlParts[urlParts.length - 1].split('?')[0];
+      const timestamp = Date.now();
+      filename = `${timestamp}-${originalFilename}`;
+    }
+    
+    // Upload to cloud storage
+    const objectName = `tenants/${tenantId}/products/${filename}`;
+    const file = bucket.file(objectName);
+    
+    const stream = file.createWriteStream({
+      metadata: {
+        contentType: contentType,
+        cacheControl: ASSETS_CACHE_CONTROL
+      },
+      public: true
+    });
+    
+    return new Promise((resolve, reject) => {
+      stream.on('error', (err) => {
+        console.error(`Error uploading image to cloud storage:`, err);
+        reject(err);
+      });
+      
+      stream.on('finish', () => {
+        const publicUrl = `https://storage.googleapis.com/${ASSETS_BUCKET}/${objectName}`;
+        console.log(`Successfully copied image to cloud storage: ${publicUrl}`);
+        resolve(publicUrl);
+      });
+      
+      stream.end(buffer);
+    });
+    
+  } catch (error) {
+    console.error(`Error copying image to cloud storage:`, error);
+    return null;
+  }
+}
+
+// Image URL utilities - ensures all images use cloud storage
+function normalizeImageUrl(url) {
+  if (!url) return null;
+  
+  // If it's already a full cloud storage URL, return as-is
+  // This preserves tenant-specific paths like tenants/{tenantId}/products/{filename}
+  if (url.startsWith('https://storage.googleapis.com/')) {
+    return url;
+  }
+  
+  // If it's a relative path starting with /images/, convert to cloud storage
+  if (url.startsWith('/images/') && ASSETS_BUCKET) {
+    const path = url.replace('/images/', 'images/');
+    return `https://storage.googleapis.com/${ASSETS_BUCKET}/${path}`;
+  }
+  
+  // If it starts with images/ (no leading slash), also convert
+  if (url.startsWith('images/') && ASSETS_BUCKET) {
+    return `https://storage.googleapis.com/${ASSETS_BUCKET}/${url}`;
+  }
+  
+  // For external URLs (like Foodics), return as-is to let the image proxy handle them
+  // This avoids breaking valid external URLs while they're being migrated
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    return url;
+  }
+  
+  // Otherwise return the original URL
+  return url;
 }
 
 // Integrations: Foodics client
@@ -7336,12 +8586,15 @@ async function ensureModifiersSchema(){
   // New optional columns used for Foodics-like option creation
   try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS tax_group_reference text'); } catch {}
   try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS costing_method text'); } catch {}
-  // Soft-delete support (Foodics uses soft deletes)
-  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS deleted_at timestamptz'); } catch {}
-  try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS deleted_at timestamptz'); } catch {}
   // Localized names
   try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS name_localized text'); } catch {}
   try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS name_localized text'); } catch {}
+  // Soft delete support for imported items
+  try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS deleted_at timestamptz'); } catch {}
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS deleted_at timestamptz'); } catch {}
+  // External ID for sync
+  try { await db('ALTER TABLE IF EXISTS modifier_groups ADD COLUMN IF NOT EXISTS external_id text'); } catch {}
+  try { await db('ALTER TABLE IF EXISTS modifier_options ADD COLUMN IF NOT EXISTS external_id text'); } catch {}
 }
 
 // List modifier groups
@@ -7355,10 +8608,12 @@ addRoute('get', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenant
              mg.name,
              mg.name_localized,
              mg.reference,
+             mg.external_id,
              mg.min_select,
              mg.max_select,
              mg.required,
              mg.created_at,
+             mg.deleted_at,
              coalesce(o.cnt,0) as options_count,
              coalesce(p.cnt,0) as products_count
         from modifier_groups mg
@@ -7378,7 +8633,7 @@ addRoute('get', '/admin/tenants/:id/modifiers/groups', verifyAuth, requireTenant
     return res.json({ items: rows });
   } catch (_e) {
     // Fallback to basic projection
-    const rows = await db('select id, tenant_id, name, name_localized, reference, min_select, max_select, required, created_at from modifier_groups where tenant_id=$1 order by name asc', [req.params.id]);
+    const rows = await db('select id, tenant_id, name, name_localized, reference, external_id, min_select, max_select, required, created_at, deleted_at from modifier_groups where tenant_id=$1 order by name asc', [req.params.id]);
     return res.json({ items: rows });
   }
 });
@@ -7423,7 +8678,7 @@ addRoute('get', '/admin/tenants/:id/modifiers/options', verifyAuth, requireTenan
   if (!HAS_DB) return res.json({ items: [] });
   await ensureModifiersSchema();
   const gid = String(req.query.group_id || '').trim();
-  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, g.reference as group_reference, o.name, o.name_localized, o.reference, o.tax_group_reference, o.costing_method, o.price, o.is_active, o.sort_order, o.created_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
+  let sql = 'select o.id, o.tenant_id, o.group_id, g.name as group_name, g.reference as group_reference, o.name, o.name_localized, o.reference, o.external_id, o.tax_group_reference, o.costing_method, o.price, o.is_active, o.sort_order, o.created_at, o.deleted_at from modifier_options o join modifier_groups g on g.id=o.group_id where o.tenant_id=$1';
   const params = [req.params.id];
   if (gid) { sql += ' and o.group_id=$2'; params.push(gid); }
   sql += ' order by g.name asc, coalesce(o.sort_order, 999999) asc, o.name asc';
@@ -7467,6 +8722,68 @@ addRoute('delete', '/admin/tenants/:id/modifiers/options/:oid', verifyAuth, requ
   await ensureModifiersSchema();
   await db('delete from modifier_options where tenant_id=$1 and id=$2', [req.params.id, req.params.oid]);
   res.json({ ok:true });
+});
+
+// Move inactive items to deleted status
+addRoute('post', '/admin/tenants/:id/modifiers/move-inactive-to-deleted', verifyAuth, requireTenantAdminParam, async (req, res) => {
+  if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
+  await ensureModifiersSchema();
+  const tenantId = req.params.id;
+  
+  try {
+    let movedGroups = 0;
+    let movedOptions = 0; 
+    let movedProducts = 0;
+    
+    // Move inactive modifier options to deleted (where is_active = false)
+    const optionResult = await db(`
+      UPDATE modifier_options 
+      SET deleted_at = NOW() 
+      WHERE tenant_id = $1
+        AND deleted_at IS NULL 
+        AND is_active = false
+    `, [tenantId]);
+    movedOptions = optionResult.rowCount || 0;
+    
+    // Move inactive products to deleted (where active = false)
+    const productResult = await db(`
+      UPDATE products 
+      SET deleted_at = NOW() 
+      WHERE tenant_id = $1
+        AND deleted_at IS NULL 
+        AND active = false
+    `, [tenantId]);
+    movedProducts = productResult.rowCount || 0;
+    
+    // Move modifier groups that are not required and have no active options to deleted
+    const groupResult = await db(`
+      UPDATE modifier_groups 
+      SET deleted_at = NOW() 
+      WHERE tenant_id = $1
+        AND deleted_at IS NULL 
+        AND (required = false OR required IS NULL)
+        AND id NOT IN (
+          SELECT DISTINCT group_id 
+          FROM modifier_options 
+          WHERE tenant_id = $1
+            AND is_active = true 
+            AND deleted_at IS NULL
+        )
+    `, [tenantId]);
+    movedGroups = groupResult.rowCount || 0;
+    
+    res.json({ 
+      ok: true, 
+      moved: {
+        groups: movedGroups,
+        options: movedOptions,
+        products: movedProducts,
+        total: movedGroups + movedOptions + movedProducts
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'move_failed', detail: error.message });
+  }
 });
 
 // ---- Device activation and licensing
@@ -7608,7 +8925,7 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
       }
     } catch {}
 
-    // License limit for on-the-fly device creation
+  // License limit for on-the-fly device creation
   try {
     const limit = await readLicenseLimit(tenantId);
     const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
@@ -7616,13 +8933,47 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
   } catch {}
   // Create device immediately and claim the code (no pre-created device)
   const token = genDeviceToken();
+  
+  // Get or create branch_id for the branch name
+  let branchId = null;
+  if (branch && branch.trim()) {
+    try {
+      // Try to find existing branch
+      const branchRows = await db('select branch_id from branches where branch_name=$1 and tenant_id=$2 limit 1', [branch.trim(), tenantId]);
+      if (branchRows && branchRows.length) {
+        branchId = branchRows[0].branch_id;
+      } else {
+        // Create new branch with LiveKit room
+        const [newBranch] = await db('insert into branches (branch_name, tenant_id) values ($1, $2) returning branch_id', [branch.trim(), tenantId]);
+        branchId = newBranch.branch_id;
+        
+        // Create LiveKit room for the new branch
+        try {
+          await ensureLiveKitRoomsSchema();
+          const roomName = `branch_${branchId}`;
+          await db(
+            `INSERT INTO livekit_rooms (tenant_id, display_device_id, room_name, status, last_heartbeat_at, metadata)
+             VALUES ($1, $2, $3, 'active', now(), $4)
+             ON CONFLICT (room_name) DO NOTHING`,
+            [tenantId, branchId, roomName, JSON.stringify({ branch_id: branchId, branch_name: branch.trim(), created_by: 'device_register_auto_branch' })]
+          );
+          console.log(`[device-register] Auto-created LiveKit room: ${roomName} for branch: ${branch.trim()}`);
+        } catch (roomErr) {
+          console.warn('[device-register] Auto-created branch room failed:', roomErr.message);
+        }
+      }
+    } catch (e) {
+      console.warn('[device-register] Branch lookup/create failed:', e.message);
+    }
+  }
+  
   let dev;
   try {
     [dev] = await db(
-      `insert into devices (tenant_id, device_name, role, status, branch, device_token)
-       values ($1,$2,$3,'active',$4,$5)
-       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, null::text as short_code`,
-      [tenantId, name||null, role, branch||null, token]
+      `insert into devices (tenant_id, device_name, role, status, branch, branch_id, device_type, device_token)
+       values ($1,$2,$3,'active',$4,$5,$6,$7)
+       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, branch_id, device_type, activated_at, null::text as short_code`,
+      [tenantId, name||null, role, branch||null, branchId, role, token]
     );
   } catch (_e) {
     // Legacy schema fallback: name/id columns
@@ -7934,29 +9285,45 @@ addRoute('post', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPar
   const role = String(req.body?.role||'').trim().toLowerCase();
   const name = String(req.body?.name||'').trim();
   let branch = String(req.body?.branch||'').trim();
+  let branchId = null;
+  
   if (role !== 'cashier' && role !== 'display') return res.status(400).json({ error: 'invalid_role' });
-  // If branch looks like a UUID, resolve to branch name
+  
+  // If branch looks like a UUID, resolve to branch name and get branch_id
   if (branch && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branch)) {
-    const [b] = await db('select branch_name as name from branches where tenant_id=$1 and branch_id=$2', [tenantId, branch]);
+    const [b] = await db('select branch_name as name, branch_id from branches where tenant_id=$1 and branch_id=$2', [tenantId, branch]);
     if (!b) return res.status(404).json({ error: 'branch_not_found' });
     branch = b.name;
+    branchId = b.branch_id;
+  } else if (branch && branch.trim()) {
+    // Lookup branch_id from branch name
+    try {
+      const [b] = await db('select branch_id from branches where tenant_id=$1 and branch_name=$2', [tenantId, branch.trim()]);
+      if (b) branchId = b.branch_id;
+    } catch (e) {
+      console.warn('[admin-device-create] Branch lookup failed:', e.message);
+    }
   }
+  
   if (role === 'display' && !branch) return res.status(400).json({ error: 'branch_required' });
+  
   // License check
   const limit = await readLicenseLimit(tenantId);
   const [{ count }] = await db("select count(*)::int as count from devices where tenant_id=$1 and status='active'", [tenantId]);
   if ((count||0) >= limit) return res.status(409).json({ error: 'license_limit_reached' });
+  
   // Generate unique 6-digit activation code and device token
   let shortCode;
   try { shortCode = await genDeviceShortCode(); } catch { return res.status(500).json({ error: 'code_generation_failed' }); }
   const token = genDeviceToken();
+  
   let dev;
   try {
     [dev] = await db(
-      `insert into devices (tenant_id, device_name, role, status, branch, device_token, short_code)
-       values ($1,$2,$3,'revoked',$4,$5,$6)
-       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, activated_at, short_code::text as short_code`,
-      [tenantId, name||null, role, branch||null, token, shortCode]
+      `insert into devices (tenant_id, device_name, role, status, branch, branch_id, device_type, device_token, short_code)
+       values ($1,$2,$3,'revoked',$4,$5,$6,$7,$8)
+       returning device_id as id, tenant_id, device_name as name, role::text as role, status::text as status, branch, branch_id, device_type, activated_at, short_code::text as short_code`,
+      [tenantId, name||null, role, branch||null, branchId, role, token, shortCode]
     );
   } catch (_e) {
     // Legacy schemas may only allow 'inactive' instead of 'revoked'
@@ -7967,9 +9334,177 @@ addRoute('post', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPar
       [tenantId, name||null, role, branch||null, token, shortCode]
     );
   }
-  try { await logDeviceEvent(tenantId, dev.id, 'created', { role, branch: dev.branch||null }); } catch {}
+  try { await logDeviceEvent(tenantId, dev.id, 'created', { role, branch: dev.branch||null, branch_id: branchId||null }); } catch {}
   return res.json({ ok:true, device: dev });
 });
+
+
+// ---- AI Integration Endpoints ----
+
+// POST /ai/token - Issue ephemeral token for OpenAI access
+addRoute('post', '/ai/token', requireTenant, handleAITokenRequest);
+
+// POST /ai/sessions - Start AI conversation session
+addRoute('post', '/ai/sessions', requireTenant, handleAISessionStart);
+
+// POST /ai/chat/stream - Stream chat completion with OpenAI
+addRoute('post', '/ai/chat/stream', requireTenant, handleAIChatStream);
+
+// POST /ai/events - Log AI conversation events
+addRoute('post', '/ai/events', requireTenant, handleAIEventLog);
+
+// POST /ai/sessions/:sessionId/end - End AI session
+addRoute('post', '/ai/sessions/:sessionId/end', requireTenant, handleAISessionEnd);
+
+// GET /ai/customer-profile - Get customer profile for personalization
+addRoute('get', '/ai/customer-profile', requireTenant, handleCustomerProfileLookup);
+
+// GET /ai/menu-data - Get complete menu data for client-side caching
+addRoute('get', '/ai/menu-data', requireTenant, handleMenuDataLookup);
+
+// POST /ai/whisper/transcribe - Transcribe audio using OpenAI Whisper
+// Special CORS handling for raw body endpoint
+app.options('/ai/whisper/transcribe', cors(corsOptions));
+addRoute('post', '/ai/whisper/transcribe', cors(corsOptions), express.raw({ type: 'audio/*', limit: '25mb' }), requireTenant, handleWhisperTranscribe);
+// ---- OpenAI TTS Endpoints (Primary) ----
+
+// POST /tts/synthesize - Generate speech using OpenAI TTS (default endpoint)
+addRoute('post', '/tts/synthesize', async (req, res) => {
+  try {
+    if (!openaiTTSService.isAvailable) {
+      return res.status(503).json({ error: 'tts_unavailable' });
+    }
+
+    const {
+      text,
+      language = 'ar-KW', // Default to Kuwaiti Arabic
+      voice,
+      model,
+      speed = 0.95 // Slightly slower speed for good clarity
+    } = req.body;
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text_required' });
+    }
+
+    console.log(`[OpenAI TTS] Synthesizing: "${text.substring(0, 50)}..."`);
+
+    const audioBuffer = await openaiTTSService.synthesizeSpeech({
+      text,
+      language,
+      voice,
+      model,
+      speed
+    });
+
+    // Set response headers for audio
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', audioBuffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS for audio
+    
+    res.send(audioBuffer);
+    
+  } catch (error) {
+    console.error('[OpenAI TTS] Speech synthesis failed:', error);
+    res.status(500).json({ error: 'synthesis_failed', message: error.message });
+  }
+});
+
+// GET /tts/voices - Get available OpenAI voices (default endpoint)
+addRoute('get', '/tts/voices', async (req, res) => {
+  try {
+    const languageCode = req.query.lang || 'ar-KW';
+    const voices = openaiTTSService.getVoicesForLanguage(languageCode);
+    res.json({ voices, languageCode, service: 'OpenAI' });
+  } catch (error) {
+    console.error('[OpenAI TTS] Get voices failed:', error);
+    res.status(500).json({ error: 'voices_fetch_failed' });
+  }
+});
+
+// GET /tts/health - OpenAI TTS service health check (default endpoint)
+addRoute('get', '/tts/health', async (req, res) => {
+  try {
+    const health = await openaiTTSService.healthCheck();
+    res.json(health);
+  } catch (error) {
+    console.error('[OpenAI TTS] Health check failed:', error);
+    res.status(500).json({ status: 'unhealthy', service: 'OpenAI TTS', error: error.message });
+  }
+});
+
+// ---- OpenAI TTS Endpoints (Alternative paths) ----
+
+// POST /tts/openai/synthesize - Generate speech using OpenAI TTS (Best for Arabic)
+addRoute('post', '/tts/openai/synthesize', async (req, res) => {
+  try {
+    if (!openaiTTSService.isAvailable) {
+      return res.status(503).json({ error: 'openai_tts_unavailable' });
+    }
+
+    const {
+      text,
+      language = 'ar-KW',
+      voice,
+      model,
+      speed = 0.95 // Slightly slower speed for good clarity
+    } = req.body;
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text_required' });
+    }
+
+    console.log(`[OpenAI TTS] Synthesizing: "${text.substring(0, 50)}..."`);
+
+    const audioBuffer = await openaiTTSService.synthesizeSpeech({
+      text,
+      language,
+      voice,
+      model,
+      speed
+    });
+
+    // Set response headers for audio
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', audioBuffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS for audio
+    
+    res.send(audioBuffer);
+    
+  } catch (error) {
+    console.error('[OpenAI TTS] Speech synthesis failed:', error);
+    res.status(500).json({ error: 'synthesis_failed', message: error.message });
+  }
+});
+
+// GET /tts/openai/voices - Get available OpenAI voices for a language
+addRoute('get', '/tts/openai/voices', async (req, res) => {
+  try {
+    const languageCode = req.query.lang || 'ar-KW';
+    const voices = openaiTTSService.getVoicesForLanguage(languageCode);
+    res.json({ voices, languageCode, service: 'OpenAI' });
+  } catch (error) {
+    console.error('[OpenAI TTS] Get voices failed:', error);
+    res.status(500).json({ error: 'voices_fetch_failed' });
+  }
+});
+
+// GET /tts/openai/health - OpenAI TTS service health check
+addRoute('get', '/tts/openai/health', async (req, res) => {
+  try {
+    const health = await openaiTTSService.healthCheck();
+    res.json(health);
+  } catch (error) {
+    console.error('[OpenAI TTS] Health check failed:', error);
+    res.status(500).json({ status: 'unhealthy', service: 'OpenAI TTS', error: error.message });
+  }
+});
+
+// ---- End OpenAI TTS ----
+
+// ---- End AI Integration ----
 
 // Tenant admin: list and revoke devices
 addRoute('get', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminParam, async (req, res) => {
@@ -8709,26 +10244,46 @@ addRoute('get', '/admin/tenants/:id/logs', verifyAuth, requireTenantAdminParam, 
 
 // My tenants (for the logged-in user)
 addRoute('get', '/admin/my/tenants', verifyAuthOpen, async (req, res) => {
-  // In dev-open mode or localhost, expose default in-memory tenant(s) and also include host-mapped tenant when available
+  const userEmail = (req.user?.email || '').toLowerCase();
+  const isDevelopmentUser = process.env.DEV_USER_EMAIL && userEmail === process.env.DEV_USER_EMAIL.toLowerCase();
+  const isDevelopmentEnvironment = String(process.env.NODE_ENV || '').toLowerCase() === 'development';
+  
+  // Development user gets default tenants in development environment
+  if (isDevelopmentUser && isDevelopmentEnvironment) {
+    try { ensureMemTenantsSeed(); } catch {}
+    const out = [];
+    try { out.push(...Array.from(__memTenants.values())); } catch {}
+    if (out.length) return res.json(out);
+    return res.json([{ id: DEFAULT_TENANT_ID, name: 'Development Tenant' }]);
+  }
+  // In dev-open mode or localhost, return all database tenants for development
   if (DEV_OPEN_ADMIN || isLocalRequest(req)) {
+    if (HAS_DB) {
+      try {
+        // Return all tenants from database for development (production schema)
+        const rows = await db('select tenant_id as id, company_name as name, company_id as code from saas.tenants where deleted_at is null order by company_name asc');
+        if (rows && rows.length) {
+          return res.json(rows);
+        }
+      } catch (e) {
+        console.error('[admin/my/tenants] Database error in DEV_OPEN_ADMIN mode:', e.message);
+      }
+    }
+    
+    // Fallback to in-memory tenants if database fails
     const out = [];
     try { ensureMemTenantsSeed(); } catch {}
     try { out.push(...Array.from(__memTenants.values())); } catch {}
-    // Include host-mapped tenant to make subdomain.localhost resolve in the UI without manual selection
-    try {
-      if (HAS_DB) {
-        const host = getForwardedHost(req);
-        if (host) {
-          const rows = await db(`select t.tenant_id as id, t.company_name as name from tenant_domains d join tenants t on t.tenant_id=d.tenant_id where d.host=$1 limit 1`, [host]);
-          if (rows && rows[0]) {
-            const tid = String(rows[0].id);
-            if (!out.some(x => String(x.id) === tid)) out.push(rows[0]);
-          }
-        }
-      }
-    } catch {}
     if (out.length) return res.json(out);
     return res.json([{ id: DEFAULT_TENANT_ID, name: 'Fouz Cafe' }]);
+  }
+  // Development fallback: if no database or development environment, provide default tenants
+  if (!HAS_DB || String(process.env.NODE_ENV || '').toLowerCase() === 'development') {
+    try { ensureMemTenantsSeed(); } catch {}
+    const out = [];
+    try { out.push(...Array.from(__memTenants.values())); } catch {}
+    if (out.length) return res.json(out);
+    return res.json([{ id: DEFAULT_TENANT_ID, name: 'Development Tenant' }]);
   }
   if (!HAS_DB) return res.json([]);
   try {
@@ -8975,6 +10530,386 @@ addRoute('post', '/auth/bootstrap-trial', verifyAuth, async (req, res) => {
   } catch (_e) { return res.status(500).json({ error: 'bootstrap_failed' }); }
 });
 
+// ---- Admin API endpoints for dashboard ----
+
+// Helper function to get tenant ID from request headers or authentication
+function getTenantIdFromRequest(req) {
+  // First check X-Tenant-Id header
+  const headerTenant = req.headers['x-tenant-id'];
+  if (headerTenant) return headerTenant;
+  
+  // Fallback to default tenant for development
+  if (process.env.NODE_ENV === 'development') {
+    return DEFAULT_TENANT_ID;
+  }
+  
+  return null;
+}
+
+// Admin: Products
+addRoute('get', '/admin/products', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+    const status = req.query.status || 'active'; // active, inactive, all
+    
+    let whereClause = 'p.tenant_id = $1';
+    const params = [tenantId];
+    
+    if (status === 'active') {
+      whereClause += ' AND coalesce(p.active, true) = true';
+    } else if (status === 'inactive') {
+      whereClause += ' AND coalesce(p.active, true) = false';
+    }
+    // 'all' shows both active and inactive
+    
+    const sql = `
+      SELECT p.id::text as id,
+             p.name,
+             p.name_localized,
+             coalesce(p.price, 0)::float8 as price,
+             p.image_url,
+             p.category_id::text as category_id,
+             c.name as category_name,
+             coalesce(p.active, true) as active,
+             p.sku,
+             p.description,
+             p.created_at
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+       WHERE ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    
+    params.push(limit, offset);
+    const rows = await db(sql, params);
+    
+    // Normalize image URLs to use cloud storage
+    const normalizedRows = (rows || []).map(row => ({
+      ...row,
+      image_url: normalizeImageUrl(row.image_url)
+    }));
+    
+    res.json({ items: normalizedRows });
+  } catch (e) {
+    console.error('[admin/products] Error:', e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Admin: Categories
+addRoute('get', '/admin/categories', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+    
+    const sql = `
+      SELECT c.id::text as id,
+             c.name,
+             c.name_localized,
+             c.reference,
+             c.created_at,
+             (SELECT count(*) FROM products p WHERE p.category_id = c.id AND coalesce(p.active, true) = true) as product_count
+        FROM categories c
+       WHERE c.tenant_id = $1
+       ORDER BY c.name ASC
+       LIMIT $2 OFFSET $3
+    `;
+    
+    const rows = await db(sql, [tenantId, limit, offset]);
+    
+    res.json({ items: rows || [] });
+  } catch (e) {
+    console.error('[admin/categories] Error:', e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Admin: Modifiers (modifier groups and their options)
+addRoute('get', '/admin/modifiers', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    // Check if modifier tables exist
+    try {
+      await ensureModifiersSchema();
+    } catch (e) {
+      console.error('[admin/modifiers] Schema error:', e);
+      return res.json({ items: [] });
+    }
+    
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+    
+    const sql = `
+      SELECT mg.id::text as id,
+             mg.name,
+             mg.reference,
+             mg.min_select,
+             mg.max_select,
+             mg.required,
+             mg.created_at,
+             (
+               SELECT json_agg(
+                 json_build_object(
+                   'id', mo.id::text,
+                   'name', mo.name,
+                   'price', coalesce(mo.price, 0)::float8,
+                   'is_active', coalesce(mo.is_active, true),
+                   'sort_order', mo.sort_order
+                 ) ORDER BY mo.sort_order ASC, mo.name ASC
+               )
+               FROM modifier_options mo 
+               WHERE mo.group_id = mg.id
+             ) as options
+        FROM modifier_groups mg
+       WHERE mg.tenant_id = $1
+       ORDER BY mg.name ASC
+       LIMIT $2 OFFSET $3
+    `;
+    
+    const rows = await db(sql, [tenantId, limit, offset]);
+    
+    res.json({ items: rows || [] });
+  } catch (e) {
+    console.error('[admin/modifiers] Error:', e);
+    res.json({ items: [] }); // Don't fail completely if modifiers don't exist
+  }
+});
+
+// Admin: Dashboard Statistics with Status Breakdown
+addRoute('get', '/admin/dashboard/stats', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ 
+    products: { total: 0, active: 0, inactive: 0 },
+    categories: { total: 0, active: 0, inactive: 0 },
+    modifiers: { total: 0, active: 0, inactive: 0 },
+    orders: { total: 0, pending: 0, completed: 0, cancelled: 0 }
+  });
+  
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    // Products statistics (exact match with /admin/tenants/:id/products endpoint logic)
+    const productStats = await db(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE coalesce(p.active, true) = true) as active,
+        COUNT(*) FILTER (WHERE coalesce(p.active, true) = false) as inactive
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      WHERE p.tenant_id = $1
+    `, [tenantId]);
+    
+    // Categories statistics (exclude deleted categories)
+    const categoryStats = await db(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE coalesce(active, true) = true) as active,
+        COUNT(*) FILTER (WHERE coalesce(active, true) = false) as inactive
+      FROM categories 
+      WHERE tenant_id = $1
+        AND coalesce(deleted, false) = false
+    `, [tenantId]);
+    
+    // Modifiers statistics
+    let modifierStats = [{ total: 0, active: 0, inactive: 0 }];
+    try {
+      await ensureModifiersSchema();
+      modifierStats = await db(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) as active,
+          0 as inactive
+        FROM modifier_groups 
+        WHERE tenant_id = $1
+      `, [tenantId]);
+    } catch (e) {
+      console.log('[admin/dashboard/stats] Modifiers schema not available:', e.message);
+    }
+    
+    // Orders statistics (last 30 days)
+    let orderStats = [{ total: 0, pending: 0, completed: 0, cancelled: 0 }];
+    try {
+      await ensureOrdersSchema();
+      orderStats = await db(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE status = 'completed') as completed,
+          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
+        FROM orders 
+        WHERE tenant_id = $1 
+        AND created_at >= NOW() - INTERVAL '30 days'
+      `, [tenantId]);
+    } catch (e) {
+      console.log('[admin/dashboard/stats] Orders schema not available:', e.message);
+    }
+    
+    const stats = {
+      products: {
+        total: parseInt(productStats[0]?.total || 0),
+        active: parseInt(productStats[0]?.active || 0),
+        inactive: parseInt(productStats[0]?.inactive || 0)
+      },
+      categories: {
+        total: parseInt(categoryStats[0]?.total || 0),
+        active: parseInt(categoryStats[0]?.active || 0),
+        inactive: parseInt(categoryStats[0]?.inactive || 0)
+      },
+      modifiers: {
+        total: parseInt(modifierStats[0]?.total || 0),
+        active: parseInt(modifierStats[0]?.active || 0),
+        inactive: parseInt(modifierStats[0]?.inactive || 0)
+      },
+      orders: {
+        total: parseInt(orderStats[0]?.total || 0),
+        pending: parseInt(orderStats[0]?.pending || 0),
+        completed: parseInt(orderStats[0]?.completed || 0),
+        cancelled: parseInt(orderStats[0]?.cancelled || 0)
+      },
+      tenant_id: tenantId
+    };
+    
+    res.json(stats);
+  } catch (e) {
+    console.error('[admin/dashboard/stats] Error:', e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Admin: Orders
+addRoute('get', '/admin/orders', verifyAuthOpen, async (req, res) => {
+  if (!HAS_DB) return res.json({ items: [] });
+  
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 50)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+    const status = req.query.status || 'all'; // pending, completed, cancelled, all
+    
+    let whereClause = 'o.tenant_id = $1';
+    const params = [tenantId];
+    
+    if (status && status !== 'all') {
+      whereClause += ` AND o.status = $${params.length + 1}`;
+      params.push(status);
+    }
+    
+    const sql = `
+      SELECT o.id::text as id,
+             o.customer_name,
+             o.total::float8 as total,
+             o.status,
+             o.payment_method,
+             o.created_at,
+             o.completed_at,
+             (
+               SELECT json_agg(
+                 json_build_object(
+                   'id', oi.id::text,
+                   'product_name', oi.product_name,
+                   'quantity', oi.quantity,
+                   'price', oi.price::float8
+                 )
+               )
+               FROM order_items oi 
+               WHERE oi.order_id = o.id
+             ) as items
+        FROM orders o
+       WHERE ${whereClause}
+       ORDER BY o.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    
+    params.push(limit, offset);
+    const rows = await db(sql, params);
+    
+    res.json({ items: rows || [] });
+  } catch (e) {
+    console.error('[admin/orders] Error:', e);
+    res.json({ items: [] }); // Don't fail completely if orders don't exist
+  }
+});
+
+// Admin: Foodics Integration Status
+addRoute('get', '/admin/integration/foodics/status', verifyAuthOpen, async (req, res) => {
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    // For now, return a basic status. This can be enhanced later with actual integration data
+    res.json({
+      connected: false,
+      last_sync: null,
+      status: 'not_configured'
+    });
+  } catch (e) {
+    console.error('[admin/integration/foodics/status] Error:', e);
+    res.json({ connected: false, last_sync: null, status: 'error' });
+  }
+});
+
+// Tenant resolve endpoint (used by frontend for tenant resolution)
+addRoute('get', '/tenant/resolve', async (req, res) => {
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenant_id_required' });
+    }
+    
+    if (!HAS_DB) {
+      // Return default tenant info for development
+      return res.json({
+        id: DEFAULT_TENANT_ID,
+        name: 'Koobs Café',
+        code: '494675'
+      });
+    }
+    
+    // Get tenant info from database
+    const rows = await db('SELECT tenant_id as id, company_name as name, short_code as code FROM tenants WHERE tenant_id = $1', [tenantId]);
+    
+    if (!rows.length) {
+      return res.status(404).json({ error: 'tenant_not_found' });
+    }
+    
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[tenant/resolve] Error:', e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // Branch CRUD (tenant admin)
 addRoute('get', '/admin/tenants/:id/branches', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
   if (!HAS_DB) return res.json({ items: [] });
@@ -9001,6 +10936,24 @@ const [lim] = await db('select branch_limit from tenants where tenant_id=$1', [t
 const exists = await db('select 1 from branches where tenant_id=$1 and lower(branch_name)=lower($2)', [tenantId, name]);
   if (exists.length) return res.status(409).json({ error: 'branch_name_exists' });
 const [b] = await db('insert into branches (tenant_id, branch_name) values ($1,$2) returning branch_id as id, branch_name as name, created_at', [tenantId, name]);
+  
+  // Create LiveKit room for the branch
+  try {
+    await ensureLiveKitRoomsSchema();
+    const roomName = `branch_${b.id}`;
+    await db(
+      `INSERT INTO livekit_rooms (tenant_id, display_device_id, room_name, status, last_heartbeat_at, metadata)
+       VALUES ($1, $2, $3, 'active', now(), $4)
+       ON CONFLICT (room_name) DO NOTHING`,
+      [tenantId, b.id, roomName, JSON.stringify({ branch_id: b.id, branch_name: name, created_by: 'branch_creation' })]
+    );
+    console.log(`[branch-create] Created LiveKit room: ${roomName} for branch: ${name}`);
+    try { await logConnectionEvent('livekit_room_created', { roomName, branchId: b.id, branchName: name, tenantId }); } catch {}
+  } catch (roomError) {
+    console.warn('[branch-create] LiveKit room creation failed:', roomError.message);
+    // Continue - branch was created successfully
+  }
+  
   res.json({ ok:true, branch: b });
 });
 addRoute('put', '/admin/tenants/:id/branches/:branchId', verifyAuthOpen, requireTenantAdminParamOpen, async (req, res) => {
@@ -9107,7 +11060,29 @@ app.use('/kiosk/win', express.static(path.join(__dirname, 'kiosk', 'win')));
 
 
 
-// Root admin pages
+// Root admin pages - root path now serves admin dashboard directly
+// Keep /admin route for backward compatibility
+addRoute('get', /^\/admin\/?$/, (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Last-Modified', new Date().toUTCString());
+    res.set('ETag', `"${Date.now()}"`);
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
+});
+// Add /dashboard route to match the URL you're using
+addRoute('get', /^\/dashboard\/?$/, (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Last-Modified', new Date().toUTCString());
+    res.set('ETag', `"${Date.now()}"`);
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
+});
 addRoute('get', '/products/', (_req, res) => res.sendFile(path.join(__dirname, 'products', 'index.html')));
 addRoute('get', '/products/edit/', (_req, res) => { try { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'); res.set('Pragma', 'no-cache'); res.set('Expires', '0'); } catch {} return res.sendFile(path.join(__dirname, 'products', 'edit', 'index.html')); });
 addRoute('get', '/categories/', (_req, res) => res.sendFile(path.join(__dirname, 'categories', 'index.html')));
@@ -9149,20 +11124,114 @@ addRoute('get', '/platform/admins/', (_req, res) => res.sendFile(path.join(__dir
 // Friendly aliases for cashier/display
 addRoute('get', /^\/drive\/?$/,  (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
 addRoute('get', '/drive/', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
-addRoute('get', '/drive',  (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
+addRoute('get', '/', (_req, res) => res.sendFile(path.join(__dirname, 'admin-dashboard.html')));
+// Direct access to admin HTML files
+addRoute('get', '/admin-dashboard.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Last-Modified', new Date().toUTCString());
+    res.set('ETag', `"${Date.now()}"`);
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
+});
+addRoute('get', '/admin-login.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Last-Modified', new Date().toUTCString());
+    res.set('ETag', `"${Date.now()}"`);
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'admin-login.html'));
+});
+addRoute('get', '/ai-test', (_req, res) => res.sendFile(path.join(__dirname, 'ai-integration-test.html')));
+addRoute('get', '/ai-integration-test', (_req, res) => res.sendFile(path.join(__dirname, 'ai-integration-test.html')));
 addRoute('get', '/display', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
 addRoute('get', /^\/cashier\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier/', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
 addRoute('get', '/cashier', (_req, res) => res.sendFile(path.join(__dirname, 'cashier', 'index.html')));
-// Unified Orders page
-addRoute('get', '/unified-orders.html', (_req, res) => {
+// AI Chat page
+addRoute('get', '/Ai-Chat.html', (_req, res) => {
   try {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
   } catch {}
-  return res.sendFile(path.join(__dirname, 'unified-orders.html'));
+  return res.sendFile(path.join(__dirname, 'Ai-Chat.html'));
 });
+addRoute('get', '/ai-test-simple.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'ai-test-simple.html'));
+});
+addRoute('get', '/ai-test-direct.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'ai-test-direct.html'));
+});
+addRoute('get', '/ai-continuous-test.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'ai-continuous-test.html'));
+});
+addRoute('get', '/ai-simple-continuous.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'ai-simple-continuous.html'));
+});
+addRoute('get', '/ai-full-conversation.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'ai-full-conversation.html'));
+});
+addRoute('get', '/ai-push-to-talk.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'ai-push-to-talk.html'));
+});
+addRoute('get', '/audio-diagnostic.html', (_req, res) => {
+  return res.sendFile(path.join(__dirname, 'audio-diagnostic.html'));
+});
+addRoute('get', '/audio-test-direct.html', (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'audio-test-direct.html'));
+});
+addRoute('get', '/test-audio.mp3', (_req, res) => {
+  try {
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.sendFile(path.join(__dirname, 'test-audio.mp3'));
+  } catch {
+    return res.status(404).end();
+  }
+});
+addRoute('get', '/ai-chat', (_req, res) => res.redirect(301, '/Ai-Chat.html'));
+addRoute('get', '/ai-chat/', (_req, res) => res.redirect(301, '/Ai-Chat.html'));
+
 // Login page (root-level) — support /login and /login/
 addRoute('get', /^\/login\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
 addRoute('get', '/login', (_req, res) => res.sendFile(path.join(__dirname, 'login', 'index.html')));
@@ -9494,7 +11563,8 @@ addRoute('get', '/js/vendor/livekit-client.umd.min.js', async (req, res) => {
   }
 });
 
-addRoute('get', '/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+addRoute('get', '/', (_req, res) => res.redirect(302, '/admin'));
+addRoute('get', '/ai-continuous-chat.html', (_req, res) => res.sendFile(path.join(__dirname, 'ai-continuous-chat.html')));
 
 // Lightweight client log endpoint for field diagnostics
 addRoute('post', '/client-log', async (req, res) => {
@@ -9520,6 +11590,16 @@ const wss = new WebSocket.Server({ noServer: true });
 const baskets = new Map(); // basketId -> { items: Map(sku -> {sku,name,price,qty}), total, version }
 const basketClients = new Map(); // basketId -> Set of ws
 const clientMeta = new Map(); // ws -> { clientId, basketId, alive }
+
+// Initialize enhanced device status management
+if (HAS_DB) {
+  try {
+    deviceStatusManager = new DeviceStatusManager(db, wss, clientMeta, basketClients);
+    console.log('[Server] Enhanced device status management initialized');
+  } catch (error) {
+    console.warn('[Server] Failed to initialize device status manager:', error.message);
+  }
+}
 
 // Lightweight session tracking (OSN) — in-memory; optional DB later
 const sessions = new Map(); // basketId -> { osn: string, status: 'ready'|'active'|'paid', started_at: number }
@@ -9575,6 +11655,53 @@ function handleSubscribe(ws, msg) {
     send(ws, { type: 'ui:selectCategory', basketId, name: basket.ui.category, serverTs: Date.now() });
   }
   broadcastPeerStatus(basketId);
+  
+  // Check for D2D connection: if any client subscribes to display:xxx channel
+  // (Role might not be set yet if subscribe comes before hello)
+  if (basketId.startsWith('display:') && HAS_DB) {
+    const targetDisplayId = basketId.replace('display:', '');
+    console.log(`[WS] D2D: cashier subscribing to display ${targetDisplayId}`);
+    (async () => {
+      try {
+        // Get target display's branch_id
+        const rows = await db('select branch_id, device_type from devices where device_id=$1 limit 1', [targetDisplayId]);
+        const device = rows && rows[0];
+        const branch_id = device && device.branch_id ? String(device.branch_id) : null;
+        const isDisplay = device && String(device.device_type || '').toLowerCase() === 'display';
+        
+        if (branch_id && isDisplay) {
+          const roomName = `branch_${branch_id}`;
+          const provider = 'livekit';
+          const rtcMsg = { 
+            type: 'rtc:provider', 
+            basketId: roomName,
+            provider,
+            pairId: roomName
+          };
+          
+          console.log(`[WS] D2D: Sending rtc:provider to cashier for branch room ${roomName}`);
+          ws.send(JSON.stringify(rtcMsg));
+          
+          // Also notify the target display (if online) to expect this connection
+          const displayToken = await db('select device_token from devices where device_id=$1 limit 1', [targetDisplayId]);
+          const tok = displayToken && displayToken[0] && displayToken[0].device_token ? String(displayToken[0].device_token) : '';
+          if (tok && __wsByDeviceToken.has(tok)) {
+            const set = __wsByDeviceToken.get(tok) || new Set();
+            for (const c of set) {
+              try {
+                const dm = clientMeta.get(c) || {};
+                clientMeta.set(c, { ...dm, basketId: roomName, role: (dm.role || 'display') });
+                c.send(JSON.stringify(rtcMsg));
+                console.log(`[WS] D2D: Sent rtc:provider to target display ${targetDisplayId}`);
+              } catch {}
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[WS] D2D subscription signaling error:', err);
+      }
+    })();
+  }
 }
 
 function computeTotals(basket) {
@@ -9723,6 +11850,31 @@ function handleUiVideoMode(ws, msg) {
   if (!mode) return;
   broadcast(basketId, { type: 'ui:videoMode', basketId, mode, serverTs: Date.now() });
 }
+function handleUiCheckoutOverlay(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  // Allow both cashier and display to control checkout overlay
+  const show = !!msg.show;
+  broadcast(basketId, { type: 'ui:checkoutOverlay', basketId, show, serverTs: Date.now() });
+  console.log(`[WS] Checkout overlay broadcast to basketId=${basketId} show=${show}`);
+}
+function handleUiPaymentMethod(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  // Allow both cashier and display to sync payment method selection
+  const paymentMethod = String(msg.paymentMethod || 'cash');
+  broadcast(basketId, { type: 'ui:paymentMethod', basketId, paymentMethod, serverTs: Date.now() });
+  console.log(`[WS] Payment method broadcast to basketId=${basketId} paymentMethod=${paymentMethod}`);
+}
+function handleUiCheckoutBasket(ws, msg) {
+  const meta = clientMeta.get(ws) || {};
+  const basketId = String(msg.basketId || meta.basketId || 'default');
+  // Sync checkout basket data (lines and totals) to remote display
+  const lines = msg.lines || [];
+  const totals = msg.totals || {};
+  broadcast(basketId, { type: 'ui:checkoutBasket', basketId, lines, totals, serverTs: Date.now() });
+  console.log(`[WS] Checkout basket broadcast to basketId=${basketId} with ${lines.length} items`);
+}
 
 function applyOp(basket, op) {
   const action = op?.action;
@@ -9735,7 +11887,21 @@ function applyOp(basket, op) {
   const sku = String(itm.sku || '');
   if (!sku) throw new Error('invalid_sku');
 
-  const existing = basket.items.get(sku) || { sku, name: itm.name || '', price: Number(itm.price) || 0, qty: 0 };
+  // Generate a unique line ID based on SKU and modifiers
+  // This allows the same product with different modifiers to be separate lines
+  const modifiers = itm.modifiers || [];
+  const modKey = modifiers.length > 0 ? JSON.stringify(modifiers.map(m => ({ name: m.name, value: m.value })).sort((a, b) => a.name.localeCompare(b.name))) : '';
+  let lineId = modKey ? `${sku}::${Buffer.from(modKey).toString('base64').substring(0, 12)}` : sku;
+  
+  // For remove/setQty operations without modifiers, check if the sku is actually a lineId
+  if (action !== 'add' && !modKey) {
+    // If sku contains '::' it's likely a lineId from a previous operation
+    if (sku.includes('::') && basket.items.has(sku)) {
+      lineId = sku;
+    }
+  }
+
+  const existing = basket.items.get(lineId) || { sku, lineId, name: itm.name || '', price: Number(itm.price) || 0, qty: 0, modifiers: [] };
   // Best-effort: carry over image_url if provided on this op
   try {
     const img = String(itm.image_url || itm.imageUrl || itm.image || '').trim();
@@ -9745,23 +11911,25 @@ function applyOp(basket, op) {
   if (action === 'add') {
     const inc = qty || 1;
     existing.name = itm.name ?? existing.name;
+    existing.nameAr = itm.nameAr ?? itm.name_ar ?? existing.nameAr;
     if (itm.price != null) existing.price = Number(itm.price) || existing.price;
+    if (modifiers.length > 0) existing.modifiers = modifiers;
     // On add, also update image if a new one is provided
     try {
       const img2 = String(itm.image_url || itm.imageUrl || itm.image || '').trim();
       if (img2) existing.image_url = img2;
     } catch {}
     existing.qty = (existing.qty || 0) + inc;
-    basket.items.set(sku, existing);
+    basket.items.set(lineId, existing);
   } else if (action === 'setQty') {
     if (qty <= 0) {
-      basket.items.delete(sku);
+      basket.items.delete(lineId);
     } else {
       existing.qty = qty;
-      basket.items.set(sku, existing);
+      basket.items.set(lineId, existing);
     }
   } else if (action === 'remove') {
-    basket.items.delete(sku);
+    basket.items.delete(lineId);
   } else {
     throw new Error('invalid_action');
   }
@@ -9826,7 +11994,15 @@ function handleRtcHeartbeat(ws, msg){
 const __wsByDeviceToken = new Map();
 
 wss.on('connection', (ws, req) => {
-  clientMeta.set(ws, { clientId: uuidv4(), basketId: null, alive: true, role: null, name: null });
+  const initialMeta = { clientId: uuidv4(), basketId: null, alive: true, role: null, name: null, user_agent: req.headers['user-agent'] || null };
+  clientMeta.set(ws, initialMeta);
+  
+  // Notify device status manager of connection
+  if (deviceStatusManager) {
+    deviceStatusManager.onWebSocketConnect(ws, initialMeta).catch(err => {
+      console.warn('[DeviceStatus] Error handling WebSocket connect:', err.message);
+    });
+  }
 
   ws.on('message', raw => {
     let msg;
@@ -9848,6 +12024,25 @@ if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
     if (msg.type === 'ui:selectProduct') return handleUiSelectProduct(ws, msg);
     if (msg.type === 'ui:clearSelection') return handleUiClearSelection(ws, msg);
     if (msg.type === 'ui:videoMode') return handleUiVideoMode(ws, msg);
+    if (msg.type === 'ui:checkoutOverlay') return handleUiCheckoutOverlay(ws, msg);
+    if (msg.type === 'ui:paymentMethod') return handleUiPaymentMethod(ws, msg);
+    if (msg.type === 'ui:checkoutBasket') return handleUiCheckoutBasket(ws, msg);
+    // Handle explicit disconnect/hangup from client
+    if (msg.type === 'rtc:stopped') {
+      try {
+        const meta = clientMeta.get(ws) || {};
+        const basketId = String(msg.basketId || meta.basketId || 'default');
+        const reason = String(msg.reason || 'client_disconnect');
+        console.log(`[WS] rtc:stopped from ${meta.role || 'unknown'} for basketId=${basketId} reason=${reason}`);
+        // Broadcast to all peers in the basket
+        broadcast(basketId, { type: 'rtc:stopped', basketId, reason, serverTs: Date.now() });
+        // Update peer status
+        broadcastPeerStatus(basketId);
+      } catch (err) {
+        console.error('[WS] Error handling rtc:stopped:', err.message);
+      }
+      return;
+    }
     // Poster status pass-through: cashier <-> display
     if (msg.type === 'poster:query') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:query', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId) }); } catch {}; return; }
     if (msg.type === 'poster:status') { try { broadcast(msg.basketId || (clientMeta.get(ws)||{}).basketId, { type:'poster:status', basketId: (msg.basketId || (clientMeta.get(ws)||{}).basketId), active: !!msg.active }); } catch {}; return; }
@@ -9915,6 +12110,14 @@ if (msg.type === 'ui:optionsUpdate') return handleUiOptionsUpdate(ws, msg);
 function cleanup(ws) {
   const meta = clientMeta.get(ws);
   if (!meta) return;
+  
+  // Notify device status manager of disconnection
+  if (deviceStatusManager) {
+    deviceStatusManager.onWebSocketDisconnect(ws, meta).catch(err => {
+      console.warn('[DeviceStatus] Error handling WebSocket disconnect:', err.message);
+    });
+  }
+  
   const set = basketClients.get(meta.basketId);
   if (set) set.delete(ws);
   clientMeta.delete(ws);
@@ -9942,6 +12145,63 @@ function handleHello(ws, msg){
   const allowed = (role==='cashier'||role==='display'||role==='admin') ? role : null;
   const next = { ...meta, role: allowed, name: name || meta.name, device_id: device_id || meta.device_id };
   clientMeta.set(ws, next);
+  
+  console.log(`[WS] handleHello: role=${allowed} device_id=${device_id} msg.basketId=${msg.basketId}`);
+  
+  // Check for Display-to-Display (D2D) connection using branch-based rooms
+  // D2D detected when: role=cashier AND basketId differs from device_id (display connecting to another display)
+  const basketId = String(msg.basketId || '').trim();
+  const isD2DConnection = (allowed === 'cashier' && device_id && basketId && basketId !== device_id && HAS_DB);
+  console.log(`[WS] D2D check: allowed=${allowed}, device_id=${device_id}, basketId=${basketId}, isD2D=${isD2DConnection}`);
+  if (isD2DConnection) {
+    console.log(`[WS] D2D condition MET - entering async block`);
+    (async () => {
+      console.log(`[WS] D2D async block STARTED`);
+      try {
+        // Get branch_id for the TARGET display device (from basketId)
+        console.log(`[WS] Querying devices for target device_id=${basketId}`);
+        const rows = await db('select branch_id, device_type from devices where device_id=$1 limit 1', [basketId]);
+        console.log(`[WS] Query returned ${rows ? rows.length : 0} rows:`, JSON.stringify(rows));
+        const device = rows && rows[0];
+        const branch_id = device && device.branch_id ? String(device.branch_id) : null;
+        const isDisplay = device && String(device.device_type || '').toLowerCase() === 'display';
+        console.log(`[WS] Parsed: branch_id=${branch_id}, device_type=${device?.device_type}, isDisplay=${isDisplay}`);
+        
+        if (branch_id && isDisplay) {
+          console.log(`[WS] Branch and display checks PASSED`);
+          console.log(`[WS] D2D request: ${device_id} connecting to ${basketId} in branch ${branch_id}`);
+          
+          // Use branch-based room name
+          const roomName = `branch_${branch_id}`;
+          const provider = 'livekit';
+          
+          const rtcMsg = { 
+            type: 'rtc:provider', 
+            basketId: roomName,
+            provider,
+            pairId: roomName
+          };
+          
+          console.log(`[WS] Sending rtc:provider for branch room: ${roomName}`);
+          
+          // Send to initiating display
+          try {
+            ws.send(JSON.stringify(rtcMsg));
+          } catch (err) {
+            console.error('[WS] Failed to send rtc:provider:', err);
+          }
+          
+          // Also broadcast to all displays in the same branch (if they're subscribed)
+          broadcast(roomName, rtcMsg);
+        } else {
+          console.log(`[WS] Branch and display checks FAILED - not sending rtc:provider`);
+        }
+      } catch (err) {
+        console.error('[WS] D2D branch room setup error:', err);
+      }
+    })();
+  }
+  
   // If this is a display with a valid device token, align its basketId to the server device_id for that token
   if (allowed === 'display') {
     (async () => {
@@ -9985,6 +12245,46 @@ function broadcastPeerStatus(basketId){
     }
   }
   const status = (cashierName && displayName) ? 'connected' : 'waiting';
+  
+  // Enhanced device status management
+  if (deviceStatusManager) {
+    try {
+      const prev = __peerPrevStatus.get(basketId);
+      const cashierMeta = [...(set || [])].find(ws => {
+        const meta = clientMeta.get(ws) || {};
+        return meta.role === 'cashier';
+      });
+      const displayMeta = [...(set || [])].find(ws => {
+        const meta = clientMeta.get(ws) || {};
+        return meta.role === 'display';
+      });
+      
+      const cashierMetaData = cashierMeta ? clientMeta.get(cashierMeta) || {} : {};
+      const displayMetaData = displayMeta ? clientMeta.get(displayMeta) || {} : {};
+      
+      // Handle session state transitions
+      if (prev !== status) {
+        if (status === 'connected' && prev === 'waiting') {
+          // Peers just connected - start session
+          deviceStatusManager.onSessionStart(basketId, cashierMetaData, displayMetaData).catch(err => {
+            console.warn('[DeviceStatus] Error handling session start:', err.message);
+          });
+          // Then notify they're connected/busy
+          deviceStatusManager.onPeerConnected(basketId, cashierMetaData, displayMetaData).catch(err => {
+            console.warn('[DeviceStatus] Error handling peer connected:', err.message);
+          });
+        } else if (status === 'waiting' && prev === 'connected') {
+          // Session ended
+          deviceStatusManager.onSessionEnd(basketId, 'peer_disconnected').catch(err => {
+            console.warn('[DeviceStatus] Error handling session end:', err.message);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[DeviceStatus] Error in broadcastPeerStatus hook:', err.message);
+    }
+  }
+  
   // Log connection status transitions to platform log
   try {
     const prev = __peerPrevStatus.get(basketId);
@@ -9999,8 +12299,11 @@ function broadcastPeerStatus(basketId){
 }
 
 // Handle job commands before starting the HTTP server
+console.log('[boot] About to check JOB_COMMAND');
 const JOB_COMMAND = process.env.JOB_COMMAND;
+console.log('[boot] JOB_COMMAND value:', JSON.stringify(JOB_COMMAND));
 if (JOB_COMMAND) {
+  console.log('[boot] JOB_COMMAND detected, entering job mode');
   console.log(`🔄 Executing job command: ${JOB_COMMAND}`);
   
   (async () => {
@@ -10042,11 +12345,60 @@ if (JOB_COMMAND) {
           console.log('✅ Database schema update job completed successfully');
           break;
           
-        case 'auto-import-foodics-sales':
-          console.log('🔄 Starting automated Foodics sales import job...');
-          const { autoImportAllTenants } = require('./scripts/auto_import_foodics_sales.js');
-          const result = await autoImportAllTenants();
-          console.log('✅ Automated sales import job completed:', result);
+        case 'update-deleted-status':
+          console.log('🔄 Starting deleted status update job...');
+          const { updateDeletedStatus } = require('./scripts/update_deleted_status.js');
+          await updateDeletedStatus();
+          console.log('✅ Deleted status update job completed successfully');
+          break;
+          
+        case 'move-inactive-to-deleted':
+          console.log('📦 Starting move inactive to deleted job...');
+          const { moveInactiveToDeleted } = require('./scripts/move_inactive_to_deleted.js');
+          await moveInactiveToDeleted();
+          console.log('✅ Move inactive to deleted job completed successfully');
+          break;
+          
+        case 'sync-deleted-from-foodics':
+          console.log('🔄 Starting sync deleted from Foodics job...');
+          const { syncDeletedFromFoodics } = require('./scripts/sync_deleted_from_foodics.js');
+          await syncDeletedFromFoodics();
+          console.log('✅ Sync deleted from Foodics job completed successfully');
+          break;
+          
+        case 'check-deleted-status':
+          console.log('🔍 Starting check deleted status job...');
+          const { checkDeletedStatus } = require('./scripts/check_deleted_status.js');
+          await checkDeletedStatus();
+          console.log('✅ Check deleted status job completed successfully');
+          break;
+          
+        case 'import-all-from-foodics':
+          console.log('📥 Starting import all from Foodics job...');
+          const { importAllFromFoodics } = require('./scripts/import_all_from_foodics.js');
+          await importAllFromFoodics();
+          console.log('✅ Import all from Foodics job completed successfully');
+          break;
+          
+        case 'check-products-schema':
+          console.log('🔍 Starting check products schema job...');
+          const { checkProductsSchema } = require('./scripts/check_products_schema.js');
+          await checkProductsSchema();
+          console.log('✅ Check products schema job completed successfully');
+          break;
+          
+        case 'debug-modifiers-api':
+          console.log('🔍 Starting debug modifiers API job...');
+          const { debugModifiersApi } = require('./scripts/debug_modifiers_api.js');
+          await debugModifiersApi();
+          console.log('✅ Debug modifiers API job completed successfully');
+          break;
+          
+        case 'debug-api-response':
+          console.log('🔍 Starting debug API response job...');
+          const { debugApiResponse } = require('./scripts/debug_api_response.js');
+          await debugApiResponse();
+          console.log('✅ Debug API response job completed successfully');
           break;
           
         default:
@@ -10067,6 +12419,380 @@ if (JOB_COMMAND) {
   return;
 }
 
+// ---- Monitoring Dashboard Routes
+// Serve monitoring dashboard at /server route
+addRoute('get', /^\/server\/?$/, (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Last-Modified', new Date().toUTCString());
+    res.set('ETag', `"${Date.now()}"`);
+  } catch {}
+  return res.sendFile(path.join(__dirname, 'server', 'public', 'index.html'));
+});
+
+// Helper function to check if a port is open
+async function checkPort(host, port, timeout = 3000) {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const socket = new net.Socket();
+    
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve(false);
+    }, timeout);
+    
+    socket.setTimeout(timeout);
+    socket.on('connect', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(true);
+    });
+    
+    socket.on('timeout', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(false);
+    });
+    
+    socket.on('error', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(false);
+    });
+    
+    socket.connect(port, host);
+  });
+}
+
+// Helper function to check HTTP endpoints
+async function checkHttp(host, port, path = '/', timeout = 5000, acceptedStatuses = [200, 204, 301, 302]) {
+  try {
+    const protocol = port === 443 ? 'https:' : 'http:';
+    const url = `${protocol}//${host}${port && port !== 443 && port !== 80 ? ':' + port : ''}${path}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    const response = await fetch(url, {
+      signal: controller.signal,
+      method: 'GET',
+      headers: { 'User-Agent': 'OrderTech-Monitor/1.0' }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // For APIs, 401 (Unauthorized) means service is up but requires auth
+    const isSuccess = response.ok || acceptedStatuses.includes(response.status);
+    return { success: isSuccess, status: response.status, time: Date.now() };
+  } catch (error) {
+    return { success: false, status: 0, error: error.message, time: Date.now() };
+  }
+}
+
+// Helper function to check Cloud Run service
+async function checkCloudRun(projectId, serviceName, region = 'me-central1') {
+  try {
+    // Try to get Cloud Run service URL and check it
+    const url = `https://${serviceName}-hash-${region}.run.app/health`;
+    const result = await checkHttp(serviceName + '.run.app', 443, '/health');
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message, time: Date.now() };
+  }
+}
+
+// Real-time service checking
+async function checkService(service) {
+  const startTime = Date.now();
+  let result = { success: false, responseTime: 0, error: null };
+  
+  try {
+    switch (service.type) {
+      case 'express':
+      case 'http':
+        const healthPath = service.metadata?.health_path || '/';
+        result = await checkHttp(service.host, service.port, healthPath);
+        break;
+        
+      case 'postgres':
+      case 'redis':
+      case 'tcp':
+        result.success = await checkPort(service.host, service.port);
+        break;
+        
+      case 'docker':
+        try {
+          const fs = require('fs');
+          result.success = fs.existsSync('/var/run/docker.sock');
+        } catch {
+          result.success = false;
+        }
+        break;
+        
+      case 'cloud-run':
+      case 'livekit':
+        // For cloud-run and livekit services, treat them as HTTPS endpoints
+        const cloudHealthPath = service.metadata?.health_path || '/health';
+        result = await checkHttp(service.host, 443, cloudHealthPath);
+        break;
+        
+      case 'openai':
+        // For OpenAI API, use authentication if available
+        const openaiPath = service.metadata?.health_path || '/v1/models';
+        try {
+          const openaiUrl = `https://${service.host}${openaiPath}`;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const headers = { 'User-Agent': 'OrderTech-Monitor/1.0' };
+          
+          // Try to get OpenAI API key from environment
+          const apiKey = process.env.OPENAI_API_KEY;
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+          
+          const response = await fetch(openaiUrl, {
+            signal: controller.signal,
+            method: 'GET',
+            headers
+          });
+          
+          clearTimeout(timeoutId);
+          
+          // For OpenAI: 200 = authenticated success, 401 = service up but no auth
+          const isUp = response.status === 200 || response.status === 401;
+          result = {
+            success: isUp,
+            status: response.status,
+            time: Date.now(),
+            responseTime: Date.now() - startTime
+          };
+        } catch (error) {
+          result = {
+            success: false,
+            status: 0,
+            error: error.message,
+            time: Date.now(),
+            responseTime: Date.now() - startTime
+          };
+        }
+        break;
+        
+      case 'gcs':
+      case 'cloud-sql':
+      case 'firebase':
+        // For GCS, Cloud SQL, Firebase - assume they're up since they don't have simple health checks
+        result.success = true;
+        result.responseTime = 0;
+        break;
+        
+      default:
+        // For other cloud services, assume they're up
+        result.success = true;
+        break;
+    }
+    
+    result.responseTime = Date.now() - startTime;
+    
+  } catch (error) {
+    result = {
+      success: false,
+      responseTime: Date.now() - startTime,
+      error: error.message
+    };
+  }
+  
+  // Update service status in database
+  if (HAS_DB) {
+    try {
+      const status = result.success ? 'up' : 'down';
+      await db(`
+        UPDATE service_configs 
+        SET status = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [status, service.id]);
+      
+      // Log the check result (if monitoring_history table exists)
+      try {
+        await db(`
+          INSERT INTO monitoring_history (service_id, status, response_time_ms, error_message, checked_at)
+          VALUES ($1, $2, $3, $4, NOW())
+        `, [service.id, status, result.responseTime, result.error || null]);
+      } catch (historyError) {
+        // Ignore if monitoring_history table doesn't exist
+        console.log('History logging skipped:', historyError.message);
+      }
+      
+    } catch (dbError) {
+      console.error('Database update error:', dbError);
+    }
+  }
+  
+  return { ...result, status: result.success ? 'up' : 'down' };
+}
+
+// Monitoring API routes
+addRoute('get', '/api/dashboard/summary', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    
+    // Get service status counts from service_configs table
+    const statusResult = await db(`
+      SELECT status, COUNT(*) as count 
+      FROM service_configs 
+      WHERE enabled = true 
+      GROUP BY status
+    `);
+    
+    const statusCounts = { total: 0, up: 0, down: 0, degraded: 0, unknown: 0 };
+    
+    statusResult.forEach(row => {
+      const count = parseInt(row.count);
+      statusCounts[row.status] = count;
+      statusCounts.total += count;
+    });
+    
+    // Get monitoring history count
+    const historyResult = await db(`
+      SELECT COUNT(*) as total_checks
+      FROM monitoring_history
+      WHERE checked_at > NOW() - INTERVAL '24 hours'
+    `);
+    
+    const monitorStats = {
+      totalChecks: parseInt(historyResult[0]?.total_checks || 0),
+      lastCheck: new Date().toISOString()
+    };
+    
+    res.json({
+      services: statusCounts,
+      monitoring: monitorStats,
+      lastUpdated: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Dashboard summary error:', error);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+addRoute('get', '/api/services', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    
+    // Get all enabled services from service_configs
+    const services = await db(`
+      SELECT 
+        id, name, type, host, port, region, description, status,
+        timeout_ms, enabled, metadata, created_at, updated_at
+      FROM service_configs 
+      WHERE enabled = true 
+      ORDER BY 
+        CASE 
+          WHEN region = 'local' THEN 1
+          WHEN region = 'global' THEN 2
+          ELSE 3
+        END,
+        name
+    `);
+    
+    // Format services for frontend
+    const formattedServices = services.map(service => ({
+      ...service,
+      endpoint: service.port ? `${service.host}:${service.port}` : service.host,
+      lastChecked: service.updated_at || null,
+      responseTime: null // Will be populated by monitoring checks
+    }));
+    
+    res.json({ services: formattedServices });
+    
+  } catch (error) {
+    console.error('Services API error:', error);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+addRoute('post', '/api/services/:id/check', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    
+    const serviceId = req.params.id;
+    
+    // Get service details
+    const serviceResult = await db(`
+      SELECT * FROM service_configs WHERE id = $1
+    `, [serviceId]);
+    
+    if (!serviceResult || serviceResult.length === 0) {
+      return res.status(404).json({ error: 'service_not_found' });
+    }
+    
+    const service = serviceResult[0];
+    
+    // Perform actual health check
+    const checkResult = await checkService(service);
+    
+    res.json({ 
+      ok: true, 
+      serviceId,
+      service: service.name,
+      status: checkResult.status,
+      responseTime: checkResult.responseTime,
+      error: checkResult.error,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Service check error:', error);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Endpoint to check all services at once
+addRoute('post', '/api/services/check-all', async (req, res) => {
+  try {
+    if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
+    
+    // Get all enabled services
+    const services = await db(`
+      SELECT * FROM service_configs WHERE enabled = true
+    `);
+    
+    // Check all services in parallel (but limit concurrency)
+    const results = [];
+    const batchSize = 5; // Check 5 services at a time
+    
+    for (let i = 0; i < services.length; i += batchSize) {
+      const batch = services.slice(i, i + batchSize);
+      const batchPromises = batch.map(service => 
+        checkService(service).then(result => ({
+          id: service.id,
+          name: service.name,
+          ...result
+        }))
+      );
+      
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+    }
+    
+    res.json({ 
+      ok: true,
+      checked: results.length,
+      results,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Bulk service check error:', error);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+console.log('[boot] About to start HTTP server on', PORT);
 const server = app.listen(PORT, '0.0.0.0', async () => {
 if (HAS_DB) {
     try { await ensureStateTable(); } catch (e) { console.error('ensureStateTable failed', e); }
@@ -10080,8 +12806,9 @@ if (HAS_DB) {
     try { await ensureRBACSchema(); } catch (e) { console.error('ensureRBACSchema failed', e); }
     try { await ensureInvitesSchema(); } catch (e) { console.error('ensureInvitesSchema failed', e); }
     try { await ensurePaidOrdersSchema(); } catch (e) { console.error('ensurePaidOrdersSchema failed', e); }
-    try { await ensureSalesSchema(); } catch (e) { console.error('ensureSalesSchema failed', e); }
     try { await ensureAdminPerfIndexes(); } catch (e) { console.error('ensureAdminPerfIndexes failed', e); }
+    try { await ensureAISchema(); } catch (e) { console.error('ensureAISchema failed', e); }
+    try { await ensureEnhancedDeviceStatusSchema(); } catch (e) { console.error('ensureEnhancedDeviceStatusSchema failed', e); }
     // Fail fast if DB is required but unreachable
     try { if (REQUIRE_DB_EFFECTIVE) { await db('select 1'); } } catch (e) {
       try { console.error('DB connectivity check failed at startup; exiting'); } catch {}
@@ -10101,7 +12828,16 @@ if (HAS_DB) {
   console.log(`API running on http://0.0.0.0:${PORT}`);
 });
 
+// Configure server and socket timeouts to prevent premature WebSocket disconnections
+// Set to 10 minutes (600000ms) to allow for idle connections with periodic pings
+server.timeout = 600000; // 10 minutes
+server.keepAliveTimeout = 610000; // Slightly higher than timeout
+server.headersTimeout = 620000; // Slightly higher than keepAliveTimeout
+
 server.on('upgrade', (request, socket, head) => {
+  // Set socket timeout for WebSocket connections to 10 minutes
+  socket.setTimeout(600000);
+  
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
   });
@@ -10109,4 +12845,9 @@ server.on('upgrade', (request, socket, head) => {
 
 addRoute('get', '/cashier-basket', (req, res) => {
   res.sendFile(path.join(__dirname, 'cashier', 'basket.html'));
+});
+
+// Serve the simple login page
+addRoute('get', '/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
 });
