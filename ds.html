@@ -67,6 +67,7 @@
         flex-direction: column;
         width: 100%;
         height: 100%;
+        overflow: hidden;
       }
 
       /* Product image - flexible height to fit card */
@@ -101,17 +102,20 @@
         gap: 2px;
         text-align: center;
         flex-shrink: 0;
+        overflow: hidden;
+        padding: 4px 0;
       }
 
       /* Arabic name */
       .product-name-ar {
         font-size: 13px;
         font-weight: 600;
-        line-height: 1.2;
+        line-height: 1.3;
         color: var(--ink);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-height: 1.3em;
       }
 
       .product-name-ar:empty {
@@ -123,11 +127,12 @@
       .product-name-en {
         font-size: 11px;
         font-weight: 400;
-        line-height: 1.2;
+        line-height: 1.3;
         color: var(--ink);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-height: 1.3em;
       }
 
       /* Price */
@@ -136,6 +141,9 @@
         font-weight: 600;
         color: var(--accent);
         margin-top: 2px;
+        line-height: 1.3;
+        max-height: 1.3em;
+        overflow: hidden;
       }
 
       /* Loading state */
