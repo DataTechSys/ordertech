@@ -325,11 +325,11 @@
       // Create product card element
       function createProductCard(product) {
         const card = document.createElement('div');
-        card.className = `product-card ${product.is_active ? 'active' : 'inactive'}`;
+        card.className = 'product-card active';
         card.dataset.productId = product.id;
 
-        // Get Arabic name from localized data
-        const nameAr = product.name_localized?.ar || '';
+        // Get Arabic name from localized data (it's a string, not an object)
+        const nameAr = typeof product.name_localized === 'string' ? product.name_localized : (product.name_localized?.ar || '');
         const nameEn = product.name || '';
         
         // Determine image URL
@@ -386,21 +386,21 @@
         const grid = document.getElementById('productsGrid');
         grid.innerHTML = '';
 
-        // Filter active products and sort by name
-        const activeProducts = products
-          .filter(p => p.is_active)
+        // Products are already filtered as active by the API, just sort by name
+        const sortedProducts = (products || [])
+          .filter(p => p && p.name) // Filter out any invalid products
           .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-        if (activeProducts.length === 0) {
+        if (sortedProducts.length === 0) {
           showEmpty();
           return;
         }
 
-        activeProducts.forEach(product => {
+        sortedProducts.forEach(product => {
           grid.appendChild(createProductCard(product));
         });
 
-        currentProducts = activeProducts;
+        currentProducts = sortedProducts;
       }
 
       // Show loading state
