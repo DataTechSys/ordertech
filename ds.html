@@ -33,20 +33,27 @@
 
       /* Container for the grid */
       .signage-container {
-        width: 100%;
+        width: 100vw;
         height: 100vh;
         padding: 20px;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
       }
 
-      /* Products grid - optimized for portrait screen */
+      /* Products grid - exactly 3 columns × 4 rows, full screen */
       .products-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 24px;
-        max-width: 1200px;
-        margin: 0 auto;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 20px;
+        width: 100%;
+        height: 100%;
+        max-width: 100vw;
+        max-height: 100vh;
+        padding: 0;
       }
 
       /* Product card matching iOS ProductTileView */
@@ -58,23 +65,26 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         display: flex;
         flex-direction: column;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-
-      .product-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      }
-
-      /* Product image - square aspect ratio */
-      .product-image-wrapper {
         width: 100%;
-        padding-bottom: 88%; /* Matches iOS: imageSide * 0.88 */
+        height: 100%;
+        opacity: 0;
+        animation: fadeIn 0.5s ease-in forwards;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      /* Product image - flexible height to fit card */
+      .product-image-wrapper {
+        flex: 1;
         position: relative;
         border-radius: var(--radius);
         overflow: hidden;
         background: #f5f5f5;
-        margin-bottom: 7px;
+        margin-bottom: 8px;
+        min-height: 0;
       }
 
       .product-image {
@@ -103,8 +113,8 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
-        min-height: 64px;
         text-align: center;
+        flex-shrink: 0;
       }
 
       /* Arabic name */
@@ -210,31 +220,14 @@
         display: none;
       }
 
-      /* Responsive adjustments for portrait screens */
-      @media (orientation: portrait) {
-        .products-grid {
-          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-          gap: 20px;
-        }
+      /* Page transition */
+      .products-grid.fade-out {
+        animation: fadeOut 0.5s ease-out forwards;
       }
 
-      @media (min-width: 768px) {
-        .products-grid {
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-          gap: 28px;
-        }
-        
-        .product-name-ar {
-          font-size: 15px;
-        }
-        
-        .product-name-en {
-          font-size: 13px;
-        }
-        
-        .product-price {
-          font-size: 14px;
-        }
+      @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
       }
 
       /* Auto-refresh indicator */
@@ -288,11 +281,15 @@
       // Configuration
       const API_BASE = 'https://app.ordertech.me';
       const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+      const PAGE_ROTATION_INTERVAL = 15 * 1000; // 15 seconds
+      const PRODUCTS_PER_PAGE = 12; // 3 columns × 4 rows
       const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
 
       // State
-      let currentProducts = [];
+      let allProducts = [];
+      let currentPage = 0;
       let refreshTimer = null;
+      let rotationTimer = null;
 
       // Get tenant ID from URL or use default
       function getTenantId() {
@@ -381,26 +378,65 @@
         return `${numPrice.toFixed(3)} KWD`;
       }
 
-      // Render products
-      function renderProducts(products) {
+      // Shuffle array randomly
+      function shuffleArray(array) {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      }
+
+      // Render a specific page of products
+      function renderPage(pageIndex) {
         const grid = document.getElementById('productsGrid');
-        grid.innerHTML = '';
+        
+        // Fade out current products
+        grid.classList.add('fade-out');
+        
+        setTimeout(() => {
+          grid.innerHTML = '';
+          
+          // Get products for this page
+          const start = pageIndex * PRODUCTS_PER_PAGE;
+          const pageProducts = allProducts.slice(start, start + PRODUCTS_PER_PAGE);
+          
+          // If we don't have enough products for a full page, pad with products from start
+          while (pageProducts.length < PRODUCTS_PER_PAGE && allProducts.length > 0) {
+            pageProducts.push(allProducts[pageProducts.length % allProducts.length]);
+          }
+          
+          // Render products
+          pageProducts.forEach(product => {
+            grid.appendChild(createProductCard(product));
+          });
+          
+          // Fade in new products
+          grid.classList.remove('fade-out');
+        }, 500);
+      }
 
-        // Products are already filtered as active by the API, just sort by name
-        const sortedProducts = (products || [])
-          .filter(p => p && p.name) // Filter out any invalid products
-          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      // Render products and start rotation
+      function renderProducts(products) {
+        // Products are already filtered as active by the API
+        const validProducts = (products || [])
+          .filter(p => p && p.name); // Filter out any invalid products
 
-        if (sortedProducts.length === 0) {
+        if (validProducts.length === 0) {
           showEmpty();
           return;
         }
 
-        sortedProducts.forEach(product => {
-          grid.appendChild(createProductCard(product));
-        });
-
-        currentProducts = sortedProducts;
+        // Shuffle products randomly
+        allProducts = shuffleArray(validProducts);
+        currentPage = 0;
+        
+        // Render first page
+        renderPage(0);
+        
+        // Setup page rotation
+        setupPageRotation();
       }
 
       // Show loading state
@@ -463,6 +499,18 @@
         }
       }
 
+      // Setup page rotation
+      function setupPageRotation() {
+        if (rotationTimer) {
+          clearInterval(rotationTimer);
+        }
+        
+        rotationTimer = setInterval(() => {
+          currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
+          renderPage(currentPage);
+        }, PAGE_ROTATION_INTERVAL);
+      }
+
       // Setup auto-refresh
       function setupAutoRefresh() {
         if (refreshTimer) {
@@ -497,7 +545,22 @@
         if (refreshTimer) {
           clearInterval(refreshTimer);
         }
+        if (rotationTimer) {
+          clearInterval(rotationTimer);
+        }
       });
+
+      // Request fullscreen on click
+      document.addEventListener('click', () => {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen().catch(() => {});
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          elem.msRequestFullscreen();
+        }
+      }, { once: true });
     </script>
   </body>
 </html>
