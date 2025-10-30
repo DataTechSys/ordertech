@@ -4486,6 +4486,9 @@ addRoute('get', /^\/start-trial\/?$/, (_req, res) => res.sendFile(path.join(__di
 addRoute('get', /^\/admin\/invite\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'admin', 'invite', 'index.html')));
 addRoute('get', /^\/admin\/whoami\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'admin', 'whoami', 'index.html')));
 
+// Digital signage for portrait displays
+addRoute('get', /^\/ds\/?$/, (_req, res) => res.sendFile(path.join(__dirname, 'ds.html')));
+
 // Super admin: list tenants
 // List built-in roles (no auth required beyond login)
 addRoute('get', '/admin/roles', verifyAuthOpen, async (_req, res) => {

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Digital Signage</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <style>
+      /* Reset and base styles */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: #A3B1A4;
+        color: #2D2A26;
+        overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Design tokens matching iOS app */
+      :root {
+        --bg: #A3B1A4;
+        --surface: #ffffff;
+        --ink: #2D2A26;
+        --muted: #A3B1A4;
+        --accent: #718472;
+        --line: #E5E7EB;
+        --radius: 14px;
+      }
+
+      /* Container for the grid */
+      .signage-container {
+        width: 100%;
+        height: 100vh;
+        padding: 20px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Products grid - optimized for portrait screen */
+      .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      /* Product card matching iOS ProductTileView */
+      .product-card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        padding: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .product-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+
+      /* Product image - square aspect ratio */
+      .product-image-wrapper {
+        width: 100%;
+        padding-bottom: 88%; /* Matches iOS: imageSide * 0.88 */
+        position: relative;
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: #f5f5f5;
+        margin-bottom: 7px;
+      }
+
+      .product-image {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: var(--radius);
+      }
+
+      .product-image.loading {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+      }
+
+      @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+
+      /* Product info */
+      .product-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-height: 64px;
+        text-align: center;
+      }
+
+      /* Arabic name */
+      .product-name-ar {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.2;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .product-name-ar:empty {
+        color: transparent;
+        visibility: hidden;
+      }
+
+      /* English name */
+      .product-name-en {
+        font-size: 11px;
+        font-weight: 400;
+        line-height: 1.2;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Price */
+      .product-price {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        margin-top: 2px;
+      }
+
+      /* Loading state */
+      .loading-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid var(--line);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        font-size: 16px;
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      /* Error state */
+      .error-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px;
+      }
+
+      .error-text {
+        font-size: 16px;
+        color: #ef4444;
+        text-align: center;
+        max-width: 500px;
+      }
+
+      /* Empty state */
+      .empty-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .empty-text {
+        font-size: 18px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      /* Hide inactive products */
+      .product-card.inactive {
+        display: none;
+      }
+
+      /* Responsive adjustments for portrait screens */
+      @media (orientation: portrait) {
+        .products-grid {
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 20px;
+        }
+      }
+
+      @media (min-width: 768px) {
+        .products-grid {
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: 28px;
+        }
+        
+        .product-name-ar {
+          font-size: 15px;
+        }
+        
+        .product-name-en {
+          font-size: 13px;
+        }
+        
+        .product-price {
+          font-size: 14px;
+        }
+      }
+
+      /* Auto-refresh indicator */
+      .refresh-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--muted);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .refresh-indicator.show {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Loading state -->
+    <div id="loadingContainer" class="loading-container">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading menu...</div>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorContainer" class="error-container" style="display: none;">
+      <div class="error-text" id="errorText"></div>
+      <button onclick="location.reload()" style="padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">Retry</button>
+    </div>
+
+    <!-- Empty state -->
+    <div id="emptyContainer" class="empty-state" style="display: none;">
+      <div class="empty-text">No active products available</div>
+    </div>
+
+    <!-- Products container -->
+    <div id="signageContainer" class="signage-container" style="display: none;">
+      <div id="productsGrid" class="products-grid"></div>
+    </div>
+
+    <!-- Refresh indicator -->
+    <div id="refreshIndicator" class="refresh-indicator">Updating...</div>
+
+    <script>
+      // Configuration
+      const API_BASE = window.location.origin;
+      const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+      const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+
+      // State
+      let currentProducts = [];
+      let refreshTimer = null;
+
+      // Get tenant ID from URL or use default
+      function getTenantId() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('tenant') || DEFAULT_TENANT_ID;
+      }
+
+      // Fetch products from API
+      async function fetchProducts() {
+        try {
+          const tenantId = getTenantId();
+          const response = await fetch(`${API_BASE}/api/v1/products?tenant_id=${tenantId}&is_active=true&limit=1000`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch products: ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          return Array.isArray(data) ? data : (data.products || []);
+        } catch (error) {
+          console.error('Error fetching products:', error);
+          throw error;
+        }
+      }
+
+      // Create product card element
+      function createProductCard(product) {
+        const card = document.createElement('div');
+        card.className = `product-card ${product.is_active ? 'active' : 'inactive'}`;
+        card.dataset.productId = product.id;
+
+        // Get Arabic name from localized data
+        const nameAr = product.name_localized?.ar || '';
+        const nameEn = product.name || '';
+        
+        // Determine image URL
+        let imageUrl = product.image_url || '/images/placeholder.png';
+        // Handle relative URLs
+        if (imageUrl && imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+          imageUrl = `${API_BASE}${imageUrl}`;
+        }
+
+        card.innerHTML = `
+          <div class="product-image-wrapper">
+            <img 
+              class="product-image loading" 
+              data-src="${imageUrl}" 
+              alt="${nameEn}"
+            />
+          </div>
+          <div class="product-info">
+            <div class="product-name-ar">${nameAr}</div>
+            <div class="product-name-en">${nameEn}</div>
+            <div class="product-price">${formatPrice(product.price)}</div>
+          </div>
+        `;
+
+        // Lazy load image
+        const img = card.querySelector('.product-image');
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const image = entry.target;
+              image.src = image.dataset.src;
+              image.onload = () => image.classList.remove('loading');
+              image.onerror = () => {
+                image.src = '/images/placeholder.png';
+                image.classList.remove('loading');
+              };
+              observer.unobserve(image);
+            }
+          });
+        });
+        observer.observe(img);
+
+        return card;
+      }
+
+      // Format price
+      function formatPrice(price) {
+        const numPrice = parseFloat(price) || 0;
+        return `${numPrice.toFixed(3)} KWD`;
+      }
+
+      // Render products
+      function renderProducts(products) {
+        const grid = document.getElementById('productsGrid');
+        grid.innerHTML = '';
+
+        // Filter active products and sort by name
+        const activeProducts = products
+          .filter(p => p.is_active)
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        if (activeProducts.length === 0) {
+          showEmpty();
+          return;
+        }
+
+        activeProducts.forEach(product => {
+          grid.appendChild(createProductCard(product));
+        });
+
+        currentProducts = activeProducts;
+      }
+
+      // Show loading state
+      function showLoading() {
+        document.getElementById('loadingContainer').style.display = 'flex';
+        document.getElementById('errorContainer').style.display = 'none';
+        document.getElementById('emptyContainer').style.display = 'none';
+        document.getElementById('signageContainer').style.display = 'none';
+      }
+
+      // Show error state
+      function showError(message) {
+        document.getElementById('loadingContainer').style.display = 'none';
+        document.getElementById('errorContainer').style.display = 'flex';
+        document.getElementById('emptyContainer').style.display = 'none';
+        document.getElementById('signageContainer').style.display = 'none';
+        document.getElementById('errorText').textContent = message;
+      }
+
+      // Show empty state
+      function showEmpty() {
+        document.getElementById('loadingContainer').style.display = 'none';
+        document.getElementById('errorContainer').style.display = 'none';
+        document.getElementById('emptyContainer').style.display = 'flex';
+        document.getElementById('signageContainer').style.display = 'none';
+      }
+
+      // Show products
+      function showProducts() {
+        document.getElementById('loadingContainer').style.display = 'none';
+        document.getElementById('errorContainer').style.display = 'none';
+        document.getElementById('emptyContainer').style.display = 'none';
+        document.getElementById('signageContainer').style.display = 'block';
+      }
+
+      // Show refresh indicator
+      function showRefreshIndicator() {
+        const indicator = document.getElementById('refreshIndicator');
+        indicator.classList.add('show');
+        setTimeout(() => {
+          indicator.classList.remove('show');
+        }, 2000);
+      }
+
+      // Load and display products
+      async function loadProducts(showIndicator = false) {
+        try {
+          if (showIndicator) {
+            showRefreshIndicator();
+          } else {
+            showLoading();
+          }
+
+          const products = await fetchProducts();
+          renderProducts(products);
+          showProducts();
+        } catch (error) {
+          console.error('Failed to load products:', error);
+          showError(error.message || 'Failed to load menu. Please check your connection.');
+        }
+      }
+
+      // Setup auto-refresh
+      function setupAutoRefresh() {
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+        }
+        
+        refreshTimer = setInterval(() => {
+          loadProducts(true);
+        }, REFRESH_INTERVAL);
+      }
+
+      // Initialize
+      async function init() {
+        console.log('Digital Signage initializing...');
+        console.log('Tenant ID:', getTenantId());
+        
+        await loadProducts();
+        setupAutoRefresh();
+        
+        console.log('Digital Signage ready');
+      }
+
+      // Start when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+      // Cleanup on page unload
+      window.addEventListener('beforeunload', () => {
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+        }
+      });
+    </script>
+  </body>
+</html>
