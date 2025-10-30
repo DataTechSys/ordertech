@@ -286,7 +286,7 @@
 
     <script>
       // Configuration
-      const API_BASE = window.location.origin;
+      const API_BASE = 'https://app.ordertech.me';
       const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
       const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
 
@@ -304,7 +304,11 @@
       async function fetchProducts() {
         try {
           const tenantId = getTenantId();
-          const response = await fetch(`${API_BASE}/admin/tenants/${tenantId}/products?status=active&limit=1000`);
+          const response = await fetch(`${API_BASE}/api/products`, {
+            headers: {
+              'X-Tenant-Id': tenantId
+            }
+          });
           
           if (!response.ok) {
             throw new Error(`Failed to fetch products: ${response.statusText}`);
