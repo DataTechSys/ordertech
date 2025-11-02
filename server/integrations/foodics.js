@@ -1,5 +1,23 @@
-// server/integrations/foodics.js — minimal client for Foodics POS API v2
-// NOTE: Endpoints can be adjusted via env or options if the vendor uses different paths.
+// server/integrations/foodics.js — Foodics POS API v5 client
+// Official Documentation: https://apidocs.foodics.com/core/introduction.html
+// Base URL: https://api.foodics.com/v5
+//
+// Valid Foodics v5 endpoints (do not change without verifying in official docs):
+// - /orders          https://apidocs.foodics.com/core/orders.html
+// - /categories      https://apidocs.foodics.com/core/categories.html  
+// - /products        https://apidocs.foodics.com/core/products.html
+// - /modifiers       https://apidocs.foodics.com/core/modifiers.html
+// - /modifier_groups https://apidocs.foodics.com/core/modifier-groups.html
+// - /branches        https://apidocs.foodics.com/core/branches.html
+// - /customers       https://apidocs.foodics.com/core/customers.html
+// - /payments        https://apidocs.foodics.com/core/payments.html
+//
+// REMOVED endpoints (were causing 404 errors):
+// - /closings, /pos/orders, /receipts (invalid)
+// - /menu/categories, /menu/products, /menu/modifiers, /menu/modifier_groups, /menu/branches (invalid)
+// - /outlets, /locations (use /branches instead)
+// - /clients (use /customers instead)
+// - /transactions (use /payments instead)
 
 const DEFAULT_BASE = process.env.FOODICS_API_BASE || 'https://api.foodics.com/v5';
 const TIMEOUT_MS = Number(process.env.FOODICS_API_TIMEOUT_MS || 15000);
@@ -109,9 +127,11 @@ function makeClient(token, base=DEFAULT_BASE){
     return { items: [], pages: 0, requests: 0 };
   }
   return {
-    listCategories: () => listAllWithFallback(['/categories','/menu/categories']),
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/categories.html
+    listCategories: () => listAllWithFallback(['/categories']),
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/products.html
     listProducts: async () => {
-      const paths = ['/products','/menu/products'];
+      const paths = ['/products'];
       // Try with rich includes first
       try {
         const rich = await listAllWithFallback(paths, { include: 'image,images,media,category,price_tags,tax_group,tags,branches,ingredients.branches,modifiers,modifiers.options,modifiers.options.branches,discounts,timed_events,groups' });
@@ -126,25 +146,23 @@ function makeClient(token, base=DEFAULT_BASE){
       }
     },
     getProduct: (id, params={}) => getOne('/products', id, params),
-    listModifierGroups: () => listAllWithFallback(['/modifiers','/modifier_groups','/menu/modifiers','/menu/modifier_groups']),
-    listModifierOptions: () => listAllWithFallback(['/modifier_options','/modifiers/options','/menu/modifier_options']),
-    listProductModifierAssignments: () => listAllWithFallback(['/product_modifier_groups','/product_modifiers','/menu/product_modifier_groups']),
-    listBranches: () => listAllWithFallback(['/branches','/outlets','/locations','/menu/branches'], { include: 'address,tax_group,contact,location' }),
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/modifiers.html
+    listModifierGroups: () => listAllWithFallback(['/modifiers','/modifier_groups']),
+    listModifierOptions: () => listAllWithFallback(['/modifier_options','/modifiers/options']),
+    listProductModifierAssignments: () => listAllWithFallback(['/product_modifier_groups','/product_modifiers']),
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/branches.html
+    listBranches: () => listAllWithFallback(['/branches'], { include: 'address,tax_group,contact,location' }),
     listGroupOptions,
     
     // Orders and Sales endpoints
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/orders.html
     listOrders: async (params = {}) => {
       // Try first without include parameter (some accounts don't support it)
       const simpleParams = { ...params };
       delete simpleParams.include;
       
-      // Try multiple endpoint paths
-      const paths = [
-        '/orders',
-        '/closings',
-        '/pos/orders',
-        '/receipts'
-      ];
+      // Use only the valid v5 endpoint
+      const paths = ['/orders'];
       
       // First try without includes
       try {
@@ -170,13 +188,14 @@ function makeClient(token, base=DEFAULT_BASE){
     },
     
     // Customers endpoints
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/customers.html
     listCustomers: (params = {}) => {
       const defaultInclude = 'addresses,phones,tags';
       const finalParams = {
         include: defaultInclude,
         ...params
       };
-      return listAllWithFallback(['/customers', '/clients'], finalParams);
+      return listAllWithFallback(['/customers'], finalParams);
     },
     
     getCustomer: (id, params = {}) => {
@@ -189,8 +208,9 @@ function makeClient(token, base=DEFAULT_BASE){
     },
     
     // Payments endpoints (if available separately from orders)
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/payments.html
     listPayments: (params = {}) => {
-      return listAllWithFallback(['/payments', '/transactions'], params);
+      return listAllWithFallback(['/payments'], params);
     }
   };
 }
