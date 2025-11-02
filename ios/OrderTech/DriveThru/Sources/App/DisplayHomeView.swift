@@ -2063,6 +2063,9 @@ struct ProductDetailPopup: View {
                 let opts: [DisplayModifierGroup.Option] = g.options.map { o in
                     DisplayModifierGroup.Option(id: o.id, name: o.name, name_localized: o.name_localized, price: o.price)
                 }
+                #if DEBUG
+                print("[ProductDetailPopup] Mapped group: '\(g.name)' - min: \(g.min), max: \(g.max), options: \(g.options.count)")
+                #endif
                 return DisplayModifierGroup(group: grp, options: opts)
             }
             await MainActor.run {
