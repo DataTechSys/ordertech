@@ -1499,8 +1499,14 @@ struct ProductDetailPopup: View {
     // Check if a modifier option is quantifiable (can have quantity > 1)
     private func isQuantifiableModifier(_ optionName: String) -> Bool {
         let name = optionName.lowercased()
-        return name.contains("shot") || name.contains("espresso") || 
-               name.contains("matcha shot") || name.contains("extra")
+        let isQuantifiable = name.contains("shot") || name.contains("espresso") || 
+                            name.contains("matcha") || name.contains("extra")
+        #if DEBUG
+        if isQuantifiable {
+            print("[ProductDetailPopup] Detected quantifiable modifier: \(optionName)")
+        }
+        #endif
+        return isQuantifiable
     }
     
     var body: some View {
@@ -1745,7 +1751,8 @@ struct ProductDetailPopup: View {
     private func optionRow(_ opt: DisplayModifierGroup.Option, group: DisplayModifierGroup, isSingle: Bool, useTwoCols: Bool) -> some View {
         let isOn = selection[group.group.id, default: []].contains(opt.id)
         let isQuantifiable = isQuantifiableModifier(opt.name)
-        let qty = optionQuantities[opt.id] ?? 1
+        // Quantifiable modifiers start at 0, regular modifiers at 1
+        let qty = optionQuantities[opt.id] ?? (isQuantifiable ? 0 : 1)
         
         if isQuantifiable {
             // Quantifiable modifier: show name on left, +/- counter on right with dynamic price
