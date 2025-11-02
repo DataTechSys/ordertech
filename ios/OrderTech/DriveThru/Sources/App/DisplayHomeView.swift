@@ -1502,7 +1502,7 @@ struct ProductDetailPopup: View {
             headerView(isPad: isPad)
             
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: modifierGroups.isEmpty ? 16 : 20) {
                     productLayoutView(isPad: isPad, imageSide: imageSide, useVerticalLayout: useVerticalLayout)
                     
                     productDescriptionView(isPad: isPad)
@@ -1514,9 +1514,10 @@ struct ProductDetailPopup: View {
                             .padding(.horizontal, isPad ? 32 : 24)
                     }
                     
-                    Spacer(minLength: 40)
+                    // Adaptive bottom spacing: less space when no modifiers
+                    Spacer(minLength: modifierGroups.isEmpty ? 12 : 40)
                 }
-                .padding(.top, 24)
+                .padding(.top, modifierGroups.isEmpty ? 16 : 24)
             }
         }
     }
