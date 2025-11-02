@@ -1512,10 +1512,10 @@ struct ProductDetailPopup: View {
                         modifiersSection(isPad: isPad)
                             .padding(.top, 6)
                             .padding(.horizontal, isPad ? 32 : 24)
+                        
+                        // Only add spacer when there are modifiers
+                        Spacer(minLength: 40)
                     }
-                    
-                    // Adaptive bottom spacing: less space when no modifiers
-                    Spacer(minLength: modifierGroups.isEmpty ? 12 : 40)
                 }
                 .padding(.top, modifierGroups.isEmpty ? 16 : 24)
             }
@@ -1987,28 +1987,30 @@ struct ProductDetailPopup: View {
     
     @ViewBuilder
     private func productDescriptionView(isPad: Bool) -> some View {
-        VStack(alignment: .center, spacing: 8) {
-            // Localized description (Arabic) on top
-            if let descLocalized = product.description_localized?["ar"],
-               !descLocalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(descLocalized)
-                    .font(.system(size: isPad ? 24 : 18, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            
-            // English description below
-            if let desc = product.description,
-               !desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(desc)
-                    .font(.system(size: isPad ? 20 : 16, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
+        let hasArabicDesc = (product.description_localized?["ar"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let hasEnglishDesc = (product.description ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        
+        if hasArabicDesc || hasEnglishDesc {
+            VStack(alignment: .center, spacing: 8) {
+                // Localized description (Arabic) on top
+                if let descLocalized = product.description_localized?["ar"],
+                   !descLocalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(descLocalized)
+                        .font(.system(size: isPad ? 24 : 18, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                // English description below
+                if let desc = product.description,
+                   !desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(desc)
+                        .font(.system(size: isPad ? 20 : 16, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .center)
     }
     
     @ViewBuilder
