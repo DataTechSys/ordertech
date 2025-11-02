@@ -779,6 +779,29 @@ private struct BillBoxView: View {
     var appearance: BillItemAppearance = BillItemAppearance()
     var body: some View {
         VStack(spacing: 0) {
+            // Syncing indicator at top right
+            if catalog.isLoading {
+                HStack {
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 6, height: 6)
+                            .opacity(catalog.isLoading ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: catalog.isLoading)
+                        Text("Syncing...")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.08))
+                    .cornerRadius(8)
+                }
+                .padding(.top, 6)
+                .padding(.trailing, 8)
+            }
+            
             if isExternalContext {
                 HStack {
                     Text("Order Summary").font(.system(size: 17 * textScale, weight: .semibold))
