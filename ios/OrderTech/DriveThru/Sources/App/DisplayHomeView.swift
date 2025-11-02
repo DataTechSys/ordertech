@@ -1482,7 +1482,7 @@ struct ProductDetailPopup: View {
         return base
     }
     
-    private func selectedOptionsDelta: Double {
+    private var selectedOptionsDelta: Double {
         var sum: Double = 0
         for g in modifierGroups {
             let set = selection[g.group.id] ?? []
