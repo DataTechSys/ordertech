@@ -1499,12 +1499,12 @@ struct ProductDetailPopup: View {
     // Check if a modifier option is quantifiable (can have quantity > 1)
     private func isQuantifiableModifier(_ optionName: String) -> Bool {
         let name = optionName.lowercased()
-        let isQuantifiable = name.contains("shot") || name.contains("espresso") || 
-                            name.contains("matcha") || name.contains("extra")
+        // Remove any pipes and extra spaces for better detection
+        let cleanName = name.replacingOccurrences(of: "|", with: " ").replacingOccurrences(of: "  ", with: " ")
+        let isQuantifiable = cleanName.contains("shot") || cleanName.contains("espresso") || 
+                            cleanName.contains("matcha") || cleanName.contains("extra")
         #if DEBUG
-        if isQuantifiable {
-            print("[ProductDetailPopup] Detected quantifiable modifier: \(optionName)")
-        }
+        print("[ProductDetailPopup] Checking modifier: '\(optionName)' (cleaned: '\(cleanName)') -> quantifiable: \(isQuantifiable)")
         #endif
         return isQuantifiable
     }
