@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .register-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+            padding: 3rem;
+        }
+        
+        .logo {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #1f2937;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 2rem;
+        }
+        
+        .trial-badge {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-weight: 600;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #374151;
+            font-weight: 500;
+        }
+        
+        input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        input::placeholder {
+            color: #d1d5db;
+            opacity: 1;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        
+        .hint {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 0.875rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #5b1fa6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #4a1585;
+        }
+        
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .alert {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        
+        .login-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: #6b7280;
+        }
+        
+        .login-link a {
+            color: #3b82f6;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+        
+        .back-home {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+        
+        .back-home a {
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .back-home a:hover {
+            color: #3b82f6;
+        }
+        
+        .benefits {
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .benefits h3 {
+            font-size: 0.9rem;
+            color: #1f2937;
+            margin-bottom: 0.75rem;
+        }
+        
+        .benefits ul {
+            list-style: none;
+            font-size: 0.85rem;
+            color: #4b5563;
+        }
+        
+        .benefits li {
+            padding: 0.25rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .benefits li:before {
+            content: "✓";
+            color: #10b981;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 50px; margin-bottom: 1.5rem;"></div>
+        <h1>Try DataTech free for 14 days.</h1>
+        
+        <div id="alert" class="alert"></div>
+        
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="email">Business Email *</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    placeholder="your@business.com" 
+                    required 
+                    autocomplete="email"
+                >
+                <div class="hint">We'll send you a verification link</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="businessName">Business Name (Optional)</label>
+                <input 
+                    type="text" 
+                    id="businessName" 
+                    name="businessName" 
+                    placeholder="Your restaurant name"
+                >
+            </div>
+            
+            <button type="submit" class="btn btn-primary" id="registerBtn">
+                Start 14 Days Free Trial
+            </button>
+        </form>
+        
+        <div class="login-link">
+            Already have an account? 
+            <a href="/foodics/login.html">Login</a>
+        </div>
+        
+        <div class="back-home">
+            <a href="/foodics/index.html">← Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        const registerForm = document.getElementById('registerForm');
+        const registerBtn = document.getElementById('registerBtn');
+        const alertDiv = document.getElementById('alert');
+        
+        function showAlert(message, type = 'error') {
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.style.display = 'block';
+            setTimeout(() => {
+                alertDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value.trim();
+            const businessName = document.getElementById('businessName').value.trim();
+            
+            if (!email) {
+                showAlert('Email is required');
+                return;
+            }
+            
+            registerBtn.disabled = true;
+            registerBtn.textContent = 'Creating account...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/foodics/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        email,
+                        business_name: businessName || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showAlert('Registration successful! Check your email.', 'success');
+                    registerForm.reset();
+                    
+                    // Show email verification message
+                    setTimeout(() => {
+                        document.querySelector('.register-container').innerHTML = `
+                            <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 50px; margin-bottom: 1.5rem;"></div>
+                            <div style="text-align: center; padding: 2rem;">
+                                <div style="font-size: 3rem; margin-bottom: 1rem;">📧</div>
+                                <h2>Check Your Email</h2>
+                                <p style="margin: 1.5rem 0; color: #6b7280;">
+                                    We've sent a verification link to:<br>
+                                    <strong style="color: #1f2937;">${email}</strong>
+                                </p>
+                                <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 2rem;">
+                                    Click the link to verify your account and set your password.<br>
+                                    After verification, you'll be able to configure your Foodics settings.
+                                </p>
+                                <a href="/foodics/login.html" class="btn btn-primary">Go to Login</a>
+                            </div>
+                        `;
+                    }, 1500);
+                } else {
+                    showAlert(data.error || 'Registration failed');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showAlert('Network error. Please try again.');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Start 14 Days Free Trial';
+            }
+        });
+    </script>
+</body>
+</html>

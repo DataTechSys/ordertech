@@ -2,6 +2,12 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:../OrderTechCore">
+   </FileRef>
+   <FileRef
       location = "group:OrderTech/OrderTech.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:OrderTech/DriveThru/DriveThru.xcodeproj">
    </FileRef>
 </Workspace>

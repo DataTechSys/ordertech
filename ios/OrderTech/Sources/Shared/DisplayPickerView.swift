@@ -3,7 +3,7 @@ import OrderTechCore
 
 struct DisplayPickerView: View {
     @EnvironmentObject var env: EnvironmentStore
-    @EnvironmentObject var session: SessionStore
+    @EnvironmentObject var session: DisplaySessionStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var items: [DisplayPresenceItem] = []
@@ -128,12 +128,39 @@ VStack(alignment: .leading, spacing: 6) {
     }
 
     private var filteredBranchKeys: [String] {
-        let keys = groupedByBranch.keys.sorted()
-        return keys.filter { branch in
+        let keys = groupedByBranch.keys
+        
+        // Filter branches that have visible displays
+        let visibleBranches = keys.filter { branch in
             let list = sorted(groupedByBranch[branch] ?? [])
             let visible = filterAvailableOnly ? list.filter { isAvailable($0) } : list
             return !visible.isEmpty
         }
+        
+        // Sort branches by their best (lowest rank) display
+        let sortedBranches = visibleBranches.sorted { branchA, branchB in
+            let displaysA = sorted(groupedByBranch[branchA] ?? [])
+            let displaysB = sorted(groupedByBranch[branchB] ?? [])
+            
+            func bestRank(_ displays: [DisplayPresenceItem]) -> Int {
+                guard let first = displays.first else { return 999 }
+                let isOnline = first.online ?? false
+                let isBusy = first.busy ?? false
+                if isOnline && isBusy { return 0 }  // Busy/Active first
+                if isOnline && !isBusy { return 1 } // Available second
+                return 2  // Offline last
+            }
+            
+            let rankA = bestRank(displaysA)
+            let rankB = bestRank(displaysB)
+            
+            if rankA != rankB { return rankA < rankB }
+            
+            // If same rank, sort by branch name
+            return branchA.localizedCaseInsensitiveCompare(branchB) == .orderedAscending
+        }
+        
+        return sortedBranches
     }
 
     private var visibleItemCount: Int {
@@ -142,14 +169,17 @@ VStack(alignment: .leading, spacing: 6) {
     }
 
     private func sorted(_ list: [DisplayPresenceItem]) -> [DisplayPresenceItem] {
-        list.sorted { a, b in
-            // Availability rank: Available(0), Busy(1), Offline(2)
+        // Filter out current device from the list
+        let filtered = list.filter { $0.id != session.deviceId }
+        
+        let sorted = filtered.sorted { a, b in
+            // Priority rank: Busy/Active (0), Available (1), Offline (2)
             func rank(_ d: DisplayPresenceItem) -> Int {
                 let isOnline = d.online ?? false
                 let isBusy = d.busy ?? false
-                if isOnline && !isBusy { return 0 }
-                if isOnline && isBusy { return 1 }
-                return 2
+                if isOnline && isBusy { return 0 }  // Busy/Active first
+                if isOnline && !isBusy { return 1 } // Available second
+                return 2  // Offline last
             }
             let ra = rank(a), rb = rank(b)
             if ra != rb { return ra < rb }
@@ -158,6 +188,17 @@ VStack(alignment: .leading, spacing: 6) {
             let bn = (b.name?.isEmpty == false ? b.name! : b.id)
             return an.localizedCaseInsensitiveCompare(bn) == .orderedAscending
         }
+        
+        // DEBUG: Log sorted order
+        print("[DisplayPicker] Sorted \(sorted.count) displays:")
+        for d in sorted {
+            let isOnline = d.online ?? false
+            let isBusy = d.busy ?? false
+            let rank = isOnline && isBusy ? 0 : (isOnline ? 1 : 2)
+            print("  - \(d.name ?? d.id): online=\(isOnline), busy=\(isBusy), rank=\(rank)")
+        }
+        
+        return sorted
     }
 
     private func lastSeenText(_ iso: String?) -> String? {
@@ -191,38 +232,58 @@ VStack(alignment: .leading, spacing: 6) {
     }
 
     private func isCurrentConnected(_ d: DisplayPresenceItem) -> Bool {
-        return (session.signalBars > 0) && (d.id == (session.basketId ?? ""))
+        // Check if this is the currently connected display
+        // When peersConnected is true and connectedDisplayId matches this display's ID
+        let isConnected = session.peersConnected && (session.connectedDisplayId == d.id)
+        if session.peersConnected || session.connectedDisplayId != nil {
+            print("[DisplayPicker] isCurrentConnected for \(d.name ?? d.id): peersConnected=\(session.peersConnected), connectedDisplayId=\(session.connectedDisplayId ?? "nil"), d.id=\(d.id), result=\(isConnected)")
+        }
+        return isConnected
     }
 
     private func load(silent: Bool = false) async {
         if !silent { isLoading = true }
         defer { if !silent { isLoading = false } }
+        print("[DisplayPicker] Loading displays... silent=\(silent)")
         do {
             let client = HttpClient(env: env)
             items = try await client.presenceDisplays()
+            print("[DisplayPicker] Loaded \(items.count) displays")
             errorText = nil
         } catch {
-            if !silent { errorText = error.localizedDescription }
+            print("[DisplayPicker] Load error: \(error)")
+            if !silent {
+                // Check if it's a 403 permission error
+                if let urlError = error as? URLError, urlError.code.rawValue == 403 {
+                    errorText = "Permission denied. Display devices cannot view other displays. Please use a Cashier device to connect to displays."
+                } else if error.localizedDescription.contains("403") || error.localizedDescription.contains("Forbidden") {
+                    errorText = "Permission denied. Display devices cannot view other displays. Please use a Cashier device to connect to displays."
+                } else {
+                    errorText = error.localizedDescription
+                }
+            }
         }
     }
 
 private func start(with pairId: String) async {
         connectingId = pairId
-        await session.startSessionWithPairId(env: env, pairId: pairId)
-        // Wait briefly for initial signals; dismiss as soon as a provider is active or after a short timeout
+        print("[DisplayPicker] Connecting to display: \(pairId)")
+        await session.connectToDisplay(targetDisplayId: pairId)
+        // Wait briefly for connection to establish
         let start = Date()
         while Date().timeIntervalSince(start) < 6.0 {
             try? await Task.sleep(nanoseconds: 200_000_000)
-            if (session.providerTag.isEmpty == false) || session.signalBars > 0 { break }
+            if session.peersConnected { break }
         }
+        connectingId = nil
         dismiss()
     }
 
     private func hangup() async {
-        // 🔄 FULL SESSION REFRESH - Reset everything to clean startup state
-        print("[DisplayPicker] Initiating full session refresh on disconnect")
-        await session.refreshSession(env: env)
-        print("[DisplayPicker] Session refresh complete, dismissing picker")
+        // Stop the session and disconnect
+        print("[DisplayPicker] Disconnecting from display")
+        session.stop()
+        print("[DisplayPicker] Disconnected, dismissing picker")
         dismiss()
     }
 }

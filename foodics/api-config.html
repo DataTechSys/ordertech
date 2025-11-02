@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Configuration | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; color: #1f2937; }
+        .sidebar { position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1f2937; color: white; padding: 2rem 0; overflow-y: auto; }
+        .logo { padding: 0 1.5rem; font-size: 1.5rem; font-weight: bold; margin-bottom: 2rem; }
+        .menu { list-style: none; }
+        .menu a { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.5rem; color: #d1d5db; text-decoration: none; transition: all 0.3s; }
+        .menu a:hover, .menu a.active { background: #374151; color: white; }
+        .menu i { font-size: 1.2rem; }
+        .main-content { margin-left: 250px; padding: 2rem; max-width: 800px; }
+        .header { background: white; padding: 1.5rem 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .btn { padding: 0.625rem 1.25rem; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.3s; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .card { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .card h2 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group textarea { width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
+        .hint { font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem; }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none; }
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .info-box { background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+        .info-box h3 { font-size: 1rem; margin-bottom: 0.5rem; color: #1e40af; }
+        .info-box p { font-size: 0.9rem; color: #1e40af; line-height: 1.5; }
+        .info-box a { color: #1e40af; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 32px;"></div>
+        <ul class="menu">
+            <li><a href="/foodics/dashboard.html"><i class="ri-dashboard-line"></i> Dashboard</a></li>
+            <li><a href="/foodics/profile.html"><i class="ri-user-line"></i> Profile</a></li>
+            <li><a href="/foodics/devices.html"><i class="ri-computer-line"></i> Devices</a></li>
+            <li><a href="/foodics/subscription.html"><i class="ri-vip-crown-line"></i> Subscription</a></li>
+            <li><a href="/foodics/activity.html"><i class="ri-history-line"></i> Activity Log</a></li>
+            <li><a href="/foodics/settings.html" class="active"><i class="ri-settings-3-line"></i> Settings</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="header">
+            <h1>API Configuration</h1>
+            <button class="btn btn-danger" onclick="logout()"><i class="ri-logout-box-line"></i> Logout</button>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="info-box">
+            <h3><i class="ri-information-line"></i> Foodics API Integration</h3>
+            <p>
+                To connect your devices with Foodics, you need to provide your Foodics API credentials. 
+                You can obtain these from your <a href="https://console.foodics.com" target="_blank">Foodics Developer Console</a>.
+                <br><br>
+                📚 <a href="https://developers.foodics.com/guides/introduction.html" target="_blank">View Foodics Developer Documentation</a>
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Foodics API Credentials</h2>
+            <form id="apiConfigForm">
+                <div class="form-group">
+                    <label for="apiKey">API Key *</label>
+                    <input type="password" id="apiKey" placeholder="Enter your Foodics API Key" required>
+                    <div class="hint">Your Foodics API Key from the developer console</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="apiSecret">API Secret *</label>
+                    <input type="password" id="apiSecret" placeholder="Enter your Foodics API Secret" required>
+                    <div class="hint">Keep this secret secure</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="businessRef">Business Reference</label>
+                    <input type="text" id="businessRef" placeholder="Your Foodics Business Reference">
+                    <div class="hint">Optional: Your Foodics business/branch reference</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="webhookUrl">Webhook URL (Optional)</label>
+                    <input type="url" id="webhookUrl" placeholder="https://your-domain.com/webhook">
+                    <div class="hint">URL to receive Foodics webhook events</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="ri-save-line"></i> Save Configuration
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Connection Status</h2>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div id="statusIndicator" style="width: 12px; height: 12px; border-radius: 50%; background: #9ca3af;"></div>
+                <div>
+                    <strong id="statusText">Not Configured</strong>
+                    <div style="font-size: 0.85rem; color: #6b7280;" id="statusDetail">Add your API credentials to connect</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function checkAuth() {
+            const token = localStorage.getItem('foodics_token');
+            if (!token) {
+                window.location.href = '/foodics/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        function logout() {
+            localStorage.removeItem('foodics_token');
+            localStorage.removeItem('foodics_user');
+            window.location.href = '/foodics/login.html';
+        }
+
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            setTimeout(() => { alert.style.display = 'none'; }, 5000);
+        }
+
+        // Note: In a real implementation, you would store API configs securely in the backend
+        // For now, this is a UI placeholder
+        document.getElementById('apiConfigForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            // Store in localStorage (in production, send to backend)
+            const config = {
+                apiKey: document.getElementById('apiKey').value,
+                apiSecret: document.getElementById('apiSecret').value,
+                businessRef: document.getElementById('businessRef').value,
+                webhookUrl: document.getElementById('webhookUrl').value
+            };
+            
+            localStorage.setItem('foodics_api_config', JSON.stringify(config));
+            
+            document.getElementById('statusIndicator').style.background = '#10b981';
+            document.getElementById('statusText').textContent = 'Connected';
+            document.getElementById('statusDetail').textContent = 'API credentials saved successfully';
+            
+            showAlert('API configuration saved successfully!', 'success');
+        });
+
+        // Load saved config on page load
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('foodics_api_config');
+            if (saved) {
+                try {
+                    const config = JSON.parse(saved);
+                    document.getElementById('apiKey').value = config.apiKey || '';
+                    document.getElementById('apiSecret').value = config.apiSecret || '';
+                    document.getElementById('businessRef').value = config.businessRef || '';
+                    document.getElementById('webhookUrl').value = config.webhookUrl || '';
+                    
+                    document.getElementById('statusIndicator').style.background = '#10b981';
+                    document.getElementById('statusText').textContent = 'Connected';
+                    document.getElementById('statusDetail').textContent = 'API credentials configured';
+                } catch (e) {}
+            }
+        });
+
+        if (checkAuth()) {}
+    </script>
+</body>
+</html>

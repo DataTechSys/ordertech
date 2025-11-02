@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: #1f2937;
+            color: white;
+            padding: 2rem 0;
+            overflow-y: auto;
+        }
+        
+        .logo {
+            padding: 0 1.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+        }
+        
+        .menu {
+            list-style: none;
+        }
+        
+        .menu a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            color: #d1d5db;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .menu a:hover, .menu a.active {
+            background: #374151;
+            color: white;
+        }
+        
+        .menu i {
+            font-size: 1.2rem;
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 250px;
+            padding: 2rem;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .card h3 {
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .card .label {
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+        }
+        
+        .trial-warning {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .trial-warning .btn {
+            background: white;
+            color: #f59e0b;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+        
+        .devices-list {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .device-item {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .device-item:last-child {
+            border-bottom: none;
+        }
+        
+        .device-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .device-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .device-icon.active {
+            background: #d1fae5;
+            color: #10b981;
+        }
+        
+        .device-icon.inactive {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-badge.inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 200px;
+            }
+            
+            .main-content {
+                margin-left: 200px;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 32px;"></div>
+        <ul class="menu">
+            <li><a href="/foodics/dashboard.html" class="active"><i class="ri-dashboard-line"></i> Dashboard</a></li>
+            <li><a href="/foodics/profile.html"><i class="ri-user-line"></i> Profile</a></li>
+            <li><a href="/foodics/devices.html"><i class="ri-computer-line"></i> Devices</a></li>
+            <li><a href="/foodics/subscription.html"><i class="ri-vip-crown-line"></i> Subscription</a></li>
+            <li><a href="/foodics/activity.html"><i class="ri-history-line"></i> Activity Log</a></li>
+            <li><a href="/foodics/settings.html"><i class="ri-settings-3-line"></i> Settings</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="header">
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar"></div>
+                <div>
+                    <div><strong id="userName">Loading...</strong></div>
+                    <div style="font-size: 0.9rem; color: #6b7280;">Foodics ID: <span id="foodicsId">—</span></div>
+                </div>
+            </div>
+            <button class="btn btn-danger" onclick="logout()">
+                <i class="ri-logout-box-line"></i> Logout
+            </button>
+        </div>
+
+        <!-- Trial Warning -->
+        <div class="trial-warning" id="trialWarning" style="display: none;">
+            <div>
+                <strong>⏰ Trial Expiring Soon!</strong>
+                <div style="font-size: 0.9rem; margin-top: 0.25rem;">
+                    <span id="trialDaysLeft">—</span> days remaining in your trial
+                </div>
+            </div>
+            <a href="/foodics/subscription.html" class="btn">Upgrade Now</a>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="cards-grid">
+            <div class="card">
+                <h3>Devices</h3>
+                <div class="value"><span id="devicesUsed">0</span> / <span id="devicesAllowed">0</span></div>
+                <div class="label">Active Devices</div>
+            </div>
+            
+            <div class="card">
+                <h3>Subscription</h3>
+                <div class="value" id="planType">Trial</div>
+                <div class="label" id="planStatus">Active</div>
+            </div>
+            
+            <div class="card">
+                <h3>Account Status</h3>
+                <div class="value" style="color: #10b981;">Active</div>
+                <div class="label">All systems operational</div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <h2 class="section-title">Quick Actions</h2>
+        <div class="cards-grid" style="margin-bottom: 2rem;">
+            <a href="/foodics/devices.html" class="card" style="text-decoration: none; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <i class="ri-add-circle-line" style="font-size: 2.5rem; color: #3b82f6;"></i>
+                    <div>
+                        <h3 style="margin: 0; color: #1f2937; text-transform: none; font-size: 1.1rem;">Add Device</h3>
+                        <p style="margin: 0.25rem 0 0 0; color: #6b7280; font-size: 0.9rem;">Configure a new device</p>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="/foodics/settings.html" class="card" style="text-decoration: none; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <i class="ri-settings-3-line" style="font-size: 2.5rem; color: #10b981;"></i>
+                    <div>
+                        <h3 style="margin: 0; color: #1f2937; text-transform: none; font-size: 1.1rem;">Settings</h3>
+                        <p style="margin: 0.25rem 0 0 0; color: #6b7280; font-size: 0.9rem;">Configure Foodics & API</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Recent Devices -->
+        <h2 class="section-title">Your Devices</h2>
+        <div class="devices-list" id="devicesList">
+            <div class="empty-state">
+                <i class="ri-computer-line"></i>
+                <p>Loading devices...</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let userData = null;
+        
+        // Check authentication
+        function checkAuth() {
+            const token = localStorage.getItem('foodics_token');
+            const user = localStorage.getItem('foodics_user');
+            
+            if (!token || !user) {
+                window.location.href = '/foodics/login.html';
+                return false;
+            }
+            
+            userData = JSON.parse(user);
+            return true;
+        }
+        
+        // Logout
+        function logout() {
+            localStorage.removeItem('foodics_token');
+            localStorage.removeItem('foodics_user');
+            window.location.href = '/foodics/login.html';
+        }
+        
+        // Load user profile
+        async function loadProfile() {
+            // First, load from localStorage immediately
+            if (userData) {
+                document.getElementById('userName').textContent = userData.company_name || userData.email;
+                document.getElementById('foodicsId').textContent = userData.foodics_id || 'N/A';
+                document.getElementById('userAvatar').textContent = (userData.company_name || userData.email)[0].toUpperCase();
+            }
+            
+            // Then try to fetch from API for updated data
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/user/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const user = data.user;
+                    
+                    document.getElementById('userName').textContent = user.company_name || user.email;
+                    document.getElementById('foodicsId').textContent = user.foodics_id || 'N/A';
+                    document.getElementById('userAvatar').textContent = (user.company_name || user.email)[0].toUpperCase();
+                    
+                    document.getElementById('devicesUsed').textContent = user.active_devices_count || 0;
+                    document.getElementById('devicesAllowed').textContent = user.devices_allowed || 0;
+                    document.getElementById('planType').textContent = (user.plan_type || 'trial').toUpperCase();
+                    document.getElementById('planStatus').textContent = user.subscription_status || 'active';
+                    
+                    // Check trial expiration
+                    if (user.plan_type === 'trial' && user.trial_end_date) {
+                        const now = new Date();
+                        const trialEnd = new Date(user.trial_end_date);
+                        const daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+                        
+                        if (daysLeft <= 7 && daysLeft > 0) {
+                            document.getElementById('trialDaysLeft').textContent = daysLeft;
+                            document.getElementById('trialWarning').style.display = 'flex';
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Load profile error:', error);
+            }
+        }
+        
+        // Load devices
+        async function loadDevices() {
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/devices`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const devices = data.devices || [];
+                    const devicesList = document.getElementById('devicesList');
+                    
+                    if (devices.length === 0) {
+                        devicesList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="ri-computer-line"></i>
+                                <p>No devices configured yet</p>
+                                <a href="/foodics/devices.html" class="btn" style="background: #3b82f6; color: white; margin-top: 1rem;">Add Your First Device</a>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    devicesList.innerHTML = devices.map(device => `
+                        <div class="device-item">
+                            <div class="device-info">
+                                <div class="device-icon ${device.status}">
+                                    <i class="ri-computer-line"></i>
+                                </div>
+                                <div>
+                                    <strong>${device.device_name}</strong>
+                                    <div style="font-size: 0.85rem; color: #6b7280;">${device.device_type}</div>
+                                </div>
+                            </div>
+                            <span class="status-badge ${device.status}">${device.status}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Load devices error:', error);
+            }
+        }
+        
+        // Initialize
+        if (checkAuth()) {
+            loadProfile();
+            loadDevices();
+        }
+    </script>
+</body>
+</html>

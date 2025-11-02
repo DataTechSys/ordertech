@@ -9,25 +9,8 @@ final class CatalogStore: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var loadingProgress: String = ""
     
-    enum DataSource: String, CaseIterable {
-        case orderTechDB = "OrderTech DB"
-        case foodics = "Foodics Direct"
-        
-        var storageKey: String { "OT.catalog.dataSource" }
-    }
-    
-    var dataSource: DataSource {
-        get {
-            if let raw = UserDefaults.standard.string(forKey: DataSource.foodics.storageKey),
-               let source = DataSource(rawValue: raw) {
-                return source
-            }
-            return .foodics // Default to Foodics Direct
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: DataSource.foodics.storageKey)
-        }
-    }
+    // Always use Foodics as the data source
+    private let dataSource: String = "Foodics"
     
     func syncAll(env: EnvironmentStore) async {
         await loadAll(env: env, forceRefresh: true)
@@ -37,13 +20,10 @@ final class CatalogStore: ObservableObject {
         isLoading = true
         loadingProgress = "Initializing..."
         
-        let source = dataSource
-        print("[CatalogStore] loadAll: starting, source=\(source.rawValue), baseURL=\(env.baseURL), forceRefresh=\(forceRefresh)")
+        print("[CatalogStore] loadAll: starting from Foodics, baseURL=\(env.baseURL), forceRefresh=\(forceRefresh)")
         
         // Check if we need to sync (daily or manual force refresh)
-        var shouldSync = forceRefresh || shouldSyncToday()
-        // When using Foodics as the source, always prefer fresh sync to avoid stale cached modifiers
-        if source == .foodics { shouldSync = true }
+        let shouldSync = forceRefresh || shouldSyncToday()
         
         if !shouldSync {
             print("[CatalogStore] Using cached data from today - no sync needed")
@@ -61,15 +41,11 @@ final class CatalogStore: ObservableObject {
             return
         }
         
-        print("[CatalogStore] Syncing fresh data from \(source.rawValue)")
-        loadingProgress = "Syncing from \(source.rawValue)..."
+        print("[CatalogStore] Syncing fresh data from Foodics")
+        loadingProgress = "Syncing from Foodics..."
         
-        switch source {
-        case .orderTechDB:
-            await loadFromOrderTechDB(env: env)
-        case .foodics:
-            await loadFromFoodics(env: env)
-        }
+        // Always load from Foodics
+        await loadFromFoodics(env: env)
         
         // Cache results locally
         if !products.isEmpty {

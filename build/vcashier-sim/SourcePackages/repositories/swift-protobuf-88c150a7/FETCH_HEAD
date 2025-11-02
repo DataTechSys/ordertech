@@ -1,5 +1,6 @@
 7e3da4b9a10cfa8ed2ac23ae2dd2848bd7b059b7	not-for-merge	branch '1_x_release_branch' of https://github.com/apple/swift-protobuf
-2547102afd04fe49f1b286090f13ebce07284980	not-for-merge	branch 'main' of https://github.com/apple/swift-protobuf
+03a26d1d7b9ae70837e7f1b086d8ecc45257d60f	not-for-merge	branch 'main' of https://github.com/apple/swift-protobuf
+ddb7bf13f5b2ce9e442e5b2d4845e9547d5a66fa	not-for-merge	branch 'table-driven-branch' of https://github.com/apple/swift-protobuf
 c9e5d97b9f805de84762434b475582777db9bddc	not-for-merge	'refs/pull/100/head' of https://github.com/apple/swift-protobuf
 40eb38d25d06f8fcdbd01503ad93143ced54d03a	not-for-merge	'refs/pull/1001/head' of https://github.com/apple/swift-protobuf
 c0f09b736fb02deef20f42efec9ec9e8c8264455	not-for-merge	'refs/pull/1002/head' of https://github.com/apple/swift-protobuf
@@ -665,7 +666,7 @@ c1e4963909642e1d1422a1c1246212ee26bf1f88	not-for-merge	'refs/pull/1789/head' of 
 d5a9b9d0acdeeb7329e37537682c3ff52850ef27	not-for-merge	'refs/pull/1790/head' of https://github.com/apple/swift-protobuf
 3c26c3db960793988f40ec954a358ddb7471ce61	not-for-merge	'refs/pull/1791/head' of https://github.com/apple/swift-protobuf
 f1eabf4a64ec8ca09becac3bf484b3dcbff964a3	not-for-merge	'refs/pull/1793/head' of https://github.com/apple/swift-protobuf
-8abd12b43b23bb67a11feaae4dac41be3a1f5cb6	not-for-merge	'refs/pull/1793/merge' of https://github.com/apple/swift-protobuf
+c77c36cad92e2efa79a205d1ebb6fdb5bee76a43	not-for-merge	'refs/pull/1793/merge' of https://github.com/apple/swift-protobuf
 80aec8c066cb8d9afcfa186fb14a118c994d0bfb	not-for-merge	'refs/pull/1795/head' of https://github.com/apple/swift-protobuf
 5d6433e26a21929124ac89b28e3414c106994fde	not-for-merge	'refs/pull/1796/head' of https://github.com/apple/swift-protobuf
 33589733bfb874576814748198344cab0c360df1	not-for-merge	'refs/pull/1799/head' of https://github.com/apple/swift-protobuf
@@ -717,9 +718,28 @@ f5a026f1955d94bf4c5bb0af1891c9ed67ddf1f2	not-for-merge	'refs/pull/1850/head' of 
 39fca975ba1a6f87587aa0334e42969d1b05ee16	not-for-merge	'refs/pull/1851/head' of https://github.com/apple/swift-protobuf
 06c0c11bc2f12c9de778ae2209001827ab3d6f30	not-for-merge	'refs/pull/1852/head' of https://github.com/apple/swift-protobuf
 f24c38751eaf76e5c31fcd0ba70dfa74c5ca987e	not-for-merge	'refs/pull/1853/head' of https://github.com/apple/swift-protobuf
-9d8f1431322b1e057f9e3105ae866a3247cd1c62	not-for-merge	'refs/pull/1853/merge' of https://github.com/apple/swift-protobuf
+57604b67af05042f7c5fa73e267ce9c6b6a0dc21	not-for-merge	'refs/pull/1855/head' of https://github.com/apple/swift-protobuf
+13db0e04e70b36f30e22eba2332e068fc49fabd9	not-for-merge	'refs/pull/1857/head' of https://github.com/apple/swift-protobuf
+2e0be19e0ef654cd8f2efc97be1d10998a00b893	not-for-merge	'refs/pull/1859/head' of https://github.com/apple/swift-protobuf
 116aaf60bfdabfc83313320016247cb1f7fb7839	not-for-merge	'refs/pull/186/head' of https://github.com/apple/swift-protobuf
+e184e82a52ae3614d893d70610dd81d6c5221610	not-for-merge	'refs/pull/1860/head' of https://github.com/apple/swift-protobuf
+8524e95720290dbb1bce94c37097eab41bb3ff67	not-for-merge	'refs/pull/1861/head' of https://github.com/apple/swift-protobuf
+e2ba53aa76f6c12def8fed7e1e9d857ff702d6ff	not-for-merge	'refs/pull/1862/head' of https://github.com/apple/swift-protobuf
+3136f86a4af405f1da7acf50f161414de45aeffe	not-for-merge	'refs/pull/1863/head' of https://github.com/apple/swift-protobuf
+a9ec3ed8446fbd9329290c607051f3f4a8f6cac8	not-for-merge	'refs/pull/1864/head' of https://github.com/apple/swift-protobuf
+829883666a5a021885d0bf96df45642404cdafa9	not-for-merge	'refs/pull/1865/head' of https://github.com/apple/swift-protobuf
+c6c2d6330d0da6b9cfaa9811e547dfc19bcb80de	not-for-merge	'refs/pull/1866/head' of https://github.com/apple/swift-protobuf
+4ab6aa753c35c8f75c25746159edf583a9af3c10	not-for-merge	'refs/pull/1867/head' of https://github.com/apple/swift-protobuf
+831160a0e828195abbbcc35df81bfd5e2e3dc12d	not-for-merge	'refs/pull/1868/head' of https://github.com/apple/swift-protobuf
+846bdfc169c2897a6f1bc3c23d8aebea13cce0f7	not-for-merge	'refs/pull/1869/head' of https://github.com/apple/swift-protobuf
 4c0b38e204165e6a0743d7b085cb8b9312628745	not-for-merge	'refs/pull/187/head' of https://github.com/apple/swift-protobuf
+2623e800acd3b8ab7e0d6eb66f4f59007fc5c6ce	not-for-merge	'refs/pull/1870/head' of https://github.com/apple/swift-protobuf
+ec84beccd985c4ce46d9b509894b4a87592ac6e3	not-for-merge	'refs/pull/1871/head' of https://github.com/apple/swift-protobuf
+d3994b3121475563871a89c49073f5f9667f2c6f	not-for-merge	'refs/pull/1872/head' of https://github.com/apple/swift-protobuf
+67ed84df502956cab7094521a6a9b19ec04d8f7f	not-for-merge	'refs/pull/1873/head' of https://github.com/apple/swift-protobuf
+115891abcc01d160f2f82abfe2d872f24e3be037	not-for-merge	'refs/pull/1874/head' of https://github.com/apple/swift-protobuf
+a7fa511c63f1f12b100bd6e4cf47f560b4edadea	not-for-merge	'refs/pull/1876/head' of https://github.com/apple/swift-protobuf
+37e623ec7f7f72a2b0d1e24855a21a6bb0b6a9f1	not-for-merge	'refs/pull/1876/merge' of https://github.com/apple/swift-protobuf
 ce7646a8057820ef864d87827fc5f2f589e60a42	not-for-merge	'refs/pull/188/head' of https://github.com/apple/swift-protobuf
 76bd619e94668df65b5dda2cb71fe0f28d3ea1c4	not-for-merge	'refs/pull/190/head' of https://github.com/apple/swift-protobuf
 260d619cef87437a6afb9b7e2d27070ed639554c	not-for-merge	'refs/pull/191/head' of https://github.com/apple/swift-protobuf
@@ -1414,6 +1434,8 @@ ab98c52b5166593ad1ae0df246463266df151cfa	not-for-merge	tag '1.3.1' of https://gi
 102a647b573f60f73afdce5613a51d71349fe507	not-for-merge	tag '1.30.0' of https://github.com/apple/swift-protobuf
 e3f69fd321d0c9fcdc16fb576a0cdd956675face	not-for-merge	tag '1.31.0' of https://github.com/apple/swift-protobuf
 2547102afd04fe49f1b286090f13ebce07284980	not-for-merge	tag '1.31.1' of https://github.com/apple/swift-protobuf
+e2ba53aa76f6c12def8fed7e1e9d857ff702d6ff	not-for-merge	tag '1.31.2' of https://github.com/apple/swift-protobuf
+c6fe6442e6a64250495669325044052e113e990c	not-for-merge	tag '1.32.0' of https://github.com/apple/swift-protobuf
 6520fb185db88c0774a929acea1f7d5981a30d3a	not-for-merge	tag '1.4.0' of https://github.com/apple/swift-protobuf
 7bf52ab1f5ee87aeb89f2a6b9bfc6369408476f7	not-for-merge	tag '1.5.0' of https://github.com/apple/swift-protobuf
 3a3594f84b746793c84c2ab2f1e855aaa9d3a593	not-for-merge	tag '1.6.0' of https://github.com/apple/swift-protobuf
@@ -1421,3 +1443,4 @@ da75a93ac017534e0028e83c0e4fc4610d2acf48	not-for-merge	tag '1.7.0' of https://gi
 7790acf0a81d08429cb20375bf42a8c7d279c5fe	not-for-merge	tag '1.8.0' of https://github.com/apple/swift-protobuf
 7f36441e3372665b1b414f8ac93b5905cc42a405	not-for-merge	tag '1.9.0' of https://github.com/apple/swift-protobuf
 c036968472334e42e06e4133a4ca846eabebafca	not-for-merge	tag 'protoc-artifactbundle-v31.1' of https://github.com/apple/swift-protobuf
+a7a1a72fe175af7c451efdd1b5b1e249c82653a2	not-for-merge	tag 'protoc-artifactbundle-v32.1' of https://github.com/apple/swift-protobuf

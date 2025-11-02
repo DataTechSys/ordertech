@@ -56,6 +56,7 @@
 #import <LiveKitWebRTC/RTCConfiguration.h>
 #import <LiveKitWebRTC/RTCDataChannel.h>
 #import <LiveKitWebRTC/RTCDataChannelConfiguration.h>
+#import <LiveKitWebRTC/RTCDataPacketCryptor.h>
 #import <LiveKitWebRTC/RTCFrameCryptor.h>
 #import <LiveKitWebRTC/RTCFrameCryptorKeyProvider.h>
 #import <LiveKitWebRTC/RTCFieldTrials.h>

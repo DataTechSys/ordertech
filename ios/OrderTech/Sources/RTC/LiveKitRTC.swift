@@ -186,16 +186,22 @@ struct RtcTokenResponse: Decodable {
 
 // MARK: - LiveKit Token Fetching
 struct LiveKitTokenFetcher {
-    static func fetchLiveKitToken(basketId: String, role: String) async throws -> RtcTokenResponse {
+    static func fetchLiveKitToken(basketId: String, role: String, deviceId: String? = nil) async throws -> RtcTokenResponse {
         var req = URLRequest(url: URL(string: "https://ordertech-715493130630.me-central1.run.app/rtc/token")!)
         req.httpMethod = "POST"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let requestBody = [
+        var requestBody: [String: String] = [
             "provider": "livekit",
             "basketId": basketId,
             "role": role
         ]
+        if let deviceId = deviceId {
+            requestBody["deviceId"] = deviceId
+            print("[LiveKitTokenFetcher] Requesting token with deviceId: \(deviceId), basketId: \(basketId), role: \(role)")
+        } else {
+            print("[LiveKitTokenFetcher] WARNING: No deviceId provided! basketId: \(basketId), role: \(role)")
+        }
         
         req.httpBody = try JSONEncoder().encode(requestBody)
         let (data, resp) = try await URLSession.shared.data(for: req)
@@ -243,6 +249,7 @@ final class LiveKitRTC: ObservableObject {
     @Published var linkStatus: LinkStatus = .idle
     private(set) var signalBars: Int = 0
     private let pairId: String
+    private let deviceId: String
     private let http: HttpClient
     private var room: Room?
     private weak var remoteView: VideoView?
@@ -255,11 +262,18 @@ final class LiveKitRTC: ObservableObject {
     @MainActor private var isStarting: Bool = false
     @MainActor private var isStopping: Bool = false
     
+    // Camera position preference - ALWAYS use front camera for Display role
+    private let preferredCameraPosition: AVCaptureDevice.Position = .front
+    
     // Debouncing for attachIfAvailable to reduce excessive calls
     private var lastAttachTime: Date = Date.distantPast
     private let attachDebounceInterval: TimeInterval = 0.5 // 500ms debounce
 
-    init(pairId: String, http: HttpClient) { self.pairId = pairId; self.http = http }
+    init(pairId: String, http: HttpClient, deviceId: String = "") { 
+        self.pairId = pairId
+        self.http = http
+        self.deviceId = deviceId.isEmpty ? UUID().uuidString : deviceId
+    }
 
     func start() async throws {
         // Prevent concurrent start operations using MainActor
@@ -315,7 +329,8 @@ final class LiveKitRTC: ObservableObject {
         do {
             tokenResponse = try await LiveKitTokenFetcher.fetchLiveKitToken(
                 basketId: pairId,
-                role: "display"
+                role: "display",
+                deviceId: deviceId
             )
         } catch {
             print("[LiveKitRTC] Failed to fetch token: \(error)")
@@ -349,7 +364,7 @@ final class LiveKitRTC: ObservableObject {
         // Phase A: Optimized room options for stability and speed
         let roomOpts = RoomOptions(
             adaptiveStream: false,  // Stability first
-            dynacast: true         // Dynamic broadcasting for efficiency
+            dynacast: false        // Force publisher to always send a layer to avoid "all layers false" cases
         )
         
         print("[Display][LiveKit] connecting to \(baseURL)…")
@@ -396,10 +411,6 @@ final class LiveKitRTC: ObservableObject {
         print("[Display][LiveKit] Camera availability validated - front: \(frontCamera != nil), back: \(backCamera != nil)")
         #endif
         
-        // CRITICAL: Display app must ALWAYS use front camera for PiP consistency
-        // Never fall back to back camera as this causes the PiP issue reported
-        let preferredPosition: AVCaptureDevice.Position = .front
-        
         // Only proceed with front camera if it's available
         guard frontCamera != nil else {
             print("[Display][LiveKit] ERROR: Front camera not available - this is required for Display role")
@@ -407,11 +418,47 @@ final class LiveKitRTC: ObservableObject {
             throw APIError(message: "Display app requires front camera for PiP functionality")
         }
         
-        let cam = CameraCaptureOptions(position: preferredPosition, dimensions: .h720_169, fps: 30)
+        // CRITICAL: Display app must ALWAYS use front camera for PiP consistency
+        // IMPORTANT: Explicitly disable camera first to reset hardware state
+        // This prevents the back camera from being used after reconnect
+        print("[Display][LiveKit] Resetting camera hardware before enabling front camera...")
+        try? await lp.setCamera(enabled: false)
+        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 second delay to ensure hardware reset
+        
+        // Now enable with explicit front camera options
+        let cam = CameraCaptureOptions(position: .front, dimensions: .h720_169, fps: 30)
+        print("[Display][LiveKit] Enabling front camera with explicit position: .front")
         
         do {
             let cameraResult = try await lp.setCamera(enabled: true, captureOptions: cam)
             print("[Display][LiveKit] Camera enabled successfully with front camera: \(cameraResult)")
+            
+            // Double-check and force front camera position after enabling
+            // This ensures the correct camera is used even after reconnects
+            #if canImport(LiveKit)
+            if let localTrack = lp.firstCameraVideoTrack as? LocalVideoTrack {
+                if let capturer = localTrack.capturer as? CameraCapturer {
+                    let currentPosition = capturer.options.position
+                    print("[Display][LiveKit] Current camera position: \(currentPosition == .front ? "front" : "back")")
+                    
+                    if currentPosition != .front {
+                        print("[Display][LiveKit] ERROR: Camera is using \(currentPosition == .back ? "back" : "other") camera - forcing front camera")
+                        // Disable and re-enable with explicit front camera options
+                        try? await lp.setCamera(enabled: false)
+                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 second
+                        let frontCam = CameraCaptureOptions(position: .front, dimensions: .h720_169, fps: 30)
+                        try? await lp.setCamera(enabled: true, captureOptions: frontCam)
+                        print("[Display][LiveKit] Forced camera restart with front camera")
+                    } else {
+                        print("[Display][LiveKit] Camera position verified as front camera ✓")
+                    }
+                }
+            }
+            #endif
+            
+            // Notify UI that local camera is ready - triggers PIP update immediately
+            NotificationCenter.default.post(name: .displayLocalCameraReady, object: nil)
+            print("[Display][LiveKit] Posted displayLocalCameraReady notification")
         } catch {
             print("[Display][LiveKit] ERROR: Failed to enable front camera: \(error.localizedDescription)")
             await MainActor.run { self.linkStatus = .error("Failed to enable front camera") }
@@ -536,13 +583,21 @@ final class LiveKitRTC: ObservableObject {
                 // Disable local tracks more aggressively
                 let lp = room.localParticipant
                 print("[Display][LiveKit] Disabling local camera and microphone...")
-                try? await lp.setCamera(enabled: false)
+                
+                // Explicitly stop camera first to release hardware
+                do {
+                    try await lp.setCamera(enabled: false)
+                    print("[Display][LiveKit] Camera disabled successfully")
+                } catch {
+                    print("[Display][LiveKit] Error disabling camera: \(error)")
+                }
+                
                 try? await lp.setMicrophone(enabled: false)
                 
                 // Note: Local tracks are automatically unpublished when camera/mic are disabled
                 
-                // Wait longer for tracks to clean up properly
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+                // Wait longer for camera hardware to be fully released
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 second delay
                 
                 // Disconnect room
                 try await room.disconnect()
@@ -723,7 +778,10 @@ final class LiveKitRTC: ObservableObject {
             if let pub = r.localParticipant.localVideoTracks.first, let track = pub.track as? LocalVideoTrack {
                 DispatchQueue.main.async {
                     lv.track = track
-                    print("[Display][LiveKit] Local video track attached to PiP")
+                    // Force layout update to ensure PiP renders immediately
+                    lv.setNeedsLayout()
+                    lv.layoutIfNeeded()
+                    print("[Display][LiveKit] Local video track attached to PiP and layout forced")
                     NotificationCenter.default.post(name: .displayLocalCameraReady, object: nil)
                 }
             }
@@ -817,7 +875,10 @@ extension LiveKitRTC: RoomDelegate {
                     print("[LiveKitRTC] attaching remote track to \(views.count) video views")
                     views.forEach { view in
                         view.track = v
-                        print("[LiveKitRTC] attached track to VideoView: \(view)")
+                        // Force layout update to ensure video renders immediately
+                        view.setNeedsLayout()
+                        view.layoutIfNeeded()
+                        print("[LiveKitRTC] attached track to VideoView and forced layout: \(view)")
                     }
                 } else {
                     print("[LiveKitRTC] remote video track received but no views available yet")
@@ -850,7 +911,10 @@ extension LiveKitRTC: RoomDelegate {
         }
         DispatchQueue.main.async {
             lv.track = ltrack
-            print("[Display][LiveKit] local video view updated")
+            // Force layout update to ensure PiP renders immediately
+            lv.setNeedsLayout()
+            lv.layoutIfNeeded()
+            print("[Display][LiveKit] local video view updated and layout forced")
             // Nudge UI to ensure PiP view updates when local publishes
             NotificationCenter.default.post(name: .displayLocalCameraReady, object: nil)
             NotificationCenter.default.post(name: Notification.Name("OT.Display.KickVideo"), object: nil)
@@ -903,6 +967,23 @@ extension LiveKitRTC: RoomDelegate {
     
     func room(_ room: Room, didDisconnectParticipant participant: RemoteParticipant) {
         print("[Display][LiveKit] remote participant disconnected: \(participant.identity?.stringValue ?? "unknown")")
+        
+        // Clear remote track when participant disconnects
+        DispatchQueue.main.async {
+            self.remoteTrack = nil
+            self.linkStatus = .remotePending
+            print("[LiveKitRTC] cleared remote track - connection should transition to local mode")
+            
+            // Clear views to stop showing stale video
+            let views = (self.remoteViews.compactMap { $0.view }) + (self.remoteView != nil ? [self.remoteView!].compactMap{$0} : [])
+            views.forEach { view in
+                view.track = nil
+                print("[LiveKitRTC] cleared track from VideoView: \(view)")
+            }
+            
+            // Notify system that remote video is gone
+            NotificationCenter.default.post(name: Notification.Name("OT.Display.RemoteVideoLost"), object: nil)
+        }
     }
     
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {

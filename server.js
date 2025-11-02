@@ -107,6 +107,25 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Subdomain routing: foodics.ordertech.me serves /foodics content at root
+// MUST BE BEFORE OTHER ROUTES
+app.use((req, res, next) => {
+  const host = (req.get('host') || '').toLowerCase();
+  if (host.startsWith('foodics.ordertech.me') || host === 'foodics.ordertech.me:8080') {
+    const originalPath = req.path;
+    // Skip rewriting for API routes, static assets, and already-prefixed paths
+    if (!originalPath.startsWith('/api') && 
+        !originalPath.startsWith('/foodics') &&
+        !originalPath.startsWith('/css') &&
+        !originalPath.startsWith('/js') &&
+        !originalPath.startsWith('/images')) {
+      // Rewrite path: / -> /foodics/, /prices.html -> /foodics/prices.html, etc.
+      req.url = '/foodics' + (originalPath === '/' ? '/' : originalPath);
+    }
+  }
+  next();
+});
+
 // Static assets (minimal)
 try { app.use('/images', express.static(path.join(__dirname, 'images'))); } catch {}
 // Alias: serve /images/placeholder.png even if only JPEG exists on disk
@@ -520,6 +539,22 @@ async function ensureEnhancedDeviceStatusSchema(){
   } catch (error) {
     console.error('[Server] Failed to ensure enhanced device status schema:', error.message);
     // Don't throw - allow server to continue with basic functionality
+  }
+}
+
+// Ensure Foodics schema
+async function ensureFoodicsSchema() {
+  if (!HAS_DB) return;
+  try {
+    const fs = require('fs');
+    const schemaPath = path.join(__dirname, 'sql', 'migrations', '006_foodics_schema.sql');
+    if (fs.existsSync(schemaPath)) {
+      const sql = fs.readFileSync(schemaPath, 'utf8');
+      await db(sql);
+      console.log('[Server] Foodics schema initialized');
+    }
+  } catch (error) {
+    console.error('[Server] Foodics schema initialization error:', error.message);
   }
 }
 
@@ -12795,6 +12830,27 @@ addRoute('post', '/api/services/check-all', async (req, res) => {
   }
 });
 
+// ================ FOODICS PLATFORM ROUTES ================
+// Initialize Foodics routes
+try {
+  const initFoodicsRoutes = require('./routes/foodics-api');
+  const foodicsRouter = initFoodicsRoutes(db);
+  app.use('/api/foodics', foodicsRouter);
+  console.log('[Server] Foodics API routes initialized');
+} catch (error) {
+  console.error('[Server] Failed to initialize Foodics routes:', error);
+}
+
+// Serve Foodics static pages (must be direct app routes, not addRoute)
+app.use('/foodics', express.static(path.join(__dirname, 'foodics')));
+app.get('/foodics', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'index.html'));
+});
+app.get('/foodics/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'index.html'));
+});
+console.log('[Server] Foodics static routes registered');
+
 console.log('[boot] About to start HTTP server on', PORT);
 const server = app.listen(PORT, '0.0.0.0', async () => {
 if (HAS_DB) {
@@ -12812,6 +12868,7 @@ if (HAS_DB) {
     try { await ensureAdminPerfIndexes(); } catch (e) { console.error('ensureAdminPerfIndexes failed', e); }
     try { await ensureAISchema(); } catch (e) { console.error('ensureAISchema failed', e); }
     try { await ensureEnhancedDeviceStatusSchema(); } catch (e) { console.error('ensureEnhancedDeviceStatusSchema failed', e); }
+    try { await ensureFoodicsSchema(); } catch (e) { console.error('ensureFoodicsSchema failed', e); }
     // Fail fast if DB is required but unreachable
     try { if (REQUIRE_DB_EFFECTIVE) { await db('select 1'); } } catch (e) {
       try { console.error('DB connectivity check failed at startup; exiting'); } catch {}

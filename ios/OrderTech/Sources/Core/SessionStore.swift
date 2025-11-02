@@ -54,6 +54,12 @@ final class SessionStore: ObservableObject {
         self.basketRef = basket
         self.envStore = env
         self.ws = ws
+        
+        // Initialize connection health monitor
+        let healthMonitor = ConnectionHealthMonitor()
+        healthMonitor.configure(sessionStore: self)
+        healthMonitor.startMonitoring()
+        self._connectionHealthMonitor = healthMonitor
         // Subscribe once to WS stream
         ws.events
             .receive(on: DispatchQueue.main)
@@ -75,6 +81,8 @@ final class SessionStore: ObservableObject {
                 
                 if connected {
                     Swift.print("[SessionStore] WebSocket connected - handling reconnection")
+                    // Update health monitor
+                    self.connectionHealthMonitor.updateWebSocketState(connected: true)
                     // WebSocket reconnected - mark as unstable during reestablishment
                     self.markConnectionUnstable()
                     
@@ -99,6 +107,8 @@ final class SessionStore: ObservableObject {
                     }
                 } else {
                     Swift.print("[SessionStore] WebSocket disconnected - marking unstable")
+                    // Update health monitor
+                    self.connectionHealthMonitor.updateWebSocketState(connected: false)
                     // WebSocket disconnected - mark as unstable
                     self.markConnectionUnstable()
                 }
@@ -415,6 +425,8 @@ final class SessionStore: ObservableObject {
             try await lk.start()
             self.signalBars = max(self.signalBars, lk.signalBars)
             print("[SessionStore] LiveKit started successfully. bars=\(self.signalBars)")
+            // Update health monitor with signal strength
+            connectionHealthMonitor.updateSignalStrength(bars: self.signalBars)
             // Mark connection as stable after successful connection
             markConnectionStable()
             return
@@ -594,6 +606,9 @@ final class SessionStore: ObservableObject {
     }
     
     private func handle(event: WSEvent) {
+        // Record event for health monitoring
+        connectionHealthMonitor.recordEventReceived(type: "\(event)")
+        
         switch event {
         case .basketSync(let wire), .basketUpdate(let wire):
             apply(wire: wire)
@@ -605,6 +620,12 @@ final class SessionStore: ObservableObject {
             // keep simple for now; stats-based bars will come with RTC
             break
         case .uiSelectCategory(let name):
+            // Validate remote control before applying category selection
+            guard connectionHealthMonitor.validateRemoteControlAction(actionName: "select category: \(name)") else {
+                print("[SessionStore] Remote category update blocked by health monitor")
+                return
+            }
+            
             // Apply category selection with stability check to prevent loop
             if isConnectionStable {
                 selectedCategoryName = name
@@ -613,6 +634,12 @@ final class SessionStore: ObservableObject {
                 print("[SessionStore] Ignoring remote category update during unstable connection: '\(name)'")
             }
         case .uiShowOptions(let productId):
+            // Validate remote control before applying product selection
+            guard connectionHealthMonitor.validateRemoteControlAction(actionName: "show options: \(productId)") else {
+                print("[SessionStore] Remote product update blocked by health monitor")
+                return
+            }
+            
             // Apply product selection with stability check and debouncing
             if isConnectionStable {
                 selectedProductId = productId
@@ -621,6 +648,12 @@ final class SessionStore: ObservableObject {
                 print("[SessionStore] Ignoring remote product update during unstable connection: '\(productId)'")
             }
         case .uiScrollTo(let productId):
+            // Validate remote control before applying scroll
+            guard connectionHealthMonitor.validateRemoteControlAction(actionName: "scroll to: \(productId)") else {
+                print("[SessionStore] Remote scrollTo update blocked by health monitor")
+                return
+            }
+            
             if isConnectionStable {
                 scrollToProductId = productId
                 print("[SessionStore] Remote scrollTo update applied: \(productId)")
@@ -628,6 +661,12 @@ final class SessionStore: ObservableObject {
                 print("[SessionStore] Ignoring remote scrollTo update during unstable connection")
             }
         case .uiOptionsClose, .uiOptionsCancel:
+            // Validate remote control before processing close command
+            guard connectionHealthMonitor.validateRemoteControlAction(actionName: "close options") else {
+                print("[SessionStore] Remote close request blocked by health monitor")
+                return
+            }
+            
             // Only process close commands if we have something to close and haven't processed a recent one
             let now = Date()
             let shouldProcess = now.timeIntervalSince(lastCloseCommandAt) >= closeCommandDebounceInterval
@@ -757,6 +796,7 @@ final class SessionStore: ObservableObject {
         print("[SessionStore] Marking connection as unstable - filtering remote UI updates")
         DispatchQueue.main.async {
             self.isConnectionStable = false
+            self.connectionHealthMonitor.updateConnectionStability(stable: false)
             
             // Capture current menu state before marking unstable for later resync
             self.lastStableMenuState = (
@@ -819,6 +859,7 @@ final class SessionStore: ObservableObject {
             self.connectionStableTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] timer in
                 print("[SessionStore] *** STABILITY TIMER FIRED - marking connection as stable ***")
                 self?.isConnectionStable = true
+                self?.connectionHealthMonitor.updateConnectionStability(stable: true)
                 self?.connectionStableTimer = nil
                 self?.fallbackStabilityTimer?.invalidate()
                 self?.fallbackStabilityTimer = nil
@@ -838,6 +879,17 @@ final class SessionStore: ObservableObject {
     
     // Track if menu state needs to be synchronized after reconnect
     @Published var needsMenuStateSync: Bool = false
+    
+    // MARK: - Connection Health Monitoring
+    
+    /// Connection health monitor for robust remote control
+    private var _connectionHealthMonitor: ConnectionHealthMonitor?
+    var connectionHealthMonitor: ConnectionHealthMonitor {
+        if _connectionHealthMonitor == nil {
+            _connectionHealthMonitor = ConnectionHealthMonitor()
+        }
+        return _connectionHealthMonitor!
+    }
     
     /// Reset UI state that may have gotten stuck during connection instability
     private func resetUIStateAfterReconnect() {

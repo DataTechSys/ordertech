@@ -98,3 +98,37 @@ cloud-sql-proxy
 test
 **/*.test.js
 **/*.spec.js
+
+# --------------------------------------------------------------------
+# Deployment optimization (Cloud Run): Exclude large/static artifacts
+# These are either hosted on GCS bucket "ordertech.me" or not needed
+# at runtime. Reduces Docker build context and speeds up deployments.
+# Added: ~60MB reduction (public/images 25MB, cloud-sql-proxy 31MB, fonts 1.2MB, etc.)
+# --------------------------------------------------------------------
+
+# 1) Static images served from GCS bucket
+public/images
+
+# 2) Local dev database proxy tool (not needed in Cloud Run)
+# Cloud Run uses connectors/managed auth for Cloud SQL connection
+cloud-sql-proxy*
+cloud_sql_proxy*
+
+# 3) Fonts (can be served via CDN/GCS in future)
+fonts
+public/fonts
+
+# 4) Backups and temp files (not needed in production container)
+backup
+.backups
+*.backup
+server.js.backup
+
+# 5) Root-level sample/test image files (dev/test only)
+# These are not needed in production containers
+/poster-defualt.png
+/ordertech.png
+/iced-americano.jpg
+/Black-Spanish.jpg
+/placeholder.jpg
+/test-image.png

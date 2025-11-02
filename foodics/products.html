@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }
+        nav { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: #3b82f6; text-decoration: none; }
+        .nav-links { display: flex; gap: 2rem; align-items: center; list-style: none; }
+        .nav-links a { text-decoration: none; color: #333; font-weight: 500; transition: color 0.3s; }
+        .nav-links a:hover { color: #3b82f6; }
+        .btn { padding: 0.6rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.3s; cursor: pointer; border: none; display: inline-block; }
+        .btn-outline { background: transparent; color: #3b82f6; border: 2px solid #3b82f6; }
+        .btn-outline:hover { background: #3b82f6; color: white; }
+        .btn-secondary { background: #10b981; color: white; }
+        .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 4rem 5%; text-align: center; }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+        section { padding: 4rem 5%; }
+        .product-detail { max-width: 1000px; margin: 0 auto 4rem auto; }
+        .product-detail h2 { font-size: 2rem; margin-bottom: 1rem; color: #1f2937; }
+        .product-detail h3 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; color: #374151; }
+        .product-detail ul { margin-left: 2rem; margin-bottom: 1rem; }
+        .product-detail li { margin-bottom: 0.5rem; }
+        footer { background: #1f2937; color: white; padding: 2rem 5%; text-align: center; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 40px;"></a>
+        <ul class="nav-links">
+            <li><a href="/foodics/">Home</a></li>
+            <li><a href="/foodics/products.html">Products</a></li>
+            <li><a href="/foodics/prices.html">Prices</a></li>
+            <li><a href="/foodics/login.html" class="btn btn-outline">Login</a></li>
+            <li><a href="/foodics/register.html" class="btn btn-secondary">14 Days Trial</a></li>
+        </ul>
+    </nav>
+
+    <section class="hero">
+        <h1>Our Products</h1>
+        <p>Comprehensive Foodics integration solutions for modern restaurants</p>
+    </section>
+
+    <section>
+        <div class="product-detail" id="loyalty">
+            <h2>🏆 Loyalty Services for Foodics</h2>
+            <p>Build lasting customer relationships with our comprehensive loyalty program integration. Automatically sync with your Foodics POS to reward your best customers.</p>
+            
+            <h3>Key Features:</h3>
+            <ul>
+                <li><strong>Automatic Points Accumulation:</strong> Points are automatically awarded based on purchase amounts synced from Foodics</li>
+                <li><strong>Flexible Reward Tiers:</strong> Create bronze, silver, gold tiers with different benefits</li>
+                <li><strong>SMS & Email Notifications:</strong> Keep customers engaged with automated messages</li>
+                <li><strong>Analytics Dashboard:</strong> Track customer behavior, redemption rates, and program ROI</li>
+                <li><strong>Multi-Location Support:</strong> Manage loyalty across all your branches</li>
+                <li><strong>Custom Rewards:</strong> Free items, discounts, birthday rewards, and more</li>
+            </ul>
+
+            <h3>How It Works:</h3>
+            <p>1. Customer registers via QR code or phone number<br>
+            2. Purchases are automatically tracked through Foodics POS<br>
+            3. Points accumulate based on your rules<br>
+            4. Customers redeem rewards at any time<br>
+            5. View detailed analytics in your dashboard</p>
+        </div>
+
+        <div class="product-detail" id="drivethru">
+            <h2>🚗 DriveThru System for Foodics</h2>
+            <p>Transform your drive-thru operations with AI-powered voice ordering and real-time kitchen integration.</p>
+            
+            <h3>Key Features:</h3>
+            <ul>
+                <li><strong>AI Voice Recognition:</strong> Natural language processing understands customer orders</li>
+                <li><strong>Menu Sync:</strong> Automatically pulls menu, prices, and availability from Foodics</li>
+                <li><strong>Kitchen Display Integration:</strong> Orders instantly appear on your KDS</li>
+                <li><strong>Multi-Lane Support:</strong> Handle multiple lanes simultaneously</li>
+                <li><strong>Average Wait Time Tracking:</strong> Monitor and optimize service speed</li>
+                <li><strong>Order Modification:</strong> Easy corrections and customizations</li>
+                <li><strong>Payment Integration:</strong> Connect with your existing payment systems</li>
+            </ul>
+
+            <h3>Performance Metrics:</h3>
+            <ul>
+                <li>Up to 40% faster order taking</li>
+                <li>95% order accuracy</li>
+                <li>Reduce staff workload</li>
+                <li>24/7 consistent service</li>
+            </ul>
+        </div>
+
+        <div class="product-detail" id="signage">
+            <h2>📺 Digital Signage for Foodics</h2>
+            <p>Dynamic digital menu boards that automatically sync with your Foodics catalog, prices, and inventory.</p>
+            
+            <h3>Key Features:</h3>
+            <ul>
+                <li><strong>Real-Time Menu Sync:</strong> Prices and items update automatically from Foodics</li>
+                <li><strong>Stock-Based Display:</strong> Items automatically hide when out of stock</li>
+                <li><strong>Promotional Content:</strong> Schedule special offers, combos, and campaigns</li>
+                <li><strong>Multi-Screen Management:</strong> Control unlimited screens from one dashboard</li>
+                <li><strong>Day-Part Scheduling:</strong> Show breakfast, lunch, dinner menus automatically</li>
+                <li><strong>Rich Media Support:</strong> Videos, animations, and high-resolution images</li>
+                <li><strong>Template Library:</strong> Beautiful pre-designed layouts</li>
+            </ul>
+
+            <h3>Display Options:</h3>
+            <ul>
+                <li>Portrait or landscape orientation</li>
+                <li>Single or multi-zone layouts</li>
+                <li>Customizable branding and colors</li>
+                <li>QR codes for mobile ordering</li>
+            </ul>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2025 DataTech. All rights reserved.</p>
+    </footer>
+</body>
+</html>

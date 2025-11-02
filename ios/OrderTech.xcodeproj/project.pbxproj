@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -140,8 +140,8 @@
 		99714FC108D03656960AE5B7 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		9FEA5E978886BCCC52070B07 /* LocalCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCache.swift; sourceTree = "<group>"; };
 		A21D6C9A4824613147553EE6 /* ModifiersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifiersView.swift; sourceTree = "<group>"; };
-		A3CAC8141289773273F537F0 /* Podfile */ = {isa = PBXFileReference; path = Podfile; sourceTree = "<group>"; };
-		A5F849C8173E647E4B12A270 /* Manifest.lock */ = {isa = PBXFileReference; path = Manifest.lock; sourceTree = "<group>"; };
+		A3CAC8141289773273F537F0 /* Podfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Podfile; sourceTree = "<group>"; };
+		A5F849C8173E647E4B12A270 /* Manifest.lock */ = {isa = PBXFileReference; lastKnownFileType = text; path = Manifest.lock; sourceTree = "<group>"; };
 		A8DA48334946E07B70A52380 /* DisplayHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHomeView.swift; sourceTree = "<group>"; };
 		A9644AB90BCE02CE8889870F /* build-and-run.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "build-and-run.sh"; sourceTree = "<group>"; };
 		A96ACD5CC1E5B20CC8D14B36 /* DisplayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayApp.swift; sourceTree = "<group>"; };
@@ -163,7 +163,7 @@
 		D94C6F22483466FA941E0E4C /* BasketStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BasketStore.swift; sourceTree = "<group>"; };
 		DBDC299706E1F81577918AD2 /* COMPILATION_FIXES_NEEDED.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = COMPILATION_FIXES_NEEDED.md; sourceTree = "<group>"; };
 		E2C23C5FD8D1374D625BC5AC /* MenuSyncProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuSyncProtocol.swift; sourceTree = "<group>"; };
-		E420ABE5141FA86DB446B585 /* Podfile.lock */ = {isa = PBXFileReference; path = Podfile.lock; sourceTree = "<group>"; };
+		E420ABE5141FA86DB446B585 /* Podfile.lock */ = {isa = PBXFileReference; lastKnownFileType = text; path = Podfile.lock; sourceTree = "<group>"; };
 		E58EEB96A8451D63D48EEF16 /* HttpClient+Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HttpClient+Endpoints.swift"; sourceTree = "<group>"; };
 		E738595CAB23D691A38C3183 /* LiveKitVideoViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitVideoViews.swift; sourceTree = "<group>"; };
 		E8BA3150C9C25E2F8EC3CD39 /* SessionHolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHolder.swift; sourceTree = "<group>"; };
@@ -483,6 +483,20 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		F43B08DB2EB1DB1D00B35329 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F43B08E02EB1DB1D00B35329 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -523,8 +537,17 @@
 			);
 			mainGroup = 6096A120C07A2C725F9B5D1A;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = F43B08DB2EB1DB1D00B35329 /* Products */;
+					ProjectRef = 6A0F3DEDE877C1768898FC32 /* OrderTech.xcodeproj */;
+				},
+				{
+					ProductGroup = F43B08E02EB1DB1D00B35329 /* Products */;
+					ProjectRef = 883CC8A666AABAF38885AA87 /* Pods.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				D184ACC615E7A40F9FBC44EE /* OrderTech */,

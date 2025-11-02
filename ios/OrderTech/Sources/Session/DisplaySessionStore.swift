@@ -240,7 +240,7 @@ class EnhancedLiveKitProvider: EnhancedRTCProvider {
         
         do {
             if liveKit == nil {
-                liveKit = LiveKitRTC(pairId: pairId, http: http)
+                liveKit = LiveKitRTC(pairId: pairId, http: http, deviceId: deviceId)
             }
             
             state = .connecting
@@ -288,7 +288,7 @@ class EnhancedLiveKitProvider: EnhancedRTCProvider {
     func preload(pairId: String) async throws {
         // Create LiveKit instance without starting
         if liveKit == nil {
-            liveKit = LiveKitRTC(pairId: pairId, http: http)
+            liveKit = LiveKitRTC(pairId: pairId, http: http, deviceId: deviceId)
         }
     }
     
@@ -311,6 +311,7 @@ final class DisplaySessionStore: ObservableObject {
     @Published var lastRtcStatusAt: Date? = nil
     @Published var lastCashierName: String? = nil
     @Published var cashierDeviceId: String? = nil
+    @Published var connectedDisplayName: String? = nil  // Name of connected display (for D2D)
 
     // Track WS state to avoid duplicate logs and duplicate hello
     private var lastWSState: Bool? = nil
@@ -318,7 +319,7 @@ final class DisplaySessionStore: ObservableObject {
 
     // HTTP readiness & presence backoff
     private var httpReady: Bool = false
-    private var presenceInterval: TimeInterval = 10
+    private var presenceInterval: TimeInterval = 15  // Reduced from 10 to 15 seconds for better keep-alive
 
     // UI state published for the Display
     @Published var basketLines: [BasketLineUI] = []
@@ -327,6 +328,7 @@ final class DisplaySessionStore: ObservableObject {
     @Published var poster: PosterState? = nil
     @Published var scrollToProductId: String? = nil
     @Published var posterURLs: [String] = []
+    @Published var showIdlePoster: Bool = false
     // Suppress showing local options sheet in response to our own mirror echo
     @Published var suppressOptionsEcho: Bool = false
     // If set, an edit was initiated for this specific line (SKU). Use setQty instead of add.
@@ -341,6 +343,18 @@ final class DisplaySessionStore: ObservableObject {
     @Published var optionsSelection: [String: Set<String>] = [:]
     // Mirrored expanded/collapsed state for modifier groups
     @Published var optionsExpanded: [String: Bool] = [:]
+    // Shared checkout overlay state (mirrors across all displays)
+    @Published var showCheckoutOverlay: Bool = false
+    
+    // MARK: - Connection Health Monitoring
+    
+    /// Connection health monitor for robust remote control
+    @Published var connectionHealthMonitor: ConnectionHealthMonitor = ConnectionHealthMonitor()
+    
+    // MARK: - Menu State Synchronization
+    
+    /// Menu state synchronization manager for robust D2D remote control
+    @Published var menuStateSync: MenuStateSync = MenuStateSync()
 
     private let env: EnvironmentStore
     private let http: HttpClient
@@ -348,13 +362,15 @@ final class DisplaySessionStore: ObservableObject {
     private var bag = Set<AnyCancellable>()
     private var presenceTimer: Timer?
     private var statusTimer: Timer?
+    private var wsKeepAliveTimer: Timer?
 
     #if canImport(WebRTC)
     @Published var webRTCService = WebRTCService()
     #endif
     
     // Enhanced RTC Provider Management
-    private var rtcOrchestrator: RTCProviderOrchestrator?
+    private var _rtcOrchestrator: RTCProviderOrchestrator?
+    var rtcOrchestrator: RTCProviderOrchestrator? { _rtcOrchestrator }
     
     // Legacy RTC providers (kept for backward compatibility)
     private var p2p: RTCProvider? = nil
@@ -364,31 +380,21 @@ final class DisplaySessionStore: ObservableObject {
     private var livekit: LiveKitRTC? = nil
     var currentLiveKit: LiveKitRTC? { 
         // First check if orchestrator has a LiveKit provider
-        if let orchestrator = rtcOrchestrator {
-            print("[CurrentLiveKit] Orchestrator available - providerState: \(orchestrator.providerState), isConnected: \(orchestrator.isConnected)")
-            
+        if let orchestrator = _rtcOrchestrator {
             if let enhancedProvider = orchestrator.activeProvider as? EnhancedLiveKitProvider {
-                print("[CurrentLiveKit] Enhanced provider found - provider.state: \(enhancedProvider.state), orchestrator.providerState: \(orchestrator.providerState), liveKit instance: \(enhancedProvider.liveKit != nil ? "present" : "nil")")
-                
-                // Check both the provider's internal state AND the orchestrator's state
-                if enhancedProvider.state == .connected && orchestrator.providerState == .connected {
-                    print("[CurrentLiveKit] Both provider and orchestrator are connected - returning enhanced LiveKit instance")
-                    return enhancedProvider.liveKit
-                } else if enhancedProvider.state == .connected {
-                    print("[CurrentLiveKit] Provider is connected but orchestrator state is \(orchestrator.providerState) - returning enhanced LiveKit instance anyway")
-                    return enhancedProvider.liveKit
-                } else {
-                    print("[CurrentLiveKit] Enhanced provider state is \(enhancedProvider.state), orchestrator state is \(orchestrator.providerState) - falling back to legacy")
+                // Always return the LiveKit instance if the enhanced provider exists and has one
+                // Don't gate on connection state - let the video view handle availability
+                if let liveKit = enhancedProvider.liveKit {
+                    print("[CurrentLiveKit] Returning enhanced LiveKit instance")
+                    return liveKit
                 }
-            } else {
-                print("[CurrentLiveKit] Orchestrator available but no enhanced provider found")
             }
-        } else {
-            print("[CurrentLiveKit] No orchestrator available, falling back to legacy")
         }
         
         // Fallback to legacy instance
-        print("[CurrentLiveKit] Returning legacy livekit instance: \(livekit != nil ? "present" : "nil")")
+        if livekit != nil {
+            print("[CurrentLiveKit] Returning legacy livekit instance")
+        }
         return livekit 
     }
     #endif
@@ -398,13 +404,25 @@ final class DisplaySessionStore: ObservableObject {
     private var desiredProvider: String = ""
     // Fallback: auto-start LiveKit when peer is connected and no provider is active
     private var rtcAutoStartAttempted: Bool = false
-    // Current basket/room ID (server-side device_id for this display)
-    private var activeBasketId: String? = nil
+    // Current basket/room ID (server-side device_id for this display) - publicly accessible
+    @Published var activeBasketId: String? = nil
+    // Track the connected display ID (for D2D connections)
+    @Published var connectedDisplayId: String? = nil
+    // Flag to ignore basket syncs during new connection (until RTC is established)
+    private var ignoreBasketSync: Bool = false
 
     // Identity
-    let deviceId: String
+    var deviceId: String  // Changed from let to var to allow updates
     var friendlyName: String
     var branch: String
+    
+    /// Update deviceId and reinitialize RTC providers
+    func updateDeviceId(_ newDeviceId: String) {
+        print("[DisplaySessionStore] Updating deviceId from \(deviceId) to \(newDeviceId)")
+        deviceId = newDeviceId
+        // Reinitialize RTC orchestrator with new deviceId
+        setupRTCOrchestrator()
+    }
 
     init(env: EnvironmentStore, deviceId: String, friendlyName: String, branch: String) {
         self.env = env
@@ -417,9 +435,33 @@ final class DisplaySessionStore: ObservableObject {
         // Initialize RTC Provider Orchestrator
         setupRTCOrchestrator()
         
+        // Initialize connection health monitor
+        connectionHealthMonitor.configure(sessionStore: nil) // DisplaySessionStore doesn't have SessionStore reference
+        connectionHealthMonitor.startMonitoring()
+        
+        // Initialize menu state sync
+        menuStateSync.sendStateUpdate = { [weak self] state in
+            self?.sendMenuState(state)
+        }
+        
+        // Listen for LiveKit participant disconnection
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("OT.Display.RemoteVideoLost"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleRemoteVideoLost()
+        }
+        
         ws.events
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] obj in self?.handle(event: obj) }
+            .sink { [weak self] obj in 
+                // Record events for health monitoring
+                self?.connectionHealthMonitor.recordEventReceived(type: "\(obj["type"] ?? "unknown")")
+                self?.handle(event: obj)
+                // Post notification to reset idle timer on any WebSocket activity
+                NotificationCenter.default.post(name: .displayResetIdleTimer, object: nil)
+            }
             .store(in: &bag)
 
 ws.$isConnected
@@ -430,6 +472,8 @@ ws.$isConnected
                 if self.lastWSState != ok {
                     self.lastWSState = ok
                     self.connected = ok
+                    // Update health monitor
+                    self.connectionHealthMonitor.updateWebSocketState(connected: ok)
                     print("[Display] WS status changed → connected=\(ok)")
                     
                     // Fetch display status from database when connection changes
@@ -628,15 +672,20 @@ func start() {
     }
 
     func stop() {
+        print("[Display] stop(): Full reset initiated")
+        
+        // Send disconnect notification to remote first and wait for acknowledgment
+        let disconnectBasketId = activeBasketId ?? deviceId
+        ws.send(json: ["type":"rtc:stopped", "basketId": disconnectBasketId, "reason": "display_stop"])
+        print("[Display] Sent rtc:stopped notification to basketId=\(disconnectBasketId)")
+        
+        // Stop all timers
         presenceTimer?.invalidate(); presenceTimer = nil
         statusTimer?.invalidate(); statusTimer = nil
-        // Notify peers to clear connected indicators immediately
-        ws.send(json: ["type":"rtc:stopped", "basketId": activeBasketId ?? deviceId, "reason": "display_stop"])
-        ws.disconnect()
         
         // Stop orchestrator and legacy providers
         Task {
-            await rtcOrchestrator?.stopCurrentProvider()
+            await _rtcOrchestrator?.stopCurrentProvider()
             await MainActor.run {
                 self.peersConnected = false
                 print("[Display] All providers stopped - peersConnected reset to false")
@@ -646,18 +695,165 @@ func start() {
         #if canImport(LiveKit)
         livekit?.stop(); livekit = nil; livekitStarting = false
         #endif
+        
+        // Clear connection tracking
+        connectedDisplayId = nil
+        
+        // Full state reset like fresh start
+        peersConnected = false
+        lastRtcStatusAt = nil
+        lastCashierName = nil
+        cashierDeviceId = nil
+        desiredProvider = ""
+        rtcAutoStartAttempted = false
+        
+        // Clear all UI state including local basket
+        basketLines = []
+        basketTotals = .zero
+        preview = nil
+        poster = nil
+        selectedCategoryName = nil
+        selectedProductId = nil
+        scrollToProductId = nil
+        suppressOptionsEcho = false
+        pendingEditSku = nil
+        optionsQty = 1
+        optionsSelection = [:]
+        optionsExpanded = [:]
+        
+        // Revert to default subscription (own deviceId) to be discoverable again
+        subscribeDefaultBasket()
+        
+        // Restart presence and status timers
+        reschedulePresenceTimer()
+        startStatusTimer()
+        Task { await self.sendPresence() }
+        
+        print("[Display] Full reset complete - ready for new connection")
+    }
+    
+    /// Handle remote video loss due to LiveKit participant disconnection
+    private func handleRemoteVideoLost() {
+        print("[DisplaySessionStore] Remote participant disconnected - handling video loss")
+        
+        // Update connection state immediately
         peersConnected = false
         
-        // Reset connection state immediately for UI responsiveness
-        print("[Display] Connection state reset to LOCAL mode")
+        // The LocalModeManager will detect peersConnected=false and activate local mode
+        // We don't need to do anything else here - the existing logic will handle it
+        print("[DisplaySessionStore] Set peersConnected=false - local mode should activate")
+    }
+    
+    /// Connect to another display device (D2D connection)
+    func connectToDisplay(targetDisplayId: String) async {
+        print("[DisplaySessionStore] Connecting to display: \(targetDisplayId)")
+        
+        // Clear basket and UI state from previous session before connecting
+        await MainActor.run {
+            self.basketLines = []
+            self.basketTotals = .zero
+            self.preview = nil
+            self.poster = nil
+            self.selectedCategoryName = nil
+            self.selectedProductId = nil
+            self.scrollToProductId = nil
+            // Ignore basket syncs until RTC connection is established
+            self.ignoreBasketSync = true
+            print("[DisplaySessionStore] Cleared basket and UI state before remote session")
+        }
+        
+        // Ensure WebSocket is connected first
+        if !ws.isConnected {
+            print("[DisplaySessionStore] WebSocket not connected, reconnecting...")
+            await MainActor.run {
+                ws.connect()
+            }
+            // Wait for connection
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        }
+        
+        // Stop RTC providers but keep WebSocket connected
+        await MainActor.run {
+            // Stop timers temporarily
+            presenceTimer?.invalidate()
+            presenceTimer = nil
+            statusTimer?.invalidate()
+            statusTimer = nil
+        }
+        
+        // Notify peers and stop RTC
+        ws.send(json: ["type":"rtc:stopped", "basketId": activeBasketId ?? deviceId, "reason": "switching_display"])
+        
+        // Stop orchestrator and legacy providers
+        await _rtcOrchestrator?.stopCurrentProvider()
+        await MainActor.run {
+            self.peersConnected = false
+            print("[DisplaySessionStore] RTC providers stopped for display switch")
+        }
+        
+        // Stop legacy providers
+        await MainActor.run {
+            self.p2p?.stop()
+            self.p2p = nil
+            self.p2pPairId = nil
+            #if canImport(LiveKit)
+            self.livekit?.stop()
+            self.livekit = nil
+            self.livekitStarting = false
+            #endif
+        }
+        
+        // Small delay to ensure RTC cleanup completes
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        
+        // Subscribe to the target display's basket using display: prefix for D2D detection
+        let d2dBasketId = "display:\(targetDisplayId)"
+        ws.send(json: ["type": "subscribe", "basketId": d2dBasketId])
+        
+        // Send hello as display connecting to another display
+        // Note: Using role=cashier as workaround - server may not handle D2D with role=display
+        var hello: [String: Any] = [
+            "type": "hello",
+            "basketId": targetDisplayId,
+            "role": "cashier",  // Pretend to be cashier so server initiates RTC
+            "name": friendlyName
+        ]
+        hello["device_id"] = deviceId
+        if let tok = env.deviceToken, !tok.isEmpty { hello["token"] = tok }
+        ws.send(json: hello)
+        
+        activeBasketId = targetDisplayId
+        connectedDisplayId = targetDisplayId
+        
+        // Fetch the display name from presence API
+        Task {
+            await self.fetchConnectedDisplayName(displayId: targetDisplayId)
+        }
+        
+        // Restart timers for the new connection
+        await MainActor.run {
+            self.reschedulePresenceTimer()
+        }
+        
+        // Send device name directly to the remote display
+        ws.send(json: [
+            "type": "peer:identity",
+            "basketId": targetDisplayId,
+            "name": friendlyName,
+            "device_id": deviceId
+        ])
+        print("[DisplaySessionStore] Sent peer:identity with name=\(friendlyName) to remote display")
+        
+        // Wait for RTC provider signal from server
+        print("[DisplaySessionStore] Subscribed to display \(targetDisplayId), waiting for RTC setup")
     }
     
     // MARK: - RTC Provider Orchestration
     private func setupRTCOrchestrator() {
-        rtcOrchestrator = RTCProviderOrchestrator()
+        _rtcOrchestrator = RTCProviderOrchestrator()
         
         // Set up callback to track orchestrator state changes
-        rtcOrchestrator?.onStateChange = { [weak self] state, isConnected in
+        _rtcOrchestrator?.onStateChange = { [weak self] state, isConnected in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.peersConnected = isConnected
@@ -668,7 +864,7 @@ func start() {
         // Register available providers
         #if canImport(LiveKit)
         let enhancedLiveKit = EnhancedLiveKitProvider(deviceId: deviceId, http: http)
-        rtcOrchestrator?.registerProvider(enhancedLiveKit)
+        _rtcOrchestrator?.registerProvider(enhancedLiveKit)
         print("[Display] LiveKit provider registered for enhanced orchestration")
         #endif
         
@@ -676,7 +872,7 @@ func start() {
     }
     
     private func startEnhancedRTCProvider(_ providerType: String, pairId: String) async {
-        guard let orchestrator = rtcOrchestrator else {
+        guard let orchestrator = _rtcOrchestrator else {
             print("[Display] RTC Orchestrator not available, falling back to legacy providers")
             return
         }
@@ -685,6 +881,8 @@ func start() {
             try await orchestrator.startProvider(providerType, pairId: pairId)
             await MainActor.run {
                 self.peersConnected = orchestrator.isConnected
+                // Re-enable basket syncs now that RTC is connected
+                self.ignoreBasketSync = false
                 print("[Display] Enhanced RTC provider \(providerType) started successfully - peersConnected: \(self.peersConnected)")
             }
         } catch {
@@ -725,14 +923,28 @@ func start() {
     }
 
     func sendSelectCategory(name: String) {
-        // Mirror category selection to Cashier
-        ws.send(json: ["type":"ui:selectCategory", "basketId": deviceId, "name": name])
+        // Mirror category selection to remote (Cashier or Display)
+        let targetBasket = activeBasketId ?? deviceId
+        ws.send(json: ["type":"ui:selectCategory", "basketId": targetBasket, "name": name])
+        print("[Display] Sent ui:selectCategory to basketId=\(targetBasket) name=\(name)")
     }
     func sendShowProduct(id: String) {
-        ws.send(json: ["type":"ui:showOptions", "basketId": deviceId, "product_id": id])
+        let targetBasket = activeBasketId ?? deviceId
+        ws.send(json: ["type":"ui:showOptions", "basketId": targetBasket, "product_id": id])
+        print("[Display] Sent ui:showOptions to basketId=\(targetBasket) product_id=\(id)")
     }
     func sendScrollTo(id: String) {
-        ws.send(json: ["type":"ui:scrollTo", "basketId": deviceId, "product_id": id])
+        let targetBasket = activeBasketId ?? deviceId
+        ws.send(json: ["type":"ui:scrollTo", "basketId": targetBasket, "product_id": id])
+        print("[Display] Sent ui:scrollTo to basketId=\(targetBasket) product_id=\(id)")
+    }
+    
+    /// Send menu state update via WebSocket
+    private func sendMenuState(_ state: MenuStateSync.MenuState) {
+        let basketId = activeBasketId ?? deviceId
+        let event = state.toWebSocketEvent(basketId: basketId)
+        ws.send(json: event)
+        print("[Display] Sent menu:state: category=\(state.selectedCategory ?? "nil"), product=\(state.selectedProduct ?? "nil"), scroll=\(state.scrollToProduct ?? "nil")")
     }
     
     /// Reset menu synchronization to local control
@@ -770,18 +982,71 @@ func start() {
         let type = (event["type"] as? String) ?? ""
         print("[Display] WS event: \(type)")
         switch type {
+        case "peer:identity":
+            // Custom event to receive peer name directly from connecting display
+            if let remoteName = event["name"] as? String, !remoteName.isEmpty {
+                connectedDisplayName = remoteName
+                print("[Display] Received peer:identity with name: \(remoteName)")
+            }
+            if let remoteDeviceId = event["device_id"] as? String, !remoteDeviceId.isEmpty {
+                connectedDisplayId = remoteDeviceId
+                print("[Display] Received peer:identity with device_id: \(remoteDeviceId)")
+            }
         case "peer:status":
             let raw = (event["status"] as? String) ?? ""
             let status = raw.lowercased()
             print("[Display] WS event: peer:status status=\(status)")
+            print("[Display] peer:status event keys: \(event.keys.joined(separator: ", "))")
+            if let name = event["name"] { print("[Display] peer:status.name = \(name)") }
+            if let cashierName = event["cashier_name"] { print("[Display] peer:status.cashier_name = \(cashierName)") }
+            if let cashierNameCamel = event["cashierName"] { print("[Display] peer:status.cashierName = \(cashierNameCamel)") }
+            if let displayName = event["displayName"] { print("[Display] peer:status.displayName = \(displayName)") }
+            if let deviceId = event["device_id"] { print("[Display] peer:status.device_id = \(deviceId)") }
+            if let cashierDevId = event["cashier_device_id"] { print("[Display] peer:status.cashier_device_id = \(cashierDevId)") }
+            
+            // Extract remote device name and device_id from event if available
+            // Try multiple fields: name (for D2D), cashierName/cashier_name (for cashier connection)
+            if let remoteName = event["name"] as? String, !remoteName.isEmpty {
+                connectedDisplayName = remoteName
+                print("[Display] Updated connected display name from peer:status: \(remoteName)")
+            } else if let cashierName = (event["cashierName"] as? String) ?? (event["cashier_name"] as? String), !cashierName.isEmpty {
+                lastCashierName = cashierName
+                print("[Display] Updated cashier name from peer:status: \(cashierName)")
+            }
+            
+            // Extract device IDs
+            if let deviceId = event["device_id"] as? String, !deviceId.isEmpty {
+                connectedDisplayId = deviceId
+                cashierDeviceId = deviceId
+                print("[Display] Updated connected device_id from peer:status: \(deviceId)")
+                
+                // Fetch display name if we only have the ID
+                if connectedDisplayName == nil && lastCashierName == nil {
+                    Task {
+                        await self.fetchConnectedDisplayName(displayId: deviceId)
+                    }
+                }
+            } else if let cashierDevId = event["cashier_device_id"] as? String {
+                cashierDeviceId = cashierDevId
+            }
+            
             switch status {
             case "connected":
                 peersConnected = true
+                connectionHealthMonitor.updatePeerState(connected: true)
+                
+                // Request menu state sync on reconnection (if configured as display)
+                if menuStateSync.isDisplay {
+                    print("[Display] Peer reconnected - requesting menu state sync")
+                    menuStateSync.requestStateSync(deviceId: deviceId)
+                }
+                
                 // Do not auto-start any provider on generic peer:status. We wait for an explicit rtc:provider or rtc:offer
                 // event which includes the correct basketId/pairId to avoid mismatches.
             case "disconnected", "stopped", "off":
                 let wasPreviouslyConnected = peersConnected
                 peersConnected = false
+                connectionHealthMonitor.updatePeerState(connected: false)
                 desiredProvider = ""
                 rtcAutoStartAttempted = false
                 
@@ -789,6 +1054,9 @@ func start() {
                 
                 if wasPreviouslyConnected {
                     print("[Display] Peer disconnected - stopping RTC providers and reverting to LOCAL mode")
+                    // Clear basket from remote session
+                    basketLines = []
+                    basketTotals = .zero
                     // Clear poster state when peer disconnects
                     poster = nil
                     // Clear remote menu control state to restore full local control
@@ -798,11 +1066,14 @@ func start() {
                     preview = nil
                     suppressOptionsEcho = false
                     pendingEditSku = nil
+                    optionsQty = 1
+                    optionsSelection = [:]
+                    optionsExpanded = [:]
                     Task {
-                        await rtcOrchestrator?.stopCurrentProvider()
+                        await _rtcOrchestrator?.stopCurrentProvider()
                         await MainActor.run {
                             self.peersConnected = false // Ensure it's set again on main thread
-                            print("[Display] RTC providers stopped due to peer disconnection - remote menu state cleared, local control restored")
+                            print("[Display] RTC providers stopped due to peer disconnection - remote basket and menu state cleared, local control restored")
                         }
                     }
                 }
@@ -873,18 +1144,24 @@ func start() {
             
             // Stop orchestrator and update peersConnected
             Task {
-                await rtcOrchestrator?.stopCurrentProvider()
+                await _rtcOrchestrator?.stopCurrentProvider()
                 await MainActor.run {
                     self.peersConnected = false
                     // Clear poster state when RTC stops
                     self.poster = nil
-                    print("[Display] rtc:stopped - all RTC providers stopped, poster cleared, peersConnected set to false")
+                    // Clear connection tracking
+                    self.connectedDisplayId = nil
+                    // Clear basket on disconnect
+                    self.basketLines = []
+                    self.basketTotals = .zero
+                    print("[Display] rtc:stopped - all RTC providers stopped, basket and state cleared, peersConnected set to false")
                 }
             }
             
             // Reset provider state
             desiredProvider = ""
             rtcAutoStartAttempted = false
+            ignoreBasketSync = false
             
             // If server is preclearing/resetting the session, stay on the session basket to avoid missing the next offer
             let reason = ((event["reason"] as? String) ?? "").lowercased()
@@ -902,12 +1179,19 @@ func start() {
                 subscribeDefaultBasket()
             }
         case "basket:sync", "basket:update":
-            applyBasket(event)
+            // Ignore basket syncs during initial connection phase (until RTC connected)
+            if ignoreBasketSync {
+                print("[Display] Ignoring basket sync during connection phase")
+            } else {
+                applyBasket(event)
+            }
         case "session:started":
             // new session clears basket/preview
             basketLines = []
             basketTotals = .zero
             preview = nil
+            // Reset ignore flag for new sessions
+            ignoreBasketSync = false
             // Fallback: If no provider was explicitly requested yet, proactively start LiveKit once
             #if canImport(LiveKit)
             if desiredProvider.isEmpty && livekit == nil && !livekitStarting {
@@ -1003,11 +1287,53 @@ func start() {
             applyPoster(event, start: true)
         case "poster:stop":
             applyPoster(event, start: false)
+        case "ui:checkoutOverlay":
+            // Handle remote checkout overlay state change
+            if let show = event["show"] as? Bool {
+                Task { @MainActor in
+                    self.showCheckoutOverlay = show
+                    print("[Display] Received ui:checkoutOverlay event - showing overlay: \(show)")
+                }
+            }
+        case "ui:paymentMethod":
+            // Handle remote payment method change
+            if let paymentMethodString = event["paymentMethod"] as? String {
+                // Forward to LocalModeManager if available
+                Task { @MainActor in
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("OT.PaymentMethod.Updated"),
+                        object: nil,
+                        userInfo: ["paymentMethod": paymentMethodString]
+                    )
+                    print("[Display] Received ui:paymentMethod event - method: \(paymentMethodString)")
+                }
+            }
+        case "ui:checkoutBasket":
+            // Handle remote checkout basket data sync
+            if let linesData = event["lines"] as? [[String: Any]],
+               let totalsData = event["totals"] as? [String: Any] {
+                Task { @MainActor in
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("OT.CheckoutBasket.Updated"),
+                        object: nil,
+                        userInfo: ["lines": linesData, "totals": totalsData]
+                    )
+                    print("[Display] Received ui:checkoutBasket event with \(linesData.count) items")
+                }
+            }
         case "ui:videoMode":
             if let mode = (event["mode"] as? String)?.lowercased() {
                 if mode == "small" { NotificationCenter.default.post(name: .displayCollapseVideo, object: nil) }
                 if mode == "full" { NotificationCenter.default.post(name: .displayExpandVideo, object: nil) }
             }
+        case "menu:state":
+            // Receive menu state synchronization from peer
+            if let state = MenuStateSync.MenuState.fromWebSocketEvent(event) {
+                menuStateSync.receiveState(state)
+            }
+        case "menu:state:sync":
+            // Peer requesting current menu state
+            menuStateSync.provideCurrentState(deviceId: deviceId)
         case "device:deactivate", "device:revoke":
             // Immediate forced deactivation from Admin
             env.deviceToken = nil
@@ -1053,6 +1379,10 @@ func start() {
             guard let http1 = resp1 as? HTTPURLResponse else { return }
             if (200..<300).contains(http1.statusCode) {
                 print("[Display] presence: posted for id=\(deviceId)")
+                // Count presence as activity to prevent false "event silence" warnings
+                await MainActor.run {
+                    connectionHealthMonitor.recordEventReceived(type: "presence:sent")
+                }
                 if presenceInterval > 30 { presenceInterval = 30; await MainActor.run { reschedulePresenceTimer() } }
                 return
             }
@@ -1074,7 +1404,11 @@ func start() {
             let code2 = (resp2 as? HTTPURLResponse)?.statusCode ?? -1
             if (200..<300).contains(code2) {
                 print("[Display] presence: posted (device-token)")
-                if presenceInterval > 30 { presenceInterval = 30; await MainActor.run { reschedulePresenceTimer() } }
+                // Count presence as activity to prevent false "event silence" warnings
+                await MainActor.run {
+                    connectionHealthMonitor.recordEventReceived(type: "presence:sent")
+                }
+                if presenceInterval > 15 { presenceInterval = 15; await MainActor.run { reschedulePresenceTimer() } }
                 return
             }
             if code2 == 401 || code2 == 403 {
@@ -1097,7 +1431,11 @@ func start() {
             let code3 = (resp3 as? HTTPURLResponse)?.statusCode ?? -1
             if (200..<300).contains(code3) {
                 print("[Display] presence: posted (both)")
-                if presenceInterval > 30 { presenceInterval = 30; await MainActor.run { reschedulePresenceTimer() } }
+                // Count presence as activity to prevent false "event silence" warnings
+                await MainActor.run {
+                    connectionHealthMonitor.recordEventReceived(type: "presence:sent")
+                }
+                if presenceInterval > 15 { presenceInterval = 15; await MainActor.run { reschedulePresenceTimer() } }
                 return
             }
             if code3 == 401 || code3 == 403 {
@@ -1106,7 +1444,7 @@ func start() {
                 return
             }
             print("[Display] presence: HTTP \(code3)")
-            presenceInterval = min(presenceInterval * 2, 120)
+            presenceInterval = min(presenceInterval * 2, 60)  // Cap at 60s instead of 120s
             await MainActor.run { reschedulePresenceTimer() }
         } catch {
             print("[Display] presence: error \(error.localizedDescription)")
@@ -1120,15 +1458,16 @@ func start() {
         var lines: [BasketLineUI] = []
         if let arr = (basket["lines"] as? [[String: Any]]) ?? (basket["items"] as? [[String: Any]]) {
             for raw in arr {
-                // Prefer 'sku' as the canonical line identifier used for updates
-                let id = (raw["sku"] as? String)
+                // Prefer 'lineId' as the canonical line identifier (supports modifier variants)
+                let id = (raw["lineId"] as? String)
+                    ?? (raw["sku"] as? String)
                     ?? (raw["id"] as? String)
-                    ?? (raw["lineId"] as? String)
                     ?? (raw["productId"] as? String)
                     ?? UUID().uuidString
                 let name = (raw["name"] as? String)
                     ?? (raw["productName"] as? String)
                     ?? "Item"
+                let nameAr = (raw["nameAr"] as? String) ?? (raw["name_ar"] as? String)
                 let qty = (raw["qty"] as? Int)
                     ?? (raw["quantity"] as? Int)
                     ?? Int((raw["qty"] as? String) ?? "1") ?? 1
@@ -1145,7 +1484,7 @@ func start() {
                     }
                     options.append(contentsOf: m)
                 }
-                lines.append(BasketLineUI(id: id, name: name, qty: qty, unitPrice: price, lineTotal: total, options: options, imageURL: image))
+                lines.append(BasketLineUI(id: id, name: name, nameAr: nameAr, qty: qty, unitPrice: price, lineTotal: total, options: options, imageURL: image))
             }
         }
         basketLines = lines
@@ -1303,11 +1642,22 @@ func start() {
             break
             #endif
         case "livekit", "live":
+            // Configure menu state sync for D2D connections
+            if cashierDeviceId == nil && connectedDisplayId != nil {
+                // This is a Display-to-Display connection, configure as display (receiver)
+                menuStateSync.configureAsDisplay()
+                print("[Display] Configured MenuStateSync as display (D2D mode)")
+            }
+            
             // Use enhanced orchestrator if available, otherwise fall back to legacy
             Task { [weak self] in
                 guard let self = self else { return }
-                if self.rtcOrchestrator != nil {
+                if self._rtcOrchestrator != nil {
                     await self.startEnhancedRTCProvider("livekit", pairId: pairId)
+                    // Notify menu state sync that connection is established
+                    await MainActor.run {
+                        self.menuStateSync.onConnectionEstablished()
+                    }
                 } else {
                     // Legacy LiveKit startup
                     #if canImport(LiveKit)
@@ -1325,7 +1675,7 @@ func start() {
             // Use enhanced orchestrator for Twilio
             Task { [weak self] in
                 guard let self = self else { return }
-                if self.rtcOrchestrator != nil {
+                if self._rtcOrchestrator != nil {
                     await self.startEnhancedRTCProvider("twilio", pairId: pairId)
                 } else {
                     print("[Display] Twilio provider requires enhanced orchestrator")
@@ -1355,6 +1705,7 @@ func start() {
             "name": product.name,
             "price": product.price
         ]
+        if let nameAr = product.name_localized, !nameAr.isEmpty { item["nameAr"] = nameAr }
         if let img = product.image_url, !img.isEmpty { item["image_url"] = img }
         if let mods = modifiers, !mods.isEmpty {
             item["modifiers"] = mods
@@ -1399,6 +1750,69 @@ func start() {
 
     func sendOptionsClose() {
         ws.send(json: ["type":"ui:optionsClose", "basketId": activeBasketId ?? deviceId])
+    }
+    
+    func sendCheckoutOverlayState(show: Bool) {
+        let targetBasket = activeBasketId ?? deviceId
+        ws.send(json: ["type": "ui:checkoutOverlay", "basketId": targetBasket, "show": show])
+        print("[Display] Sent ui:checkoutOverlay to basketId=\(targetBasket) show=\(show)")
+    }
+    
+    func sendPaymentMethodUpdate(paymentMethod: String) {
+        let targetBasket = activeBasketId ?? deviceId
+        ws.send(json: ["type": "ui:paymentMethod", "basketId": targetBasket, "paymentMethod": paymentMethod])
+        print("[Display] Sent ui:paymentMethod to basketId=\(targetBasket) paymentMethod=\(paymentMethod)")
+    }
+    
+    func sendCheckoutBasketData(lines: [BasketLineUI], totals: BasketTotalsUI) {
+        let targetBasket = activeBasketId ?? deviceId
+        
+        // Convert basket lines to JSON-serializable format
+        let linesData: [[String: Any]] = lines.map { line in
+            var dict: [String: Any] = [
+                "id": line.id,
+                "name": line.name,
+                "qty": line.qty,
+                "unitPrice": line.unitPrice,
+                "lineTotal": line.lineTotal,
+                "options": line.options,
+                "imageURL": line.imageURL ?? ""
+            ]
+            if let nameAr = line.nameAr {
+                dict["nameAr"] = nameAr
+            }
+            return dict
+        }
+        
+        let totalsData: [String: Any] = [
+            "subtotal": totals.subtotal,
+            "tax": totals.tax,
+            "total": totals.total
+        ]
+        
+        ws.send(json: [
+            "type": "ui:checkoutBasket",
+            "basketId": targetBasket,
+            "lines": linesData,
+            "totals": totalsData
+        ])
+        
+        print("[Display] Sent ui:checkoutBasket to basketId=\(targetBasket) with \(lines.count) items")
+    }
+    
+    func clearRemoteBasket() {
+        // Clear local basket state
+        basketLines = []
+        basketTotals = .zero
+        
+        // Send basket:update with clear action to server/peers to reset the session
+        ws.send(json: [
+            "type": "basket:update",
+            "basketId": activeBasketId ?? deviceId,
+            "op": ["action": "clear"]
+        ])
+        
+        print("[DisplaySessionStore] Remote basket cleared and session reset sent")
     }
     
     // MARK: - Display Status API
@@ -1452,14 +1866,19 @@ func start() {
                 self.lastCashierName = displayStatus.cashier_name
                 self.cashierDeviceId = displayStatus.cashier_device_id
                 
-                // Update peers connected based on database state
-                let wasConnected = self.peersConnected
-                self.peersConnected = displayStatus.connected && displayStatus.cashier_name != nil
-                
                 print("[Display] Status from DB: connected=\(displayStatus.connected), cashier=\(displayStatus.cashier_name ?? "none"), session=\(displayStatus.session_id ?? "none")")
                 
-                if wasConnected != self.peersConnected {
-                    print("[Display] Peers connection status updated from DB: \(wasConnected) -> \(self.peersConnected)")
+                // Only update peersConnected from DB if RTC orchestrator agrees (don't override active D2D connections)
+                let dbConnected = displayStatus.connected && displayStatus.cashier_name != nil
+                let rtcConnected = self._rtcOrchestrator?.isConnected ?? false
+                
+                // If RTC says we're connected, trust that over DB (important for D2D connections)
+                if rtcConnected {
+                    print("[Display] RTC orchestrator shows connected - ignoring DB status to preserve D2D connection")
+                } else if dbConnected != self.peersConnected {
+                    // Only update from DB when RTC is not active
+                    print("[Display] Updating peersConnected from DB: \(self.peersConnected) -> \(dbConnected)")
+                    self.peersConnected = dbConnected
                 }
             }
             
@@ -1478,6 +1897,28 @@ func start() {
         RunLoop.main.add(statusTimer!, forMode: .common)
         print("[Display] Started periodic status checking (30s interval)")
     }
+    
+    /// Fetch the name of a connected display from presence API
+    private func fetchConnectedDisplayName(displayId: String) async {
+        guard let token = env.deviceToken, !token.isEmpty else { return }
+        
+        do {
+            let client = HttpClient(env: env)
+            let displays = try await client.presenceDisplays()
+            
+            // Find the display by ID
+            if let display = displays.first(where: { $0.id == displayId }) {
+                await MainActor.run {
+                    self.connectedDisplayName = display.name
+                    print("[Display] Fetched connected display name: \(display.name ?? "nil") for ID: \(displayId)")
+                }
+            } else {
+                print("[Display] Could not find display with ID: \(displayId) in presence list")
+            }
+        } catch {
+            print("[Display] fetchConnectedDisplayName error: \(error.localizedDescription)")
+        }
+    }
 }
 
 extension Notification.Name {
@@ -1486,4 +1927,5 @@ extension Notification.Name {
     static let displayKickVideo = Notification.Name("OT.Display.KickVideo")
     static let displayLocalCameraReady = Notification.Name("OT.Display.LocalCameraReady")
     static let displayVideoRefresh = Notification.Name("OT.Display.VideoRefresh")
+    static let displayResetIdleTimer = Notification.Name("OT.Display.ResetIdleTimer")
 }

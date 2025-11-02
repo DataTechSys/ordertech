@@ -531,7 +531,6 @@ public final class WebSocketManager: NSObject, ObservableObject, URLSessionWebSo
     
     private func drainMessageQueue() {
         let now = Date()
-        var remaining: [PrioritizedMessage] = []
         
         for message in messageQueue {
             switch message.priority {
@@ -546,7 +545,7 @@ public final class WebSocketManager: NSObject, ObservableObject, URLSessionWebSo
             }
         }
         
-        messageQueue = remaining
+        messageQueue.removeAll()
         
         // Flush low-priority batch every 200ms or if large enough
         if now.timeIntervalSince(lastBatchProcessTime) > 0.2 || batchedMessages.count > 10 {
@@ -575,7 +574,9 @@ public final class WebSocketManager: NSObject, ObservableObject, URLSessionWebSo
     private func startPing() {
         DispatchQueue.main.async {
             self.pingTimer?.invalidate(); self.pingTimer = nil
-            let t = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            // Send WebSocket ping every 10 seconds to keep connection alive
+            // This works in conjunction with presence pings (15s) for dual-layer keep-alive
+            let t = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
                 guard let self = self, let task = self.task else { return }
                 task.sendPing { [weak self] error in
                     if error != nil {

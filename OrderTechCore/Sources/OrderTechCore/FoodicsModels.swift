@@ -75,6 +75,8 @@ public struct FoodicsProduct: Codable, Identifiable {
     public let price: Double?
     public let is_active: Bool?
     public let deleted_at: String? // ISO timestamp or null
+    public let description: String?
+    public let description_localized: String?
     // Optional category hints when link table endpoints are unavailable
     public let category_reference: String?
     public let category_id: String?
@@ -181,7 +183,7 @@ public struct FoodicsProduct: Codable, Identifiable {
     }
     
     private enum CodingKeys: String, CodingKey {
-        case id, name, name_localized, reference, image, price, is_active, deleted_at, category_reference, category_id, category, modifiers
+        case id, name, name_localized, reference, image, price, is_active, deleted_at, description, description_localized, category_reference, category_id, category, modifiers
     }
     
     public init(
@@ -193,6 +195,8 @@ public struct FoodicsProduct: Codable, Identifiable {
         price: Double?,
         is_active: Bool?,
         deleted_at: String?,
+        description: String?,
+        description_localized: String?,
         category_reference: String?,
         category_id: String?,
         category: EmbeddedCategory?,
@@ -206,6 +210,8 @@ public struct FoodicsProduct: Codable, Identifiable {
         self.price = price
         self.is_active = is_active
         self.deleted_at = deleted_at
+        self.description = description
+        self.description_localized = description_localized
         self.category_reference = category_reference
         self.category_id = category_id
         self.category = category
@@ -244,6 +250,8 @@ public struct FoodicsProduct: Codable, Identifiable {
         let is_active = decodeBoolish(.is_active)
         
         let deleted_at = try? c.decode(String.self, forKey: .deleted_at)
+        let description = try? c.decode(String.self, forKey: .description)
+        let description_localized = try? c.decode(String.self, forKey: .description_localized)
         let category_reference = try? c.decode(String.self, forKey: .category_reference)
         let category_id = try? c.decode(String.self, forKey: .category_id)
         let category = try? c.decode(EmbeddedCategory.self, forKey: .category)
@@ -258,6 +266,8 @@ public struct FoodicsProduct: Codable, Identifiable {
             price: price,
             is_active: is_active,
             deleted_at: deleted_at,
+            description: description,
+            description_localized: description_localized,
             category_reference: category_reference,
             category_id: category_id,
             category: category,

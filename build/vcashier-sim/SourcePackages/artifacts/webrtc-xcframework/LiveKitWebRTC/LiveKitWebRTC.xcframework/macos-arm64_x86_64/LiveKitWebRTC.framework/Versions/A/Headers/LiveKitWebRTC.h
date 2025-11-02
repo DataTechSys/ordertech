@@ -17,6 +17,7 @@
 #import <LiveKitWebRTC/RTCCryptoOptions.h>
 #import <LiveKitWebRTC/RTCDataChannel.h>
 #import <LiveKitWebRTC/RTCDataChannelConfiguration.h>
+#import <LiveKitWebRTC/RTCDataPacketCryptor.h>
 #import <LiveKitWebRTC/RTCDtmfSender.h>
 #import <LiveKitWebRTC/RTCFrameCryptor.h>
 #import <LiveKitWebRTC/RTCFrameCryptorKeyProvider.h>

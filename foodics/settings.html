@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; color: #1f2937; }
+        .sidebar { position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1f2937; color: white; padding: 2rem 0; overflow-y: auto; }
+        .logo { padding: 0 1.5rem; font-size: 1.5rem; font-weight: bold; margin-bottom: 2rem; }
+        .menu { list-style: none; }
+        .menu a { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.5rem; color: #d1d5db; text-decoration: none; transition: all 0.3s; }
+        .menu a:hover, .menu a.active { background: #374151; color: white; }
+        .menu i { font-size: 1.2rem; }
+        .main-content { margin-left: 250px; padding: 2rem; max-width: 800px; }
+        .header { background: white; padding: 1.5rem 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .btn { padding: 0.625rem 1.25rem; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.3s; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .card { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .card h2 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group textarea { width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
+        .hint { font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem; }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none; }
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .info-box { background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+        .info-box h3 { font-size: 1rem; margin-bottom: 0.5rem; color: #1e40af; }
+        .info-box p { font-size: 0.9rem; color: #1e40af; line-height: 1.5; }
+        .info-box a { color: #1e40af; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 32px;"></div>
+        <ul class="menu">
+            <li><a href="/foodics/dashboard.html"><i class="ri-dashboard-line"></i> Dashboard</a></li>
+            <li><a href="/foodics/profile.html"><i class="ri-user-line"></i> Profile</a></li>
+            <li><a href="/foodics/devices.html"><i class="ri-computer-line"></i> Devices</a></li>
+            <li><a href="/foodics/subscription.html"><i class="ri-vip-crown-line"></i> Subscription</a></li>
+            <li><a href="/foodics/activity.html"><i class="ri-history-line"></i> Activity Log</a></li>
+            <li><a href="/foodics/settings.html" class="active"><i class="ri-settings-3-line"></i> Settings</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="header">
+            <h1>Settings</h1>
+            <button class="btn btn-danger" onclick="logout()"><i class="ri-logout-box-line"></i> Logout</button>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <!-- Account Info -->
+        <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 1.5rem;">
+            <h2 style="color: white; margin-bottom: 1rem;">Your DataTech Account</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+                <div>
+                    <div style="opacity: 0.9; font-size: 0.9rem; margin-bottom: 0.5rem;">DataTech Foodics ID</div>
+                    <div style="font-size: 1.5rem; font-weight: bold;" id="displayFoodicsId">—</div>
+                    <div style="opacity: 0.8; font-size: 0.75rem; margin-top: 0.25rem;">(Your DataTech account number)</div>
+                </div>
+                <div>
+                    <div style="opacity: 0.9; font-size: 0.9rem; margin-bottom: 0.5rem;">Email</div>
+                    <div style="font-size: 1.1rem; font-weight: 600;" id="displayEmail">—</div>
+                </div>
+                <div>
+                    <div style="opacity: 0.9; font-size: 0.9rem; margin-bottom: 0.5rem;">Account Status</div>
+                    <div style="font-size: 1.1rem; font-weight: 600;">✓ Active</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3><i class="ri-information-line"></i> Foodics POS Integration</h3>
+            <p>
+                Connect your Foodics restaurant POS data with DataTech. Get your API credentials from your <a href="https://console.foodics.com" target="_blank">Foodics Developer Console</a>.
+                <br><br>
+                📚 <a href="https://developers.foodics.com/guides/introduction.html" target="_blank">View Foodics Developer Documentation</a>
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Foodics POS Account ID</h2>
+            <form id="accountIdForm">
+                <div class="form-group">
+                    <label for="foodicsBusinessId">Foodics Business/Branch ID *</label>
+                    <input type="text" id="foodicsBusinessId" placeholder="Enter your Foodics POS Business/Branch ID" required>
+                    <div class="hint">Your actual Foodics POS business or branch identifier from your Foodics restaurant dashboard</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="ri-save-line"></i> Save Account ID
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Foodics API Token</h2>
+            <form id="tokenForm">
+                <div class="form-group">
+                    <label for="foodicsToken">API Token *</label>
+                    <input type="password" id="foodicsToken" placeholder="Enter your Foodics API Token" required>
+                    <div class="hint">Get your token from <a href="https://console.foodics.com" target="_blank">Foodics Developer Console</a></div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="ri-save-line"></i> Save Token
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Connection Status</h2>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div id="statusIndicator" style="width: 12px; height: 12px; border-radius: 50%; background: #9ca3af;"></div>
+                <div>
+                    <strong id="statusText">Not Configured</strong>
+                    <div style="font-size: 0.85rem; color: #6b7280;" id="statusDetail">Add your API credentials to connect</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function checkAuth() {
+            const token = localStorage.getItem('foodics_token');
+            if (!token) {
+                window.location.href = '/foodics/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        function logout() {
+            localStorage.removeItem('foodics_token');
+            localStorage.removeItem('foodics_user');
+            window.location.href = '/foodics/login.html';
+        }
+
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            setTimeout(() => { alert.style.display = 'none'; }, 5000);
+        }
+
+        // Save Foodics Account ID
+        document.getElementById('accountIdForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const businessId = document.getElementById('foodicsBusinessId').value;
+            localStorage.setItem('foodics_business_id', businessId);
+            
+            updateConnectionStatus();
+            showAlert('Foodics Account ID saved successfully!', 'success');
+        });
+
+        // Save Foodics Token
+        document.getElementById('tokenForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const token = document.getElementById('foodicsToken').value;
+            localStorage.setItem('foodics_api_token', token);
+            
+            updateConnectionStatus();
+            showAlert('Foodics API Token saved successfully!', 'success');
+        });
+
+        // Update connection status display
+        function updateConnectionStatus() {
+            const businessId = localStorage.getItem('foodics_business_id');
+            const token = localStorage.getItem('foodics_api_token');
+            
+            if (businessId && token) {
+                document.getElementById('statusIndicator').style.background = '#10b981';
+                document.getElementById('statusText').textContent = 'Connected';
+                document.getElementById('statusDetail').textContent = `Connected to Foodics Business: ${businessId}`;
+            } else if (businessId || token) {
+                document.getElementById('statusIndicator').style.background = '#fbbf24';
+                document.getElementById('statusText').textContent = 'Partially Configured';
+                document.getElementById('statusDetail').textContent = businessId ? 'Account ID set, token needed' : 'Token set, account ID needed';
+            } else {
+                document.getElementById('statusIndicator').style.background = '#9ca3af';
+                document.getElementById('statusText').textContent = 'Not Configured';
+                document.getElementById('statusDetail').textContent = 'Add your credentials to connect';
+            }
+        }
+
+        // Load user info
+        function loadUserInfo() {
+            const userStr = localStorage.getItem('foodics_user');
+            if (userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    document.getElementById('displayFoodicsId').textContent = user.foodics_id || 'N/A';
+                    document.getElementById('displayEmail').textContent = user.email || 'N/A';
+                } catch (e) {}
+            }
+        }
+
+        // Load saved config on page load
+        window.addEventListener('load', () => {
+            loadUserInfo();
+            
+            // Load saved values
+            const businessId = localStorage.getItem('foodics_business_id');
+            const token = localStorage.getItem('foodics_api_token');
+            
+            if (businessId) {
+                document.getElementById('foodicsBusinessId').value = businessId;
+            }
+            if (token) {
+                document.getElementById('foodicsToken').value = token;
+            }
+            
+            updateConnectionStatus();
+        });
+
+        if (checkAuth()) {}
+    </script>
+</body>
+</html>

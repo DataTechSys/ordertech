@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Email - DataTech</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .verify-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        .logo { margin-bottom: 2rem; }
+        h1 { color: #1f2937; font-size: 1.8rem; margin-bottom: 1rem; }
+        .message { color: #6b7280; margin: 1.5rem 0; line-height: 1.6; }
+        .icon { font-size: 4rem; margin-bottom: 1rem; }
+        .icon.success { color: #10b981; }
+        .icon.error { color: #ef4444; }
+        .icon.loading { color: #3b82f6; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #319795 0%, #2c7a7b 100%);
+            color: white;
+            padding: 0.875rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(49, 151, 149, 0.4);
+        }
+        .error-box {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="verify-container">
+        <div class="logo">
+            <img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 60px;">
+        </div>
+        
+        <div id="loading">
+            <div class="icon loading">⏳</div>
+            <h1>Verifying your email...</h1>
+            <p class="message">Please wait while we verify your email address.</p>
+        </div>
+        
+        <div id="success" style="display: none;">
+            <div class="icon success">✓</div>
+            <h1>Email Verified!</h1>
+            <p class="message">Your email has been successfully verified. Now let's set up your password to complete your account.</p>
+            <a href="/foodics/setup-password.html?token=" id="setupPasswordLink" class="btn">Set Up Password</a>
+        </div>
+        
+        <div id="error" style="display: none;">
+            <div class="icon error">✗</div>
+            <h1>Verification Failed</h1>
+            <div class="error-box" id="errorMessage"></div>
+            <p class="message">The verification link may have expired or is invalid.</p>
+            <a href="/foodics/register.html" class="btn">Register Again</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        
+        async function verifyEmail() {
+            if (!token) {
+                showError('No verification token provided');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/foodics/auth/verify-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showSuccess();
+                    document.getElementById('setupPasswordLink').href = `/foodics/setup-password.html?token=${token}`;
+                } else {
+                    showError(data.error || 'Verification failed');
+                }
+            } catch (error) {
+                console.error('Verification error:', error);
+                showError('Network error. Please try again.');
+            }
+        }
+        
+        function showSuccess() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'block';
+        }
+        
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+        
+        verifyEmail();
+    </script>
+</body>
+</html>

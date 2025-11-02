@@ -12,18 +12,24 @@ extension OrderTechCore.WebSocketManager {
     }
     
     func sendBasketUpdate(basketId: String, op: BasketOp) {
-        var payload: [String: Any] = ["type": "basket:update", "basketId": basketId]
+        var operation: [String: Any] = [:]
         
         switch op {
         case .add:
-            payload["op"] = "add"
+            operation["action"] = "add"
         case .remove:
-            payload["op"] = "remove"
+            operation["action"] = "remove"
         case .update:
-            payload["op"] = "update"
+            operation["action"] = "update"
         case .clear:
-            payload["op"] = "clear"
+            operation["action"] = "clear"
         }
+        
+        let payload: [String: Any] = [
+            "type": "basket:update",
+            "basketId": basketId,
+            "op": operation
+        ]
         
         send(json: payload)
     }

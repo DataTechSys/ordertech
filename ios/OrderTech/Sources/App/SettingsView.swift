@@ -11,6 +11,12 @@ struct SettingsView: View {
     @EnvironmentObject var activation: ActivationManager
     @AppStorage("OT.display.shareLocation") private var shareLocation: Bool = true
     @AppStorage("OT.display.externalRotation") private var externalRotationRaw: String = ExternalRotationMode.none.rawValue
+    
+    // Idle Poster settings
+    @AppStorage("OT.display.idlePosterEnabled") private var idlePosterEnabled: Bool = true
+    @AppStorage("OT.display.idleTimeout") private var idleTimeout: Double = 15.0
+    @AppStorage("OT.display.posterFlipInterval") private var posterFlipInterval: Double = 15.0
+    @AppStorage("OT.display.posterMode") private var posterModeRaw: String = "fullscreen"
 
     var body: some View {
         NavigationStack {
@@ -32,37 +38,14 @@ struct SettingsView: View {
                     Toggle("Share location", isOn: $shareLocation)
                     Button("Refresh from Admin") { Task { await refreshAdmin() } }
                 }
-                Section("Activation") {
-                    if let token = env.deviceToken, !token.isEmpty {
-                        HStack { Text("Status"); Spacer(); Text("Active").foregroundColor(.green) }
-                        Button("Deactivate") { env.deviceToken = nil }
-                            .foregroundColor(.red)
-                    } else {
-                        Text("Not activated")
-                            .foregroundColor(.secondary)
-                    }
-                }
                 
-                Section("Data") {
-                    Picker("Import From", selection: Binding(
-                        get: { CatalogStore().dataSource },
-                        set: { newValue in
-                            var store = CatalogStore()
-                            store.dataSource = newValue
-                        }
-                    )) {
-                        ForEach(CatalogStore.DataSource.allCases, id: \.self) { source in
-                            Text(source.rawValue).tag(source)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    
+                Section {
                     // Foodics token field
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Foodics API Token")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        SecureField("Enter Foodics token", text: Binding(
+                        SecureField("Enter Foodics token from Admin", text: Binding(
                             get: { env.foodicsToken ?? "" },
                             set: { env.foodicsToken = $0.isEmpty ? nil : $0 }
                         ))
@@ -70,13 +53,29 @@ struct SettingsView: View {
                         .font(.system(.body, design: .monospaced))
                         .autocapitalization(.none)
                         .autocorrectionDisabled()
-                        Text("Required for 'Foodics Direct' import")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        if let token = env.foodicsToken, !token.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                                Text("Token saved")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                            }
+                        } else {
+                            Text("Get your Foodics API token from the Admin page")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                        }
                     }
                     .padding(.vertical, 4)
                     
                     Button("Sync catalog & prefetch images") { Task { await syncData() } }
+                        .disabled(env.foodicsToken == nil || env.foodicsToken?.isEmpty == true)
+                } header: {
+                    Text("Catalog")
+                } footer: {
+                    Text("Import menu data from Foodics. Token must be configured to sync.")
                 }
                 
                 Section("External Display") {
@@ -84,6 +83,54 @@ struct SettingsView: View {
                         ForEach(ExternalRotationMode.allCases) { mode in
                             Text(mode.title).tag(mode.rawValue)
                         }
+                    }
+                }
+                
+                Section {
+                    Toggle("Enable Idle Poster", isOn: $idlePosterEnabled)
+                    
+                    if idlePosterEnabled {
+                        Picker("Display Mode", selection: $posterModeRaw) {
+                            Text("Full-Screen Products").tag("fullscreen")
+                            Text("Category Menu Flip").tag("categories")
+                        }
+                        .pickerStyle(.segmented)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Idle timeout")
+                                Spacer()
+                                Text("\(Int(idleTimeout))s")
+                                    .foregroundColor(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Slider(value: $idleTimeout, in: 5...60, step: 5)
+                                .tint(.accentColor)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(posterModeRaw == "fullscreen" ? "Page transition" : "Category transition")
+                                Spacer()
+                                Text("\(Int(posterFlipInterval))s")
+                                    .foregroundColor(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Slider(value: $posterFlipInterval, in: 5...30, step: 5)
+                                .tint(.accentColor)
+                        }
+                    }
+                } header: {
+                    Text("Idle Poster")
+                } footer: {
+                    if idlePosterEnabled {
+                        if posterModeRaw == "fullscreen" {
+                            Text("Full-Screen: Shows a shuffled grid of all products, flipping pages at the set interval.")
+                        } else {
+                            Text("Category Menu: Shows the menu for each category, flipping through categories at the set interval.")
+                        }
+                    } else {
+                        Text("Show rotating product poster when idle. Configure timeout and page transition timing.")
                     }
                 }
             }
@@ -110,6 +157,8 @@ struct SettingsView: View {
 
 extension Notification.Name {
     static let catalogDidSync = Notification.Name("CatalogDidSync")
+    static let localCameraSessionStarted = Notification.Name("LocalCameraSessionStarted")
+    static let externalCameraSessionStarted = Notification.Name("ExternalCameraSessionStarted")
 }
 
 enum ExternalRotationMode: String, CaseIterable, Identifiable {

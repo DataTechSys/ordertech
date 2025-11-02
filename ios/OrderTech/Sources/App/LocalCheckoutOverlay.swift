@@ -10,11 +10,12 @@ struct LocalModeIndicator: View {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         
         if store.peersConnected {
-            // Connected to cashier - show "Remote - [Cashier Name]"
+            // Connected to remote device - show device name only
             HStack(spacing: isPhone ? 4 : 6) {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: isPhone ? 10 : 12, weight: .semibold))
-                Text("Remote - \(connectedUserName)")
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: isPhone ? 6 : 8, height: isPhone ? 6 : 8)
+                Text(connectedUserName)
                     .font(.system(size: isPhone ? 9 : 11, weight: .bold))
                     .tracking(isPhone ? 0.3 : 0.5)
             }
@@ -49,7 +50,17 @@ struct LocalModeIndicator: View {
     }
     
     private var connectedUserName: String {
-        // Use cashier name from database (fetched via fetchDisplayStatus)
+        // Priority 1: Use connected display name (for D2D connections)
+        if let displayName = store.connectedDisplayName, !displayName.isEmpty {
+            // Extract first name from display name
+            let parts = displayName.components(separatedBy: [" ", "-", "_"])
+            if let firstName = parts.first, firstName.count > 1 {
+                return firstName.uppercased()
+            }
+            return displayName.uppercased()
+        }
+        
+        // Priority 2: Use cashier name from database (fetched via fetchDisplayStatus)
         if let cashierName = store.lastCashierName, !cashierName.isEmpty {
             // Extract first name from cashier name
             let parts = cashierName.components(separatedBy: [" ", "-", "_"])
@@ -57,6 +68,16 @@ struct LocalModeIndicator: View {
                 return firstName.uppercased()
             }
             return cashierName.uppercased()
+        }
+        
+        // Priority 3: Use shortened connected display ID if available
+        if let displayId = store.connectedDisplayId, !displayId.isEmpty {
+            // Extract a shortened version of the device ID or use the last part
+            let parts = displayId.components(separatedBy: ["-"])
+            if let last = parts.last, last.count >= 4 {
+                return last.prefix(8).uppercased()
+            }
+            return displayId.prefix(12).uppercased()
         }
         
         return "CASHIER"
@@ -106,7 +127,7 @@ struct LocalCheckoutOverlay: View {
     @EnvironmentObject var localMode: LocalModeManager
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedPaymentMethod: LocalModeManager.PaymentMethod = .cash
+    // Use LocalModeManager's selectedPaymentMethod directly instead of local state
     @State private var showingConfirmation = false
     
     var body: some View {
@@ -144,9 +165,8 @@ struct LocalCheckoutOverlay: View {
             if showingConfirmation {
                 ConfirmationOverlay(
                     total: localMode.localBasketTotals.total,
-                    paymentMethod: selectedPaymentMethod,
+                    paymentMethod: localMode.selectedPaymentMethod,
                     onConfirm: {
-                        localMode.selectedPaymentMethod = selectedPaymentMethod
                         localMode.confirmOrder()
                         showingConfirmation = false
                     },
@@ -156,9 +176,6 @@ struct LocalCheckoutOverlay: View {
                 )
                 .transition(.scale.combined(with: .opacity))
             }
-        }
-        .onAppear {
-            selectedPaymentMethod = localMode.selectedPaymentMethod
         }
     }
     
@@ -244,9 +261,12 @@ struct LocalCheckoutOverlay: View {
                 ForEach(LocalModeManager.PaymentMethod.allCases, id: \.rawValue) { method in
                     PaymentMethodCard(
                         method: method,
-                        isSelected: selectedPaymentMethod == method,
+                        isSelected: localMode.selectedPaymentMethod == method,
                         onTap: {
-                            selectedPaymentMethod = method
+                            // Update LocalModeManager directly so it syncs across all views
+                            localMode.selectedPaymentMethod = method
+                            // Sync payment method to remote display if connected
+                            localMode.syncPaymentMethod()
                         }
                     )
                 }
@@ -291,9 +311,9 @@ struct OrderLineView: View {
                 }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(line.name)
+                Text(line.displayName)
                     .font(.system(size: 14, weight: .medium))
-                    .lineLimit(1)
+                    .lineLimit(2)
                 
                 if !line.options.isEmpty {
                     Text(line.options.joined(separator: ", "))

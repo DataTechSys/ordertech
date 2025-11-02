@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 #if canImport(LiveKit)
 import LiveKit
 #endif
@@ -53,6 +54,7 @@ struct LKRemoteVideoView: UIViewRepresentable {
     @EnvironmentObject var store: DisplaySessionStore
     var cornerRadius: CGFloat = 0
     var masksToBounds: Bool = false
+    
     func makeUIView(context: Context) -> UIView {
         let currentLiveKit = store.currentLiveKit
         print("[LKRemoteVideoView] makeUIView called, currentLiveKit: \(currentLiveKit != nil ? "not nil" : "nil")")
@@ -81,10 +83,31 @@ struct LKRemoteVideoView: UIViewRepresentable {
             host.videoView.layer.masksToBounds = masksToBounds
             print("[LKRemoteVideoView] updateUIView called with currentLiveKit: \(currentLiveKit != nil ? "available" : "nil")")
             if let lk = currentLiveKit {
-                print("[LKRemoteVideoView] LiveKit instance available in updateUIView: \(lk)")
+                print("[LKRemoteVideoView] LiveKit instance available in updateUIView: \(lk), hasRemoteVideo: \(lk.hasRemoteVideo)")
             }
             print("[LKRemoteVideoView] About to call configure in updateUIView")
             host.configure(with: currentLiveKit)
+            
+            // Only do aggressive retry if we have remote video available but view is empty
+            if let lk = currentLiveKit, lk.hasRemoteVideo, host.videoView.track == nil {
+                print("[LKRemoteVideoView] Remote video available but view empty - scheduling retry attempts")
+                // Schedule multiple retry attempts to catch the video track as soon as it's available
+                for delay in [0.0, 0.1, 0.3, 0.6] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        // Only proceed if still no track attached
+                        if host.videoView.track == nil {
+                            lk.setRemoteVideoView(host.videoView)
+                            // Force layout updates
+                            host.videoView.setNeedsLayout()
+                            host.videoView.layoutIfNeeded()
+                            // Post notification for additional UI refreshes
+                            if delay == 0.3 {
+                                NotificationCenter.default.post(name: .displayVideoRefresh, object: nil)
+                            }
+                        }
+                    }
+                }
+            }
             print("[LKRemoteVideoView] updateUIView completed")
         } else {
             print("[LKRemoteVideoView] updateUIView: could not cast to LKDisplayHostView")

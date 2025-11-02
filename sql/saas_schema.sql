@@ -60,6 +60,7 @@ CREATE TABLE devices (
     tenant_id UUID REFERENCES tenants(tenant_id),
     branch_id UUID REFERENCES branches(branch_id),
     device_name VARCHAR(100),
+    device_type VARCHAR(20),
     uuid TEXT UNIQUE,
     activation_token VARCHAR(100),
     status VARCHAR(20),

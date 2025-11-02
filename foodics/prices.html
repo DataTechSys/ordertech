@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }
+        nav { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .logo img { height: 40px; }
+        .nav-links { display: flex; gap: 2rem; align-items: center; list-style: none; }
+        .nav-links a { text-decoration: none; color: #333; font-weight: 500; transition: color 0.3s; }
+        .nav-links a:hover { color: #3b82f6; }
+        .currency-dropdown { position: relative; }
+        .currency-dropdown select { padding: 0.5rem 2rem 0.5rem 1rem; border: 2px solid #e5e7eb; border-radius: 6px; font-weight: 600; cursor: pointer; background: white; appearance: none; background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3e%3cpolyline points="6 9 12 15 18 9"%3e%3c/polyline%3e%3c/svg%3e'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1em; }
+        .currency-dropdown select:hover { border-color: #3b82f6; }
+        .btn { padding: 0.6rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.3s; cursor: pointer; border: none; display: inline-block; }
+        .btn-primary { background: #2c7a7b; color: white; }
+        .btn-primary:hover { background: #285e61; }
+        .btn-outline { background: transparent; color: #2c7a7b; border: 2px solid #2c7a7b; }
+        .btn-secondary { background: #319795; color: white; }
+        .hero { background: linear-gradient(135deg, #319795 0%, #2c7a7b 100%); color: white; padding: 4rem 5%; text-align: center; }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+        .hero p { font-size: 1.2rem; }
+        section { padding: 4rem 5%; max-width: 1200px; margin: 0 auto; }
+        .section-title { text-align: center; font-size: 2rem; margin-bottom: 1rem; color: #1f2937; }
+        .section-subtitle { text-align: center; color: #6b7280; margin-bottom: 3rem; }
+        .product-section { margin-bottom: 4rem; }
+        .product-header { background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; }
+        .product-header h2 { font-size: 1.8rem; margin-bottom: 0.5rem; color: #1f2937; }
+        .product-header p { color: #6b7280; }
+        .pricing-table { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .pricing-table table { width: 100%; border-collapse: collapse; }
+        .pricing-table th { background: #1f2937; color: white; padding: 1rem; text-align: left; font-weight: 600; }
+        .pricing-table td { padding: 1rem; border-bottom: 1px solid #e5e7eb; }
+        .pricing-table tr:last-child td { border-bottom: none; }
+        .pricing-table tr:hover { background: #f9fafb; }
+        .price { font-size: 1.5rem; font-weight: bold; color: #2c7a7b; }
+        .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-left: 0.5rem; }
+        .badge-popular { background: #dbeafe; color: #1e40af; }
+        .badge-best { background: #d1fae5; color: #065f46; }
+        .bundle-card { background: linear-gradient(135deg, #319795 0%, #2c7a7b 100%); color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0; }
+        .bundle-card h3 { font-size: 1.8rem; margin-bottom: 1rem; }
+        .bundle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin: 2rem 0; }
+        .bundle-item { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .bundle-item h4 { color: #1f2937; margin-bottom: 0.5rem; }
+        .bundle-item .discount { color: #319795; font-size: 1.5rem; font-weight: bold; }
+        .calculator { background: #f9fafb; padding: 2rem; border-radius: 12px; margin: 2rem 0; }
+        .calculator h3 { margin-bottom: 1.5rem; color: #1f2937; }
+        .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+        .calc-input { display: flex; flex-direction: column; gap: 0.5rem; }
+        .calc-input label { font-weight: 600; color: #374151; }
+        .calc-input input, .calc-input select { padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 1rem; }
+        .calc-result { background: white; padding: 1.5rem; border-radius: 8px; text-align: center; margin-top: 1.5rem; }
+        .calc-result .total { font-size: 2.5rem; font-weight: bold; color: #2c7a7b; }
+        .calc-result .savings { color: #319795; font-weight: 600; margin-top: 0.5rem; }
+        .example-box { background: #e6fffa; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+        footer { background: #1f2937; color: white; padding: 2rem 5%; text-align: center; }
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2rem; }
+            .pricing-table { overflow-x: auto; }
+            .currency-selector { gap: 0.5rem; }
+            .currency-btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech"></a>
+        <ul class="nav-links">
+            <li><a href="/foodics/">Home</a></li>
+            <li><a href="/foodics/products.html">Products</a></li>
+            <li><a href="/foodics/prices.html">Prices</a></li>
+            <li class="currency-dropdown">
+                <select id="currencySelect" onchange="changeCurrency(this.value)">
+                    <option value="USD">USD $</option>
+                    <option value="SAR">SAR ر.س</option>
+                    <option value="AED">AED د.إ</option>
+                    <option value="KWD">KWD د.ك</option>
+                    <option value="QAR">QAR ر.ق</option>
+                    <option value="EUR">EUR €</option>
+                </select>
+            </li>
+            <li><a href="/foodics/login.html" class="btn btn-outline">Login</a></li>
+            <li><a href="/foodics/register.html" class="btn btn-secondary">14 Days Trial</a></li>
+        </ul>
+    </nav>
+
+    <section class="hero">
+        <h1>Transparent Pricing</h1>
+        <p>Choose the services you need. Pay only for what you use.</p>
+    </section>
+
+    <section>
+        <!-- DriveThru POS System -->
+        <div class="product-section">
+            <div class="product-header">
+                <h2>🚗 DriveThru POS System</h2>
+                <p>Complete POS solution • Pricing per device</p>
+            </div>
+            <div class="pricing-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Features</th>
+                            <th>Monthly</th>
+                            <th>Yearly</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Basic</strong></td>
+                            <td>
+                                • DriveThru Dashboard access<br>
+                                • Foodics API integration<br>
+                                • Menu sync & management<br>
+                                • Order processing<br>
+                                • Email support
+                            </td>
+                            <td><span class="price" data-usd="49">$49</span>/device/month</td>
+                            <td><span class="price" data-usd="470">$470</span>/device/year<br><span style="color: #10b981; font-size: 0.9rem;">Save 20%</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Pro</strong><span class="badge badge-best">Coming Soon</span></td>
+                            <td>
+                                • All Basic features<br>
+                                • Accept orders remotely<br>
+                                • Remote video monitoring<br>
+                                • Real-time menu control<br>
+                                • Advanced analytics<br>
+                                • Priority support
+                            </td>
+                            <td colspan="2" style="text-align: center; color: #6b7280;">Pricing TBA</td>
+                        </tr>
+                        <tr>
+                            <td><strong>AI Voice</strong><span class="badge badge-best">Coming Soon</span></td>
+                            <td>
+                                • All Pro features<br>
+                                • AI voice ordering<br>
+                                • Multi-language support<br>
+                                • Voice analytics<br>
+                                • Premium support
+                            </td>
+                            <td colspan="2" style="text-align: center; color: #6b7280;">Pricing TBA</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="example-box">
+                <strong>Example:</strong> 3 devices with Basic plan (yearly) = 3 × <span data-usd="470">$470</span> = <span class="price" data-usd="1410">$1,410</span>/year
+            </div>
+        </div>
+
+        <!-- Digital Signage -->
+        <div class="product-section">
+            <div class="product-header">
+                <h2>📺 Digital Signage</h2>
+                <p>Pricing per screen with volume discounts</p>
+            </div>
+            <div class="pricing-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tier</th>
+                            <th>Number of Screens</th>
+                            <th>Monthly Price</th>
+                            <th>Per Screen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Starter</strong></td>
+                            <td>1-3 screens</td>
+                            <td><span class="price" data-usd="79">$79</span></td>
+                            <td>~<span data-usd="26">$26</span>/screen</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Growth</strong><span class="badge badge-popular">Popular</span></td>
+                            <td>4-10 screens</td>
+                            <td><span class="price" data-usd="199">$199</span></td>
+                            <td>~<span data-usd="20">$20</span>/screen</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Professional</strong></td>
+                            <td>11-25 screens</td>
+                            <td><span class="price" data-usd="399">$399</span></td>
+                            <td>~<span data-usd="16">$16</span>/screen</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Enterprise</strong></td>
+                            <td>26+ screens</td>
+                            <td><span class="price" data-usd="699">$699</span></td>
+                            <td>~<span data-usd="13">$13</span>/screen</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Bundle Discounts -->
+        <div class="bundle-card">
+            <h3>💰 Special Offers</h3>
+            <p style="margin-bottom: 2rem;">Save more with our special discounts</p>
+            <div class="bundle-grid">
+                <div class="bundle-item">
+                    <h4>Bundle Both Products</h4>
+                    <div class="discount">15% OFF</div>
+                    <p style="color: #6b7280; margin-top: 0.5rem;">DriveThru + Digital Signage</p>
+                </div>
+                <div class="bundle-item">
+                    <h4>Annual Payment</h4>
+                    <div class="discount">20% OFF</div>
+                    <p style="color: #6b7280; margin-top: 0.5rem;">2.4 months free</p>
+                </div>
+                <div class="bundle-item">
+                    <h4>Multi-Location</h4>
+                    <div class="discount">Custom</div>
+                    <p style="color: #6b7280; margin-top: 0.5rem;">Contact us for volume pricing</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing Calculator -->
+        <div class="calculator">
+            <h3>💡 Calculate Your Monthly Cost</h3>
+            <div class="calc-grid">
+                <div class="calc-input">
+                    <label for="driveThruLocations">DriveThru Locations</label>
+                    <input type="number" id="driveThruLocations" min="0" value="0" onchange="calculateTotal()">
+                </div>
+                <div class="calc-input">
+                    <label for="driveThruLanes">Lanes per Location</label>
+                    <input type="number" id="driveThruLanes" min="0" value="1" onchange="calculateTotal()">
+                </div>
+                <div class="calc-input">
+                    <label for="aiVoice">AI Voice Add-on</label>
+                    <select id="aiVoice" onchange="calculateTotal()">
+                        <option value="0">No</option>
+                        <option value="1">Yes</option>
+                    </select>
+                </div>
+                <div class="calc-input">
+                    <label for="signageTier">Digital Signage</label>
+                    <select id="signageTier" onchange="calculateTotal()">
+                        <option value="0">Not needed</option>
+                        <option value="79">1-3 screens</option>
+                        <option value="199">4-10 screens</option>
+                        <option value="399">11-25 screens</option>
+                        <option value="699">26+ screens</option>
+                    </select>
+                </div>
+            </div>
+            <div class="calc-result">
+                <div style="color: #6b7280; margin-bottom: 0.5rem;">Estimated Monthly Cost</div>
+                <div class="total" id="totalPrice">$0</div>
+                <div class="savings" id="savings"></div>
+                <div style="margin-top: 1rem;">
+                    <a href="/foodics/register.html" class="btn btn-primary">Start 14-Day Free Trial</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Services -->
+        <h2 class="section-title" style="margin-top: 4rem;">Additional Services</h2>
+        <div class="pricing-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Price</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Setup & Onboarding</strong></td>
+                        <td><span class="price" data-usd="299">$299</span> one-time</td>
+                        <td>White-glove service (optional)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Premium Support</strong></td>
+                        <td><span class="price" data-usd="49">$49</span>/month</td>
+                        <td>24/7 phone support</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Custom Integration</strong></td>
+                        <td><span class="price" data-usd="999">$999</span>+</td>
+                        <td>Custom API development</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Training Session</strong></td>
+                        <td><span class="price" data-usd="199">$199</span> per session</td>
+                        <td>Staff training & onboarding</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2025 DataTech. All rights reserved.</p>
+    </footer>
+
+    <script>
+        const exchangeRates = {
+            USD: 1,
+            SAR: 3.75,
+            AED: 3.67,
+            KWD: 0.31,
+            QAR: 3.64,
+            EUR: 0.92
+        };
+        
+        let currentCurrency = 'USD';
+        
+        function changeCurrency(currency) {
+            currentCurrency = currency;
+            
+            // Update all prices
+            document.querySelectorAll('[data-usd]').forEach(el => {
+                const usdPrice = parseFloat(el.getAttribute('data-usd'));
+                const convertedPrice = Math.round(usdPrice * exchangeRates[currency]);
+                const symbol = getCurrencySymbol(currency);
+                el.textContent = `${symbol}${convertedPrice.toLocaleString()}`;
+            });
+            
+            calculateTotal();
+        }
+        
+        function getCurrencySymbol(currency) {
+            const symbols = {
+                USD: '$',
+                SAR: 'ر.س ',
+                AED: 'د.إ ',
+                KWD: 'د.ك ',
+                QAR: 'ر.ق ',
+                EUR: '€'
+            };
+            return symbols[currency] || '$';
+        }
+        
+        function calculateTotal() {
+            const locations = parseInt(document.getElementById('driveThruLocations').value) || 0;
+            const lanes = parseInt(document.getElementById('driveThruLanes').value) || 0;
+            const aiVoice = parseInt(document.getElementById('aiVoice').value) || 0;
+            const signage = parseFloat(document.getElementById('signageTier').value) || 0;
+            
+            // Calculate DriveThru cost
+            const driveThru = locations > 0 ? (locations * 99) + (locations * lanes * 49) + (aiVoice * locations * lanes * 29) : 0;
+            
+            // Total before discount
+            let total = driveThru + signage;
+            
+            // Apply bundle discount
+            let discount = 0;
+            const productsSelected = (driveThru > 0 ? 1 : 0) + (signage > 0 ? 1 : 0);
+            if (productsSelected === 2) {
+                discount = 0.15; // 15% off for both products
+            }
+            
+            const savings = total * discount;
+            total = total * (1 - discount);
+            
+            // Convert to selected currency
+            const convertedTotal = Math.round(total * exchangeRates[currentCurrency]);
+            const convertedSavings = Math.round(savings * exchangeRates[currentCurrency]);
+            const symbol = getCurrencySymbol(currentCurrency);
+            
+            document.getElementById('totalPrice').textContent = `${symbol}${convertedTotal.toLocaleString()}`;
+            
+            if (discount > 0) {
+                document.getElementById('savings').textContent = `🎉 You save ${symbol}${convertedSavings.toLocaleString()}/month with ${discount * 100}% bundle discount!`;
+            } else if (productsSelected === 1 && (driveThru > 0 || signage > 0)) {
+                document.getElementById('savings').textContent = '💡 Add the other product to save 15%!';
+            } else {
+                document.getElementById('savings').textContent = '';
+            }
+        }
+        
+        // Initialize
+        calculateTotal();
+    </script>
+</body>
+</html>

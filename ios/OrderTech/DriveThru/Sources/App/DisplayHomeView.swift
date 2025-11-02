@@ -754,6 +754,23 @@ private struct LinkStatusOverlay: View {
     }
 }
 
+// MARK: - FlashingDot for syncing indicator
+private struct FlashingDot: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        Circle()
+            .fill(Color.blue)
+            .frame(width: 6, height: 6)
+            .opacity(isAnimating ? 0.3 : 1.0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+    }
+}
+
 // MARK: - Bill item appearance configuration
 private struct BillItemAppearance {
     var qtyNameMultiplier: CGFloat = 1.0
@@ -784,11 +801,7 @@ private struct BillBoxView: View {
                 HStack {
                     Spacer()
                     HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 6, height: 6)
-                            .opacity(catalog.isLoading ? 1 : 0)
-                            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: catalog.isLoading)
+                        FlashingDot()
                         Text("Syncing...")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.blue)
@@ -800,6 +813,7 @@ private struct BillBoxView: View {
                 }
                 .padding(.top, 6)
                 .padding(.trailing, 8)
+                .transition(.opacity)
             }
             
             if isExternalContext {
