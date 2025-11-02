@@ -1496,15 +1496,17 @@ struct ProductDetailPopup: View {
         return sum
     }
     
-    // Check if a modifier option is quantifiable (can have quantity > 1)
-    private func isQuantifiableModifier(_ optionName: String) -> Bool {
-        let name = optionName.lowercased()
-        // Remove any pipes and extra spaces for better detection
-        let cleanName = name.replacingOccurrences(of: "|", with: " ").replacingOccurrences(of: "  ", with: " ")
-        let isQuantifiable = cleanName.contains("shot") || cleanName.contains("espresso") || 
-                            cleanName.contains("matcha") || cleanName.contains("extra")
+    // Check if a modifier group allows quantity selection (based on Foodics max_select)
+    private func isQuantifiableGroup(_ group: DisplayModifierGroup) -> Bool {
+        // A group is quantifiable if max_select allows selecting more than 1
+        // AND it has only 1 option (e.g., Espresso Shot group with 1 option)
+        let maxSelect = group.group.max_select ?? 1
+        let hasOneOption = group.options.count == 1
+        let isQuantifiable = maxSelect > 1 && hasOneOption
         #if DEBUG
-        print("[ProductDetailPopup] Checking modifier: '\(optionName)' (cleaned: '\(cleanName)') -> quantifiable: \(isQuantifiable)")
+        if isQuantifiable {
+            print("[ProductDetailPopup] Quantifiable group: '\(group.group.name)' (max_select: \(maxSelect), options: \(group.options.count))")
+        }
         #endif
         return isQuantifiable
     }
@@ -1750,7 +1752,7 @@ struct ProductDetailPopup: View {
     @ViewBuilder
     private func optionRow(_ opt: DisplayModifierGroup.Option, group: DisplayModifierGroup, isSingle: Bool, useTwoCols: Bool) -> some View {
         let isOn = selection[group.group.id, default: []].contains(opt.id)
-        let isQuantifiable = isQuantifiableModifier(opt.name)
+        let isQuantifiable = isQuantifiableGroup(group)
         // Quantifiable modifiers start at 0, regular modifiers at 1
         let qty = optionQuantities[opt.id] ?? (isQuantifiable ? 0 : 1)
         
