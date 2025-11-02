@@ -6,18 +6,6 @@ import AVKit
 import OrderTechCore
 import Foundation
 
-// MARK: - Build Environment Detection
-enum BuildEnv {
-    /// Returns true if running on iOS Simulator, false on physical device
-    static var isSimulator: Bool {
-        #if targetEnvironment(simulator)
-        return true
-        #else
-        return false
-        #endif
-    }
-}
-
 // MARK: - Responsive Padding Helper (Inline for DisplayHomeView)
 struct ResponsivePaddingModifier: ViewModifier {
     @EnvironmentObject private var orientation: OrientationModel
@@ -70,7 +58,7 @@ struct DisplayHomeView: View {
     // Idle detection
     @State private var lastInteractionTime: Date = Date()
     @State private var idleTimer: Timer?
-    @AppStorage("OT.display.idlePosterEnabled") private var idlePosterEnabled: Bool = true
+    @AppStorage("OT.display.idlePosterEnabled") private var idlePosterEnabled: Bool = false
     @AppStorage("OT.display.idleTimeout") private var idleTimeout: Double = 15.0
     @AppStorage("OT.display.posterFlipInterval") private var posterFlipInterval: Double = 15.0
 
@@ -153,8 +141,12 @@ struct DisplayHomeView: View {
                         .frame(width: 64, height: 64)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
-                            print("[DisplayHomeView] Bottom-left double-tap detected - showing poster overlay")
-                            store.showIdlePoster = true
+                            if idlePosterEnabled {
+                                print("[DisplayHomeView] Bottom-left double-tap detected - showing poster overlay")
+                                store.showIdlePoster = true
+                            } else {
+                                print("[DisplayHomeView] Bottom-left double-tap detected - poster is disabled in settings")
+                            }
                         }
                     Spacer()
                 }
@@ -179,7 +171,14 @@ struct DisplayHomeView: View {
                 lines: localMode.isLocalMode ? localMode.localBasketLines : store.basketLines,
                 totals: localMode.isLocalMode ? localMode.localBasketTotals : store.basketTotals,
                 textScale: isPad ? (orientation.isLandscape ? 0.9 : 1.0) : (orientation.isLandscape ? 0.55 : 0.6),
-                onTapTotal: { showBasketSheet = true },
+                onTapTotal: {
+                    // Go directly to checkout, skip basket sheet
+                    if localMode.isLocalMode {
+                        localMode.startCheckout()
+                    } else {
+                        localMode.startRemoteCheckout(from: store)
+                    }
+                },
                 onTapLine: { line in
                     // Map basket line id back to a catalog product and mirror to peers
                     let candidates = alternateIds(from: line.id)
@@ -217,110 +216,16 @@ struct DisplayHomeView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            mainContent(geo: geo)
-                .simultaneousGesture(
-                    TapGesture()
-                        .onEnded { _ in
-                            resetIdleTimer()
-                        }
-                )
-        }
-        .onAppear {
-            startIdleTimer()
-        }
-        .onDisappear {
-            stopIdleTimer()
-        }
-        .task {
-            await loadBrand() 
-            await catalog.loadAll(env: env)
-            
-            // Set up LocalModeManager and DisplaySessionStore integration first
-            localMode.configure(with: env, displaySessionStore: store)
-            
-            // Check initial state and activate local mode if needed
-            localMode.checkInitialState(connected: store.connected, peersConnected: store.peersConnected)
-        }
-        .onReceive(store.$connected.combineLatest(store.$peersConnected)) { connected, peersConnected in
-            localMode.updateConnectionStatus(connected: connected, peersConnected: peersConnected)
-            
-            // Auto-dismiss poster overlay when a remote session starts
-            if peersConnected && store.showIdlePoster {
-                print("[DisplayHomeView] Remote session started - dismissing poster overlay")
-                store.showIdlePoster = false
-            }
-            
-            // Clear local UI state when switching to remote mode
-            if peersConnected && localMode.isLocalMode {
-                print("[DisplayHomeView] Remote session started - clearing local UI state")
-                selectedProduct = nil
-            }
-            
-            // Clear remote UI state when returning to local mode
-            if !peersConnected && !localMode.isLocalMode {
-                print("[DisplayHomeView] Connection lost - will clear remote UI state when local mode activates")
-            }
-        }
-        .onReceive(store.$poster.removeDuplicates { $0?.imageURL == $1?.imageURL && $0?.title == $1?.title }) { poster in
-            // Control poster overlay based on WebSocket events from remote display
-            // Only show if poster is enabled in settings
-            if let _ = poster {
-                if idlePosterEnabled {
-                    print("[DisplayHomeView] Received poster:start from remote - showing poster overlay")
-                    store.showIdlePoster = true
-                    // Reset idle timer when remote poster is shown
-                    resetIdleTimer()
-                } else {
-                    print("[DisplayHomeView] Received poster:start from remote - ignored (poster disabled in settings)")
-                }
-            } else {
-                print("[DisplayHomeView] Received poster:stop from remote - hiding poster overlay and preventing auto-show")
-                store.showIdlePoster = false
-                // Reset idle timer to prevent immediate re-showing
-                resetIdleTimer()
-            }
-        }
-.onReceive(store.$selectedProductId
-            .removeDuplicates()
-            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
-        ) { pid in
-            // Skip only remote-controlled changes while in local mode; allow local mirroring to external display
-            if localMode.isLocalMode && store.peersConnected {
-                print("[DisplayHomeView] Ignoring remote selectedProductId update in local mode: \(pid ?? "nil")")
-                return
-            }
-            
-            // Apply selection coming from our own device (mirroring) or from remote when allowed
-            if let id = pid, !id.isEmpty {
-                if let product = catalog.products.first(where: { $0.id == id }) {
-                    selectedProduct = product
-                }
-            } else {
-                // Clear popup when selectedProductId is set to nil (product options close)
-                selectedProduct = nil
-            }
-        }
-        .onChange(of: catalog.products.map { $0.id }) { _ in
-            // If a product id was requested before data loaded, try fulfilling now
-            if let id = store.selectedProductId, let product = catalog.products.first(where: { $0.id == id }) {
-                selectedProduct = product
-            }
-        }
-        .onReceive(localMode.$isLocalMode) { isLocalMode in
-            // Only clear remote UI state when transitioning FROM remote TO local mode
-            if isLocalMode && !wasInLocalMode {
-                print("[DisplayHomeView] Transitioning to local mode - clearing remote UI state")
-                selectedProduct = nil
-                // The DisplaySessionStore will handle clearing its own remote state via resetToLocalControl
-            }
-            wasInLocalMode = isLocalMode
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .displayResetIdleTimer)) { _ in
-            // Reset idle timer on WebSocket activity to prevent poster from showing during active sessions
-            resetIdleTimer()
-        }
-        .environmentObject(localMode)
+        contentWithGestures
+    }
+    
+    private var contentWithGestures: some View {
+        baseContent
+            .task(priority: .userInitiated, taskActions)
+    }
+    
+    private var baseContent: some View {
+        contentWithReceivers
         .overlay {
             // Checkout overlay - shared across all displays
             if store.showCheckoutOverlay || localMode.showCheckoutOverlay {
@@ -428,12 +333,6 @@ struct DisplayHomeView: View {
         } message: {
             Text("This will disconnect from the cashier and switch to local mode.")
         }
-.sheet(isPresented: $showDisplayPicker) {
-            DisplayPickerView()
-                .environmentObject(env)
-                .environmentObject(store)
-                .presentationDetents([.medium, .large])
-        }
         .sheet(isPresented: $showBasketSheet) {
             basketSheetContent
         }
@@ -536,6 +435,13 @@ struct DisplayHomeView: View {
     
     private func startIdleTimer() {
         stopIdleTimer()
+        
+        // Don't start timer if poster is disabled in settings
+        guard idlePosterEnabled else {
+            print("[DisplayHomeView] Idle poster disabled - not starting timer")
+            return
+        }
+        
         lastInteractionTime = Date()
         
         idleTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [self] _ in
@@ -544,10 +450,9 @@ struct DisplayHomeView: View {
             // Get RTC orchestrator state to check if we're in an active video session
             let hasActiveRTC = (store.rtcOrchestrator?.providerState == .connected)
             
-            // Only show poster if enabled, in local mode, not connected to cashier, and no active RTC session
+            // Only show poster if in local mode, not connected to cashier, and no active RTC session
             // Also respect remote poster control - don't show if a remote poster:stop was received
-            let shouldShowPoster = idlePosterEnabled 
-                && elapsed >= idleTimeout 
+            let shouldShowPoster = elapsed >= idleTimeout 
                 && !store.showIdlePoster 
                 && localMode.isLocalMode 
                 && !store.peersConnected
@@ -571,6 +476,121 @@ struct DisplayHomeView: View {
     
     private func resetIdleTimer() {
         lastInteractionTime = Date()
+    }
+    
+    // MARK: - Helper Methods
+    private var tapGesture: some Gesture {
+        TapGesture()
+            .onEnded { _ in
+                resetIdleTimer()
+            }
+    }
+    
+    private func onAppearActions() {
+        startIdleTimer()
+    }
+    
+    private func onDisappearActions() {
+        stopIdleTimer()
+    }
+    
+    private var contentWithReceivers: some View {
+        contentWithLifecycle
+            .onReceive(store.$connected.combineLatest(store.$peersConnected), perform: handleConnectionChange)
+            .onReceive(store.$poster, perform: handlePosterChange)
+            .onReceive(store.$selectedProductId.removeDuplicates().debounce(for: .milliseconds(100), scheduler: RunLoop.main), perform: handleProductIdChange)
+            .onChange(of: catalog.products.map { $0.id }, perform: handleCatalogChange)
+            .onReceive(localMode.$isLocalMode, perform: handleLocalModeChange)
+            .onChange(of: idlePosterEnabled, perform: handlePosterSettingChange)
+            .environmentObject(localMode)
+    }
+    
+    private var contentWithLifecycle: some View {
+        geometryContent
+            .onAppear(perform: onAppearActions)
+            .onDisappear(perform: onDisappearActions)
+    }
+    
+    private var geometryContent: some View {
+        GeometryReader { geo in
+            mainContent(geo: geo)
+                .simultaneousGesture(tapGesture)
+        }
+    }
+    
+    @Sendable
+    private func taskActions() async {
+        await loadBrand()
+        await catalog.loadAll(env: env)
+        
+        // Set up LocalModeManager and DisplaySessionStore integration first
+        await MainActor.run {
+            localMode.configure(with: env, displaySessionStore: store)
+            // Check initial state and activate local mode if needed
+            localMode.checkInitialState(connected: store.connected, peersConnected: store.peersConnected)
+        }
+    }
+    
+    // MARK: - Event Handlers
+    private func handleConnectionChange(_ values: (Bool, Bool)) {
+        let (connected, peersConnected) = values
+        localMode.updateConnectionStatus(connected: connected, peersConnected: peersConnected)
+        
+        // Auto-dismiss poster overlay when a remote session starts
+        if peersConnected && store.showIdlePoster {
+            store.showIdlePoster = false
+        }
+        
+        // Clear local UI state when switching to remote mode
+        if peersConnected && localMode.isLocalMode {
+            selectedProduct = nil
+        }
+    }
+    
+    private func handlePosterChange(_ poster: PosterState?) {
+        if let _ = poster {
+            if idlePosterEnabled {
+                store.showIdlePoster = true
+                resetIdleTimer()
+            }
+        } else {
+            store.showIdlePoster = false
+            resetIdleTimer()
+        }
+    }
+    
+    private func handleProductIdChange(_ pid: String?) {
+        if localMode.isLocalMode && store.peersConnected { return }
+        
+        if let id = pid, !id.isEmpty {
+            if let product = catalog.products.first(where: { $0.id == id }) {
+                selectedProduct = product
+            }
+        } else {
+            selectedProduct = nil
+        }
+    }
+    
+    private func handleCatalogChange(_ ids: [String]) {
+        if let id = store.selectedProductId, let product = catalog.products.first(where: { $0.id == id }) {
+            selectedProduct = product
+        }
+    }
+    
+    private func handleLocalModeChange(_ isLocalMode: Bool) {
+        if isLocalMode && !wasInLocalMode {
+            selectedProduct = nil
+        }
+        wasInLocalMode = isLocalMode
+    }
+    
+    private func handlePosterSettingChange(_ enabled: Bool) {
+        if !enabled {
+            stopIdleTimer()
+            store.showIdlePoster = false
+        } else {
+            startIdleTimer()
+        }
     }
 }
 
@@ -634,19 +654,6 @@ private struct CameraBoxView: View {
                 }
         }
         .compositingGroup()
-        .onReceive(NotificationCenter.default.publisher(for: .displayKickVideo)) { _ in
-            remoteKey += 1
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .displayVideoRefresh)) { _ in
-            print("[CameraBoxView] Received video refresh notification, updating remoteKey")
-            remoteKey += 1
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .displayLocalCameraReady)) { _ in
-            pipLocalReady = true
-            #if canImport(AVFoundation)
-            preconnectController.stop()
-            #endif
-        }
         .contentShape(Rectangle())
     }
 
@@ -671,25 +678,10 @@ private struct CameraBoxView: View {
     private var linkStatusTitle: String {
         if !store.connected { return "Connecting to server…" }
         if !store.peersConnected { return "Waiting for cashier…" }
-        #if canImport(LiveKit)
-        if let lk = store.currentLiveKit { return lk.linkStatus.text }
-        #endif
         return "Starting video…"
     }
 
     private var linkStatusSubtitle: String? {
-        #if canImport(LiveKit)
-        if let lk = store.currentLiveKit {
-            switch lk.linkStatus {
-            case .tokenRequested: return "Requesting access from server"
-            case .roomConnecting: return "Negotiating media session"
-            case .roomConnected: return "Setting up camera and speakers"
-            case .remotePending: return "Waiting for remote stream"
-            case .error(let m): return m
-            default: return nil
-            }
-        }
-        #endif
         return nil
     }
 
@@ -705,24 +697,6 @@ private struct CameraBoxView: View {
                     }
             } else {
                 // Remote mode: Show LiveKit remote video
-                #if canImport(LiveKit)
-                let currentLiveKit = store.currentLiveKit
-                let hasLiveKit = currentLiveKit != nil
-                let _ = print("[CameraBoxView] Remote mode rendering: hasLiveKit=\(hasLiveKit)")
-                if hasLiveKit {
-                    LKRemoteVideoView(cornerRadius: 12, masksToBounds: true)
-                        .id("remote_\(remoteKey)")
-                        .environmentObject(store)
-                        .aspectRatio(9/16, contentMode: .fit)
-                        .onAppear {
-                            print("[CameraBoxView] Remote mode - LiveKit remote video appeared")
-                        }
-                } else {
-                    fallbackView
-                }
-                #else
-                fallbackView
-                #endif
             }
         }
     }
@@ -742,34 +716,6 @@ private struct CameraBoxView: View {
                     EmptyView()
                 } else {
                     // Remote mode: Show LiveKit local camera in PIP
-                    #if canImport(LiveKit)
-                    if store.currentLiveKit != nil {
-                        ZStack {
-                            #if canImport(AVFoundation)
-                            if !pipLocalReady {
-                                DisplayPreconnectLocalPreview(controller: preconnectController)
-                                    .frame(width: pipW, height: pipH)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-                                    .shadow(radius: 1)
-                                    .position(x: x, y: y)
-                                    .onAppear { preconnectController.start() }
-                                    .onDisappear { preconnectController.stop() }
-                            }
-                            #endif
-                            LKLocalVideoView()
-                                .environmentObject(store)
-                                .frame(width: pipW, height: pipH)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.6), lineWidth: 1))
-                                .shadow(radius: 3)
-                                .position(x: x, y: y)
-                                .onAppear {
-                                    print("[CameraBoxView] Remote mode - Local camera PIP appeared")
-                                }
-                        }
-                    }
-                    #endif
                 }
             }
         }
@@ -787,7 +733,6 @@ private struct CameraBoxView: View {
             } else {
                 EmptyView() // Poster (tenant or default) will be visible behind
             }
-            #else
             EmptyView() // Poster (tenant or default) will be visible behind
             #endif
         }
@@ -1034,18 +979,6 @@ private struct DisplayFullscreenVideoView: View {
 
             // Video content
             Group {
-                #if canImport(LiveKit)
-                if store.currentLiveKit != nil {
-                    LKRemoteVideoView()
-                        .id(fullVideoKey)
-                        .environmentObject(store)
-                        .ignoresSafeArea()
-                } else {
-                    fallbackFullView
-                }
-                #else
-                fallbackFullView
-                #endif
             }
 
             Button(action: { isPresented = false }) {
@@ -1068,7 +1001,6 @@ private struct DisplayFullscreenVideoView: View {
         } else {
             EmptyView() // Poster backdrop visible
         }
-        #else
         EmptyView() // Poster backdrop visible
         #endif
     }
@@ -1081,18 +1013,14 @@ private struct CategoriesBoxView: View {
     @EnvironmentObject var catalog: CatalogStore
     @EnvironmentObject var localMode: LocalModeManager
     @EnvironmentObject var orientation: OrientationModel
+    @Environment(\.isExternalContext) private var isExternalContext
     @State private var selectedCategory: String? = nil
     @State private var pageIndex: Int = 1
     
     @Binding var selectedProduct: Product?
     let preview: PreviewState?
     let poster: PosterState?
-
-    // Removed debug controls in production build
-
-    @State private var topVisibleProductId: String? = nil
-    @State private var suppressScrollBroadcast: Bool = false
-    @State private var topDebounceWorkItem: DispatchWorkItem? = nil
+    
     var body: some View {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         
@@ -1117,12 +1045,7 @@ private struct CategoriesBoxView: View {
             }
             .zIndex(0)
         }
-        .onReceive(store.$selectedCategoryName.removeDuplicates()) { name in
-            // When category changes from Cashier, reset any scroll echo suppression automatically
-            suppressScrollBroadcast = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { suppressScrollBroadcast = false }
-        }
-.padding(.horizontal, 10)
+        .padding(.horizontal, 10)
         .padding(.vertical, DT.space2)
         .background(DT.surface)
         .clipShape(AsymmetricRoundedRect(topLeft: DT.radius, topRight: DT.radius, bottomLeft: 0, bottomRight: 0))
@@ -1187,21 +1110,25 @@ private struct CategoriesBoxView: View {
         VStack(spacing: 8) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(catalog.categoriesWithProducts) { c in
-                            let isSel = (c.name == (selectedCategory ?? c.name))
-                            Button(action: { Task { await select(category: c.name) } }) {
-                                Text(c.name)
-                                    .font(.system(size: 15, weight: isSel ? .semibold : .regular))
-                                    .foregroundColor(isSel ? DT.acc : DT.ink)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(isSel ? DT.acc.opacity(0.12) : DT.surface)
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSel ? DT.acc : DT.line, lineWidth: 1))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    let categories = catalog.categoriesWithProducts
+                    let halfCount = (categories.count + 1) / 2
+                    let row1 = Array(categories.prefix(halfCount))
+                    let row2 = Array(categories.dropFirst(halfCount))
+                    
+                    VStack(spacing: 6) {
+                        // First row
+                        HStack(spacing: 6) {
+                            ForEach(row1) { c in
+                                categoryButton(c)
                             }
-                            .buttonStyle(.plain)
-                            .id(c.id)
+                        }
+                        // Second row
+                        if !row2.isEmpty {
+                            HStack(spacing: 6) {
+                                ForEach(row2) { c in
+                                    categoryButton(c)
+                                }
+                            }
                         }
                     }
                 }
@@ -1221,6 +1148,31 @@ private struct CategoriesBoxView: View {
             Divider()
         }
         .background(DT.surface.opacity(0.98))
+    }
+    
+    @ViewBuilder
+    private func categoryButton(_ c: Category) -> some View {
+        let isSel = (c.name == (selectedCategory ?? c.name))
+        let arabicName = c.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        Button(action: { Task { await select(category: c.name) } }) {
+            VStack(spacing: 2) {
+                if !arabicName.isEmpty {
+                    Text(arabicName)
+                        .font(.system(size: 14, weight: isSel ? .semibold : .medium))
+                        .foregroundColor(isSel ? DT.acc : DT.ink)
+                }
+                Text(c.name)
+                    .font(.system(size: 13, weight: isSel ? .medium : .regular))
+                    .foregroundColor(isSel ? DT.acc.opacity(0.8) : DT.ink.opacity(0.7))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(isSel ? DT.acc.opacity(0.12) : DT.surface)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSel ? DT.acc : DT.line, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .id(c.id)
     }
 
     private var productsPager: some View {
@@ -1267,26 +1219,11 @@ private struct CategoriesBoxView: View {
                                     })
                                         .environmentObject(env)
                                         .id(p.id)
-                                        .background(
-                                            GeometryReader { gp in
-                                                Color.clear.preference(key: VisibleProductKey.self, value: [p.id: gp.frame(in: .named("displayCatalogScroll")).minY])
-                                            }
-                                        )
                                 }
                             }
                             .padding(.top, 6)
+                            .padding(.bottom, 80)
                             .padding(.horizontal, horizontalPadding)
-                        }
-                        .coordinateSpace(name: "displayCatalogScroll")
-.onPreferenceChange(VisibleProductKey.self) { offsets in
-                            let topPair = offsets.min(by: { a, b in a.value < b.value })
-                            if let top = topPair?.key { debounceTopVisible(top) }
-                        }
-.onReceive(store.$scrollToProductId.removeDuplicates()) { pid in
-                            // Skip only when remote peers are connected and we're in local mode; otherwise allow local mirroring
-                            if localMode.isLocalMode && store.peersConnected { return }
-                            guard let pid = pid, list.contains(where: { $0.id == pid }) else { return }
-                            withAnimation { proxy.scrollTo(pid, anchor: .top) }
                         }
                     }
                 } else {
@@ -1321,26 +1258,11 @@ private struct CategoriesBoxView: View {
                                         })
                                             .environmentObject(env)
                                             .id(p.id)
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear.preference(key: VisibleProductKey.self, value: [p.id: gp.frame(in: .named("displayCatalogScroll")).minY])
-                                                }
-                                            )
                                     }
                                 }
                                 .padding(.top, 6)
+                                .padding(.bottom, 80)
                                 .padding(.horizontal, horizontalPadding)
-                            }
-                            .coordinateSpace(name: "displayCatalogScroll")
-.onPreferenceChange(VisibleProductKey.self) { offsets in
-                                let topPair = offsets.min(by: { a, b in a.value < b.value })
-                                if let top = topPair?.key { debounceTopVisible(top) }
-                            }
-.onReceive(store.$scrollToProductId.removeDuplicates()) { pid in
-                                // Skip only when remote peers are connected and we're in local mode; otherwise allow local mirroring
-                                if localMode.isLocalMode && store.peersConnected { return }
-                                guard let pid = pid, list.contains(where: { $0.id == pid }) else { return }
-                                withAnimation { proxy.scrollTo(pid, anchor: .top) }
                             }
                         }
                         .tag(i)
@@ -1406,23 +1328,6 @@ private struct CategoriesBoxView: View {
     }
 
     
-    private func debounceTopVisible(_ top: String) {
-        // Cancel any pending broadcast
-        topDebounceWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak store = self.store, weak localMode = self.localMode] in
-            guard let store = store, let localMode = localMode else { return }
-            if top != self.topVisibleProductId {
-                self.topVisibleProductId = top
-                store.scrollToProductId = top
-                if !localMode.isLocalMode && !self.suppressScrollBroadcast {
-                    store.sendScrollTo(id: top)
-                }
-            }
-        }
-        topDebounceWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
-    }
-    
     private func calculateOptimalGrid(
         availableWidth: CGFloat,
         availableHeight: CGFloat,
@@ -1447,7 +1352,8 @@ private struct CategoriesBoxView: View {
         
         // iPad: Try different column counts and pick the one that best fills the screen for THIS category
         let minCols = isLandscape ? 4 : 3
-        let maxCols = 8 // Increased max to allow more columns
+        // External displays (Drive-Thru screens) limited to 4 columns max for better readability
+        let maxCols = isExternalContext ? 4 : 8
         
         var bestCols = minCols
         var bestFit: CGFloat = 0
@@ -1500,13 +1406,6 @@ private struct CategoriesBoxView: View {
     }
 }
 
-private struct VisibleProductKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue(), uniquingKeysWith: { a, b in min(a, b) })
-    }
-}
-
 // MARK: - Environment flag to detect external display context
 private struct ExternalContextKey: EnvironmentKey { static let defaultValue: Bool = false }
 extension EnvironmentValues {
@@ -1536,6 +1435,7 @@ struct ProductDetailPopup: View {
     @State private var modifierGroups: [DisplayModifierGroup] = []
     @State private var selection: [String: Set<String>] = [:] // group.id -> set(option.id)
     @State private var isLoadingOptions = false
+    @State private var expandedGroups: Set<String> = [] // Track which groups are expanded
     
     var totalPrice: Double {
         let perItem = product.price + selectedOptionsDelta
@@ -1568,228 +1468,304 @@ struct ProductDetailPopup: View {
     }
     
     var body: some View {
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let imageSide = computeImageSide(isPad: isPad)
-        // Use vertical layout on iPhone, horizontal on iPad
-        let useVerticalLayout = !isPad
-        
-        VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("Product Details")
-                        .font(.system(size: isPad ? 24 : 20, weight: .bold))
-                        .foregroundColor(.primary)
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-                .background(Color.white)
-                
-                // Scrollable content
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Main content: conditional vertical/horizontal layout
-                        if useVerticalLayout {
-                            // iPhone: vertical layout (image on top, details below)
-                            VStack(alignment: .leading, spacing: 20) {
-                                // Product image
-                                productImageView(imageSide: imageSide, isPad: isPad)
-                                    .frame(maxWidth: .infinity)
-                                
-                                // Product info, quantity, and actions
-                                productDetailsView(isPad: isPad)
-                            }
-                            .padding(.horizontal, 24)
-                        } else {
-                            // iPad: horizontal layout (image left, details right)
-                            HStack(alignment: .top, spacing: 20) {
-                                // LEFT: Product image
-                                productImageView(imageSide: imageSide, isPad: isPad)
-                                
-                                // RIGHT: Product info, quantity, and actions
-                                productDetailsView(isPad: isPad)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .padding(.horizontal, 32)
-                        }
-                        
-                        // Modifiers section - full width below
-                        if !modifierGroups.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Customizations")
-                                    .font(.system(size: isPad ? 20 : 18, weight: .semibold))
-                                    .foregroundColor(DT.ink)
-                                ForEach(modifierGroups) { g in
-                                    let selectedCount = selection[g.group.id]?.count ?? 0
-                                    let maxSel = g.group.max_select ?? Int.max
-                                    let isSingle = maxSel == 1 || (g.group.required ?? false) && (g.group.max_select ?? 1) == 1
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        // Header row
-                                        HStack(spacing: 8) {
-                                            HStack(spacing: 6) {
-                                                Text(g.group.name)
-                                                    .font(.system(size: isPad ? 17 : 15, weight: .semibold))
-                                                    .foregroundColor(DT.ink)
-                                                if let arabicName = g.group.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                   !arabicName.isEmpty {
-                                                    Text(arabicName)
-                                                        .font(.system(size: isPad ? 15 : 13, weight: .medium))
-                                                        .foregroundColor(DT.ink.opacity(0.7))
-                                                }
-                                            }
-                                            if g.group.required == true {
-                                                Text("Required")
-                                                    .font(.system(size: 11, weight: .semibold))
-                                                    .foregroundColor(DT.acc)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 3)
-                                                    .background(Capsule().fill(DT.acc.opacity(0.12)))
-                                            }
-                                            Spacer()
-                                            if selectedCount > 0 {
-                                                Text("Selected: \(selectedCount)")
-                                                    .font(.system(size: 11))
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            if selectedCount > 0 {
-                                                Button("Clear") {
-                                                    selection[g.group.id] = []
-                                                }
-                                                .font(.system(size: 12, weight: .semibold))
-                                                .foregroundColor(DT.acc)
-                                                .buttonStyle(.plain)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(Capsule().fill(DT.acc.opacity(0.1)))
-                                            }
-                                        }
-                                        
-                                        // Options (professional row style)
-                                        #if os(iOS)
-                                        let isPad = UIDevice.current.userInterfaceIdiom == .pad
-                                        #else
-                                        let isPad = false
-                                        #endif
-                                        let useTwoCols = isExternalContext || isPad
-                                        let optCols: [GridItem] = useTwoCols
-                                            ? [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
-                                            : [GridItem(.flexible(), spacing: 8)]
-                                        LazyVGrid(columns: optCols, spacing: 8) {
-                                            ForEach(g.options) { opt in
-                                                let isOn = selection[g.group.id, default: []].contains(opt.id)
-                                                Button(action: { toggleOption(opt, in: g) }) {
-                                                    HStack(spacing: 10) {
-                                                        Image(systemName: isSingle ? (isOn ? "largecircle.fill.circle" : "circle") : (isOn ? "checkmark.square.fill" : "square"))
-                                                            .font(.system(size: isPad ? 16 : 15, weight: .semibold))
-                                                            .foregroundColor(isOn ? DT.acc : .secondary)
-                                                        VStack(alignment: .leading, spacing: 2) {
-                                                            HStack(spacing: 4) {
-                                                                Text(opt.name)
-                                                                    .font(.system(size: isPad ? 15 : 13, weight: isOn ? .semibold : .regular))
-                                                                    .foregroundColor(DT.ink)
-                                                                if let arabicName = opt.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                   !arabicName.isEmpty {
-                                                                    Text(arabicName)
-                                                                        .font(.system(size: isPad ? 13 : 11, weight: isOn ? .medium : .regular))
-                                                                        .foregroundColor(DT.ink.opacity(0.7))
-                                                                }
-                                                            }
-                                                            .lineLimit(1)
-                                                            .truncationMode(.tail)
-                                                        }
-                                                        Spacer()
-                                                        if let price = opt.price, price != 0 {
-                                                            Text(String(format: "+%.3f KWD", price))
-                                                                .font(.system(size: isPad ? 12 : 10, weight: .semibold))
-                                                                .foregroundColor(DT.acc)
-                                                                .monospacedDigit()
-                                                                .lineLimit(1)
-                                                                .truncationMode(.tail)
-                                                        }
-                                                    }
-                                                    .padding(.horizontal, 12)
-                                                    .padding(.vertical, 10)
-                                                    .background(
-                                                        RoundedRectangle(cornerRadius: 10)
-                                                            .fill(isOn ? DT.acc.opacity(0.08) : Color.gray.opacity(0.06))
-                                                    )
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 10)
-                                                            .stroke(isOn ? DT.acc : Color.gray.opacity(0.25), lineWidth: 1)
-                                                    )
-                                                }
-                                                .buttonStyle(.plain)
-                                                .allowsHitTesting(!isExternalContext)
-                                            }
-                                        }
-                                        
-                                        // Guidance (removed info icon)
-                                        HStack(spacing: 6) {
-                                            if let minSel = minRequired(g) {
-                                                if maxSel == Int.max {
-                                                    Text("Select at least \\(minSel)")
-                                                        .font(.footnote)
-                                                        .foregroundColor(.secondary)
-                                                } else {
-                                                    Text("Select \\(minSel) to \\(maxSel)")
-                                                        .font(.footnote)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                            } else if maxSel != Int.max {
-                                                Text("Select up to \\(maxSel)")
-                                                    .font(.footnote)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            Spacer()
-                                        }
-                                    }
-                                    .padding(12)
-                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.15), lineWidth: 1))
-                                }
-                            }
-                            .padding(.top, 6)
-                            .padding(.horizontal, isPad ? 32 : 24)
-                        }
-                        
-                        Spacer(minLength: 40)
-                    }
-                    // Close the VStack wrapper
-                    .padding(.top, 24)
-                }
-            }
+        mainContentView
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
             .onAppear {
-                // Reset quantity to 1 for each new product
                 quantity = 1
                 store.optionsQty = 1
-                // Fetch modifiers lazily
                 Task { await loadModifiersIfNeeded() }
             }
             .onChange(of: quantity) { q in
-                // Mirror local changes to shared store
                 store.optionsQty = max(1, q)
             }
             .onReceive(store.$optionsQty) { q in
-                // Reflect external changes locally (avoid loops by checking inequality)
                 if q != quantity {
                     quantity = max(1, q)
                 }
             }
             .onChange(of: selection) { newSel in
-                // Mirror modifiers selection
                 store.optionsSelection = newSel
             }
             .onReceive(store.$optionsSelection) { incoming in
                 if !equalSelection(incoming, selection) {
-                    // Adopt external selection
                     selection = incoming
                 }
             }
+            .onChange(of: expandedGroups) { newExpanded in
+                store.optionsExpandedGroups = newExpanded
+            }
+            .onReceive(store.$optionsExpandedGroups) { incoming in
+                if incoming != expandedGroups {
+                    expandedGroups = incoming
+                }
+            }
+    }
+    
+    @ViewBuilder
+    private var mainContentView: some View {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let imageSide = computeImageSide(isPad: isPad)
+        let useVerticalLayout = !isPad
+        
+        VStack(spacing: 0) {
+            headerView(isPad: isPad)
+            
+            ScrollView {
+                VStack(spacing: 20) {
+                    productLayoutView(isPad: isPad, imageSide: imageSide, useVerticalLayout: useVerticalLayout)
+                    
+                    productDescriptionView(isPad: isPad)
+                        .padding(.horizontal, isPad ? 32 : 24)
+                    
+                    if !modifierGroups.isEmpty {
+                        modifiersSection(isPad: isPad)
+                            .padding(.top, 6)
+                            .padding(.horizontal, isPad ? 32 : 24)
+                    }
+                    
+                    Spacer(minLength: 40)
+                }
+                .padding(.top, 24)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func headerView(isPad: Bool) -> some View {
+        HStack {
+            Text("Product Details")
+                .font(.system(size: isPad ? 24 : 20, weight: .bold))
+                .foregroundColor(.primary)
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+        .background(Color.white)
+    }
+    
+    @ViewBuilder
+    private func productLayoutView(isPad: Bool, imageSide: CGFloat, useVerticalLayout: Bool) -> some View {
+        if useVerticalLayout {
+            VStack(alignment: .leading, spacing: 20) {
+                productImageView(imageSide: imageSide, isPad: isPad)
+                    .frame(maxWidth: .infinity)
+                productDetailsView(isPad: isPad)
+            }
+            .padding(.horizontal, 24)
+        } else {
+            HStack(alignment: .top, spacing: 20) {
+                productImageView(imageSide: imageSide, isPad: isPad)
+                productDetailsView(isPad: isPad)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 32)
+        }
+    }
+    
+    @ViewBuilder
+    private func modifiersSection(isPad: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Customizations")
+                .font(.system(size: isPad ? 20 : 18, weight: .semibold))
+                .foregroundColor(DT.ink)
+            ForEach(modifierGroups) { g in
+                modifierGroupCard(g, isPad: isPad)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func modifierGroupCard(_ g: DisplayModifierGroup, isPad: Bool) -> some View {
+        let selectedCount = selection[g.group.id]?.count ?? 0
+        let maxSel = g.group.max_select ?? Int.max
+        let isSingle = maxSel == 1 || (g.group.required ?? false) && (g.group.max_select ?? 1) == 1
+        let isRequired = (g.group.min_select ?? 0) > 0 || g.group.required == true
+        let isExpanded = expandedGroups.contains(g.group.id)
+        
+        VStack(alignment: .leading, spacing: 8) {
+            modifierGroupHeader(g, isPad: isPad, selectedCount: selectedCount, isRequired: isRequired, isExpanded: isExpanded)
+            
+            if isExpanded {
+                modifierGroupOptions(g, isPad: isPad, isSingle: isSingle, maxSel: maxSel)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.15), lineWidth: 1))
+    }
+    
+    @ViewBuilder
+    private func modifierGroupHeader(_ g: DisplayModifierGroup, isPad: Bool, selectedCount: Int, isRequired: Bool, isExpanded: Bool) -> some View {
+        Button(action: { toggleGroup(g.group.id) }) {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: (isPad || isExternalContext) ? 18 : 12, weight: .semibold))
+                    .foregroundColor(isRequired ? .red : DT.ink)
+                
+                groupIcon(g.group.name, isRequired: isRequired, isPad: isPad)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    if let arabicName = g.group.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines), !arabicName.isEmpty {
+                        Text(arabicName)
+                            .font(.system(size: (isPad || isExternalContext) ? 22 : 15, weight: .bold))
+                            .foregroundColor(isRequired ? .red : DT.ink)
+                    }
+                    Text(g.group.name)
+                        .font(.system(size: (isPad || isExternalContext) ? 19 : 13, weight: .medium))
+                        .foregroundColor(isRequired ? .red.opacity(0.8) : DT.ink.opacity(0.7))
+                }
+                if g.group.required == true {
+                    Text("Required")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DT.acc)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(DT.acc.opacity(0.12)))
+                }
+                Spacer()
+                if selectedCount > 0 {
+                    Text("Selected: \(selectedCount)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                if selectedCount > 0 {
+                    Button("Clear") {
+                        selection[g.group.id] = []
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(DT.acc)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(DT.acc.opacity(0.1)))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    @ViewBuilder
+    private func groupIcon(_ groupName: String, isRequired: Bool, isPad: Bool) -> some View {
+        Group {
+            let name = groupName.lowercased()
+            if name.contains("milk") {
+                Image("milk")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: (isPad || isExternalContext) ? 28 : 20, height: (isPad || isExternalContext) ? 28 : 20)
+            } else if name.contains("espresso") || name.contains("shot") {
+                Image("espresso")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: (isPad || isExternalContext) ? 28 : 20, height: (isPad || isExternalContext) ? 28 : 20)
+            } else if name.contains("extra") {
+                Image("extra")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: (isPad || isExternalContext) ? 24 : 18, height: (isPad || isExternalContext) ? 24 : 18)
+            } else {
+                Image(systemName: iconForGroup(groupName))
+                    .font(.system(size: (isPad || isExternalContext) ? 22 : 14, weight: .semibold))
+                    .foregroundColor(isRequired ? .red : DT.acc)
+                    .frame(width: (isPad || isExternalContext) ? 32 : 20)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func modifierGroupOptions(_ g: DisplayModifierGroup, isPad: Bool, isSingle: Bool, maxSel: Int) -> some View {
+        let useTwoCols = isExternalContext || isPad
+        VStack(alignment: .leading, spacing: 12) {
+            optionsGrid(g.options, group: g, isSingle: isSingle, useTwoCols: useTwoCols)
+            optionGuidance(g, maxSel: maxSel)
+        }
+    }
+    
+    @ViewBuilder
+    private func optionsGrid(_ options: [DisplayModifierGroup.Option], group: DisplayModifierGroup, isSingle: Bool, useTwoCols: Bool) -> some View {
+        let columns: [GridItem] = {
+            if useTwoCols {
+                // iPad and External display: 2 columns
+                return Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+            } else {
+                // iPhone: 1 column
+                return [GridItem(.flexible())]
+            }
+        }()
+        
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(options) { opt in
+                optionRow(opt, group: group, isSingle: isSingle, useTwoCols: useTwoCols)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func optionRow(_ opt: DisplayModifierGroup.Option, group: DisplayModifierGroup, isSingle: Bool, useTwoCols: Bool) -> some View {
+        let isOn = selection[group.group.id, default: []].contains(opt.id)
+        Button(action: { toggleOption(opt, in: group) }) {
+            HStack(spacing: 10) {
+                Image(systemName: isSingle ? (isOn ? "largecircle.fill.circle" : "circle") : (isOn ? "checkmark.square.fill" : "square"))
+                    .font(.system(size: useTwoCols ? 20 : 15, weight: .semibold))
+                    .foregroundColor(isOn ? DT.acc : .secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    if let arabicName = opt.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines), !arabicName.isEmpty {
+                        Text(arabicName)
+                            .font(.system(size: useTwoCols ? 18 : 13, weight: isOn ? .bold : .semibold))
+                            .foregroundColor(DT.ink)
+                            .lineLimit(1)
+                    }
+                    Text(opt.name)
+                        .font(.system(size: useTwoCols ? 16 : 11, weight: isOn ? .medium : .regular))
+                        .foregroundColor(DT.ink.opacity(0.7))
+                        .lineLimit(1)
+                }
+                Spacer()
+                if let price = opt.price, price != 0 {
+                    HStack(spacing: 2) {
+                        Text(String(format: "+%.3f", price))
+                            .font(.system(size: useTwoCols ? 16 : 10, weight: .semibold))
+                            .foregroundColor(DT.acc)
+                            .monospacedDigit()
+                        Text("KWD")
+                            .font(.system(size: useTwoCols ? 10 : 8, weight: .medium))
+                            .foregroundColor(DT.acc.opacity(0.8))
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(isOn ? DT.acc.opacity(0.08) : Color.gray.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isOn ? DT.acc : Color.gray.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(!isExternalContext)
+    }
+    
+    @ViewBuilder
+    private func optionGuidance(_ g: DisplayModifierGroup, maxSel: Int) -> some View {
+        HStack(spacing: 6) {
+            if let minSel = minRequired(g) {
+                if maxSel == Int.max {
+                    Text("Select at least \(minSel)")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Select \(minSel) to \(maxSel)")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+            } else if maxSel != Int.max {
+                Text("Select up to \(maxSel)")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
     }
     
     private func addToCart() {
@@ -1861,6 +1837,79 @@ struct ProductDetailPopup: View {
             if va != vb { return false }
         }
         return true
+    }
+    
+    private func toggleGroup(_ groupId: String) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if expandedGroups.contains(groupId) {
+                // Collapse the currently open group
+                expandedGroups.remove(groupId)
+            } else {
+                // Collapse all groups and expand only this one (accordion behavior)
+                expandedGroups.removeAll()
+                expandedGroups.insert(groupId)
+            }
+            // Sync to store for external display
+            store.optionsExpandedGroups = expandedGroups
+        }
+    }
+    
+    private func iconForGroup(_ groupName: String) -> String {
+        let name = groupName.lowercased()
+        
+        // Beverages & Drinks
+        if name.contains("milk") || name.contains("dairy") || name.contains("cream") {
+            return "drop"
+        } else if name.contains("coffee") || name.contains("espresso") || name.contains("shot") {
+            return "cup.and.saucer"
+        } else if name.contains("tea") {
+            return "mug"
+        } else if name.contains("juice") || name.contains("smoothie") {
+            return "drop.triangle"
+        } else if name.contains("water") || name.contains("drink") {
+            return "drop"
+        }
+        
+        // Sweeteners & Flavors
+        else if name.contains("sugar") || name.contains("sweet") || name.contains("syrup") {
+            return "cube"
+        } else if name.contains("flavor") || name.contains("sauce") {
+            return "circle.hexagongrid"
+        } else if name.contains("honey") {
+            return "drop.triangle"
+        }
+        
+        // Toppings & Add-ons
+        else if name.contains("topping") || name.contains("whip") {
+            return "sparkles"
+        } else if name.contains("ice") || name.contains("cold") {
+            return "snowflake"
+        } else if name.contains("hot") || name.contains("temp") {
+            return "thermometer.medium"
+        }
+        
+        // Food items
+        else if name.contains("bread") || name.contains("bun") || name.contains("toast") {
+            return "takeoutbag.and.cup.and.straw"
+        } else if name.contains("cheese") {
+            return "square.stack"
+        } else if name.contains("meat") || name.contains("protein") || name.contains("patty") {
+            return "circle.grid.cross"
+        } else if name.contains("vegetable") || name.contains("veggie") || name.contains("salad") {
+            return "leaf"
+        } else if name.contains("egg") {
+            return "circle"
+        }
+        
+        // Size & Quantity
+        else if name.contains("size") {
+            return "ruler"
+        } else if name.contains("extra") || name.contains("add") {
+            return "plus.circle"
+        }
+        
+        // Default icon
+        return "circle.grid.2x2"
     }
     
     private func loadModifiersIfNeeded() async {
@@ -1948,6 +1997,32 @@ struct ProductDetailPopup: View {
     }
     
     @ViewBuilder
+    private func productDescriptionView(isPad: Bool) -> some View {
+        VStack(alignment: .center, spacing: 8) {
+            // Localized description (Arabic) on top
+            if let descLocalized = product.description_localized?["ar"],
+               !descLocalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(descLocalized)
+                    .font(.system(size: isPad ? 24 : 18, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            
+            // English description below
+            if let desc = product.description,
+               !desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(desc)
+                    .font(.system(size: isPad ? 20 : 16, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+    
+    @ViewBuilder
     private func productDetailsView(isPad: Bool) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             // Product names
@@ -1955,8 +2030,9 @@ struct ProductDetailPopup: View {
                 // Arabic name (if available) above English
                 let ar = (product.name_localized?["ar"] ?? "").trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                 if !ar.isEmpty {
+                    let fontSize: CGFloat = isExternalContext ? 40 : (isPad ? 36 : 28)
                     Text(ar)
-                        .font(.system(size: isPad ? 24 : 20, weight: .bold))
+                        .font(.system(size: fontSize, weight: .black))
                         .foregroundColor(.primary)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -1970,10 +2046,15 @@ struct ProductDetailPopup: View {
                     }
                 }
                 
-                Text(String(format: "%.3f KWD", product.price))
-                    .font(.system(size: isPad ? 22 : 18, weight: .semibold))
-                    .foregroundColor(.blue)
-                    .monospacedDigit()
+                HStack(spacing: 3) {
+                    Text(String(format: "%.3f", product.price))
+                        .font(.system(size: isPad ? 22 : 18, weight: .semibold))
+                        .foregroundColor(.blue)
+                        .monospacedDigit()
+                    Text("KWD")
+                        .font(.system(size: isPad ? 14 : 12, weight: .medium))
+                        .foregroundColor(.blue.opacity(0.8))
+                }
             }
             
             Divider()
@@ -2053,9 +2134,13 @@ struct ProductDetailPopup: View {
                         HStack(spacing: 8) {
                             Image(systemName: localMode.isLocalMode ? "cart.badge.plus" : "paperplane.fill")
                                 .font(.system(size: isPad ? 20 : 18, weight: .semibold))
-                            Text(String(format: "%.3f KWD", totalPrice))
-                                .font(.system(size: isPad ? 18 : 16, weight: .bold))
-                                .monospacedDigit()
+                            HStack(spacing: 2) {
+                                Text(String(format: "%.3f", totalPrice))
+                                    .font(.system(size: isPad ? 18 : 16, weight: .bold))
+                                    .monospacedDigit()
+                                Text("KWD")
+                                    .font(.system(size: isPad ? 12 : 10, weight: .medium))
+                            }
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -2290,77 +2375,48 @@ private struct ProductTile: View {
                 .fill(DT.surface)
                 .overlay(RoundedRectangle(cornerRadius: corner).stroke(DT.line, lineWidth: 1))
             
-            if isExternalContext {
-                // External display: Image on top, text below with price on right
-                VStack(spacing: 6) {
-                    // Image on top
-                    SquareAsyncImage(url: absoluteURL(product.image_url), cornerRadius: corner)
-                        .frame(width: imageSide, height: imageSide)
-                    
-                    // Text row below image: Names on left, Price on right
-                    HStack(alignment: .top, spacing: 8) {
-                        // Left side: Arabic (bold) and English
-                        VStack(alignment: .leading, spacing: 2) {
-                            if !ar.isEmpty {
-                                Text(ar)
-                                    .font(.custom("Almarai-Bold", size: 17))
-                                    .lineLimit(1)
-                                    .foregroundColor(DT.ink)
-                            }
-                            Text(en)
-                                .font(.system(size: 14, weight: .regular))
-                                .lineLimit(1)
-                                .foregroundColor(DT.ink.opacity(0.8))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        // Right side: Price (bold)
-                        Text(String(format: "%.3f", product.price))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(DT.acc)
-                            .monospacedDigit()
-                    }
-                    .padding(.horizontal, 4)
-                }
-                .padding(innerPad)
-            } else {
-                // Local display: Original vertical layout
-                VStack(spacing: 4) {
-                    SquareAsyncImage(url: absoluteURL(product.image_url), cornerRadius: corner)
-                        .frame(width: imageSide, height: imageSide)
-                    VStack(spacing: 1) {
-                        if ar.isEmpty {
-                            Text(en)
-                                .font(.system(size: 13, weight: .semibold))
-                                .lineLimit(1)
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.clear)
-                                .frame(width: imageSide)
-                        } else {
-                            Text(ar)
-                                .font(.custom("Almarai-Bold", size: 11))
-                                .lineLimit(1)
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(DT.ink)
-                                .frame(width: imageSide)
-                        }
+            // Same vertical layout for both local and external displays
+            VStack(spacing: 4) {
+                SquareAsyncImage(url: absoluteURL(product.image_url), cornerRadius: corner)
+                    .frame(width: imageSide, height: imageSide)
+                VStack(spacing: 1) {
+                    if ar.isEmpty {
                         Text(en)
-                            .font(.system(size: 11, weight: .regular))
+                            .font(.system(size: 14, weight: .semibold))
+                            .lineLimit(1)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.clear)
+                            .frame(width: imageSide)
+                    } else {
+                        Text(ar)
+                            .font(.system(size: 14, weight: .black))
                             .lineLimit(1)
                             .multilineTextAlignment(.center)
                             .foregroundColor(DT.ink)
                             .frame(width: imageSide)
-                        Text(String(format: "%.3f KWD", product.price))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(DT.acc)
-                            .frame(width: imageSide)
                     }
-                    .frame(height: textBlockH)
+                    Text(en)
+                        .font(.system(size: 12, weight: .regular))
+                        .lineLimit(1)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(DT.ink)
+                        .frame(width: imageSide)
+                    HStack(spacing: 2) {
+                        Text(String(format: "%.3f", product.price))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(DT.acc)
+                            .monospacedDigit()
+                        Text("KWD")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(DT.acc.opacity(0.8))
+                    }
+                    .frame(width: imageSide)
                 }
-                .padding(innerPad)
+                .frame(height: textBlockH)
             }
+            .padding(innerPad)
         }
-        .frame(width: width, height: isExternalContext ? imageSide + 60 : imageSide + 8 + textBlockH + innerPad * 2)
+        .frame(width: width, height: imageSide + 8 + textBlockH + innerPad * 2)
         .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
@@ -3235,6 +3291,7 @@ private struct ProductDetailSheetView: View {
     @State private var qty: Int = 1
     // Modifiers selection state (groupId -> Set<optionId>)
     @State private var selection: [String: Set<String>] = [:]
+    @State private var expandedGroups: Set<String> = []
 
     var body: some View {
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
@@ -3312,46 +3369,110 @@ private struct ProductDetailSheetView: View {
                 if let groups = product.modifiers, !groups.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(groups, id: \.id) { g in
+                            let isRequired = g.min > 0
+                            let isExpanded = expandedGroups.contains(g.id)
+                            
                             VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text(g.name)
-                                        .font(.system(size: 14, weight: .semibold))
-                                    Spacer()
-                                    if g.min > 0 {
-                                        Text("min \(g.min)")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    if g.max > 0 && g.max < 99 {
-                                        Text("max \(g.max)")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                // Options as chips
-                                let opts = g.options
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], alignment: .leading, spacing: 8) {
-                                    ForEach(opts, id: \.id) { opt in
-                                        let isOn = selection[g.id, default: []].contains(opt.id)
-                                        Button(action: { toggleOption(optId: opt.id, inGroup: g) }) {
-                                            HStack(spacing: 6) {
-                                                Text(opt.name)
-                                                    .font(.system(size: 13, weight: isOn ? .semibold : .regular))
-                                                if opt.price != 0 {
-                                                    Text(String(format: "+%.3f", opt.price))
-                                                        .font(.system(size: 12, weight: .semibold))
-                                                        .foregroundColor(DT.acc)
-                                                }
+                                // Group header (tappable to expand/collapse)
+                                Button(action: { toggleGroup(g.id) }) {
+                                    HStack {
+                                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                                            .font(.system(size: isPad ? 18 : 12, weight: .semibold))
+                                            .foregroundColor(isRequired ? .red : .secondary)
+                                        
+                                        // Group icon
+                                        Group {
+                                            let groupName = g.name.lowercased()
+                                            if groupName.contains("milk") {
+                                                Image("milk")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .frame(width: isPad ? 28 : 20, height: isPad ? 28 : 20)
+                                            } else if groupName.contains("espresso") || groupName.contains("shot") {
+                                                Image("espresso")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .frame(width: isPad ? 28 : 20, height: isPad ? 28 : 20)
+                                            } else if groupName.contains("extra") {
+                                                Image("extra")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .frame(width: isPad ? 24 : 18, height: isPad ? 24 : 18)
+                                            } else {
+                                                Image(systemName: iconForGroup(g.name))
+                                                    .font(.system(size: isPad ? 22 : 14, weight: .semibold))
+                                                    .foregroundColor(isRequired ? .red : DT.acc)
+                                                    .frame(width: isPad ? 32 : 20)
                                             }
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                            .frame(minWidth: 96)
-                                            .background(isOn ? DT.acc.opacity(0.12) : DT.surface)
-                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isOn ? DT.acc : DT.line, lineWidth: 1))
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
                                         }
-                                        .buttonStyle(.plain)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            if let arabicName = g.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                               !arabicName.isEmpty {
+                                                Text(arabicName)
+                                                    .font(.system(size: isPad ? 22 : 14, weight: .bold))
+                                                    .foregroundColor(isRequired ? .red : .primary)
+                                            }
+                                            Text(g.name)
+                                                .font(.system(size: isPad ? 19 : 12, weight: .medium))
+                                                .foregroundColor(isRequired ? .red.opacity(0.8) : .primary.opacity(0.7))
+                                        }
+                                        Spacer()
+                                        if g.min > 0 {
+                                            Text("min \(g.min)")
+                                                .font(.caption2)
+                                                .foregroundColor(isRequired ? .red : .secondary)
+                                        }
+                                        if g.max > 0 && g.max < 99 {
+                                            Text("max \(g.max)")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 12)
+                                    .background(isRequired ? Color.red.opacity(0.05) : Color.clear)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                // Options (only shown when expanded)
+                                if isExpanded {
+                                    let opts = g.options
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], alignment: .leading, spacing: 8) {
+                                        ForEach(opts, id: \.id) { opt in
+                                            let isOn = selection[g.id, default: []].contains(opt.id)
+                                            Button(action: { toggleOption(optId: opt.id, inGroup: g) }) {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    if let arabicName = opt.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                       !arabicName.isEmpty {
+                                                        Text(arabicName)
+                                                            .font(.system(size: isPad ? 18 : 13, weight: isOn ? .bold : .semibold))
+                                                            .foregroundColor(DT.ink)
+                                                    }
+                                                    HStack(spacing: 6) {
+                                                        Text(opt.name)
+                                                            .font(.system(size: isPad ? 16 : 11, weight: isOn ? .medium : .regular))
+                                                            .foregroundColor(DT.ink.opacity(0.7))
+                                                        if opt.price != 0 {
+                                                            Text(String(format: "+%.3f", opt.price))
+                                                                .font(.system(size: isPad ? 14 : 10, weight: .semibold))
+                                                                .foregroundColor(DT.acc)
+                                                        }
+                                                    }
+                                                }
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .frame(minWidth: 96)
+                                                .background(isOn ? DT.acc.opacity(0.12) : DT.surface)
+                                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(isOn ? DT.acc : DT.line, lineWidth: 1))
+                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .padding(.leading, 24)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
                             }
                         }
@@ -3385,9 +3506,8 @@ private struct ProductDetailSheetView: View {
                 if let sku = store.pendingEditSku, !sku.isEmpty {
                     if localMode.isLocalMode {
                         localMode.setLocalLineQty(lineId: sku, qty: qty)
-                    } else {
-                        store.setLineQty(sku: sku, qty: qty)
                     }
+                    // Remote mode removed
                     store.pendingEditSku = nil
                 } else {
                     if localMode.isLocalMode {
@@ -3442,6 +3562,16 @@ private struct ProductDetailSheetView: View {
         selection = initSel
     }
 
+    private func toggleGroup(_ groupId: String) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if expandedGroups.contains(groupId) {
+                expandedGroups.remove(groupId)
+            } else {
+                expandedGroups.insert(groupId)
+            }
+        }
+    }
+    
     private func toggleOption(optId: String, inGroup g: Product.ModifierGroup) {
         var set = selection[g.id, default: []]
         let maxSel = g.max > 0 ? g.max : Int.max
@@ -3452,6 +3582,64 @@ private struct ProductDetailSheetView: View {
             if set.count < maxSel { set.insert(optId) }
         }
         selection[g.id] = set
+    }
+    
+    private func iconForGroup(_ groupName: String) -> String {
+        let name = groupName.lowercased()
+        
+        // Beverages & Drinks
+        if name.contains("milk") || name.contains("dairy") || name.contains("cream") {
+            return "waterbottle"
+        } else if name.contains("coffee") || name.contains("espresso") || name.contains("shot") {
+            return "cup.and.saucer"
+        } else if name.contains("tea") {
+            return "mug"
+        } else if name.contains("juice") || name.contains("smoothie") {
+            return "drop.triangle"
+        } else if name.contains("water") || name.contains("drink") {
+            return "drop"
+        }
+        
+        // Sweeteners & Flavors
+        else if name.contains("sugar") || name.contains("sweet") || name.contains("syrup") {
+            return "cube"
+        } else if name.contains("flavor") || name.contains("sauce") {
+            return "circle.hexagongrid"
+        } else if name.contains("honey") {
+            return "drop.triangle"
+        }
+        
+        // Toppings & Add-ons
+        else if name.contains("topping") || name.contains("whip") {
+            return "sparkles"
+        } else if name.contains("ice") || name.contains("cold") {
+            return "snowflake"
+        } else if name.contains("hot") || name.contains("temp") {
+            return "thermometer.medium"
+        }
+        
+        // Food items
+        else if name.contains("bread") || name.contains("bun") || name.contains("toast") {
+            return "takeoutbag.and.cup.and.straw"
+        } else if name.contains("cheese") {
+            return "square.stack"
+        } else if name.contains("meat") || name.contains("protein") || name.contains("patty") {
+            return "circle.grid.cross"
+        } else if name.contains("vegetable") || name.contains("veggie") || name.contains("salad") {
+            return "leaf"
+        } else if name.contains("egg") {
+            return "circle"
+        }
+        
+        // Size & Quantity
+        else if name.contains("size") {
+            return "ruler"
+        } else if name.contains("extra") || name.contains("add") {
+            return "plus.circle"
+        }
+        
+        // Default icon
+        return "circle.grid.2x2"
     }
 
     private func absoluteURL(_ raw: String?) -> URL? {
@@ -3545,240 +3733,6 @@ final class PrePreviewView: UIView {
 }
 #endif
 
-// MARK: - Idle Poster Overlay
-
-/// Poster mode options
-enum PosterMode: String, CaseIterable {
-    case fullScreenProducts = "fullscreen" // Full-screen product grid (shuffled)
-    case categoryFlip = "categories" // Flip through menu categories
-    
-    var displayName: String {
-        switch self {
-        case .fullScreenProducts: return "Full-Screen Products"
-        case .categoryFlip: return "Category Menu Flip"
-        }
-    }
-}
-
-/// Full-screen idle poster overlay - supports two modes
-private struct IdlePosterOverlay: View {
-    @EnvironmentObject var env: EnvironmentStore
-    @EnvironmentObject var catalog: CatalogStore
-    
-    @State private var currentPageIndex = 0
-    @State private var timer: Timer?
-    @AppStorage("OT.display.posterFlipInterval") private var posterFlipInterval: Double = 15.0
-    @AppStorage("OT.display.posterMode") private var posterModeRaw: String = PosterMode.fullScreenProducts.rawValue
-    
-    let onDismiss: () -> Void
-    
-    private var posterMode: PosterMode {
-        PosterMode(rawValue: posterModeRaw) ?? .fullScreenProducts
-    }
-    
-    // Calculate adaptive grid size based on screen dimensions
-    private var gridDimensions: (columns: Int, rows: Int) {
-        let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
-        
-        // Estimate available space (minus padding and header/footer)
-        let availableWidth = screenWidth - 64 // 32px padding on each side
-        let availableHeight = screenHeight - 120 // 40px top + 40px bottom padding
-        
-        // Target card size (adjust based on device)
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let targetCardSize: CGFloat = isPad ? 280 : 180
-        
-        // Calculate columns and rows that fit
-        let spacing: CGFloat = isPad ? 24 : 16
-        let columns = max(2, Int((availableWidth + spacing) / (targetCardSize + spacing)))
-        let rows = max(3, Int((availableHeight + spacing) / (targetCardSize + spacing)))
-        
-        return (columns: columns, rows: rows)
-    }
-    
-    private var itemsPerPage: Int {
-        let grid = gridDimensions
-        return grid.columns * grid.rows
-    }
-    
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.95)
-                .ignoresSafeArea()
-            
-            switch posterMode {
-            case .fullScreenProducts:
-                fullScreenProductsView
-            case .categoryFlip:
-                categoryFlipView
-            }
-        }
-        .onAppear { startAutoFlip() }
-        .onDisappear { stopAutoFlip() }
-        .onTapGesture { onDismiss() }
-    }
-    
-    // Full-screen product grid mode (original)
-    private var fullScreenProductsView: some View {
-        Group {
-            if !allPages.isEmpty {
-                VStack(spacing: 0) {
-                    productGrid
-                        .padding(.horizontal, 32)
-                        .padding(.top, 40)
-                        .padding(.bottom, 40)
-                }
-            } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 64))
-                        .foregroundColor(.white.opacity(0.5))
-                    Text("No products available")
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-        }
-    }
-    
-    // Category flip mode - shows menu and flips through categories
-    private var categoryFlipView: some View {
-        Group {
-            if !catalog.categoriesWithProducts.isEmpty {
-                VStack(spacing: 0) {
-                    categoryMenuGrid
-                        .padding(.horizontal, 32)
-                        .padding(.top, 40)
-                        .padding(.bottom, 40)
-                }
-            } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 64))
-                        .foregroundColor(.white.opacity(0.5))
-                    Text("No categories available")
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-        }
-    }
-    
-    // Product grid for full-screen mode
-    private var productGrid: some View {
-        let grid = gridDimensions
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let spacing: CGFloat = isPad ? 24 : 16
-        let screenWidth = UIScreen.main.bounds.width
-        let availableWidth = screenWidth - 64
-        let itemWidth = (availableWidth - spacing * CGFloat(grid.columns - 1)) / CGFloat(grid.columns)
-        
-        return LazyVGrid(
-            columns: Array(repeating: GridItem(.fixed(itemWidth), spacing: spacing), count: grid.columns),
-            spacing: spacing
-        ) {
-            ForEach(currentPageProducts, id: \.id) { product in
-                ProductPosterCard(product: product, width: itemWidth)
-                    .environmentObject(env)
-            }
-        }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .id("page-\(currentPageIndex)")
-    }
-    
-    // Category menu grid for category flip mode
-    private var categoryMenuGrid: some View {
-        let category = currentCategory
-        let products = catalog.products(inCategoryName: category.name, env: env)
-        let grid = gridDimensions
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let spacing: CGFloat = isPad ? 24 : 16
-        let screenWidth = UIScreen.main.bounds.width
-        let availableWidth = screenWidth - 64
-        let itemWidth = (availableWidth - spacing * CGFloat(grid.columns - 1)) / CGFloat(grid.columns)
-        
-        return VStack(spacing: 20) {
-            // Category header
-            Text(category.name)
-                .font(.system(size: 48, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.bottom, 10)
-            
-            // Product grid for this category
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(itemWidth), spacing: spacing), count: grid.columns),
-                spacing: spacing
-            ) {
-                ForEach(products.prefix(grid.columns * grid.rows)) { product in
-                    ProductPosterCard(product: product, width: itemWidth)
-                        .environmentObject(env)
-                }
-            }
-        }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .id("category-\(currentPageIndex)")
-    }
-    
-    private var pageIndicator: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<allPages.count, id: \.self) { index in
-                Circle()
-                    .fill(index == currentPageIndex ? Color.white : Color.white.opacity(0.3))
-                    .frame(width: 8, height: 8)
-                    .animation(.easeInOut(duration: 0.3), value: currentPageIndex)
-            }
-        }
-    }
-    
-    // Split all products into pages of itemsPerPage size, shuffled for variety
-    private var allPages: [[Product]] {
-        let shuffled = catalog.products.shuffled()
-        return stride(from: 0, to: shuffled.count, by: itemsPerPage).map {
-            Array(shuffled[$0..<min($0 + itemsPerPage, shuffled.count)])
-        }
-    }
-    
-    // Get products for the current page (full-screen mode)
-    private var currentPageProducts: [Product] {
-        guard !allPages.isEmpty else { return [] }
-        let index = currentPageIndex % allPages.count
-        return allPages[index]
-    }
-    
-    // Get current category (category flip mode)
-    private var currentCategory: Category {
-        let categories = catalog.categoriesWithProducts
-        guard !categories.isEmpty else { return Category(id: "none", name: "No Category") }
-        let index = currentPageIndex % categories.count
-        return categories[index]
-    }
-    
-    private func startAutoFlip() {
-        timer = Timer.scheduledTimer(withTimeInterval: posterFlipInterval, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 0.5)) {
-                flipToNextPage()
-            }
-        }
-    }
-    
-    private func stopAutoFlip() {
-        timer?.invalidate()
-        timer = nil
-    }
-    
-    private func flipToNextPage() {
-        switch posterMode {
-        case .fullScreenProducts:
-            guard !allPages.isEmpty else { return }
-            currentPageIndex = (currentPageIndex + 1) % allPages.count
-        case .categoryFlip:
-            let categories = catalog.categoriesWithProducts
-            guard !categories.isEmpty else { return }
-            currentPageIndex = (currentPageIndex + 1) % categories.count
-        }
-    }
-}
 
 private struct ProductPosterCard: View {
     @EnvironmentObject var env: EnvironmentStore
