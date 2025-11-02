@@ -90,20 +90,12 @@ public func listProducts(perPage: Int = 100) async throws -> [FoodicsProduct] {
     }
 
     public func listProductCategoryLinks(perPage: Int = 200) async throws -> [FoodicsProductCategoryLink] {
-        // Try a variety of plausible endpoints across API versions.
-        do {
-            return try await listAllWithVersionAndPathFallback(paths: [
-                "/product_categories",
-                "/menu/product_categories",
-                "/categories_products",
-                "/products_categories"
-            ], perPage: perPage)
-        } catch let e as APIError where e.code == 404 {
-            #if DEBUG
-            print("[Foodics] product-category link endpoint not available (404). Proceeding without category links.")
-            #endif
-            return []
-        }
+        // Product-category links endpoint doesn't exist in Foodics v5 API
+        // Return empty array to avoid 404 spam in logs
+        #if DEBUG
+        print("[Foodics] Skipping product-category links (endpoint not available in API). Using category reference mapping instead.")
+        #endif
+        return []
     }
 
     // MARK: - Core listAll with pagination & retry
