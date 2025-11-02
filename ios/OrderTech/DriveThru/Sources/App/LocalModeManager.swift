@@ -250,12 +250,19 @@ class LocalModeManager: ObservableObject {
         // Compute options and price delta from modifiers
         let optionLabels: [String] = (modifiers ?? []).compactMap { item in
             let name = (item["name"] as? String) ?? ""
+            let quantity = (item["quantity"] as? Int) ?? 1
+            // Format with quantity if > 1 (e.g., "2x Espresso Shot")
+            if quantity > 1 {
+                return "\(quantity)x \(name)"
+            }
             return name
         }.filter { !$0.isEmpty }
         let delta: Double = (modifiers ?? []).reduce(0.0) { sum, item in
-            if let v = item["price"] as? Double { return sum + v }
-            if let s = item["price"] as? String, let v = Double(s) { return sum + v }
-            return sum
+            let quantity = (item["quantity"] as? Int) ?? 1
+            var price: Double = 0
+            if let v = item["price"] as? Double { price = v }
+            else if let s = item["price"] as? String, let v = Double(s) { price = v }
+            return sum + (price * Double(quantity))
         }
         let unit = product.price + delta
         let total = unit * Double(qty)

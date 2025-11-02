@@ -1459,6 +1459,7 @@ struct ProductDetailPopup: View {
     // Modifiers
     @State private var modifierGroups: [DisplayModifierGroup] = []
     @State private var selection: [String: Set<String>] = [:] // group.id -> set(option.id)
+    @State private var optionQuantities: [String: Int] = [:] // option.id -> quantity (for quantifiable modifiers)
     @State private var isLoadingOptions = false
     @State private var expandedGroups: Set<String> = [] // Track which groups are expanded
     
@@ -1481,15 +1482,25 @@ struct ProductDetailPopup: View {
         return base
     }
     
-    private var selectedOptionsDelta: Double {
+    private func selectedOptionsDelta: Double {
         var sum: Double = 0
         for g in modifierGroups {
             let set = selection[g.group.id] ?? []
             for o in g.options where set.contains(o.id) {
-                if let d = o.price { sum += d }
+                if let d = o.price {
+                    let qty = optionQuantities[o.id] ?? 1
+                    sum += d * Double(qty)
+                }
             }
         }
         return sum
+    }
+    
+    // Check if a modifier option is quantifiable (can have quantity > 1)
+    private func isQuantifiableModifier(_ optionName: String) -> Bool {
+        let name = optionName.lowercased()
+        return name.contains("shot") || name.contains("espresso") || 
+               name.contains("matcha shot") || name.contains("extra")
     }
     
     var body: some View {
@@ -1733,11 +1744,12 @@ struct ProductDetailPopup: View {
     @ViewBuilder
     private func optionRow(_ opt: DisplayModifierGroup.Option, group: DisplayModifierGroup, isSingle: Bool, useTwoCols: Bool) -> some View {
         let isOn = selection[group.group.id, default: []].contains(opt.id)
-        Button(action: { toggleOption(opt, in: group) }) {
+        let isQuantifiable = isQuantifiableModifier(opt.name)
+        let qty = optionQuantities[opt.id] ?? 1
+        
+        if isQuantifiable {
+            // Quantifiable modifier: show name on left, +/- counter on right with dynamic price
             HStack(spacing: 10) {
-                Image(systemName: isSingle ? (isOn ? "largecircle.fill.circle" : "circle") : (isOn ? "checkmark.square.fill" : "square"))
-                    .font(.system(size: useTwoCols ? 20 : 15, weight: .semibold))
-                    .foregroundColor(isOn ? DT.acc : .secondary)
                 VStack(alignment: .leading, spacing: 1) {
                     if let arabicName = opt.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines), !arabicName.isEmpty {
                         Text(arabicName)
@@ -1751,15 +1763,62 @@ struct ProductDetailPopup: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                if let price = opt.price, price != 0 {
-                    HStack(spacing: 2) {
-                        Text(String(format: "+%.3f", price))
-                            .font(.system(size: useTwoCols ? 16 : 10, weight: .semibold))
-                            .foregroundColor(DT.acc)
+                VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            if qty > 0 {
+                                let newQty = qty - 1
+                                if newQty == 0 {
+                                    optionQuantities[opt.id] = nil
+                                    var set = selection[group.group.id] ?? []
+                                    set.remove(opt.id)
+                                    selection[group.group.id] = set
+                                } else {
+                                    optionQuantities[opt.id] = newQty
+                                }
+                            }
+                        }) {
+                            Image(systemName: "minus")
+                                .font(.system(size: useTwoCols ? 14 : 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: useTwoCols ? 32 : 28, height: useTwoCols ? 32 : 28)
+                                .background(Circle().fill(qty > 0 ? DT.acc : Color.gray))
+                        }
+                        .disabled(qty == 0 || isExternalContext)
+                        .buttonStyle(.plain)
+                        
+                        Text("\(qty)")
+                            .font(.system(size: useTwoCols ? 18 : 16, weight: .bold))
+                            .foregroundColor(DT.ink)
+                            .frame(minWidth: useTwoCols ? 30 : 24)
                             .monospacedDigit()
-                        Text("KWD")
-                            .font(.system(size: useTwoCols ? 10 : 8, weight: .medium))
-                            .foregroundColor(DT.acc.opacity(0.8))
+                        
+                        Button(action: {
+                            let newQty = qty + 1
+                            optionQuantities[opt.id] = newQty
+                            var set = selection[group.group.id] ?? []
+                            set.insert(opt.id)
+                            selection[group.group.id] = set
+                        }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: useTwoCols ? 14 : 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: useTwoCols ? 32 : 28, height: useTwoCols ? 32 : 28)
+                                .background(Circle().fill(DT.acc))
+                        }
+                        .disabled(isExternalContext)
+                        .buttonStyle(.plain)
+                    }
+                    if let price = opt.price, price != 0, qty > 0 {
+                        HStack(spacing: 2) {
+                            Text(String(format: "+%.3f", price * Double(qty)))
+                                .font(.system(size: useTwoCols ? 14 : 10, weight: .semibold))
+                                .foregroundColor(DT.acc)
+                                .monospacedDigit()
+                            Text("KWD")
+                                .font(.system(size: useTwoCols ? 9 : 8, weight: .medium))
+                                .foregroundColor(DT.acc.opacity(0.8))
+                        }
                     }
                 }
             }
@@ -1767,9 +1826,46 @@ struct ProductDetailPopup: View {
             .padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 10).fill(isOn ? DT.acc.opacity(0.08) : Color.gray.opacity(0.06)))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(isOn ? DT.acc : Color.gray.opacity(0.25), lineWidth: 1))
+        } else {
+            // Regular modifier: show checkbox
+            Button(action: { toggleOption(opt, in: group) }) {
+                HStack(spacing: 10) {
+                    Image(systemName: isSingle ? (isOn ? "largecircle.fill.circle" : "circle") : (isOn ? "checkmark.square.fill" : "square"))
+                        .font(.system(size: useTwoCols ? 20 : 15, weight: .semibold))
+                        .foregroundColor(isOn ? DT.acc : .secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        if let arabicName = opt.name_localized?.trimmingCharacters(in: .whitespacesAndNewlines), !arabicName.isEmpty {
+                            Text(arabicName)
+                                .font(.system(size: useTwoCols ? 18 : 13, weight: isOn ? .bold : .semibold))
+                                .foregroundColor(DT.ink)
+                                .lineLimit(1)
+                        }
+                        Text(opt.name)
+                            .font(.system(size: useTwoCols ? 16 : 11, weight: isOn ? .medium : .regular))
+                            .foregroundColor(DT.ink.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if let price = opt.price, price != 0 {
+                        HStack(spacing: 2) {
+                            Text(String(format: "+%.3f", price))
+                                .font(.system(size: useTwoCols ? 16 : 10, weight: .semibold))
+                                .foregroundColor(DT.acc)
+                                .monospacedDigit()
+                            Text("KWD")
+                                .font(.system(size: useTwoCols ? 10 : 8, weight: .medium))
+                                .foregroundColor(DT.acc.opacity(0.8))
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(isOn ? DT.acc.opacity(0.08) : Color.gray.opacity(0.06)))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(isOn ? DT.acc : Color.gray.opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .allowsHitTesting(!isExternalContext)
         }
-        .buttonStyle(.plain)
-        .allowsHitTesting(!isExternalContext)
     }
     
     @ViewBuilder
@@ -1846,7 +1942,8 @@ struct ProductDetailPopup: View {
         for g in modifierGroups {
             let set = selection[g.group.id] ?? []
             for o in g.options where set.contains(o.id) {
-                var item: [String: Any] = ["id": o.id, "name": o.name]
+                let qty = optionQuantities[o.id] ?? 1
+                var item: [String: Any] = ["id": o.id, "name": o.name, "quantity": qty]
                 if let p = o.price { item["price"] = p }
                 item["group_id"] = g.group.id
                 item["group_name"] = g.group.name
