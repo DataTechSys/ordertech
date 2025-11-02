@@ -276,19 +276,7 @@ struct DisplayHomeView: View {
                     .overlay(alignment: .bottom) {
                         let isPad = UIDevice.current.userInterfaceIdiom == .pad
                         let maxPopupWidth: CGFloat = isPad ? 900 : UIScreen.main.bounds.width - 32
-                        
-                        // Adaptive height based on whether product has modifiers
-                        let hasModifiers = product.modifiers != nil && !(product.modifiers?.isEmpty ?? true)
-                        let maxPopupHeight: CGFloat = {
-                            if isPad {
-                                return .infinity
-                            } else {
-                                // Reduced height when no modifiers (70% vs 85%)
-                                return hasModifiers 
-                                    ? UIScreen.main.bounds.height * 0.85 
-                                    : UIScreen.main.bounds.height * 0.70
-                            }
-                        }()
+                        let maxPopupHeight: CGFloat = UIScreen.main.bounds.height * 0.90
                         
                         ProductDetailPopup(
                             product: product,
@@ -1469,7 +1457,7 @@ struct ProductDetailPopup: View {
     
     var body: some View {
         mainContentView
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
