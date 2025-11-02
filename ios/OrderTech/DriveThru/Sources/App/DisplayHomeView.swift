@@ -276,7 +276,7 @@ struct DisplayHomeView: View {
                     .overlay(alignment: .bottom) {
                         let isPad = UIDevice.current.userInterfaceIdiom == .pad
                         let maxPopupWidth: CGFloat = isPad ? 900 : UIScreen.main.bounds.width - 32
-                        let maxPopupHeight: CGFloat = UIScreen.main.bounds.height * 0.90
+                        let maxPopupHeight: CGFloat = UIScreen.main.bounds.height * 0.85
                         
                         ProductDetailPopup(
                             product: product,
@@ -302,7 +302,7 @@ struct DisplayHomeView: View {
                         .environmentObject(localMode)
                         .frame(maxWidth: maxPopupWidth, maxHeight: maxPopupHeight)
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 0)
+                        .padding(.bottom, 24)
                         .contentShape(Rectangle())
                         .allowsHitTesting(true)
                         .zIndex(2000)
