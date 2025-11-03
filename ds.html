@@ -20,18 +20,15 @@
         -moz-osx-font-smoothing: grayscale;
       }
 
-      /* Design tokens matching iOS app */
       :root {
         --bg: #A3B1A4;
         --surface: #ffffff;
         --ink: #2D2A26;
-        --muted: #A3B1A4;
         --accent: #718472;
         --line: #E5E7EB;
         --radius: 14px;
       }
 
-      /* Container for the grid */
       .signage-container {
         width: 100vw;
         height: 100vh;
@@ -40,10 +37,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        position: relative;
       }
 
-      /* Products grid - exactly 3 columns × 4 rows, full screen */
       .products-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -51,12 +46,8 @@
         gap: 20px;
         width: 100%;
         height: 100%;
-        max-width: 100vw;
-        max-height: 100vh;
-        padding: 0;
       }
 
-      /* Product card matching iOS ProductTileView */
       .product-card {
         background: var(--surface);
         border-radius: var(--radius);
@@ -65,12 +56,9 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         display: flex;
         flex-direction: column;
-        width: 100%;
-        height: 100%;
         overflow: hidden;
       }
 
-      /* Product image - flexible height to fit card */
       .product-image-wrapper {
         flex: 1;
         position: relative;
@@ -83,19 +71,11 @@
 
       .product-image {
         position: absolute;
-        top: 0;
-        left: 0;
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border-radius: var(--radius);
       }
 
-      .product-image.loading {
-        background: #f0f0f0;
-      }
-
-      /* Product info */
       .product-info {
         display: flex;
         flex-direction: column;
@@ -106,7 +86,6 @@
         padding: 4px 0;
       }
 
-      /* Arabic name */
       .product-name-ar {
         font-size: 14px;
         font-weight: 700;
@@ -115,35 +94,23 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-height: 1.3em;
       }
 
-      .product-name-ar:empty {
-        display: none;
-      }
-
-      /* English name */
       .product-name-en {
         font-size: 11px;
-        font-weight: 400;
         line-height: 1.3;
         color: var(--ink);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-height: 1.3em;
       }
 
-      /* Price */
       .product-price {
         font-size: 13px;
         font-weight: 600;
         color: var(--accent);
-        line-height: 1.3;
-        margin-top: 2px;
       }
 
-      /* Loading state */
       .loading-container {
         display: flex;
         align-items: center;
@@ -165,198 +132,115 @@
       @keyframes spin {
         to { transform: rotate(360deg); }
       }
-
-      .loading-text {
-        font-size: 16px;
-        color: var(--ink);
-        font-weight: 500;
-      }
-
-      /* Error state */
-      .error-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        flex-direction: column;
-        gap: 16px;
-        padding: 20px;
-      }
-
-      .error-text {
-        font-size: 16px;
-        color: #ef4444;
-        text-align: center;
-        max-width: 500px;
-      }
-
-      /* Empty state */
-      .empty-state {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .empty-text {
-        font-size: 18px;
-        color: var(--muted);
-        font-weight: 500;
-      }
-
-      /* Hide inactive products */
-      .product-card.inactive {
-        display: none;
-      }
-
-      /* Hidden page for preloading */
-      .products-grid.hidden {
-        display: none;
-      }
-
-      /* Auto-refresh indicator */
-      .refresh-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: var(--surface);
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 8px 16px;
-        font-size: 12px;
-        color: var(--muted);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-      }
-
-      .refresh-indicator.show {
-        opacity: 1;
-      }
     </style>
   </head>
   <body>
-    <!-- Loading state -->
     <div id="loadingContainer" class="loading-container">
       <div class="spinner"></div>
-      <div class="loading-text">Loading menu...</div>
+      <div style="font-size: 16px;">Loading menu...</div>
     </div>
 
-    <!-- Error state -->
-    <div id="errorContainer" class="error-container" style="display: none;">
-      <div class="error-text" id="errorText"></div>
-      <button onclick="location.reload()" style="padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">Retry</button>
-    </div>
-
-    <!-- Empty state -->
-    <div id="emptyContainer" class="empty-state" style="display: none;">
-      <div class="empty-text">No active products available</div>
-    </div>
-
-    <!-- Products container -->
     <div id="signageContainer" class="signage-container" style="display: none;">
       <div id="productsGrid" class="products-grid"></div>
     </div>
 
-    <!-- Refresh indicator -->
-    <div id="refreshIndicator" class="refresh-indicator">Updating...</div>
-
     <script>
-      // Configuration
-      const API_BASE = 'https://app.ordertech.me';
-      const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
-      const PAGE_ROTATION_INTERVAL = 15 * 1000; // 15 seconds
-      const PRODUCTS_PER_PAGE = 12; // 3 columns × 4 rows
+      const API_BASE = 'https://app.ordertech.me'\;
+      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+      const PAGE_ROTATION_INTERVAL = 15 * 1000;
+      const PRODUCTS_PER_PAGE = 12;
       const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+      const STORAGE_KEY = 'ordertech_ds_cache';
 
-      // State
       let allProducts = [];
       let currentPage = 0;
-      let refreshTimer = null;
       let rotationTimer = null;
+      let preloadedImages = new Map();
 
-      // Get tenant ID from URL or use default
       function getTenantId() {
         const params = new URLSearchParams(window.location.search);
         return params.get('tenant') || DEFAULT_TENANT_ID;
       }
 
-      // Fetch products from API
-      async function fetchProducts() {
+      function getCachedData() {
         try {
-          const tenantId = getTenantId();
-          const response = await fetch(`${API_BASE}/api/products`, {
-            headers: {
-              'X-Tenant-Id': tenantId
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch products: ${response.statusText}`);
+          const cached = localStorage.getItem(STORAGE_KEY);
+          if (!cached) return null;
+          const data = JSON.parse(cached);
+          if (Date.now() - data.timestamp < CACHE_DURATION) {
+            console.log('Using cached data');
+            return data.products;
           }
-          
-          const data = await response.json();
-          return Array.isArray(data) ? data : (data.items || data.products || []);
-        } catch (error) {
-          console.error('Error fetching products:', error);
-          throw error;
+          return null;
+        } catch {
+          return null;
         }
       }
 
-      // Preload an image
+      function setCachedData(products) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            products: products
+          }));
+        } catch {}
+      }
+
+      async function fetchProducts() {
+        const response = await fetch(`${API_BASE}/api/products`, {
+          headers: { 'X-Tenant-Id': getTenantId() }
+        });
+        if (!response.ok) throw new Error('Failed to fetch');
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.items || []);
+      }
+
       function preloadImage(url) {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
+          if (preloadedImages.has(url)) {
+            resolve(preloadedImages.get(url));
+            return;
+          }
           const img = new Image();
-          img.onload = () => resolve(url);
-          img.onerror = () => resolve(url); // Still resolve on error to not block
+          img.onload = () => {
+            preloadedImages.set(url, url);
+            resolve(url);
+          };
+          img.onerror = () => {
+            const placeholder = `${API_BASE}/images/placeholder.png`;
+            preloadedImages.set(url, placeholder);
+            resolve(placeholder);
+          };
           img.src = url;
         });
       }
 
-      // Create product card element with preloaded image
       function createProductCard(product) {
         const card = document.createElement('div');
-        card.className = 'product-card active';
-        card.dataset.productId = product.id;
-
-        // Get Arabic name from localized data (it's a string, not an object)
-        const nameAr = typeof product.name_localized === 'string' ? product.name_localized : (product.name_localized?.ar || '');
+        card.className = 'product-card';
+        
+        const nameAr = typeof product.name_localized === 'string' ? product.name_localized : '';
         const nameEn = product.name || '';
         
-        // Determine image URL
         let imageUrl = product.image_url || '/images/placeholder.png';
-        // Handle relative URLs
-        if (imageUrl && imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+        if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
           imageUrl = `${API_BASE}${imageUrl}`;
         }
+        const finalUrl = preloadedImages.get(imageUrl) || imageUrl;
 
         card.innerHTML = `
           <div class="product-image-wrapper">
-            <img 
-              class="product-image" 
-              src="${imageUrl}" 
-              alt="${nameEn}"
-            />
+            <img class="product-image" src="${finalUrl}" alt="${nameEn}"/>
           </div>
           <div class="product-info">
             <div class="product-name-ar">${nameAr}</div>
             <div class="product-name-en">${nameEn}</div>
-            <div class="product-price">${formatPrice(product.price)}</div>
+            <div class="product-price">${(parseFloat(product.price) || 0).toFixed(3)} KWD</div>
           </div>
         `;
-
         return card;
       }
 
-      // Format price
-      function formatPrice(price) {
-        const numPrice = parseFloat(price) || 0;
-        return `${numPrice.toFixed(3)} KWD`;
-      }
-
-      // Shuffle array randomly
       function shuffleArray(array) {
         const shuffled = [...array];
         for (let i = shuffled.length - 1; i > 0; i--) {
@@ -366,193 +250,84 @@
         return shuffled;
       }
 
-      // Render a specific page of products (instant switch)
       function renderPage(pageIndex) {
         const grid = document.getElementById('productsGrid');
         grid.innerHTML = '';
-        
-        // Get products for this page
         const start = pageIndex * PRODUCTS_PER_PAGE;
         const pageProducts = allProducts.slice(start, start + PRODUCTS_PER_PAGE);
-        
-        // If we don't have enough products for a full page, pad with products from start
         while (pageProducts.length < PRODUCTS_PER_PAGE && allProducts.length > 0) {
           pageProducts.push(allProducts[pageProducts.length % allProducts.length]);
         }
-        
-        // Render products (images already preloaded)
-        pageProducts.forEach(product => {
-          grid.appendChild(createProductCard(product));
-        });
+        pageProducts.forEach(product => grid.appendChild(createProductCard(product)));
       }
 
-      // Preload all product images
       async function preloadAllImages(products) {
-        const imageUrls = products.map(p => {
+        const urls = products.map(p => {
           let url = p.image_url || '/images/placeholder.png';
-          if (url && url.startsWith('/') && !url.startsWith('//')) {
-            url = `${API_BASE}${url}`;
-          }
+          if (url.startsWith('/') && !url.startsWith('//')) url = `${API_BASE}${url}`;
           return url;
         });
-        
-        await Promise.all(imageUrls.map(url => preloadImage(url)));
+        await Promise.all(urls.map(url => preloadImage(url)));
       }
 
-      // Render products and start rotation
-      async function renderProducts(products) {
-        // Products are already filtered as active by the API
-        const validProducts = (products || [])
-          .filter(p => p && p.name); // Filter out any invalid products
-
-        if (validProducts.length === 0) {
-          showEmpty();
-          return;
-        }
-
-        // Shuffle products randomly
-        allProducts = shuffleArray(validProducts);
-        currentPage = 0;
-        
-        // Preload all images before showing anything
-        await preloadAllImages(allProducts);
-        
-        // Render first page
-        renderPage(0);
-        
-        // Setup page rotation
-        setupPageRotation();
-      }
-
-      // Show loading state
-      function showLoading() {
-        document.getElementById('loadingContainer').style.display = 'flex';
-        document.getElementById('errorContainer').style.display = 'none';
-        document.getElementById('emptyContainer').style.display = 'none';
-        document.getElementById('signageContainer').style.display = 'none';
-      }
-
-      // Show error state
-      function showError(message) {
-        document.getElementById('loadingContainer').style.display = 'none';
-        document.getElementById('errorContainer').style.display = 'flex';
-        document.getElementById('emptyContainer').style.display = 'none';
-        document.getElementById('signageContainer').style.display = 'none';
-        document.getElementById('errorText').textContent = message;
-      }
-
-      // Show empty state
-      function showEmpty() {
-        document.getElementById('loadingContainer').style.display = 'none';
-        document.getElementById('errorContainer').style.display = 'none';
-        document.getElementById('emptyContainer').style.display = 'flex';
-        document.getElementById('signageContainer').style.display = 'none';
-      }
-
-      // Show products
-      function showProducts() {
-        document.getElementById('loadingContainer').style.display = 'none';
-        document.getElementById('errorContainer').style.display = 'none';
-        document.getElementById('emptyContainer').style.display = 'none';
-        document.getElementById('signageContainer').style.display = 'block';
-      }
-
-      // Show refresh indicator
-      function showRefreshIndicator() {
-        const indicator = document.getElementById('refreshIndicator');
-        indicator.classList.add('show');
-        setTimeout(() => {
-          indicator.classList.remove('show');
-        }, 2000);
-      }
-
-      // Load and display products
-      async function loadProducts(showIndicator = false) {
-        try {
-          if (showIndicator) {
-            showRefreshIndicator();
-          } else {
-            showLoading();
-          }
-
-          const products = await fetchProducts();
-          renderProducts(products);
-          showProducts();
-        } catch (error) {
-          console.error('Failed to load products:', error);
-          showError(error.message || 'Failed to load menu. Please check your connection.');
-        }
-      }
-
-      // Setup page rotation
-      function setupPageRotation() {
-        if (rotationTimer) {
-          clearInterval(rotationTimer);
-        }
-        
-        rotationTimer = setInterval(() => {
-          currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
-          renderPage(currentPage);
-        }, PAGE_ROTATION_INTERVAL);
-      }
-
-      // Setup auto-refresh
-      function setupAutoRefresh() {
-        if (refreshTimer) {
-          clearInterval(refreshTimer);
-        }
-        
-        refreshTimer = setInterval(() => {
-          loadProducts(true);
-        }, REFRESH_INTERVAL);
-      }
-
-      // Force fullscreen
-      function enterFullscreen() {
-        const elem = document.documentElement;
-        if (elem.requestFullscreen) {
-          elem.requestFullscreen().catch(() => {});
-        } else if (elem.webkitRequestFullscreen) {
-          elem.webkitRequestFullscreen();
-        } else if (elem.msRequestFullscreen) {
-          elem.msRequestFullscreen();
-        }
-      }
-
-      // Initialize
       async function init() {
-        console.log('Digital Signage initializing...');
-        console.log('Tenant ID:', getTenantId());
-        
-        // Enter fullscreen immediately
-        enterFullscreen();
-        
-        // Also try again on any user interaction
-        document.addEventListener('click', enterFullscreen, { once: true });
-        document.addEventListener('touchstart', enterFullscreen, { once: true });
-        
-        await loadProducts();
-        setupAutoRefresh();
-        
-        console.log('Digital Signage ready');
+        try {
+          let products = getCachedData();
+          if (!products) {
+            products = await fetchProducts();
+            setCachedData(products);
+          }
+          
+          products = products.filter(p => p && p.name);
+          allProducts = shuffleArray(products);
+          
+          await preloadAllImages(allProducts);
+          
+          renderPage(0);
+          
+          document.getElementById('loadingContainer').style.display = 'none';
+          document.getElementById('signageContainer').style.display = 'block';
+          
+          // Auto-rotate pages
+          rotationTimer = setInterval(() => {
+            currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
+            renderPage(currentPage);
+          }, PAGE_ROTATION_INTERVAL);
+          
+          // Fullscreen
+          const enterFS = () => {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) elem.requestFullscreen().catch(() => {});
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+          };
+          enterFS();
+          document.addEventListener('click', enterFS, { once: true });
+        } catch (error) {
+          console.error('Failed:', error);
+          // Try expired cache as fallback
+          try {
+            const cached = localStorage.getItem(STORAGE_KEY);
+            if (cached) {
+              const data = JSON.parse(cached);
+              allProducts = shuffleArray(data.products.filter(p => p && p.name));
+              await preloadAllImages(allProducts);
+              renderPage(0);
+              document.getElementById('loadingContainer').style.display = 'none';
+              document.getElementById('signageContainer').style.display = 'block';
+              rotationTimer = setInterval(() => {
+                currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
+                renderPage(currentPage);
+              }, PAGE_ROTATION_INTERVAL);
+            }
+          } catch {}
+        }
       }
 
-      // Start when DOM is ready
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
       } else {
         init();
       }
-
-      // Cleanup on page unload
-      window.addEventListener('beforeunload', () => {
-        if (refreshTimer) {
-          clearInterval(refreshTimer);
-        }
-        if (rotationTimer) {
-          clearInterval(rotationTimer);
-        }
-      });
     </script>
   </body>
 </html>
