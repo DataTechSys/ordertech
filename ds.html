@@ -6,18 +6,15 @@
     <title>OrderTech — Digital Signage</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <style>
-      /* Reset and base styles */
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         background: #A3B1A4;
         color: #2D2A26;
         overflow: hidden;
         width: 100vw;
         height: 100vh;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
 
       :root {
@@ -33,7 +30,6 @@
         width: 100vw;
         height: 100vh;
         padding: 20px;
-        overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -82,7 +78,6 @@
         gap: 2px;
         text-align: center;
         flex-shrink: 0;
-        overflow: hidden;
         padding: 4px 0;
       }
 
@@ -117,13 +112,13 @@
         justify-content: center;
         height: 100vh;
         flex-direction: column;
-        gap: 16px;
+        gap: 24px;
       }
 
       .spinner {
-        width: 48px;
-        height: 48px;
-        border: 4px solid var(--line);
+        width: 64px;
+        height: 64px;
+        border: 5px solid var(--line);
         border-top-color: var(--accent);
         border-radius: 50%;
         animation: spin 1s linear infinite;
@@ -132,12 +127,44 @@
       @keyframes spin {
         to { transform: rotate(360deg); }
       }
+
+      .loading-text {
+        font-size: 18px;
+        font-weight: 500;
+        color: var(--ink);
+      }
+
+      .progress-container {
+        width: 300px;
+        height: 8px;
+        background: var(--line);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 999px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      .progress-percent {
+        font-size: 14px;
+        color: var(--accent);
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
     <div id="loadingContainer" class="loading-container">
       <div class="spinner"></div>
-      <div style="font-size: 16px;">Loading menu...</div>
+      <div class="loading-text">Loading menu...</div>
+      <div class="progress-container">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <div id="progressPercent" class="progress-percent">0%</div>
     </div>
 
     <div id="signageContainer" class="signage-container" style="display: none;">
@@ -146,7 +173,7 @@
 
     <script>
       const API_BASE = 'https://app.ordertech.me'\;
-      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+      const CACHE_DURATION = 24 * 60 * 60 * 1000;
       const PAGE_ROTATION_INTERVAL = 15 * 1000;
       const PRODUCTS_PER_PAGE = 12;
       const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
@@ -155,7 +182,13 @@
       let allProducts = [];
       let currentPage = 0;
       let rotationTimer = null;
-      let preloadedImages = new Map();
+
+      function updateProgress(percent) {
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressPercent');
+        if (bar) bar.style.width = percent + '%';
+        if (text) text.textContent = Math.round(percent) + '%';
+      }
 
       function getTenantId() {
         const params = new URLSearchParams(window.location.search);
@@ -187,32 +220,14 @@
       }
 
       async function fetchProducts() {
+        updateProgress(10);
         const response = await fetch(`${API_BASE}/api/products`, {
           headers: { 'X-Tenant-Id': getTenantId() }
         });
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
+        updateProgress(30);
         return Array.isArray(data) ? data : (data.items || []);
-      }
-
-      function preloadImage(url) {
-        return new Promise((resolve) => {
-          if (preloadedImages.has(url)) {
-            resolve(preloadedImages.get(url));
-            return;
-          }
-          const img = new Image();
-          img.onload = () => {
-            preloadedImages.set(url, url);
-            resolve(url);
-          };
-          img.onerror = () => {
-            const placeholder = `${API_BASE}/images/placeholder.png`;
-            preloadedImages.set(url, placeholder);
-            resolve(placeholder);
-          };
-          img.src = url;
-        });
       }
 
       function createProductCard(product) {
@@ -226,11 +241,11 @@
         if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
           imageUrl = `${API_BASE}${imageUrl}`;
         }
-        const finalUrl = preloadedImages.get(imageUrl) || imageUrl;
 
         card.innerHTML = `
           <div class="product-image-wrapper">
-            <img class="product-image" src="${finalUrl}" alt="${nameEn}"/>
+            <img class="product-image" src="${imageUrl}" alt="${nameEn}" 
+                 onerror="this.src='${API_BASE}/images/placeholder.png'"/>
           </div>
           <div class="product-info">
             <div class="product-name-ar">${nameAr}</div>
@@ -261,34 +276,67 @@
         pageProducts.forEach(product => grid.appendChild(createProductCard(product)));
       }
 
-      async function preloadAllImages(products) {
-        const urls = products.map(p => {
+      async function preloadFirstPageImages(products) {
+        // Only preload first 12 images for quick start
+        const firstPage = products.slice(0, PRODUCTS_PER_PAGE);
+        const urls = firstPage.map(p => {
           let url = p.image_url || '/images/placeholder.png';
           if (url.startsWith('/') && !url.startsWith('//')) url = `${API_BASE}${url}`;
           return url;
         });
-        await Promise.all(urls.map(url => preloadImage(url)));
+
+        let loaded = 0;
+        const promises = urls.map(url => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              loaded++;
+              updateProgress(30 + (loaded / urls.length) * 60);
+              resolve();
+            };
+            img.onerror = () => {
+              loaded++;
+              updateProgress(30 + (loaded / urls.length) * 60);
+              resolve();
+            };
+            img.src = url;
+          });
+        });
+
+        await Promise.all(promises);
+        updateProgress(90);
       }
 
       async function init() {
         try {
           let products = getCachedData();
+          
           if (!products) {
             products = await fetchProducts();
             setCachedData(products);
+          } else {
+            updateProgress(30);
           }
           
           products = products.filter(p => p && p.name);
           allProducts = shuffleArray(products);
           
-          await preloadAllImages(allProducts);
+          updateProgress(50);
+          
+          // Only preload first page for fast start
+          await preloadFirstPageImages(allProducts);
           
           renderPage(0);
           
-          document.getElementById('loadingContainer').style.display = 'none';
-          document.getElementById('signageContainer').style.display = 'block';
+          updateProgress(100);
           
-          // Auto-rotate pages
+          // Hide loading, show content
+          setTimeout(() => {
+            document.getElementById('loadingContainer').style.display = 'none';
+            document.getElementById('signageContainer').style.display = 'block';
+          }, 300);
+          
+          // Start rotation
           rotationTimer = setInterval(() => {
             currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
             renderPage(currentPage);
@@ -302,15 +350,17 @@
           };
           enterFS();
           document.addEventListener('click', enterFS, { once: true });
+          
+          console.log('Digital Signage ready');
         } catch (error) {
           console.error('Failed:', error);
-          // Try expired cache as fallback
+          // Try expired cache
           try {
             const cached = localStorage.getItem(STORAGE_KEY);
             if (cached) {
               const data = JSON.parse(cached);
               allProducts = shuffleArray(data.products.filter(p => p && p.name));
-              await preloadAllImages(allProducts);
+              await preloadFirstPageImages(allProducts);
               renderPage(0);
               document.getElementById('loadingContainer').style.display = 'none';
               document.getElementById('signageContainer').style.display = 'block';
