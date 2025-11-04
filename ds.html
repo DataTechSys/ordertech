@@ -155,6 +155,26 @@
         color: var(--accent);
         font-weight: 600;
       }
+
+      .update-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--accent);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      .update-indicator.show {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
@@ -171,10 +191,12 @@
       <div id="productsGrid" class="products-grid"></div>
     </div>
 
+    <div id="updateIndicator" class="update-indicator">Checking for updates...</div>
+
     <script>
-      const API_BASE = 'https://app.ordertech.me';
-      const CACHE_DURATION = 24 * 60 * 60 * 1000;
-      const PAGE_ROTATION_INTERVAL = 15 * 1000;
+      const API_BASE = 'https://app.ordertech.me'\;
+      const CHECK_UPDATES_INTERVAL = 5 * 60 * 1000; // 5 minutes
+      const PAGE_ROTATION_INTERVAL = 15 * 1000; // 15 seconds
       const PRODUCTS_PER_PAGE = 12;
       const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
       const STORAGE_KEY = 'ordertech_ds_cache';
@@ -182,12 +204,22 @@
       let allProducts = [];
       let currentPage = 0;
       let rotationTimer = null;
+      let updateCheckTimer = null;
 
       function updateProgress(percent) {
         const bar = document.getElementById('progressBar');
         const text = document.getElementById('progressPercent');
         if (bar) bar.style.width = percent + '%';
         if (text) text.textContent = Math.round(percent) + '%';
+      }
+
+      function showUpdateIndicator(message = 'Checking for updates...') {
+        const indicator = document.getElementById('updateIndicator');
+        indicator.textContent = message;
+        indicator.classList.add('show');
+        setTimeout(() => {
+          indicator.classList.remove('show');
+        }, 3000);
       }
 
       function getTenantId() {
@@ -200,11 +232,8 @@
           const cached = localStorage.getItem(STORAGE_KEY);
           if (!cached) return null;
           const data = JSON.parse(cached);
-          if (Date.now() - data.timestamp < CACHE_DURATION) {
-            console.log('Using cached data');
-            return data.products;
-          }
-          return null;
+          console.log('Cache found:', data.products?.length, 'products');
+          return data.products;
         } catch {
           return null;
         }
@@ -216,17 +245,18 @@
             timestamp: Date.now(),
             products: products
           }));
+          console.log('Cached', products.length, 'products');
         } catch {}
       }
 
-      async function fetchProducts() {
-        updateProgress(10);
+      async function fetchProducts(silent = false) {
+        if (!silent) updateProgress(10);
         const response = await fetch(`${API_BASE}/api/products`, {
           headers: { 'X-Tenant-Id': getTenantId() }
         });
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
-        updateProgress(30);
+        if (!silent) updateProgress(30);
         return Array.isArray(data) ? data : (data.items || []);
       }
 
@@ -276,8 +306,7 @@
         pageProducts.forEach(product => grid.appendChild(createProductCard(product)));
       }
 
-      async function preloadFirstPageImages(products) {
-        // Only preload first 12 images for quick start
+      async function preloadFirstPageImages(products, silent = false) {
         const firstPage = products.slice(0, PRODUCTS_PER_PAGE);
         const urls = firstPage.map(p => {
           let url = p.image_url || '/images/placeholder.png';
@@ -291,12 +320,12 @@
             const img = new Image();
             img.onload = () => {
               loaded++;
-              updateProgress(30 + (loaded / urls.length) * 60);
+              if (!silent) updateProgress(30 + (loaded / urls.length) * 60);
               resolve();
             };
             img.onerror = () => {
               loaded++;
-              updateProgress(30 + (loaded / urls.length) * 60);
+              if (!silent) updateProgress(30 + (loaded / urls.length) * 60);
               resolve();
             };
             img.src = url;
@@ -304,7 +333,73 @@
         });
 
         await Promise.all(promises);
-        updateProgress(90);
+        if (!silent) updateProgress(90);
+      }
+
+      function hasProductsChanged(oldProducts, newProducts) {
+        if (!oldProducts || !newProducts) return true;
+        if (oldProducts.length !== newProducts.length) return true;
+        
+        // Check if any product has different data
+        for (let i = 0; i < oldProducts.length; i++) {
+          const oldP = oldProducts[i];
+          const newP = newProducts.find(p => p.id === oldP.id);
+          if (!newP) return true; // Product removed
+          if (oldP.name !== newP.name) return true;
+          if (oldP.name_localized !== newP.name_localized) return true;
+          if (oldP.price !== newP.price) return true;
+          if (oldP.image_url !== newP.image_url) return true;
+        }
+        
+        return false;
+      }
+
+      async function checkForUpdates() {
+        try {
+          console.log('[Update Check] Checking for updates...');
+          showUpdateIndicator('Checking for updates...');
+          
+          const newProducts = await fetchProducts(true);
+          const validNew = newProducts.filter(p => p && p.name);
+          
+          if (hasProductsChanged(allProducts, validNew)) {
+            console.log('[Update Check] Changes detected, updating...');
+            showUpdateIndicator('Menu updated!');
+            
+            // Update cache
+            setCachedData(validNew);
+            
+            // Update display
+            const oldPage = currentPage;
+            allProducts = shuffleArray(validNew);
+            
+            // Preload new images silently
+            await preloadFirstPageImages(allProducts, true);
+            
+            // Re-render current page
+            renderPage(oldPage);
+            
+            console.log('[Update Check] Update complete');
+          } else {
+            console.log('[Update Check] No changes detected');
+            showUpdateIndicator('Menu is up to date');
+          }
+        } catch (error) {
+          console.error('[Update Check] Failed:', error);
+          showUpdateIndicator('Update check failed');
+        }
+      }
+
+      function startUpdateChecks() {
+        if (updateCheckTimer) {
+          clearInterval(updateCheckTimer);
+        }
+        
+        updateCheckTimer = setInterval(() => {
+          checkForUpdates();
+        }, CHECK_UPDATES_INTERVAL);
+        
+        console.log('[Update Check] Scheduled every', CHECK_UPDATES_INTERVAL / 60000, 'minutes');
       }
 
       async function init() {
@@ -312,9 +407,11 @@
           let products = getCachedData();
           
           if (!products) {
+            console.log('No cache, fetching fresh data...');
             products = await fetchProducts();
             setCachedData(products);
           } else {
+            console.log('Using cached data');
             updateProgress(30);
           }
           
@@ -323,24 +420,25 @@
           
           updateProgress(50);
           
-          // Only preload first page for fast start
           await preloadFirstPageImages(allProducts);
           
           renderPage(0);
           
           updateProgress(100);
           
-          // Hide loading, show content
           setTimeout(() => {
             document.getElementById('loadingContainer').style.display = 'none';
             document.getElementById('signageContainer').style.display = 'block';
           }, 300);
           
-          // Start rotation
+          // Start page rotation
           rotationTimer = setInterval(() => {
             currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
             renderPage(currentPage);
           }, PAGE_ROTATION_INTERVAL);
+          
+          // Start update checks
+          startUpdateChecks();
           
           // Fullscreen
           const enterFS = () => {
@@ -353,7 +451,7 @@
           
           console.log('Digital Signage ready');
         } catch (error) {
-          console.error('Failed:', error);
+          console.error('Init failed:', error);
           // Try expired cache
           try {
             const cached = localStorage.getItem(STORAGE_KEY);
@@ -368,6 +466,7 @@
                 currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
                 renderPage(currentPage);
               }, PAGE_ROTATION_INTERVAL);
+              startUpdateChecks();
             }
           } catch {}
         }
@@ -378,6 +477,11 @@
       } else {
         init();
       }
+
+      window.addEventListener('beforeunload', () => {
+        if (rotationTimer) clearInterval(rotationTimer);
+        if (updateCheckTimer) clearInterval(updateCheckTimer);
+      });
     </script>
   </body>
 </html>
