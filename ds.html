@@ -272,6 +272,12 @@
           imageUrl = `${API_BASE}${imageUrl}`;
         }
 
+        // Add cache-busting for Foodics images to force fresh load
+        if (imageUrl.includes("foodics-console-production.s3")) {
+          const separator = imageUrl.includes("?") ? "&" : "?";
+          imageUrl = `${imageUrl}${separator}t=${Date.now()}`;
+        }
+
         card.innerHTML = `
           <div class="product-image-wrapper">
             <img class="product-image" src="${imageUrl}" alt="${nameEn}" 
@@ -360,7 +366,7 @@
           showUpdateIndicator('Checking for updates...');
           
           const newProducts = await fetchProducts(true);
-          const validNew = newProducts.filter(p => p && p.name);
+          const validNew = newProducts.filter(p => p && p.name && p.image_url && p.image_url !== "/images/placeholder.png");
           
           if (hasProductsChanged(allProducts, validNew)) {
             console.log('[Update Check] Changes detected, updating...');
@@ -415,7 +421,7 @@
             updateProgress(30);
           }
           
-          products = products.filter(p => p && p.name);
+          products = products.filter(p => p && p.name && p.image_url && p.image_url !== "/images/placeholder.png");
           allProducts = shuffleArray(products);
           
           updateProgress(50);
@@ -457,7 +463,7 @@
             const cached = localStorage.getItem(STORAGE_KEY);
             if (cached) {
               const data = JSON.parse(cached);
-              allProducts = shuffleArray(data.products.filter(p => p && p.name));
+              allProducts = shuffleArray(data.products.filter(p => p && p.name && p.image_url && p.image_url !== "/images/placeholder.png"));
               await preloadFirstPageImages(allProducts);
               renderPage(0);
               document.getElementById('loadingContainer').style.display = 'none';
