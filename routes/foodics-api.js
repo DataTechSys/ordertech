@@ -813,10 +813,11 @@ function initFoodicsRoutes(db) {
         return res.status(400).json({ error: 'Valid 6-digit Activation Code required' });
       }
       
-      // Get tenant_id from foodics_id (company_id)
+      // Get tenant_id and foodics_api_token from foodics_id (company_id)
       const tenantResult = await db(
-        `SELECT t.tenant_id, t.license_limit as devices_allowed
+        `SELECT t.tenant_id, t.license_limit as devices_allowed, fu.foodics_api_token
          FROM saas.tenants t
+         LEFT JOIN foodics_users fu ON t.foodics_id = fu.foodics_id
          WHERE t.foodics_id = $1`,
         [company_id]
       );
@@ -827,6 +828,7 @@ function initFoodicsRoutes(db) {
       }
       
       const tenant_id = tenantRows[0].tenant_id;
+      const foodics_token = tenantRows[0].foodics_api_token || null;
       
       // Find activation code
       const codeResult = await db(
@@ -879,7 +881,8 @@ function initFoodicsRoutes(db) {
         device_id,
         device_name: codeData.device_name,
         device_type: codeData.device_type,
-        branch_id: codeData.branch_id
+        branch_id: codeData.branch_id,
+        foodics_token: foodics_token
       });
       
     } catch (error) {

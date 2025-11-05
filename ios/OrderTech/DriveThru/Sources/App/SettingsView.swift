@@ -258,8 +258,9 @@ struct SettingsView: View {
         defer { isActivating = false }
         
         do {
-            // Try to claim the activation code via Foodics API
-            guard let url = URL(string: "http://192.168.1.126:8080/api/foodics/devices/activate") else {
+            // Try to claim the activation code via Foodics API  
+            // TODO: Change back to https://app.ordertech.me/api/foodics/devices/activate after production deployment
+            guard let url = URL(string: "https://faa89f54fcf1.ngrok-free.app/api/foodics/devices/activate") else {
                 activationError = "Invalid URL"
                 return
             }
@@ -293,13 +294,25 @@ struct SettingsView: View {
                    status.lowercased() == "claimed",
                    let token = json["device_token"] as? String {
                     print("[Settings] Activation successful - token received")
+                    
+                    // Extract Foodics token if available
+                    let foodicsToken = json["foodics_token"] as? String
+                    
                     await MainActor.run {
                         env.tenantId = companyId
                         env.deviceToken = token
+                        if let foodicsToken = foodicsToken, !foodicsToken.isEmpty {
+                            env.foodicsToken = foodicsToken
+                            print("[Settings] Foodics token saved: \(foodicsToken.prefix(20))...")
+                        }
                         companyId = ""
                         activationCode = ""
                     }
                     await activation.updateAfterActivation(env: env, app: app)
+                    
+                    // Auto-sync catalog after activation
+                    print("[Settings] Auto-syncing catalog after activation")
+                    await syncData()
                     return
                 } else {
                     print("[Settings] JSON parsing failed or status != claimed")
