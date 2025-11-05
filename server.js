@@ -9029,8 +9029,12 @@ addRoute('post', '/device/pair/register', requireTenant, async (req, res) => {
   // Return immediate activation payload
   return res.json({ status: 'claimed', device_token: token, tenant_id: tenantId, role, branch: dev.branch, device_id: dev.id, name: dev.name });
   } catch (e) {
-    try { console.error('register_failed', e?.message || e, e?.stack ? String(e.stack).split('\n')[0] : ''); } catch {}
-    return res.status(500).json({ error: 'register_failed' });
+    try { 
+      console.error('[device-register] FAILURE:', e?.message || e); 
+      console.error('[device-register] Stack:', e?.stack);
+      console.error('[device-register] Code:', code, 'Tenant:', tenantId, 'Role:', role);
+    } catch {}
+    return res.status(500).json({ error: 'register_failed', detail: e?.message });
   }
 });
 

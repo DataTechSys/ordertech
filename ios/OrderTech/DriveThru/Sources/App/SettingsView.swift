@@ -12,6 +12,12 @@ struct SettingsView: View {
     @AppStorage("OT.display.shareLocation") private var shareLocation: Bool = true
     @AppStorage("OT.display.externalRotation") private var externalRotationRaw: String = ExternalRotationMode.none.rawValue
     
+    // Activation state
+    @State private var companyId: String = ""
+    @State private var activationCode: String = ""
+    @State private var isActivating: Bool = false
+    @State private var activationError: String? = nil
+    
     // Idle Poster settings
     @AppStorage("OT.display.idlePosterEnabled") private var idlePosterEnabled: Bool = false
     @AppStorage("OT.display.idleTimeout") private var idleTimeout: Double = 15.0
@@ -21,6 +27,59 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                // Show activation section if device is not activated
+                if env.deviceToken == nil || (env.deviceToken ?? "").isEmpty {
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Company ID (6 digits)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            TextField("123456", text: $companyId)
+                                .textFieldStyle(.roundedBorder)
+                                .keyboardType(.numberPad)
+                                .onChange(of: companyId) { newValue in
+                                    companyId = String(newValue.filter { $0.isNumber }.prefix(6))
+                                }
+                            
+                            Text("Activation Code (6 digits)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            TextField("123456", text: $activationCode)
+                                .textFieldStyle(.roundedBorder)
+                                .keyboardType(.numberPad)
+                                .onChange(of: activationCode) { newValue in
+                                    activationCode = String(newValue.filter { $0.isNumber }.prefix(6))
+                                }
+                            
+                            if let error = activationError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                            
+                            Button(action: { Task { await activateDevice() } }) {
+                                HStack {
+                                    if isActivating {
+                                        ProgressView()
+                                            .progressViewStyle(.circular)
+                                            .scaleEffect(0.8)
+                                    }
+                                    Text(isActivating ? "Activating..." : "Activate Device")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(companyId.count != 6 || activationCode.count != 6 || isActivating)
+                        }
+                        .padding(.vertical, 8)
+                    } header: {
+                        Text("Device Activation")
+                    } footer: {
+                        Text("Get your Company ID and Activation Code from the admin dashboard at foodics.ordertech.me")
+                    }
+                }
+                
                 Section("Device") {
                     HStack { Text("Device ID"); Spacer(); Text(app.deviceId).font(.footnote).foregroundColor(.secondary) }
                     HStack { Text("Branch"); Spacer(); Text(app.branchName).font(.footnote).foregroundColor(.secondary) }
@@ -40,32 +99,50 @@ struct SettingsView: View {
                 }
                 
                 Section {
-                    // Foodics token field
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Foodics API Token")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        SecureField("Enter Foodics token from Admin", text: Binding(
-                            get: { env.foodicsToken ?? "" },
-                            set: { env.foodicsToken = $0.isEmpty ? nil : $0 }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                        .autocapitalization(.none)
-                        .autocorrectionDisabled()
-                        if let token = env.foodicsToken, !token.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.caption)
-                                Text("Token saved")
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
+                    // Foodics token status (read-only)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Foodics API Token")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            if let token = env.foodicsToken, !token.isEmpty {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                    Text("Active")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                }
+                            } else {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "exclamationmark.circle.fill")
+                                        .foregroundColor(.orange)
+                                    Text("Not Available")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                }
                             }
+                        }
+                        
+                        if let token = env.foodicsToken, !token.isEmpty {
+                            // Show token preview (first 20 chars)
+                            HStack {
+                                Text("\(token.prefix(20))...")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            .padding(8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(6)
                         } else {
-                            Text("Get your Foodics API token from the Admin page")
+                            Text("Token will be automatically synced from server during device activation")
                                 .font(.caption2)
-                                .foregroundColor(.orange)
+                                .foregroundColor(.secondary)
+                                .padding(8)
+                                .background(Color.blue.opacity(0.05))
+                                .cornerRadius(6)
                         }
                     }
                     .padding(.vertical, 4)
@@ -168,6 +245,71 @@ struct SettingsView: View {
 
     private func refreshAdmin() async {
         await activation.updateFromManifest(env: env, app: app)
+    }
+    
+    private func activateDevice() async {
+        guard companyId.count == 6, activationCode.count == 6 else {
+            activationError = "Please enter valid 6-digit codes"
+            return
+        }
+        
+        isActivating = true
+        activationError = nil
+        defer { isActivating = false }
+        
+        do {
+            // Try to claim the activation code via Foodics API
+            guard let url = URL(string: "http://192.168.1.126:8080/api/foodics/devices/activate") else {
+                activationError = "Invalid URL"
+                return
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "content-type")
+            request.setValue("application/json", forHTTPHeaderField: "accept")
+            
+            let payload: [String: Any] = [
+                "company_id": companyId,
+                "activation_code": activationCode
+            ]
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                activationError = "Invalid response"
+                return
+            }
+            
+            print("[Settings] Activation response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("[Settings] Activation response body: \(responseString)")
+            }
+            
+            if httpResponse.statusCode == 200 {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let status = json["status"] as? String,
+                   status.lowercased() == "claimed",
+                   let token = json["device_token"] as? String {
+                    print("[Settings] Activation successful - token received")
+                    await MainActor.run {
+                        env.tenantId = companyId
+                        env.deviceToken = token
+                        companyId = ""
+                        activationCode = ""
+                    }
+                    await activation.updateAfterActivation(env: env, app: app)
+                    return
+                } else {
+                    print("[Settings] JSON parsing failed or status != claimed")
+                }
+            }
+            
+            activationError = "Activation failed. Please check your codes and try again."
+        } catch {
+            activationError = "Error: \(error.localizedDescription)"
+        }
     }
 }
 
