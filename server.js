@@ -4464,13 +4464,40 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
     if (!HAS_DB) return res.status(503).json({ error: 'db_unavailable' });
     const [brandRow] = await db('select display_name, logo_url, color_primary, color_secondary from tenant_brand where tenant_id=$1', [req.tenantId]);
     const tok = String(req.header('x-device-token')||'').trim();
-    const profileRows = tok ? await db(`
-      select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
-        from devices d
-        left join tenants t on t.tenant_id = d.tenant_id
-       where d.device_token=$1 and d.status='active' and d.tenant_id=$2
-       limit 1
-    `, [tok, req.tenantId]) : [];
+    
+    // Check both devices table (regular schema) and saas.devices (Foodics schema)
+    let profileRows = [];
+    if (tok) {
+      // Try regular devices table first
+      profileRows = await db(`
+        select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
+          from devices d
+          left join tenants t on t.tenant_id = d.tenant_id
+         where d.device_token=$1 and d.status='active' and d.tenant_id=$2
+         limit 1
+      `, [tok, req.tenantId]);
+      
+      // If not found, try saas.devices (Foodics schema)
+      if (!profileRows.length) {
+        try {
+          profileRows = await db(`
+            select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.foodics_id as short_code
+              from saas.devices d
+              left join saas.tenants t on t.tenant_id = d.tenant_id
+             where d.device_token=$1 and d.status='active' and d.deleted_at IS NULL and d.tenant_id=$2
+             limit 1
+          `, [tok, req.tenantId]);
+        } catch (e) {
+          // saas schema might not exist, ignore
+        }
+      }
+    }
+    
+    // If device token provided but no device found (deleted or revoked), return 401
+    if (tok && (!profileRows || profileRows.length === 0)) {
+      return res.status(401).json({ error: 'device_not_found_or_deleted' });
+    }
+    
     const brand = brandRow || {};
     const profile = (profileRows && profileRows[0]) ? profileRows[0] : {};
     return res.json({ brand, profile });
