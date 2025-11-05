@@ -258,8 +258,9 @@ struct SettingsView: View {
         defer { isActivating = false }
         
         do {
-            // Try to claim the activation code via Foodics API  
-            // TODO: Change back to https://app.ordertech.me/api/foodics/devices/activate after production deployment
+            // Try to claim the activation code via Foodics API
+            // TEMPORARY: Using ngrok tunnel to local server (localhost:8080) which connects to production cloud database
+            // TODO: Once Cloud Run deployment is fixed, change to: https://app.ordertech.me/api/foodics/devices/activate  
             guard let url = URL(string: "https://faa89f54fcf1.ngrok-free.app/api/foodics/devices/activate") else {
                 activationError = "Invalid URL"
                 return
