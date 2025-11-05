@@ -94,6 +94,30 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                     }
+                    
+                    // Subscription status
+                    if let subscription = activation.info?.subscription {
+                        HStack {
+                            Text("Subscription")
+                            Spacer()
+                            if subscription.isExpired {
+                                Text("Expired")
+                                    .font(.footnote)
+                                    .foregroundColor(.red)
+                                    .fontWeight(.semibold)
+                            } else if subscription.daysRemaining <= 30 {
+                                Text("\(subscription.daysRemaining) days left")
+                                    .font(.footnote)
+                                    .foregroundColor(subscription.daysRemaining <= 7 ? .orange : .secondary)
+                                    .fontWeight(subscription.daysRemaining <= 7 ? .semibold : .regular)
+                            } else {
+                                Text("Active (\(subscription.daysRemaining) days)")
+                                    .font(.footnote)
+                                    .foregroundColor(.green)
+                            }
+                        }
+                    }
+                    
                     Toggle("Share location", isOn: $shareLocation)
                     Button("Refresh from Admin") { Task { await refreshAdmin() } }
                 }

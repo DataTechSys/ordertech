@@ -2,6 +2,13 @@ import Foundation
 import SwiftUI
 import OrderTechCore
 
+struct SubscriptionInfo: Codable {
+    let status: String
+    let expiresAt: Date
+    let daysRemaining: Int
+    let isExpired: Bool
+}
+
 struct ActivationInfo: Codable {
     let tenantId: String
     let companyName: String?
@@ -10,6 +17,7 @@ struct ActivationInfo: Codable {
     let tenantShortId: String?
     let activatedAt: Date
     let expiresAt: Date
+    var subscription: SubscriptionInfo?
 }
 
 @MainActor
@@ -112,6 +120,7 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
             var branchName = base.branchName
             var shortId = base.shortId
             var expiresFromServer = base.expiresAt
+            var subscriptionInfo = base.subscription
 
             // Fallback: if display name missing, fetch /device/profile
             if displayName == nil || displayName!.isEmpty {
@@ -151,9 +160,17 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
                 displayName: displayName,
                 tenantShortId: shortId,
                 activatedAt: activatedAt,
-                expiresAt: expiresAt
+                expiresAt: expiresAt,
+                subscription: subscriptionInfo
             )
             self.info = info
+            
+            // If subscription is expired, auto-deactivate
+            if let sub = subscriptionInfo, sub.isExpired {
+                print("[Activation] Subscription expired - auto-deactivating")
+                env.deviceToken = nil
+                return
+            }
             _ = try? LocalCache.saveJSON(info, to: activationFilename)
 
             // Update AppModel local fields for UI consistency
@@ -212,10 +229,11 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
         }
     }
 
-    private func extractDetails(from obj: Any?) -> (companyName: String?, displayName: String?, branchName: String?, shortId: String?, expiresAt: Date?) {
-        guard let dict = obj as? [String: Any] else { return (nil, nil, nil, nil, nil) }
+    private func extractDetails(from obj: Any?) -> (companyName: String?, displayName: String?, branchName: String?, shortId: String?, expiresAt: Date?, subscription: SubscriptionInfo?) {
+        guard let dict = obj as? [String: Any] else { return (nil, nil, nil, nil, nil, nil) }
         let profile = dict["profile"] as? [String: Any]
         let brand = dict["brand"] as? [String: Any]
+        let subscriptionDict = dict["subscription"] as? [String: Any]
 
         func nonEmpty(_ s: Any?) -> String? {
             guard let s = s as? String else { return nil }
@@ -254,7 +272,23 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
         for c in expiryCandidates {
             if let d = parseDate(c) { expiresAt = d; break }
         }
-        return (companyName, displayName, branchName, shortId, expiresAt)
+        
+        // Parse subscription info if available
+        var subscription: SubscriptionInfo? = nil
+        if let subDict = subscriptionDict,
+           let status = subDict["status"] as? String,
+           let daysRemaining = subDict["days_remaining"] as? Int,
+           let isExpired = subDict["is_expired"] as? Bool,
+           let expiresAtDate = parseDate(subDict["expires_at"]) {
+            subscription = SubscriptionInfo(
+                status: status,
+                expiresAt: expiresAtDate,
+                daysRemaining: daysRemaining,
+                isExpired: isExpired
+            )
+        }
+        
+        return (companyName, displayName, branchName, shortId, expiresAt, subscription)
     }
 
     private func parseDate(_ any: Any?) -> Date? {

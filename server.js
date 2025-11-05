@@ -4467,6 +4467,8 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
     
     // Check both devices table (regular schema) and saas.devices (Foodics schema)
     let profileRows = [];
+    let subscriptionInfo = null;
+    
     if (tok) {
       // Try regular devices table first
       profileRows = await db(`
@@ -4477,16 +4479,41 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
          limit 1
       `, [tok, req.tenantId]);
       
-      // If not found, try saas.devices (Foodics schema)
+      // If not found, try saas.devices (Foodics schema) with subscription info
       if (!profileRows.length) {
         try {
           profileRows = await db(`
-            select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.foodics_id as short_code
+            select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, 
+                   t.company_name as tenant_name, t.foodics_id as short_code,
+                   t.subscription_expires_at, t.subscription_status
               from saas.devices d
               left join saas.tenants t on t.tenant_id = d.tenant_id
              where d.device_token=$1 and d.status='active' and d.deleted_at IS NULL and d.tenant_id=$2
              limit 1
           `, [tok, req.tenantId]);
+          
+          // Extract subscription info if available
+          if (profileRows.length > 0) {
+            const row = profileRows[0];
+            if (row.subscription_expires_at) {
+              const expiresAt = new Date(row.subscription_expires_at);
+              const now = new Date();
+              const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+              const isExpired = daysRemaining <= 0;
+              
+              subscriptionInfo = {
+                status: row.subscription_status || 'active',
+                expires_at: row.subscription_expires_at,
+                days_remaining: Math.max(0, daysRemaining),
+                is_expired: isExpired
+              };
+              
+              // If subscription is expired, treat as unauthorized
+              if (isExpired) {
+                return res.status(401).json({ error: 'subscription_expired', subscription: subscriptionInfo });
+              }
+            }
+          }
         } catch (e) {
           // saas schema might not exist, ignore
         }
@@ -4500,7 +4527,14 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
     
     const brand = brandRow || {};
     const profile = (profileRows && profileRows[0]) ? profileRows[0] : {};
-    return res.json({ brand, profile });
+    
+    // Remove subscription fields from profile, return separately
+    if (profile.subscription_expires_at) {
+      delete profile.subscription_expires_at;
+      delete profile.subscription_status;
+    }
+    
+    return res.json({ brand, profile, subscription: subscriptionInfo });
   } catch (_e) { return res.status(500).json({ error: 'server_error' }); }
 });
 
