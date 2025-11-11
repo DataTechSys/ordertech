@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/foodics-sync-items:latest'
+      - '-f'
+      - 'jobs/Dockerfile.items'
+      - '.'
+images:
+  - 'gcr.io/$PROJECT_ID/foodics-sync-items:latest'

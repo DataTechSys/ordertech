@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Branches Dashboard - Foodics</title>
+  <meta name="description" content="Branch performance analytics dashboard powered by Foodics integration. Track orders, sales, peak times, and product performance by location.">
+  <link rel="icon" type="image/x-icon" href="https://storage.googleapis.com/ordertech.me/images/favicon.ico">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://foodics.ordertech.me/branches">
+  <meta property="og:title" content="Branches Dashboard - Foodics | OrderTech">
+  <meta property="og:description" content="Branch performance analytics dashboard powered by Foodics integration. Track orders, sales, peak times, and product performance by location.">
+  <meta property="og:image" content="https://storage.googleapis.com/ordertech.me/images/ordertech.png">
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://foodics.ordertech.me/branches">
+  <meta property="twitter:title" content="Branches Dashboard - Foodics | OrderTech">
+  <meta property="twitter:description" content="Branch performance analytics dashboard powered by Foodics integration. Track orders, sales, peak times, and product performance by location.">
+  <meta property="twitter:image" content="https://storage.googleapis.com/ordertech.me/images/ordertech.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #2d3748;
+    }
+    
+    .header {
+      background: white;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 1.5rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .header-content {
+      max-width: 1800px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .header-logo {
+      width: 50px;
+      height: 50px;
+      object-fit: contain;
+    }
+    
+    .header-title h1 {
+      font-size: 1.5rem;
+      color: #1a202c;
+      font-weight: 700;
+    }
+    
+    .header-nav {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: 2rem;
+    }
+    
+    .nav-link {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+      transition: all 0.2s;
+    }
+    
+    .nav-link:hover {
+      background: #f7fafc;
+      color: #667eea;
+    }
+    
+    .nav-link.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .date-selector {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .date-range-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.9rem;
+      border: 2px solid #cbd5e0;
+      border-radius: 6px;
+      background: white;
+      height: 100%;
+    }
+    
+    .date-range-box input {
+      border: none;
+      outline: none;
+      font-size: 0.8rem;
+      padding: 0;
+      width: 105px;
+    }
+    
+    .date-range-box span {
+      color: #718096;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+    
+    .quick-filters {
+      position: relative;
+    }
+    
+    .btn-period {
+      padding: 0.5rem 0.9rem;
+      border: 2px solid #cbd5e0;
+      background: white;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #4a5568;
+      min-width: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    
+    .btn-period span:first-child {
+      flex: 1;
+      text-align: left;
+    }
+    
+    .btn-period span:last-child {
+      font-size: 0.65rem;
+      opacity: 0.7;
+    }
+    
+    .btn-period:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+    
+    .period-dropdown {
+      position: absolute;
+      top: 110%;
+      left: 0;
+      min-width: 150px;
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      padding: 0.5rem;
+      z-index: 1000;
+    }
+    
+    .period-dropdown.hidden {
+      display: none;
+    }
+    
+    .period-option {
+      padding: 0.6rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+    }
+    
+    .period-option:hover {
+      background: #f7fafc;
+      color: #667eea;
+    }
+    
+    .period-option.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .period-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 0.5rem 0;
+    }
+    
+    .btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: white;
+      color: #4a5568;
+      border-color: #cbd5e0;
+    }
+    
+    .btn-primary:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+    
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .stats-bar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .stat-item {
+      text-align: center;
+    }
+    
+    .stat-label {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    
+    .branches-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    
+    .branch-card {
+      background: white;
+      border-radius: 16px;
+      padding: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: all 0.3s;
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+    
+    .branch-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(102, 126, 234, 0.15);
+      border-color: #667eea;
+    }
+    
+    .branch-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 1rem 1.25rem;
+      position: relative;
+    }
+    
+    .branch-name {
+      font-size: clamp(1rem, 2vw, 1.3rem);
+      font-weight: 700;
+      color: white;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      line-height: 1.2;
+    }
+    
+    .branch-name::before {
+      content: '📍';
+      font-size: clamp(0.9rem, 1.8vw, 1.1rem);
+    }
+    
+    .branch-body {
+      padding: 1rem;
+    }
+    
+    .branch-metrics {
+      margin-bottom: 1rem;
+    }
+    
+    .metrics-container {
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+    
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .metrics-table thead th {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.6rem 0.5rem;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .metrics-table thead th:last-child {
+      border-right: none;
+    }
+    
+    .metrics-table tbody td {
+      padding: 0.7rem 0.5rem;
+      text-align: center;
+      border-right: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .metrics-table tbody td:last-child {
+      border-right: none;
+    }
+    
+    .metrics-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .metric-label {
+      font-size: 0.65rem;
+      color: #718096;
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+    }
+    
+    .metric-value {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #2d3748;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.2rem;
+    }
+    
+    .currency-tag {
+      display: inline-block;
+      font-size: 0.5em;
+      opacity: 0.7;
+      font-weight: 600;
+      vertical-align: super;
+      margin-right: 0.2em;
+    }
+    
+    .metric-prev {
+      font-size: 0.7rem;
+      color: #718096;
+      font-weight: 600;
+      margin-top: 0.15rem;
+    }
+    
+    .metric-change {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      margin-top: 0.2rem;
+      display: inline-block;
+    }
+    
+    .metric-change.positive {
+      color: #38a169;
+      background: #f0fff4;
+    }
+    
+    .metric-change.positive::before {
+      content: '↗ ';
+    }
+    
+    .metric-change.negative {
+      color: #e53e3e;
+      background: #fff5f5;
+    }
+    
+    .metric-change.negative::before {
+      content: '↘ ';
+    }
+    
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: #2d3748;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      letter-spacing: 0.8px;
+      padding-bottom: 0.4rem;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    
+    .top-products {
+      margin-bottom: 1rem;
+      background: #f8f9fa;
+      padding: 0.75rem;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .product-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.6rem;
+      margin-bottom: 0.4rem;
+      background: white;
+      border-radius: 6px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    
+    .product-item:hover {
+      border-color: #667eea;
+      transform: translateX(4px);
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+    }
+    
+    .product-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .product-rank {
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: white;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 0.5rem;
+      flex-shrink: 0;
+    }
+    
+    .product-name {
+      flex: 1;
+      font-size: clamp(0.75rem, 1.4vw, 0.8rem);
+      color: #2d3748;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    
+    .product-value {
+      font-size: clamp(0.75rem, 1.4vw, 0.8rem);
+      font-weight: 800;
+      color: #38a169;
+      background: #f0fff4;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    
+    .order-types-table {
+      width: 100%;
+      margin-bottom: 1rem;
+      font-size: 0.75rem;
+      background: #f8f9fa;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .order-types-table th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      color: #4a5568;
+      font-weight: 700;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      background: white;
+      border-bottom: 2px solid #e2e8f0;
+      letter-spacing: 0.3px;
+    }
+    
+    .order-types-table td {
+      padding: 0.5rem 0.75rem;
+      background: white;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .order-types-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .order-types-table tbody tr:hover td {
+      background: #f7fafc;
+    }
+    
+    .order-type-icon {
+      margin-right: 0.4rem;
+      font-size: 0.9rem;
+    }
+    
+    .order-type-current {
+      font-weight: 800;
+      color: #2d3748;
+      font-size: clamp(0.75rem, 1.4vw, 0.8rem);
+    }
+    
+    .order-type-prev {
+      font-size: clamp(0.65rem, 1.2vw, 0.7rem);
+      color: #718096;
+      margin-left: 0.25rem;
+    }
+    
+    .peak-time-box {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .peak-time-box::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      animation: pulse 3s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    
+    .peak-time-label {
+      font-size: 0.65rem;
+      opacity: 0.95;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 700;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .peak-time-value {
+      font-size: clamp(1.5rem, 3vw, 1.8rem);
+      font-weight: 900;
+      margin-bottom: 0.35rem;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+      z-index: 1;
+    }
+    
+    .peak-time-compare {
+      font-size: 0.65rem;
+      opacity: 0.9;
+      font-weight: 600;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 4rem;
+      color: #718096;
+    }
+    
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #4c51bf;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 2rem auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .error {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+      text-align: center;
+    }
+    
+    @media (max-width: 1200px) {
+      .branches-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .branches-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      
+      .metric-divider {
+        width: 100%;
+        height: 1px;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <div class="header-title">
+        <img src="https://storage.googleapis.com/ordertech.me/images/ordertech.png" alt="OrderTech" class="header-logo">
+        <h1>Branches Dashboard</h1>
+        <div class="header-nav">
+          <a href="/sales" class="nav-link">Products</a>
+          <a href="/branches" class="nav-link active">Branches</a>
+          <a href="/customers" class="nav-link">Customers</a>
+        </div>
+      </div>
+      <div class="date-selector">
+        <div class="date-range-box">
+          <input type="date" id="dateFrom">
+          <span>-</span>
+          <input type="date" id="dateTo">
+        </div>
+        <div class="quick-filters">
+          <button class="btn-period" id="periodBtn">
+            <span id="periodLabel">This Month</span>
+            <span>▼</span>
+          </button>
+          <div class="period-dropdown hidden" id="periodDropdown">
+            <div class="period-option" onclick="setQuickFilter('today')">Today</div>
+            <div class="period-option" onclick="setQuickFilter('thisWeek')">This Week</div>
+            <div class="period-option active" onclick="setQuickFilter('thisMonth')">This Month</div>
+            <div class="period-option" onclick="setQuickFilter('thisYear')">This Year</div>
+            <div class="period-divider"></div>
+            <div class="period-option" onclick="setQuickFilter('yesterday')">Yesterday</div>
+            <div class="period-option" onclick="setQuickFilter('lastWeek')">Last Week</div>
+            <div class="period-option" onclick="setQuickFilter('lastMonth')">Last Month</div>
+            <div class="period-option" onclick="setQuickFilter('lastYear')">Last Year</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="loadData()">Load Data</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="container">
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar" style="display: none;">
+      <div class="stat-item">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value" id="totalRevenue">0 KWD</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Total Orders</div>
+        <div class="stat-value" id="totalOrders">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Active Branches</div>
+        <div class="stat-value" id="branchesCount">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Avg Branch Revenue</div>
+        <div class="stat-value" id="avgBranchRevenue">0 KWD</div>
+      </div>
+    </div>
+    
+    <!-- Branches Grid -->
+    <div id="branchesContainer">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 1rem; font-size: 1.1rem;">Loading branches...</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const FOODICS_ID = localStorage.getItem('foodics_id') || '494675';
+    const API_BASE = window.location.origin;
+    
+    const ORDER_TYPES = {
+      1: { name: 'Dine-in', icon: '🍽️' },
+      2: { name: 'Pickup', icon: '🥡' },
+      3: { name: 'Delivery', icon: '🚗' },
+      4: { name: 'Drive-thru', icon: '🚙' }
+    };
+    
+    // Quick date filter
+    function setQuickFilter(filter) {
+      const today = new Date();
+      let from, to, label;
+      
+      document.querySelectorAll('.period-option').forEach(opt => opt.classList.remove('active'));
+      
+      switch(filter) {
+        case 'today':
+          from = to = new Date();
+          label = 'Today';
+          break;
+        case 'thisWeek':
+          to = new Date();
+          from = new Date(today);
+          const day = from.getDay();
+          const diff = from.getDate() - day + (day === 0 ? -6 : 1);
+          from.setDate(diff);
+          label = 'This Week';
+          break;
+        case 'thisMonth':
+          from = new Date(today.getFullYear(), today.getMonth(), 1);
+          to = new Date();
+          label = 'This Month';
+          break;
+        case 'thisYear':
+          from = new Date(today.getFullYear(), 0, 1);
+          to = new Date();
+          label = 'This Year';
+          break;
+        case 'yesterday':
+          from = to = new Date(today.setDate(today.getDate() - 1));
+          label = 'Yesterday';
+          break;
+        case 'lastWeek':
+          to = new Date(today);
+          const lastSunday = to.getDate() - to.getDay();
+          to.setDate(lastSunday);
+          from = new Date(to);
+          from.setDate(from.getDate() - 6);
+          label = 'Last Week';
+          break;
+        case 'lastMonth':
+          from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          to = new Date(today.getFullYear(), today.getMonth(), 0);
+          label = 'Last Month';
+          break;
+        case 'lastYear':
+          from = new Date(today.getFullYear() - 1, 0, 1);
+          to = new Date(today.getFullYear() - 1, 11, 31);
+          label = 'Last Year';
+          break;
+      }
+      
+      document.getElementById('periodLabel').textContent = label;
+      event.target.classList.add('active');
+      document.getElementById('periodDropdown').classList.add('hidden');
+      
+      document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
+      document.getElementById('dateTo').value = to.toISOString().split('T')[0];
+      loadData();
+    }
+    
+    // Initialize period dropdown
+    function initPeriodDropdown() {
+      const btn = document.getElementById('periodBtn');
+      const dropdown = document.getElementById('periodDropdown');
+      
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('hidden');
+      });
+      
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+          dropdown.classList.add('hidden');
+        }
+      });
+    }
+    
+    // Initialize dates
+    function initDates() {
+      const today = new Date();
+      const firstDayThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      
+      document.getElementById('dateFrom').value = firstDayThisMonth.toISOString().split('T')[0];
+      document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+    }
+    
+    // Load data
+    async function loadData() {
+      const from = document.getElementById('dateFrom').value;
+      const to = document.getElementById('dateTo').value;
+      
+      if (!from || !to) {
+        alert('Please select date range');
+        return;
+      }
+      
+      document.getElementById('branchesContainer').innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 1rem; font-size: 1.1rem;">Loading branches...</p></div>';
+      document.getElementById('statsBar').style.display = 'none';
+      
+      try {
+        const params = new URLSearchParams({
+          foodics_id: FOODICS_ID,
+          from,
+          to
+        });
+        
+        const res = await fetch(`${API_BASE}/api/foodics/analytics/branches-performance?${params.toString()}`);
+        
+        if (!res.ok) {
+          throw new Error('Failed to load data');
+        }
+        
+        const data = await res.json();
+        
+        // Update stats - format currency with 3 decimals and KWD tag
+        const formatCurrency = (num) => {
+          const formatted = parseFloat(num).toLocaleString('en-US', {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3
+          });
+          return `<span class="currency-tag">KWD</span>${formatted}`;
+        };
+        
+        document.getElementById('totalRevenue').innerHTML = formatCurrency(data.summary.total_revenue);
+        document.getElementById('totalOrders').textContent = data.summary.total_orders.toLocaleString('en-US');
+        document.getElementById('branchesCount').textContent = data.branches.length;
+        document.getElementById('avgBranchRevenue').innerHTML = formatCurrency(data.summary.avg_branch_revenue);
+        document.getElementById('statsBar').style.display = 'grid';
+        
+        // Render branches
+        renderBranches(data.branches);
+        
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('branchesContainer').innerHTML = 
+          `<div class="error">Failed to load data: ${error.message}</div>`;
+      }
+    }
+    
+    // Render branches grid
+    function renderBranches(branches) {
+      const container = document.getElementById('branchesContainer');
+      
+      if (branches.length === 0) {
+        container.innerHTML = '<div class="loading"><p style="font-size: 1.2rem;">No branches found</p></div>';
+        return;
+      }
+      
+      const gridHtml = `
+        <div class="branches-grid">
+          ${branches.map(branch => renderBranchCard(branch)).join('')}
+        </div>
+      `;
+      
+      container.innerHTML = gridHtml;
+    }
+    
+    // Render individual branch card
+    function renderBranchCard(branch) {
+      const formatCurrency = (num) => parseFloat(num).toLocaleString('en-US', {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3
+      });
+      const formatPercent = (num) => num.toFixed(1);
+      
+      // Calculate comparisons
+      const ordersChange = branch.orders_prev > 0 ? ((branch.orders - branch.orders_prev) / branch.orders_prev * 100) : 0;
+      const revenueChange = branch.revenue_prev > 0 ? ((branch.revenue - branch.revenue_prev) / branch.revenue_prev * 100) : 0;
+      
+      const ordersClass = ordersChange >= 0 ? 'positive' : 'negative';
+      const revenueClass = revenueChange >= 0 ? 'positive' : 'negative';
+      
+      return `
+        <div class="branch-card">
+          <div class="branch-header">
+            <div class="branch-name">${branch.name}</div>
+          </div>
+          <div class="branch-body">
+          
+          <div class="branch-metrics">
+            <div class="metrics-container">
+              <table class="metrics-table">
+                <thead>
+                  <tr>
+                    <th>Orders</th>
+                    <th>Sales</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div class="metric-value">${branch.orders.toLocaleString()}</div>
+                      <div class="metric-prev">${branch.orders_prev.toLocaleString()}</div>
+                      <div class="metric-change ${ordersClass}">${ordersChange >= 0 ? '+' : ''}${formatPercent(ordersChange)}%</div>
+                    </td>
+                    <td>
+                      <div class="metric-value"><span class="currency-tag">KWD</span>${formatCurrency(branch.revenue)}</div>
+                      <div class="metric-prev"><span class="currency-tag">KWD</span>${formatCurrency(branch.revenue_prev)}</div>
+                      <div class="metric-change ${revenueClass}">${revenueChange >= 0 ? '+' : ''}${formatPercent(revenueChange)}%</div>
+                    </td>
+                    <td>
+                      <div class="metric-value">${formatPercent(branch.percentage)}%</div>
+                      <div class="metric-prev">${formatPercent(branch.percentage_prev)}%</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div class="top-products">
+            <div class="section-title">🏆 Top 5 Products</div>
+            ${branch.top_products.slice(0, 5).map((product, index) => `
+              <div class="product-item">
+                <span class="product-rank">${index + 1}</span>
+                <span class="product-name">${product.name}</span>
+                <span class="product-value"><span class="currency-tag">KWD</span>${formatCurrency(product.revenue)}</span>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div class="section-title">📊 Sales by Order Type</div>
+          <table class="order-types-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th style="text-align: right;">Current</th>
+                <th style="text-align: right;">Previous</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(branch.order_types)
+                .filter(([type, data]) => data.current > 0 || data.previous > 0)
+                .map(([type, data]) => {
+                  const typeInfo = ORDER_TYPES[type] || { name: 'Other', icon: '📦' };
+                  return `
+                    <tr>
+                      <td><span class="order-type-icon">${typeInfo.icon}</span>${typeInfo.name}</td>
+                      <td style="text-align: right;" class="order-type-current"><span class="currency-tag">KWD</span>${formatCurrency(data.current)}</td>
+                      <td style="text-align: right;" class="order-type-prev"><span class="currency-tag">KWD</span>${formatCurrency(data.previous)}</td>
+                    </tr>
+                  `;
+                }).join('') || '<tr><td colspan="3" style="text-align: center; padding: 1rem; color: #718096; font-style: italic;">No order type data available</td></tr>'}
+            </tbody>
+          </table>
+          
+          <div class="peak-time-box">
+            <div class="peak-time-label">⏰ Peak Time</div>
+            <div class="peak-time-value">${branch.peak_time.current}</div>
+            <div class="peak-time-compare">Prev: ${branch.peak_time.previous}</div>
+          </div>
+          
+          </div>
+        </div>
+      `;
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      initDates();
+      initPeriodDropdown();
+      loadData();
+    });
+  </script>
+</body>
+</html>

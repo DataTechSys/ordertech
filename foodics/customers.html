@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customers Dashboard - Foodics</title>
+  <meta name="description" content="Customer analytics dashboard with RFM segmentation, CLV analysis, and detailed customer insights.">
+  <link rel="icon" type="image/x-icon" href="https://storage.googleapis.com/ordertech.me/images/favicon.ico">
+  
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://foodics.ordertech.me/customers">
+  <meta property="og:title" content="Customers Dashboard - Foodics | OrderTech">
+  <meta property="og:description" content="Customer analytics dashboard with RFM segmentation, CLV analysis, and detailed customer insights.">
+  <meta property="og:image" content="https://storage.googleapis.com/ordertech.me/images/ordertech.png">
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #2d3748;
+    }
+    
+    .header {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0.75rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .header-content {
+      max-width: 1800px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+    }
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .header-logo {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+    }
+    
+    .header-title h1 {
+      font-size: 1.1rem;
+      color: #1a202c;
+      font-weight: 700;
+      margin: 0;
+    }
+    
+    .header-nav {
+      display: flex;
+      gap: 0.25rem;
+    }
+    
+    .nav-link {
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #4a5568;
+      transition: all 0.2s;
+    }
+    
+    .nav-link:hover {
+      background: #f7fafc;
+      color: #667eea;
+    }
+    
+    .nav-link.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      background: white;
+      min-width: 220px;
+    }
+    
+    .search-box input {
+      border: none;
+      outline: none;
+      font-size: 0.8rem;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .btn {
+      padding: 0.4rem 0.85rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+      color: #4a5568;
+    }
+    
+    .btn:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+    }
+    
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+    
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .stats-bar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 10px;
+      margin-bottom: 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .stat-item {
+      text-align: center;
+      padding: 0.5rem;
+    }
+    
+    .stat-label {
+      font-size: 0.65rem;
+      opacity: 0.85;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+    }
+    
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    
+    .stat-subvalue {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin-top: 0.2rem;
+      font-weight: 500;
+    }
+    
+    .currency-tag {
+      display: inline-block;
+      font-size: 0.5em;
+      opacity: 0.7;
+      font-weight: 600;
+      vertical-align: super;
+      margin-right: 0.2em;
+    }
+    
+    .segment-filters {
+      margin-bottom: 2rem;
+    }
+    
+    .segment-filter-label {
+      font-size: 0.75rem;
+      color: #718096;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .all-customers-btn {
+      background: #f7fafc;
+      border: 2px solid #e2e8f0;
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #4a5568;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .all-customers-btn:hover {
+      border-color: #667eea;
+      color: #667eea;
+      background: white;
+    }
+    
+    .all-customers-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: transparent;
+    }
+    
+    .segments-overview {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .segment-card {
+      background: white;
+      border-radius: 10px;
+      padding: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      transition: all 0.2s;
+      cursor: pointer;
+      border: 2px solid transparent;
+      text-align: center;
+    }
+    
+    .segment-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.12);
+      border-color: #667eea;
+    }
+    
+    .segment-card.active {
+      border-color: #667eea;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    }
+    
+    .segment-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .segment-name {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #2d3748;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .segment-count {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #667eea;
+      line-height: 1;
+    }
+    
+    .segment-description {
+      display: none;
+    }
+    
+    .segment-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    
+    .segment-stat {
+      text-align: center;
+    }
+    
+    .segment-stat-label {
+      font-size: 0.6rem;
+      color: #a0aec0;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+      letter-spacing: 0.3px;
+    }
+    
+    .segment-stat-value {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #2d3748;
+    }
+    
+    .customers-table-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    
+    .table-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .table-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #2d3748;
+    }
+    
+    .table-filters {
+      display: flex;
+      gap: 0.75rem;
+    }
+    
+    .filter-select {
+      padding: 0.4rem 0.75rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: white;
+      color: #4a5568;
+      cursor: pointer;
+      outline: none;
+    }
+    
+    .customers-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .customers-table thead {
+      background: #f7fafc;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .customers-table th {
+      padding: 1rem;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #4a5568;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .customers-table th:hover {
+      background: #edf2f7;
+    }
+    
+    .customers-table td {
+      padding: 1rem;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.85rem;
+    }
+    
+    .customers-table tbody tr:hover {
+      background: #f7fafc;
+    }
+    
+    .customer-name {
+      font-weight: 700;
+      color: #2d3748;
+    }
+    
+    .customer-phone {
+      font-size: 0.75rem;
+      color: #718096;
+      font-family: 'SF Mono', 'Monaco', monospace;
+    }
+    
+    .segment-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .segment-champions { background: #48bb78; color: white; }
+    .segment-loyal { background: #4299e1; color: white; }
+    .segment-at-risk { background: #ed8936; color: white; }
+    .segment-new { background: #9f7aea; color: white; }
+    .segment-lost { background: #f56565; color: white; }
+    .segment-others { background: #a0aec0; color: white; }
+    
+    .rfm-score {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    
+    .rfm-scores {
+      font-size: 0.7rem;
+      color: #718096;
+      margin-top: 0.2rem;
+    }
+    
+    .currency {
+      font-weight: 700;
+      color: #2d3748;
+    }
+    
+    .metric-good {
+      color: #48bb78;
+    }
+    
+    .metric-bad {
+      color: #f56565;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #a0aec0;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1.5rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    
+    .pagination button {
+      padding: 0.5rem 1rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      background: white;
+      color: #4a5568;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .pagination button:hover:not(:disabled) {
+      border-color: #667eea;
+      color: #667eea;
+    }
+    
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .pagination-info {
+      font-size: 0.8rem;
+      color: #718096;
+      margin: 0 1rem;
+    }
+    
+    /* Legend tooltip styles */
+    .legend-container {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.7rem;
+      color: #4a5568;
+      line-height: 1.6;
+    }
+    
+    .legend-container strong {
+      color: #2d3748;
+      font-weight: 700;
+    }
+    
+    .legend-item {
+      display: inline-block;
+      margin-right: 1.5rem;
+      margin-bottom: 0.3rem;
+    }
+    
+    .customer-branch {
+      font-size: 0.65rem;
+      color: #9ca3af;
+      font-weight: 500;
+      margin-top: 0.15rem;
+    }
+    
+    .customer-branch::before {
+      content: '📍 ';
+      font-size: 0.6rem;
+    }
+    
+    /* Customer detail modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      overflow-y: auto;
+    }
+    
+    .modal.active {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 1200px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: modalSlideIn 0.3s ease-out;
+    }
+    
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem 2rem;
+      border-radius: 16px 16px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0;
+    }
+    
+    .modal-close {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal-close:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: rotate(90deg);
+    }
+    
+    .modal-body {
+      padding: 2rem;
+    }
+    
+    .detail-section {
+      margin-bottom: 2rem;
+    }
+    
+    .detail-section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    
+    .detail-item {
+      background: #f7fafc;
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .detail-label {
+      font-size: 0.7rem;
+      color: #718096;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.3rem;
+    }
+    
+    .detail-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #2d3748;
+    }
+    
+    .chart-container {
+      background: #f7fafc;
+      padding: 1.5rem;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 1rem;
+    }
+    
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .bar-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .bar-label {
+      min-width: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #4a5568;
+    }
+    
+    .bar-visual {
+      flex: 1;
+      height: 24px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      border-radius: 4px;
+      position: relative;
+      transition: all 0.3s;
+    }
+    
+    .bar-visual:hover {
+      transform: scaleX(1.02);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+    
+    .bar-count {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #2d3748;
+      min-width: 40px;
+      text-align: right;
+    }
+    
+    .product-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 0.75rem;
+    }
+    
+    .product-list-item {
+      background: #f7fafc;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+    
+    .product-list-item:hover {
+      border-color: #667eea;
+      transform: translateX(4px);
+    }
+    
+    .product-list-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #2d3748;
+      flex: 1;
+    }
+    
+    .product-list-count {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #667eea;
+      background: white;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+    }
+    
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    
+    .orders-table thead {
+      background: #f7fafc;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .orders-table th {
+      padding: 0.75rem;
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #4a5568;
+      text-transform: uppercase;
+    }
+    
+    .orders-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid #e2e8f0;
+      color: #2d3748;
+    }
+    
+    .orders-table tbody tr:hover {
+      background: #f7fafc;
+    }
+    
+    .clickable-row {
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .clickable-row:hover {
+      background: #f7fafc !important;
+    }
+    
+    @media (max-width: 768px) {
+      .header-content {
+        flex-direction: column;
+        gap: 1rem;
+      }
+      
+      .stats-bar {
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      
+      .segments-overview {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    @media (max-width: 1200px) {
+      .segments-overview {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      
+      .customers-table {
+        font-size: 0.75rem;
+      }
+      
+      .customers-table th,
+      .customers-table td {
+        padding: 0.75rem 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <div class="header-title">
+          <img src="https://storage.googleapis.com/ordertech.me/images/ordertech.png" alt="OrderTech" class="header-logo">
+          <h1>Customers Analytics</h1>
+        </div>
+        <nav class="header-nav">
+          <a href="/sales" class="nav-link">Sales</a>
+          <a href="/branches" class="nav-link">Branches</a>
+          <a href="/customers" class="nav-link active">Customers</a>
+        </nav>
+      </div>
+      <div class="controls">
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" id="searchInput" placeholder="Search by name or phone..." />
+        </div>
+        <button class="btn btn-primary" onclick="refreshData()">↻ Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Summary Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item">
+        <div class="stat-label">Total Customers</div>
+        <div class="stat-value" id="totalCustomers">-</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Active (30d)</div>
+        <div class="stat-value" id="activeCustomers">-</div>
+        <div class="stat-subvalue" id="retentionRate">-</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Average CLV</div>
+        <div class="stat-value" id="averageClv">-</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Total Value</div>
+        <div class="stat-value" id="totalValue">-</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Repeat Rate</div>
+        <div class="stat-value" id="repeatRate">-</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Churn Rate</div>
+        <div class="stat-value" id="churnRate">-</div>
+      </div>
+    </div>
+
+    <!-- Segment Filters -->
+    <div class="segment-filters">
+      <div class="segment-filter-label">
+        <span>Filter by Segment:</span>
+        <button class="all-customers-btn active" id="allCustomersBtn" onclick="selectSegment('all')">All Customers</button>
+      </div>
+      <div class="segments-overview" id="segmentsOverview">
+        <!-- Will be populated dynamically -->
+      </div>
+    </div>
+
+    <!-- Customers Table -->
+    <div class="customers-table-container">
+      <div class="table-header">
+        <h2 class="table-title">Customer Details</h2>
+        <div class="table-filters">
+          <select class="filter-select" id="sortSelect" onchange="applySort()">
+            <option value="total_spent">Sort by: Total Spent</option>
+            <option value="clv">Sort by: CLV</option>
+            <option value="orders_count">Sort by: Order Count</option>
+            <option value="last_order_date">Sort by: Last Order</option>
+            <option value="rfm_score">Sort by: RFM Score</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Legend -->
+      <div class="legend-container">
+        <span class="legend-item"><strong>CLV:</strong> Customer Lifetime Value (predicted total revenue)</span>
+        <span class="legend-item"><strong>RFM Score:</strong> Recency + Frequency + Monetary (3-15 scale)</span>
+        <span class="legend-item"><strong>R:</strong> Recency (how recent was last order, 1-5)</span>
+        <span class="legend-item"><strong>F:</strong> Frequency (how often they order, 1-5)</span>
+        <span class="legend-item"><strong>M:</strong> Monetary (how much they spend, 1-5)</span>
+        <span class="legend-item" style="font-style: italic; color: #667eea;">💡 Click any row for detailed analysis</span>
+      </div>
+      
+      <div id="tableContent">
+        <div class="loading">
+          <div class="loading-spinner"></div>
+          <p style="margin-top: 1rem;">Loading customer data...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Customer Detail Modal -->
+  <div id="customerModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalCustomerName">Customer Details</h2>
+        <button class="modal-close" onclick="closeCustomerModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div class="loading">
+          <div class="loading-spinner"></div>
+          <p style="margin-top: 1rem;">Loading customer details...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/customers/analytics';
+    let currentPage = 1;
+    let currentSegment = 'all';
+    let currentSearch = '';
+    let currentSort = 'total_spent';
+    let searchTimeout = null;
+
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSummary();
+      loadSegments();
+      loadCustomers();
+      
+      // Setup search with debounce
+      document.getElementById('searchInput').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          currentSearch = e.target.value;
+          currentPage = 1;
+          loadCustomers();
+        }, 500);
+      });
+    });
+
+    async function loadSummary() {
+      try {
+        const response = await fetch(`${API_BASE}/summary?segment=${currentSegment}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          const summary = data.summary;
+          document.getElementById('totalCustomers').textContent = formatNumber(summary.total_customers);
+          document.getElementById('activeCustomers').textContent = formatNumber(summary.active_customers_30d);
+          document.getElementById('retentionRate').textContent = `${summary.retention_rate}% retention`;
+          document.getElementById('averageClv').innerHTML = formatCurrency(summary.average_clv);
+          document.getElementById('totalValue').innerHTML = formatCurrency(summary.total_customer_value);
+          document.getElementById('repeatRate').textContent = `${summary.repeat_purchase_rate}%`;
+          document.getElementById('churnRate').textContent = `${summary.churn_rate}%`;
+        }
+      } catch (error) {
+        console.error('Failed to load summary:', error);
+      }
+    }
+
+    async function loadSegments() {
+      try {
+        const response = await fetch(`${API_BASE}/segments`);
+        const data = await response.json();
+        
+        if (data.success) {
+          const container = document.getElementById('segmentsOverview');
+          const allCustomersBtn = document.getElementById('allCustomersBtn');
+          
+          // Update "All Customers" button state
+          if (currentSegment === 'all') {
+            allCustomersBtn.classList.add('active');
+          } else {
+            allCustomersBtn.classList.remove('active');
+          }
+          
+          // Add segment cards
+          container.innerHTML = '';
+          data.segments.forEach(segment => {
+            const segmentClass = segment.segment.toLowerCase().replace(' ', '-');
+            container.innerHTML += `
+              <div class="segment-card ${currentSegment === segment.segment ? 'active' : ''}" onclick="selectSegment('${segment.segment}')">
+                <div class="segment-header">
+                  <div class="segment-count">${formatNumber(segment.count)}</div>
+                  <div class="segment-name">${segment.segment}</div>
+                </div>
+                <div class="segment-stats">
+                  <div class="segment-stat">
+                    <div class="segment-stat-label">Avg CLV</div>
+                    <div class="segment-stat-value">${formatCurrency(segment.avg_clv)}</div>
+                  </div>
+                  <div class="segment-stat">
+                    <div class="segment-stat-label">Total Value</div>
+                    <div class="segment-stat-value">${formatCurrency(segment.total_spent)}</div>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load segments:', error);
+      }
+    }
+
+    async function loadCustomers() {
+      try {
+        const params = new URLSearchParams({
+          page: currentPage,
+          limit: 50,
+          search: currentSearch,
+          sort: currentSort,
+          direction: 'DESC'
+        });
+        
+        if (currentSegment !== 'all') {
+          params.append('segment', currentSegment);
+        }
+        
+        const response = await fetch(`${API_BASE}/list?${params}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          renderCustomersTable(data.customers, data.pagination);
+        }
+      } catch (error) {
+        console.error('Failed to load customers:', error);
+        document.getElementById('tableContent').innerHTML = '<div class="loading">Failed to load customers</div>';
+      }
+    }
+
+    function renderCustomersTable(customers, pagination) {
+      if (customers.length === 0) {
+        document.getElementById('tableContent').innerHTML = '<div class="loading">No customers found</div>';
+        return;
+      }
+      
+      let html = `
+        <table class="customers-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Segment</th>
+              <th>RFM Score</th>
+              <th>Orders</th>
+              <th>Total Spent</th>
+              <th>Avg Order</th>
+              <th>CLV</th>
+              <th>Last Order</th>
+              <th>Days Since</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      customers.forEach(customer => {
+        const segmentClass = customer.segment.toLowerCase().replace(' ', '-');
+        const daysSince = customer.days_since_last_order;
+        const daysSinceClass = daysSince <= 30 ? 'metric-good' : daysSince >= 90 ? 'metric-bad' : '';
+        const favBranch = customer.preferred_branch_id || 'N/A';
+        
+        html += `
+          <tr class="clickable-row" onclick="openCustomerDetail(${customer.id})">
+            <td>
+              <div class="customer-name">${escapeHtml(customer.name)}</div>
+              ${customer.phone_raw ? `<div class="customer-phone">${customer.phone_raw}</div>` : ''}
+              ${favBranch !== 'N/A' ? `<div class="customer-branch">${escapeHtml(favBranch)}</div>` : ''}
+            </td>
+            <td>
+              <span class="segment-badge segment-${segmentClass}">${customer.segment}</span>
+            </td>
+            <td>
+              <div class="rfm-score">${customer.rfm_score}</div>
+              <div class="rfm-scores">R:${customer.r_score} F:${customer.f_score} M:${customer.m_score}</div>
+            </td>
+            <td>${customer.orders_count}</td>
+            <td class="currency">${formatCurrency(customer.total_spent)}</td>
+            <td class="currency">${formatCurrency(customer.average_order_value)}</td>
+            <td class="currency">${formatCurrency(customer.clv)}</td>
+            <td>${formatDate(customer.last_order_date)}</td>
+            <td class="${daysSinceClass}">${daysSince} days</td>
+          </tr>
+        `;
+      });
+      
+      html += `
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button onclick="goToPage(${pagination.page - 1})" ${pagination.page === 1 ? 'disabled' : ''}>
+            ← Previous
+          </button>
+          <span class="pagination-info">
+            Page ${formatNumber(pagination.page)} of ${formatNumber(pagination.total_pages)} (${formatNumber(pagination.total)} customers)
+          </span>
+          <button onclick="goToPage(${pagination.page + 1})" ${pagination.page >= pagination.total_pages ? 'disabled' : ''}>
+            Next →
+          </button>
+        </div>
+      `;
+      
+      document.getElementById('tableContent').innerHTML = html;
+    }
+
+    function selectSegment(segment) {
+      currentSegment = segment;
+      currentPage = 1;
+      loadSummary();
+      loadSegments();
+      loadCustomers();
+    }
+
+    function applySort() {
+      currentSort = document.getElementById('sortSelect').value;
+      currentPage = 1;
+      loadCustomers();
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      loadCustomers();
+    }
+
+    function refreshData() {
+      loadSummary();
+      loadSegments();
+      loadCustomers();
+    }
+
+    // Utility functions
+    function formatCurrency(value) {
+      if (!value || value === 0) return '<span class="currency-tag">KWD</span>0.000';
+      const num = parseFloat(value);
+      // Show 3 decimals for values < 100, no decimals for ≥ 100
+      const formatted = num < 100
+        ? num.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+        : Math.round(num).toLocaleString('en-US');
+      return `<span class="currency-tag">KWD</span>${formatted}`;
+    }
+    
+    function formatNumber(value) {
+      if (!value) return '0';
+      return parseInt(value).toLocaleString('en-US');
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    // Customer detail modal functions
+    async function openCustomerDetail(customerId) {
+      const modal = document.getElementById('customerModal');
+      const modalBody = document.getElementById('modalBody');
+      
+      modal.classList.add('active');
+      modalBody.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="margin-top: 1rem;">Loading customer details...</p></div>';
+      
+      try {
+        const response = await fetch(`${API_BASE}/detail/${customerId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          renderCustomerDetail(data.customer);
+        } else {
+          modalBody.innerHTML = '<div class="loading"><p style="color: #f56565;">Failed to load customer details</p></div>';
+        }
+      } catch (error) {
+        console.error('Failed to load customer detail:', error);
+        modalBody.innerHTML = '<div class="loading"><p style="color: #f56565;">Failed to load customer details</p></div>';
+      }
+    }
+    
+    function closeCustomerModal() {
+      document.getElementById('customerModal').classList.remove('active');
+    }
+    
+    // Close modal when clicking outside
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('customerModal');
+      if (e.target === modal) {
+        closeCustomerModal();
+      }
+    });
+    
+    function renderCustomerDetail(customer) {
+      const { profile, orders, analysis } = customer;
+      const modalBody = document.getElementById('modalBody');
+      const modalTitle = document.getElementById('modalCustomerName');
+      
+      modalTitle.textContent = profile.name;
+      
+      // Profile section
+      let html = `
+        <div class="detail-section">
+          <div class="detail-section-title">👤 Customer Profile</div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Phone</div>
+              <div class="detail-value">${profile.phone_raw || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Email</div>
+              <div class="detail-value" style="font-size: 0.85rem;">${profile.email || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Segment</div>
+              <div class="detail-value">
+                <span class="segment-badge segment-${profile.segment.toLowerCase().replace(' ', '-')}">${profile.segment}</span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Favorite Branch</div>
+              <div class="detail-value" style="font-size: 0.9rem;">${profile.preferred_branch_id || 'N/A'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">First Order</div>
+              <div class="detail-value" style="font-size: 0.9rem;">${formatDate(profile.first_order_date)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Last Order</div>
+              <div class="detail-value" style="font-size: 0.9rem;">${formatDate(profile.last_order_date)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Customer Age</div>
+              <div class="detail-value">${profile.customer_lifespan_months} months</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Days Since Last</div>
+              <div class="detail-value" class="${profile.days_since_last_order <= 30 ? 'metric-good' : profile.days_since_last_order >= 90 ? 'metric-bad' : ''}">${profile.days_since_last_order} days</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="detail-section">
+          <div class="detail-section-title">📊 RFM & Value Metrics</div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">RFM Score</div>
+              <div class="detail-value">${profile.rfm_score} / 15</div>
+              <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">R:${profile.r_score} F:${profile.f_score} M:${profile.m_score}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Total Orders</div>
+              <div class="detail-value">${formatNumber(profile.orders_count)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Total Spent</div>
+              <div class="detail-value">${formatCurrency(profile.total_spent)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Avg Order Value</div>
+              <div class="detail-value">${formatCurrency(profile.average_order_value)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">CLV (Lifetime Value)</div>
+              <div class="detail-value">${formatCurrency(profile.clv)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Purchase Frequency</div>
+              <div class="detail-value">${profile.purchase_frequency_per_month ? parseFloat(profile.purchase_frequency_per_month).toFixed(2) : '0.00'} / month</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Churn Risk</div>
+              <div class="detail-value" style="color: ${profile.churn_risk_score >= 70 ? '#f56565' : profile.churn_risk_score >= 40 ? '#ed8936' : '#48bb78'}">${profile.churn_risk_score}%</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Repeat Buyer</div>
+              <div class="detail-value">${profile.repeat_buyer ? '✅ Yes' : '❌ No'}</div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Order types distribution
+      if (analysis.by_type && Object.keys(analysis.by_type).length > 0) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">🛒 Order Types Distribution</div>
+            <div class="chart-container">
+              <div class="bar-chart">
+                ${Object.entries(analysis.by_type).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                  const max = Math.max(...Object.values(analysis.by_type));
+                  const width = (count / max * 100) + '%';
+                  return `
+                    <div class="bar-item">
+                      <div class="bar-label">${type}</div>
+                      <div class="bar-visual" style="width: ${width}"></div>
+                      <div class="bar-count">${count}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Branch distribution
+      if (analysis.by_branch && Object.keys(analysis.by_branch).length > 0) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">📍 Branch Preferences</div>
+            <div class="chart-container">
+              <div class="bar-chart">
+                ${Object.entries(analysis.by_branch).sort((a, b) => b[1] - a[1]).map(([branch, count]) => {
+                  const max = Math.max(...Object.values(analysis.by_branch));
+                  const width = (count / max * 100) + '%';
+                  return `
+                    <div class="bar-item">
+                      <div class="bar-label">${branch}</div>
+                      <div class="bar-visual" style="width: ${width}"></div>
+                      <div class="bar-count">${count}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Day of week pattern
+      if (analysis.by_day_of_week && Object.keys(analysis.by_day_of_week).length > 0) {
+        const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const orderedDays = dayOrder.filter(day => analysis.by_day_of_week[day]);
+        
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">📅 Ordering Pattern by Day</div>
+            <div class="chart-container">
+              <div class="bar-chart">
+                ${orderedDays.map(day => {
+                  const count = analysis.by_day_of_week[day];
+                  const max = Math.max(...Object.values(analysis.by_day_of_week));
+                  const width = (count / max * 100) + '%';
+                  return `
+                    <div class="bar-item">
+                      <div class="bar-label">${day}</div>
+                      <div class="bar-visual" style="width: ${width}"></div>
+                      <div class="bar-count">${count}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Peak hour
+      if (analysis.peak_hour) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">⏰ Peak Ordering Time</div>
+            <div class="detail-item" style="max-width: 300px;">
+              <div class="detail-label">Most Frequent Hour</div>
+              <div class="detail-value" style="font-size: 2rem; color: #667eea;">${analysis.peak_hour}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Top products
+      if (analysis.top_products && analysis.top_products.length > 0) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">🍔 Favorite Products (Top 20)</div>
+            <div class="product-list">
+              ${analysis.top_products.map(product => `
+                <div class="product-list-item">
+                  <div class="product-list-name">${escapeHtml(product.name)}</div>
+                  <div class="product-list-count">${product.count}x</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      // Top categories
+      if (analysis.top_categories && analysis.top_categories.length > 0) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">🎯 Favorite Categories</div>
+            <div class="chart-container">
+              <div class="bar-chart">
+                ${analysis.top_categories.slice(0, 10).map(cat => {
+                  const max = analysis.top_categories[0].count;
+                  const width = (cat.count / max * 100) + '%';
+                  return `
+                    <div class="bar-item">
+                      <div class="bar-label">${escapeHtml(cat.name)}</div>
+                      <div class="bar-visual" style="width: ${width}"></div>
+                      <div class="bar-count">${cat.count}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Recent orders
+      if (orders && orders.length > 0) {
+        html += `
+          <div class="detail-section">
+            <div class="detail-section-title">📋 Recent Orders (Last 20)</div>
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Branch</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${orders.map(order => {
+                  const typeMap = { 1: 'Dine-in', 2: 'Pickup', 3: 'Delivery', 4: 'Drive-thru' };
+                  return `
+                    <tr>
+                      <td>${formatDate(order.closed_at)}</td>
+                      <td>${escapeHtml(order.branch_name || 'Unknown')}</td>
+                      <td>${typeMap[order.type] || 'Other'}</td>
+                      <td>${formatCurrency(order.total_price)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+      
+      modalBody.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

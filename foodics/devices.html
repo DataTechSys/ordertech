@@ -33,9 +33,11 @@
         .device-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 1rem; }
         .device-icon.active { background: #d1fae5; color: #10b981; }
         .device-icon.inactive { background: #fee2e2; color: #ef4444; }
+        .device-icon.revoked { background: #fee2e2; color: #ef4444; }
         .status-badge { padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
         .status-badge.active { background: #d1fae5; color: #065f46; }
         .status-badge.inactive { background: #fee2e2; color: #991b1b; }
+        .status-badge.revoked { background: #fee2e2; color: #991b1b; }
         .device-info { margin-bottom: 1rem; }
         .device-info div { margin-bottom: 0.5rem; color: #6b7280; font-size: 0.9rem; }
         .device-info strong { color: #1f2937; }
@@ -100,12 +102,26 @@
                 </div>
                 <div class="form-group">
                     <label for="deviceType">Device Type *</label>
-                    <select id="deviceType" required>
+                    <select id="deviceType" required onchange="toggleBranchField()">
                         <option value="">Select type...</option>
-                        <option value="loyalty">Loyalty System</option>
-                        <option value="drivethru">DriveThru System</option>
-                        <option value="signage">Digital Signage</option>
+                        <option value="drivethru">DriveThru</option>
+                        <option value="label_printer">Label Printer</option>
                     </select>
+                </div>
+                <div class="form-group" id="branchField">
+                    <label for="branchId">Branch *</label>
+                    <select id="branchId" onchange="loadTerminalsForBranch()">
+                        <option value="">Loading branches...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="terminalField" style="display: none;">
+                    <label for="terminalId">POS Terminal (for Orders) *</label>
+                    <select id="terminalId">
+                        <option value="">Select branch first...</option>
+                    </select>
+                    <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 0.5rem;">
+                        Orders from this device will be sent to the selected POS terminal
+                    </small>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
@@ -141,45 +157,85 @@
             setTimeout(() => { alert.style.display = 'none'; }, 5000);
         }
         
+        function toggleBranchField() {
+            const deviceType = document.getElementById('deviceType').value;
+            const branchField = document.getElementById('branchField');
+            const terminalField = document.getElementById('terminalField');
+            const branchSelect = document.getElementById('branchId');
+            const terminalSelect = document.getElementById('terminalId');
+            
+            if (deviceType === 'label_printer') {
+                branchField.style.display = 'none';
+                terminalField.style.display = 'none';
+                branchSelect.removeAttribute('required');
+                terminalSelect.removeAttribute('required');
+            } else {
+                branchField.style.display = 'block';
+                branchSelect.setAttribute('required', 'required');
+                // Terminal field will be shown after branch is selected
+            }
+        }
+        
         async function loadDevices() {
             try {
                 const token = localStorage.getItem('foodics_token');
-                const response = await fetch(`${API_BASE}/api/foodics/devices`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const [devicesResponse, labelsResponse] = await Promise.all([
+                    fetch(`${API_BASE}/api/foodics/devices`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_BASE}/api/foodics/labels`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('devicesUsed').textContent = data.devices_used;
-                    document.getElementById('devicesAllowed').textContent = data.devices_allowed;
+                if (devicesResponse.ok && labelsResponse.ok) {
+                    const devicesData = await devicesResponse.json();
+                    const labelsData = await labelsResponse.json();
+                    
+                    const allDevices = [...devicesData.devices, ...labelsData.devices];
+                    const totalUsed = devicesData.devices_used + labelsData.devices_used;
+                    const totalAllowed = devicesData.devices_allowed;
+                    
+                    document.getElementById('devicesUsed').textContent = totalUsed;
+                    document.getElementById('devicesAllowed').textContent = totalAllowed;
                     
                     const grid = document.getElementById('devicesGrid');
-                    if (data.devices.length === 0) {
+                    if (allDevices.length === 0) {
                         grid.innerHTML = '<p style="text-align: center; color: #6b7280; grid-column: 1/-1;">No devices yet. Click "Add Device" to get started.</p>';
                         return;
                     }
                     
-                    grid.innerHTML = data.devices.map(device => `
+                    grid.innerHTML = allDevices.map(device => {
+                        const isLabelPrinter = device.device_type === 'label_printer';
+                        const icon = isLabelPrinter ? 'ri-printer-line' : 'ri-computer-line';
+                        const typeDisplay = isLabelPrinter ? 'Label Printer' : 'DriveThru';
+                        const appName = isLabelPrinter ? 'Sunmi' : 'DriveThru';
+                        const statusDisplay = device.status === 'active' ? 'Used' : 'Not Used';
+                        
+                        return `
                         <div class="device-card">
                             <div class="device-card-header">
                                 <div class="device-icon ${device.status}">
-                                    <i class="ri-computer-line"></i>
+                                    <i class="${icon}"></i>
                                 </div>
-                                <span class="status-badge ${device.status}">${device.status}</span>
+                                <span class="status-badge ${device.status}">${statusDisplay}</span>
                             </div>
                             <h3>${device.device_name}</h3>
                             <div class="device-info">
-                                <div><strong>Type:</strong> ${device.device_type}</div>
-                                <div><strong>License:</strong> ${device.license_key || 'Not generated'}</div>
+                                <div><strong>Type:</strong> ${typeDisplay}</div>
+                                ${!isLabelPrinter ? `<div><strong>Branch:</strong> ${device.branch_name || 'N/A'}</div>` : ''}
+                                ${device.activation_code && (device.status === 'inactive' || device.status === 'revoked') ? `<div><strong>Activation Code:</strong> <span style="font-size: 1.2rem; color: #3b82f6; font-weight: bold;">${device.activation_code}</span></div>` : ''}
+                                ${device.activation_code && (device.status === 'inactive' || device.status === 'revoked') ? `<div style="color: #6b7280; font-size: 0.85rem;">Enter this code in the ${appName} app to activate</div>` : ''}
                                 <div><strong>Created:</strong> ${new Date(device.created_at).toLocaleDateString()}</div>
                                 ${device.activated_at ? `<div><strong>Activated:</strong> ${new Date(device.activated_at).toLocaleDateString()}</div>` : ''}
                             </div>
                             <div class="device-actions">
                                 ${device.status === 'inactive' ? `<button class="btn btn-primary" onclick="activateDevice('${device.device_id}')">Activate</button>` : ''}
-                                <button class="btn btn-danger" onclick="deleteDevice('${device.device_id}', '${device.device_name}')">Delete</button>
+                                <button class="btn btn-danger" onclick="deleteDevice('${device.device_id}', '${device.device_name}', '${device.device_type}')">Delete</button>
                             </div>
                         </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
             } catch (error) {
                 console.error('Load devices error:', error);
@@ -187,29 +243,163 @@
             }
         }
         
-        function showAddDeviceModal() {
+        async function showAddDeviceModal() {
             document.getElementById('addDeviceModal').style.display = 'flex';
+            await loadBranches();
+        }
+        
+        async function loadBranches() {
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/branches`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const branchSelect = document.getElementById('branchId');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.branches && data.branches.length > 0) {
+                        branchSelect.innerHTML = '<option value="">Select branch...</option>' +
+                            data.branches.map(b => `<option value="${b.branch_id}" data-foodics-id="${b.meta?.foodics_branch_id || ''}">${b.branch_name}</option>`).join('');
+                    } else {
+                        branchSelect.innerHTML = '<option value="">No branches available</option>';
+                        showAlert('No branches found. Please sync branches first.', 'error');
+                    }
+                } else {
+                    branchSelect.innerHTML = '<option value="">Failed to load branches</option>';
+                    showAlert('Failed to load branches');
+                }
+            } catch (error) {
+                console.error('Load branches error:', error);
+                document.getElementById('branchId').innerHTML = '<option value="">Error loading branches</option>';
+                showAlert('Network error loading branches');
+            }
+        }
+        
+        async function loadTerminalsForBranch() {
+            const branchSelect = document.getElementById('branchId');
+            const terminalField = document.getElementById('terminalField');
+            const terminalSelect = document.getElementById('terminalId');
+            const deviceType = document.getElementById('deviceType').value;
+            
+            // Only show terminal field for drivethru devices
+            if (deviceType !== 'drivethru' || !branchSelect.value) {
+                terminalField.style.display = 'none';
+                terminalSelect.removeAttribute('required');
+                return;
+            }
+            
+            // Get the Foodics branch ID from the selected option
+            const selectedOption = branchSelect.options[branchSelect.selectedIndex];
+            const foodicsBranchId = selectedOption.getAttribute('data-foodics-id');
+            
+            if (!foodicsBranchId) {
+                showAlert('Branch does not have Foodics configuration. Please sync branches from Settings.', 'error');
+                return;
+            }
+            
+            // Show the terminal field and set it to loading
+            terminalField.style.display = 'block';
+            terminalSelect.innerHTML = '<option value="">Loading terminals...</option>';
+            terminalSelect.setAttribute('required', 'required');
+            
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/terminals?branch_id=${encodeURIComponent(foodicsBranchId)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.terminals && data.terminals.length > 0) {
+                        terminalSelect.innerHTML = '<option value="">Select terminal...</option>' +
+                            data.terminals.map(t => {
+                                return `<option value="${t.id}">${t.name}${t.code ? ' (' + t.code + ')' : ''}</option>`;
+                            }).join('');
+                    } else {
+                        terminalSelect.innerHTML = '<option value="">No terminals found for this branch</option>';
+                        showAlert('No POS terminals found. Please ensure the branch has devices in Foodics.', 'error');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    terminalSelect.innerHTML = '<option value="">Failed to load terminals</option>';
+                    showAlert(errorData.error || 'Failed to load terminals from Foodics');
+                }
+            } catch (error) {
+                console.error('Load terminals error:', error);
+                terminalSelect.innerHTML = '<option value="">Error loading terminals</option>';
+                showAlert('Network error loading terminals');
+            }
         }
         
         function closeAddDeviceModal() {
             document.getElementById('addDeviceModal').style.display = 'none';
             document.getElementById('addDeviceForm').reset();
+            // Hide terminal field when closing
+            document.getElementById('terminalField').style.display = 'none';
         }
+        
+        let isSubmitting = false;
         
         document.getElementById('addDeviceForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Prevent double submission
+            if (isSubmitting) {
+                console.log('Already submitting, ignoring duplicate');
+                return;
+            }
+            
             const name = document.getElementById('deviceName').value.trim();
             const type = document.getElementById('deviceType').value;
+            const branch_id = document.getElementById('branchId').value;
+            const terminal_id = document.getElementById('terminalId').value;
+            
+            // Only require branch for drivethru
+            if (type === 'drivethru' && !branch_id) {
+                showAlert('Please select a branch');
+                return;
+            }
+            
+            // Require terminal for drivethru
+            if (type === 'drivethru' && !terminal_id) {
+                showAlert('Please select a POS terminal for order routing');
+                return;
+            }
+            
+            isSubmitting = true;
             
             try {
                 const token = localStorage.getItem('foodics_token');
-                const response = await fetch(`${API_BASE}/api/foodics/devices`, {
+                const endpoint = type === 'label_printer' ? '/api/foodics/labels' : '/api/foodics/devices';
+                
+                // Get branch name for drivethru
+                let branch_name = null;
+                if (type === 'drivethru' && branch_id) {
+                    const branchSelect = document.getElementById('branchId');
+                    const selectedOption = branchSelect.options[branchSelect.selectedIndex];
+                    branch_name = selectedOption.text;
+                }
+                
+                const body = type === 'label_printer' 
+                    ? { device_name: name }
+                    : { 
+                        device_name: name, 
+                        device_type: type, 
+                        branch_id: branch_id,
+                        branch_name: branch_name,
+                        terminal_id: terminal_id
+                      };
+                
+                console.log('Submitting device:', { type, endpoint, body });
+                
+                const response = await fetch(`${API_BASE}${endpoint}`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ device_name: name, device_type: type })
+                    body: JSON.stringify(body)
                 });
                 
                 const data = await response.json();
@@ -221,7 +411,10 @@
                     showAlert(data.error || 'Failed to add device');
                 }
             } catch (error) {
+                console.error('Submit error:', error);
                 showAlert('Network error');
+            } finally {
+                isSubmitting = false;
             }
         });
         
@@ -252,12 +445,13 @@
             }
         }
         
-        async function deleteDevice(deviceId, deviceName) {
+        async function deleteDevice(deviceId, deviceName, deviceType) {
             if (!confirm(`Delete device "${deviceName}"?`)) return;
             
             try {
                 const token = localStorage.getItem('foodics_token');
-                const response = await fetch(`${API_BASE}/api/foodics/devices/${deviceId}`, {
+                const endpoint = deviceType === 'label_printer' ? '/api/foodics/labels' : '/api/foodics/devices';
+                const response = await fetch(`${API_BASE}${endpoint}/${deviceId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });

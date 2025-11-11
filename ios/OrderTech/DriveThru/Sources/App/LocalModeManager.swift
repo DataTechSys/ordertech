@@ -506,6 +506,12 @@ class LocalModeManager: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add device token for authentication
+        if let deviceToken = env.deviceToken {
+            request.setValue(deviceToken, forHTTPHeaderField: "x-device-token")
+        }
+        
         request.httpBody = try JSONSerialization.data(withJSONObject: orderData)
         
         let (_, response) = try await URLSession.shared.data(for: request)

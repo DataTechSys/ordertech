@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/foodics-backfill:latest'
+      - '-f'
+      - 'jobs/Dockerfile.backfill-2025'
+      - '.'
+images:
+  - 'gcr.io/$PROJECT_ID/foodics-backfill:latest'

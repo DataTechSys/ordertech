@@ -151,7 +151,7 @@ function makeClient(token, base=DEFAULT_BASE){
     listModifierOptions: () => listAllWithFallback(['/modifier_options','/modifiers/options']),
     listProductModifierAssignments: () => listAllWithFallback(['/product_modifier_groups','/product_modifiers']),
     // Valid per Foodics API v5: https://apidocs.foodics.com/core/branches.html
-    listBranches: () => listAllWithFallback(['/branches'], { include: 'address,tax_group,contact,location' }),
+    listBranches: () => listAllWithFallback(['/branches']),
     listGroupOptions,
     
     // Orders and Sales endpoints
@@ -211,6 +211,145 @@ function makeClient(token, base=DEFAULT_BASE){
     // Valid per Foodics API v5: https://apidocs.foodics.com/core/payments.html
     listPayments: (params = {}) => {
       return listAllWithFallback(['/payments'], params);
+    },
+    
+    // ============================================================================
+    // Order Creation and Device/Cashier Management for Order Push
+    // ============================================================================
+    
+    // List POS terminals/devices for a branch
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/devices.html
+    listTerminals: async (branchId) => {
+      const params = {};
+      if (branchId) {
+        params['filter[branch_id]'] = branchId;
+      }
+      try {
+        const result = await listAllWithFallback(['/devices'], params);
+        return result;
+      } catch (e) {
+        console.error(`[Foodics] Failed to list terminals for branch ${branchId}:`, e.message);
+        throw e;
+      }
+    },
+    
+    // List users/cashiers for a branch
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/users.html
+    listCashiers: async (branchId) => {
+      const params = {};
+      if (branchId) {
+        params['filter[branches.id]'] = branchId;
+      }
+      try {
+        const result = await listAllWithFallback(['/users'], params);
+        return result;
+      } catch (e) {
+        console.error(`[Foodics] Failed to list cashiers for branch ${branchId}:`, e.message);
+        throw e;
+      }
+    },
+    
+    // Find "OrderTech" user by name
+    findOrderTechUser: async (branchId) => {
+      try {
+        const result = await listAllWithFallback(['/users'], 
+          branchId ? { 'filter[branches.id]': branchId } : {}
+        );
+        const orderTechUser = result.items?.find(u => 
+          u.name?.toLowerCase().includes('ordertech') ||
+          u.username?.toLowerCase().includes('ordertech')
+        );
+        return orderTechUser || null;
+      } catch (e) {
+        console.error(`[Foodics] Failed to find OrderTech user:`, e.message);
+        return null;
+      }
+    },
+    
+    // List payment methods
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/payment-methods.html
+    listPaymentMethods: async () => {
+      try {
+        const result = await listAllWithFallback(['/payment_methods']);
+        return result;
+      } catch (e) {
+        console.error(`[Foodics] Failed to list payment methods:`, e.message);
+        throw e;
+      }
+    },
+    
+    // Find "Card" payment method
+    findCardPaymentMethod: async () => {
+      try {
+        const result = await listAllWithFallback(['/payment_methods']);
+        const cardMethod = result.items?.find(pm => 
+          pm.name?.toLowerCase().includes('card') ||
+          pm.name?.toLowerCase().includes('credit') ||
+          pm.name?.toLowerCase().includes('debit')
+        );
+        return cardMethod || null;
+      } catch (e) {
+        console.error(`[Foodics] Failed to find Card payment method:`, e.message);
+        return null;
+      }
+    },
+    
+    // Create an order
+    // Valid per Foodics API v5: https://apidocs.foodics.com/core/orders.html
+    // Payload structure:
+    // {
+    //   branch_id: 'uuid',
+    //   device_id: 'uuid',  // terminal/POS device
+    //   user_id: 'uuid',    // cashier
+    //   type: 'takeaway' | 'dine_in' | 'delivery' (check docs for drive_thru support),
+    //   status: 'pending' | 'open' | 'closed',
+    //   reference: 'OT-{uuid}',
+    //   source: 'ordertech',
+    //   notes: 'Drive-Thru via OrderTech',
+    //   items: [
+    //     {
+    //       product_id: 'uuid',
+    //       quantity: 2,
+    //       unit_price: 12.50,  // if required by API
+    //       modifiers: [
+    //         { option_id: 'uuid', price: 1.00 }
+    //       ]
+    //     }
+    //   ]
+    // }
+    createOrder: async (orderData, idempotencyKey = null) => {
+      const url = root + '/orders';
+      const headers = {};
+      
+      // Add idempotency key if supported
+      if (idempotencyKey) {
+        headers['Idempotency-Key'] = idempotencyKey;
+      }
+      
+      console.log(`[Foodics] Creating order with reference: ${orderData.reference}`);
+      
+      try {
+        const startTime = Date.now();
+        const data = await httpJson(url, { 
+          token, 
+          method: 'POST', 
+          body: orderData 
+        });
+        const duration = Date.now() - startTime;
+        
+        console.log(`[Foodics] Order created successfully in ${duration}ms. Foodics Order ID: ${data?.data?.id || data?.id}`);
+        
+        return {
+          success: true,
+          order: data?.data || data,
+          duration_ms: duration
+        };
+      } catch (e) {
+        console.error(`[Foodics] Failed to create order:`, e.message);
+        console.error(`[Foodics] Order data:`, JSON.stringify(orderData, null, 2));
+        console.error(`[Foodics] Full error:`, JSON.stringify(e, null, 2));
+        throw e;
+      }
     }
   };
 }

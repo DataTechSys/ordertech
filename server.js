@@ -553,6 +553,11 @@ async function ensureFoodicsSchema() {
       await db(sql);
       console.log('[Server] Foodics schema initialized');
     }
+    
+    // Add subscription columns to saas.tenants
+    await db(`ALTER TABLE IF EXISTS saas.tenants ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ`);
+    await db(`ALTER TABLE IF EXISTS saas.tenants ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'active'`);
+    console.log('[Server] Foodics subscription columns ensured');
   } catch (error) {
     console.error('[Server] Foodics schema initialization error:', error.message);
   }
@@ -2590,6 +2595,138 @@ addRoute('post', '/orders/local', requireTenant, async (req, res) => {
   }
 });
 
+// DriveThru order submission endpoint - sends orders to Foodics
+addRoute('post', '/api/local-order', requireTenant, requireDeviceAuth, async (req, res) => {
+  if (!HAS_DB) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  
+  try {
+    const { order_number, device_id, timestamp, payment_method, subtotal, tax, total, items } = req.body;
+    
+    console.log('[OrderTech] Received order submission:', JSON.stringify({ order_number, device_id, item_count: items?.length }));
+    
+    if (!order_number || !Array.isArray(items) || items.length === 0) {
+      console.error('[OrderTech] Invalid order data:', { order_number, has_items: Array.isArray(items), item_count: items?.length });
+      return res.status(400).json({ error: 'Invalid order data. Required: order_number, items array' });
+    }
+
+    // Get device configuration from saas.devices
+    const deviceToken = String(req.header('x-device-token') || '').trim();
+    const [device] = await db(
+      `SELECT d.device_id, d.device_name, d.meta, t.meta as tenant_meta
+       FROM saas.devices d
+       LEFT JOIN saas.tenants t ON t.tenant_id = d.tenant_id
+       WHERE d.device_token = $1 AND d.tenant_id = $2 AND d.status = 'active' AND d.deleted_at IS NULL
+       LIMIT 1`,
+      [deviceToken, req.tenantId]
+    );
+
+    if (!device) {
+      console.error('[OrderTech] Device not found for token');
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    const deviceMeta = device.meta || {};
+    const tenantMeta = device.tenant_meta || {};
+    
+    console.log('[OrderTech] Device found:', device.device_name);
+    
+    // Get Foodics credentials
+    const foodicsBranchId = deviceMeta.foodics_branch_id;
+    const foodicsTerminalId = deviceMeta.foodics_terminal_id;
+    const foodicsCashierId = deviceMeta.foodics_cashier_id_override || deviceMeta.foodics_cashier_id;
+    const foodicsToken = tenantMeta.foodics_api_token;
+
+    console.log('[OrderTech] Foodics config:', { 
+      has_branch: !!foodicsBranchId, 
+      has_terminal: !!foodicsTerminalId, 
+      has_cashier: !!foodicsCashierId,
+      has_token: !!foodicsToken 
+    });
+
+    if (!foodicsBranchId || !foodicsTerminalId || !foodicsCashierId) {
+      console.error('[OrderTech] Missing Foodics config:', { foodicsBranchId, foodicsTerminalId, foodicsCashierId });
+      return res.status(400).json({ 
+        error: 'Device not configured for Foodics. Missing branch_id, terminal_id, or cashier_id in device metadata.' 
+      });
+    }
+
+    if (!foodicsToken) {
+      console.error('[OrderTech] No Foodics API token found in tenant meta');
+      return res.status(400).json({ error: 'Tenant Foodics API token not found' });
+    }
+
+    // Transform iOS order to Foodics format
+    const foodicsItems = items.map(item => {
+      const productId = item.product_id;
+      const quantity = item.quantity || 1;
+      const unitPrice = item.unit_price || 0;
+      
+      // Transform modifiers/options
+      const modifiers = [];
+      if (Array.isArray(item.options)) {
+        for (const opt of item.options) {
+          if (opt.option_id) {
+            modifiers.push({
+              option_id: opt.option_id,
+              price: opt.price || 0
+            });
+          }
+        }
+      }
+      
+      return {
+        product_id: productId,
+        quantity: quantity,
+        unit_price: unitPrice,
+        modifiers: modifiers
+      };
+    });
+
+    // Create Foodics order
+    const foodicsIntegration = require('./server/integrations/foodics.js');
+    const foodicsClient = foodicsIntegration.makeClient(foodicsToken);
+    
+    // Create minimal order payload - let Foodics calculate totals
+    const orderData = {
+      branch_id: foodicsBranchId,
+      type: 2,  // 2 = takeaway (Foodics uses numeric types: 1=dine_in, 2=takeaway, 3=delivery)
+      reference: `OT-${order_number}`,
+      products: foodicsItems.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        ...(item.modifiers && item.modifiers.length > 0 ? { options: item.modifiers.map(m => m.option_id) } : {})
+      }))
+    };
+    
+    console.log('[OrderTech] Submitting order to Foodics:', JSON.stringify(orderData, null, 2));
+
+    // Submit to Foodics
+    const result = await foodicsClient.createOrder(orderData, `ot-${order_number}`);
+    
+    if (!result.success) {
+      throw new Error('Foodics order creation failed');
+    }
+
+    console.log(`[OrderTech] Successfully submitted order ${order_number} to Foodics. Foodics Order ID: ${result.order?.id}`);
+
+    return res.status(200).json({
+      success: true,
+      order_number: order_number,
+      foodics_order_id: result.order?.id,
+      branch_id: foodicsBranchId
+    });
+
+  } catch (error) {
+    console.error('[OrderTech] Failed to submit order to Foodics:', error);
+    return res.status(500).json({ 
+      error: 'Failed to submit order to Foodics',
+      message: error.message 
+    });
+  }
+});
+
 // ---- WebRTC signaling (use DB when available; fallback to in-memory)
 // Schema (DB): webrtc_rooms(pair_id text pk, offer text, answer text, ice_cashier_queued jsonb, ice_display_queued jsonb, updated_at timestamptz)
 async function ensureWebrtcSchema(){
@@ -4470,53 +4607,70 @@ addRoute('get', '/manifest', requireTenant, requireDeviceAuth, async (req, res) 
     let subscriptionInfo = null;
     
     if (tok) {
-      // Try regular devices table first
-      profileRows = await db(`
-        select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
-          from devices d
-          left join tenants t on t.tenant_id = d.tenant_id
-         where d.device_token=$1 and d.status='active' and d.tenant_id=$2
-         limit 1
-      `, [tok, req.tenantId]);
-      
-      // If not found, try saas.devices (Foodics schema) with subscription info
-      if (!profileRows.length) {
-        try {
-          profileRows = await db(`
-            select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, 
-                   t.company_name as tenant_name, t.foodics_id as short_code,
-                   t.subscription_expires_at, t.subscription_status
-              from saas.devices d
-              left join saas.tenants t on t.tenant_id = d.tenant_id
-             where d.device_token=$1 and d.status='active' and d.deleted_at IS NULL and d.tenant_id=$2
-             limit 1
-          `, [tok, req.tenantId]);
+      // Try saas.devices FIRST (Foodics schema) with subscription info
+      try {
+        profileRows = await db(`
+          select d.device_id, d.device_name as display_name, d.device_name as name, 
+                 COALESCE(b.branch_name, d.meta->>'foodics_branch_name') as branch, 
+                 d.meta,
+                 t.company_name as tenant_name, t.foodics_id as short_code,
+                 t.subscription_expires_at, t.subscription_status, t.subscription_type
+            from saas.devices d
+            left join saas.tenants t on t.tenant_id = d.tenant_id
+            left join saas.branches b on d.branch_id = b.branch_id
+           where d.device_token=$1 and d.status='active' and d.deleted_at IS NULL and d.tenant_id=$2
+           limit 1
+        `, [tok, req.tenantId]);
+        
+        // Extract subscription info if available
+        if (profileRows.length > 0) {
+          const row = profileRows[0];
+          // Always include subscription type from database, even if no expiry date
+          const subscriptionType = row.subscription_type || 'basic';
+          const subscriptionStatus = row.subscription_status || 'active';
           
-          // Extract subscription info if available
-          if (profileRows.length > 0) {
-            const row = profileRows[0];
-            if (row.subscription_expires_at) {
-              const expiresAt = new Date(row.subscription_expires_at);
-              const now = new Date();
-              const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
-              const isExpired = daysRemaining <= 0;
-              
-              subscriptionInfo = {
-                status: row.subscription_status || 'active',
-                expires_at: row.subscription_expires_at,
-                days_remaining: Math.max(0, daysRemaining),
-                is_expired: isExpired
-              };
-              
-              // If subscription is expired, treat as unauthorized
-              if (isExpired) {
-                return res.status(401).json({ error: 'subscription_expired', subscription: subscriptionInfo });
-              }
+          if (row.subscription_expires_at) {
+            const expiresAt = new Date(row.subscription_expires_at);
+            const now = new Date();
+            const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+            const isExpired = daysRemaining <= 0;
+            
+            subscriptionInfo = {
+              status: subscriptionStatus,
+              type: subscriptionType,
+              expires_at: row.subscription_expires_at,
+              days_remaining: Math.max(0, daysRemaining),
+              is_expired: isExpired
+            };
+            
+            // If subscription is expired, treat as unauthorized
+            if (isExpired) {
+              return res.status(401).json({ error: 'subscription_expired', subscription: subscriptionInfo });
             }
+          } else {
+            // No expiry date set - return subscription type with no expiry
+            subscriptionInfo = {
+              status: subscriptionStatus,
+              type: subscriptionType,
+              expires_at: null,
+              days_remaining: 999999,
+              is_expired: false
+            };
           }
-        } catch (e) {
-          // saas schema might not exist, ignore
         }
+      } catch (e) {
+        // saas schema might not exist, try regular devices table
+      }
+      
+      // If not found in saas.devices, try regular devices table
+      if (!profileRows.length) {
+        profileRows = await db(`
+          select d.device_id, d.device_name as display_name, d.device_name as name, d.branch, t.company_name as tenant_name, t.company_id as short_code
+            from devices d
+            left join tenants t on t.tenant_id = d.tenant_id
+           where d.device_token=$1 and d.status='active' and d.tenant_id=$2
+           limit 1
+        `, [tok, req.tenantId]);
       }
     }
     
@@ -4725,12 +4879,14 @@ addRoute('get', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
     // Minimal tenant_settings table to provide slug if migrations haven't run yet
     try { await db("CREATE TABLE IF NOT EXISTS tenant_settings (tenant_id uuid PRIMARY KEY, slug text)"); } catch {}
 
-    const rows = await db('select tenant_id as id, company_name as name, trim(company_id) as code, subdomain, email, status, plan_type, start_date, renewal_date, branch_limit, license_limit, created_at from tenants where tenant_id=$1', [id]);
+    const rows = await db('select tenant_id as id, company_name as name, trim(company_id) as code, subdomain, email, status, plan_type, start_date, renewal_date, branch_limit, license_limit, subscription_type, subscription_expires_at, created_at from tenants where tenant_id=$1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    console.log('[GET /admin/tenants/:id] Raw row from DB:', rows[0]);
     let slug = null;
     try { const s = await db('select slug from tenant_settings where tenant_id=$1', [id]); slug = (s && s[0] && s[0].slug) || null; } catch {}
     const r = rows[0];
-    return res.json({ id: r.id, name: r.name, code: r.code||null, branch_limit: r.branch_limit, license_limit: r.license_limit, slug });
+    console.log('[GET /admin/tenants/:id] Returning code:', r.code);
+    return res.json({ id: r.id, name: r.name, code: r.code||null, branch_limit: r.branch_limit, license_limit: r.license_limit, slug, subscription_type: r.subscription_type||null, subscription_expires_at: r.subscription_expires_at||null });
   } catch (_e) {
     // Fallback to minimal shape to avoid 500s on partially-migrated DBs
     try {
@@ -4867,11 +5023,34 @@ addRoute('put', '/admin/tenants/:id', verifyAuthOpen, requirePlatformAdminOpen, 
   const rawCode = req.body?.code;
   const rawBranchLimit = req.body?.branch_limit;
   const rawLicenseLimit = req.body?.license_limit;
+  const subscriptionType = req.body?.subscription_type != null ? String(req.body.subscription_type).trim() : null;
+  const subscriptionExpiresAt = req.body?.subscription_expires_at != null ? String(req.body.subscription_expires_at).trim() : null;
   if (!id) return res.status(400).json({ error: 'invalid_id' });
   // Ensure expected columns exist before updates on partially-migrated DBs
   try { await ensureLicensingSchema(); } catch {}
+  try { await db('ALTER TABLE IF EXISTS tenants ADD COLUMN IF NOT EXISTS subscription_type text'); } catch {}
+  try { await db('ALTER TABLE IF EXISTS tenants ADD COLUMN IF NOT EXISTS subscription_expires_at timestamptz'); } catch {}
   if (name) await db('update tenants set company_name=$1 where tenant_id=$2', [name, id]).catch(async ()=>{ try { await db('update tenants set name=$1 where id=$2', [name, id]); } catch {} });
   if (slug != null) await db('insert into tenant_settings (tenant_id, slug) values ($1,$2) on conflict (tenant_id) do update set slug=excluded.slug', [id, slug||null]);
+  
+  // Update subscription directly in tenants table
+  if (subscriptionType != null || subscriptionExpiresAt != null) {
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+    if (subscriptionType != null) {
+      updates.push(`subscription_type = $${paramIndex++}`);
+      values.push(subscriptionType);
+    }
+    if (subscriptionExpiresAt != null) {
+      updates.push(`subscription_expires_at = $${paramIndex++}`);
+      values.push(subscriptionExpiresAt || null);
+    }
+    if (updates.length > 0) {
+      values.push(id);
+      await db(`UPDATE tenants SET ${updates.join(', ')} WHERE tenant_id = $${paramIndex}`, values);
+    }
+  }
 
   // Company ID update (6 digits, unique, required)
   if (rawCode != null) {
@@ -9618,7 +9797,7 @@ addRoute('get', '/admin/tenants/:id/devices', verifyAuth, requireTenantAdminPara
   const key = `adm:devices:${req.params.id}:l=${limit}:o=${offset}`;
   const cached = cacheGet(key);
   if (cached) return res.json(cached);
-  const rows = await db("select device_id as id, short_code::text as short_code, device_name as name, role::text as role, status::text as status, branch, activated_at, revoked_at, last_seen from devices where tenant_id=$1 order by activated_at desc limit $2 offset $3", [req.params.id, limit, offset]);
+  const rows = await db("select device_id as id, short_code::text as short_code, device_name as name, role::text as role, status::text as status, branch, activated_at, revoked_at, last_seen from devices where tenant_id=$1 and deleted_at is null order by activated_at desc limit $2 offset $3", [req.params.id, limit, offset]);
   const payload = { items: rows };
   cacheSet(key, payload, 10000); // 10s TTL
   res.json(payload);
@@ -11147,6 +11326,14 @@ addRoute('get', '/products', requireTenant, async (req, res) => {
   }
 });
 app.use('/images/products', express.static(path.join(__dirname, 'photos')));
+
+// Explicit routes for logo and favicon (must come before other static mounts)
+app.get('/ordertech.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'ordertech.png'));
+});
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'favicon.ico'));
+});
 
 // Static mounts for new root assets
 app.use('/css', express.static(path.join(__dirname, 'css')));
@@ -12906,6 +13093,35 @@ try {
   console.error('[Server] Failed to initialize Foodics routes:', error);
 }
 
+// Initialize Foodics analytics routes (real-time data from Foodics API)
+try {
+  const initFoodicsAnalyticsRoutes = require('./routes/foodics-analytics');
+  const foodicsAnalyticsRouter = initFoodicsAnalyticsRoutes(db);
+  app.use('/api/foodics/analytics', foodicsAnalyticsRouter);
+  console.log('[Server] Foodics Analytics routes initialized');
+} catch (error) {
+  console.error('[Server] Failed to initialize Foodics Analytics routes:', error);
+}
+
+// Initialize Foodics sync routes (scheduled order sync)
+try {
+  const foodicsSyncRouter = require('./routes/foodics-sync');
+  app.use('/api/foodics', foodicsSyncRouter);
+  console.log('[Server] Foodics Sync routes initialized');
+} catch (error) {
+  console.error('[Server] Failed to initialize Foodics Sync routes:', error);
+}
+
+// Initialize Customer Analytics routes
+try {
+  const initCustomerAnalyticsRoutes = require('./routes/customer-analytics');
+  const customerAnalyticsRouter = initCustomerAnalyticsRoutes(db);
+  app.use('/api/customers/analytics', customerAnalyticsRouter);
+  console.log('[Server] Customer Analytics routes initialized');
+} catch (error) {
+  console.error('[Server] Failed to initialize Customer Analytics routes:', error);
+}
+
 // Serve Foodics static pages (must be direct app routes, not addRoute)
 app.use('/foodics', express.static(path.join(__dirname, 'foodics')));
 app.get('/foodics', (req, res) => {
@@ -12914,6 +13130,61 @@ app.get('/foodics', (req, res) => {
 app.get('/foodics/', (req, res) => {
   res.sendFile(path.join(__dirname, 'foodics', 'index.html'));
 });
+app.get('/foodics/marketing', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'marketing.html'));
+});
+app.get('/foodics/sales', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'sales.html'));
+});
+app.get('/foodics/branches', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'branches.html'));
+});
+app.get('/foodics/customers', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'customers.html'));
+});
+
+// Root-level shortcuts for sales, branches, and customers
+app.get('/sales', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'sales.html'));
+});
+app.get('/branches', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'branches.html'));
+});
+app.get('/customers', (req, res) => {
+  res.sendFile(path.join(__dirname, 'foodics', 'customers.html'));
+});
+
+// Image proxy to bypass CORS for Foodics S3 images
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) {
+      return res.status(400).send('Missing url parameter');
+    }
+    
+    // Only allow Foodics S3 images
+    if (!imageUrl.includes('foodics-console-production.s3')) {
+      return res.status(403).send('Invalid image source');
+    }
+    
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      return res.status(404).send('Image not found');
+    }
+    
+    // Set proper headers
+    res.set('Content-Type', response.headers.get('content-type') || 'image/png');
+    res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    
+    // Pipe the image
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error('Image proxy error:', error);
+    res.status(500).send('Failed to load image');
+  }
+});
+
 console.log('[Server] Foodics static routes registered');
 
 console.log('[boot] About to start HTTP server on', PORT);

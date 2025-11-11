@@ -4,7 +4,8 @@ import OrderTechCore
 
 struct SubscriptionInfo: Codable {
     let status: String
-    let expiresAt: Date
+    let type: String
+    let expiresAt: Date?
     let daysRemaining: Int
     let isExpired: Bool
 }
@@ -113,6 +114,12 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
                 data = try await getManifestManual(env: env)
             }
             let parsed = try? JSONSerialization.jsonObject(with: data, options: [])
+            
+            // Debug: Print manifest response
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("[Activation] Manifest response: \(jsonString)")
+            }
+            
             let base = extractDetails(from: parsed)
             // Start with manifest-provided values
             var companyName = base.companyName
@@ -165,11 +172,10 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
             )
             self.info = info
             
-            // If subscription is expired, auto-deactivate
+            // If subscription is expired, log warning but keep device activated
             if let sub = subscriptionInfo, sub.isExpired {
-                print("[Activation] Subscription expired - auto-deactivating")
-                env.deviceToken = nil
-                return
+                print("[Activation] Subscription expired - menu sync will be blocked")
+                // Don't clear deviceToken - just block sync functionality
             }
             _ = try? LocalCache.saveJSON(info, to: activationFilename)
 
@@ -224,8 +230,19 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
         } catch {
             print("[Activation] updateFromManifest failed: \(error.localizedDescription)")
             print("[Activation] Error details: \(error)")
-            // On failure do not persist tenant defaults; keep empty
-            // IMPORTANT: Do NOT clear deviceToken here - let user manually deactivate if needed
+            
+            // Check if error is HTTP 401 (device deleted/unauthorized)
+            let errorString = "\(error)"
+            let is401 = errorString.contains("401") || errorString.contains("HTTP 401") || errorString.contains("unauthorized")
+            
+            if is401 {
+                print("[Activation] HTTP 401 detected - Device unauthorized or deleted. Auto-deactivating...")
+                env.deviceToken = nil
+                env.foodicsToken = nil
+                self.info = nil
+                _ = try? LocalCache.delete("activation.json")
+                _ = try? LocalCache.delete("tenant.json")
+            }
         }
     }
 
@@ -280,8 +297,10 @@ if let tid = await self.associateViaWSHost(env: env) { env.setTenantId(tid) }
            let daysRemaining = subDict["days_remaining"] as? Int,
            let isExpired = subDict["is_expired"] as? Bool,
            let expiresAtDate = parseDate(subDict["expires_at"]) {
+            let type = subDict["type"] as? String ?? "trial"
             subscription = SubscriptionInfo(
                 status: status,
+                type: type,
                 expiresAt: expiresAtDate,
                 daysRemaining: daysRemaining,
                 isExpired: isExpired

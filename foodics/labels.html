@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Label Printers | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; color: #1f2937; }
+        .sidebar { position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1f2937; color: white; padding: 2rem 0; overflow-y: auto; }
+        .logo { padding: 0 1.5rem; font-size: 1.5rem; font-weight: bold; margin-bottom: 2rem; }
+        .menu { list-style: none; }
+        .menu a { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.5rem; color: #d1d5db; text-decoration: none; transition: all 0.3s; }
+        .menu a:hover, .menu a.active { background: #374151; color: white; }
+        .menu i { font-size: 1.2rem; }
+        .main-content { margin-left: 250px; padding: 2rem; }
+        .header { background: white; padding: 1.5rem 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .btn { padding: 0.625rem 1.25rem; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.3s; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .btn-secondary:hover { background: #4b5563; }
+        .device-count { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .device-count .stats { font-size: 1.5rem; font-weight: bold; }
+        .devices-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; }
+        .device-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .device-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+        .device-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 1rem; }
+        .device-icon.active { background: #d1fae5; color: #10b981; }
+        .device-icon.revoked { background: #fee2e2; color: #ef4444; }
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .status-badge.active { background: #d1fae5; color: #065f46; }
+        .status-badge.revoked { background: #fee2e2; color: #991b1b; }
+        .device-info { margin-bottom: 1rem; }
+        .device-info div { margin-bottom: 0.5rem; color: #6b7280; font-size: 0.9rem; }
+        .device-info strong { color: #1f2937; }
+        .device-actions { display: flex; gap: 0.5rem; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-content { background: white; border-radius: 16px; padding: 2rem; width: 90%; max-width: 500px; }
+        .modal-content h2 { margin-bottom: 1.5rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group select { width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 1rem; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #3b82f6; }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 32px;"></div>
+        <ul class="menu">
+            <li><a href="/foodics/dashboard.html"><i class="ri-dashboard-line"></i> Dashboard</a></li>
+            <li><a href="/foodics/profile.html"><i class="ri-user-line"></i> Profile</a></li>
+            <li><a href="/foodics/devices.html"><i class="ri-computer-line"></i> DriveThru Devices</a></li>
+            <li><a href="/foodics/labels.html" class="active"><i class="ri-printer-line"></i> Label Printers</a></li>
+            <li><a href="/foodics/subscription.html"><i class="ri-vip-crown-line"></i> Subscription</a></li>
+            <li><a href="/foodics/activity.html"><i class="ri-history-line"></i> Activity Log</a></li>
+            <li><a href="/foodics/settings.html"><i class="ri-settings-3-line"></i> Settings</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="header">
+            <h1>Label Printer Management</h1>
+            <button class="btn btn-danger" onclick="logout()"><i class="ri-logout-box-line"></i> Logout</button>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="device-count">
+            <div>
+                <div style="font-size: 0.9rem; color: #6b7280; margin-bottom: 0.5rem;">LABEL PRINTERS</div>
+                <div class="stats"><span id="devicesUsed">0</span> / <span id="devicesAllowed">0</span> Used</div>
+            </div>
+            <button class="btn btn-primary" onclick="showAddDeviceModal()">
+                <i class="ri-add-line"></i> Add Printer
+            </button>
+        </div>
+
+        <div class="devices-grid" id="devicesGrid">
+            <p style="text-align: center; color: #6b7280;">Loading printers...</p>
+        </div>
+    </main>
+
+    <!-- Add Device Modal -->
+    <div id="addDeviceModal" class="modal">
+        <div class="modal-content">
+            <h2>Add New Label Printer</h2>
+            <form id="addDeviceForm">
+                <div class="form-group">
+                    <label for="deviceName">Printer Name *</label>
+                    <input type="text" id="deviceName" placeholder="e.g., Kitchen Printer" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Printer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function checkAuth() {
+            const token = localStorage.getItem('foodics_token');
+            if (!token) {
+                window.location.href = '/foodics/login.html';
+                return false;
+            }
+            return true;
+        }
+        
+        function logout() {
+            localStorage.removeItem('foodics_token');
+            localStorage.removeItem('foodics_user');
+            window.location.href = '/foodics/login.html';
+        }
+        
+        function showAlert(message, type = 'error') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            setTimeout(() => { alert.style.display = 'none'; }, 5000);
+        }
+        
+        async function loadDevices() {
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/labels`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('devicesUsed').textContent = data.devices_used;
+                    document.getElementById('devicesAllowed').textContent = data.devices_allowed;
+                    
+                    const userData = JSON.parse(localStorage.getItem('foodics_user') || '{}');
+                    const foodicsId = userData.foodics_id || 'N/A';
+                    
+                    const grid = document.getElementById('devicesGrid');
+                    if (data.devices.length === 0) {
+                        grid.innerHTML = '<p style="text-align: center; color: #6b7280; grid-column: 1/-1;">No printers yet. Click "Add Printer" to get started.</p>';
+                        return;
+                    }
+                    
+                    grid.innerHTML = data.devices.map(device => `
+                        <div class="device-card">
+                            <div class="device-card-header">
+                                <div class="device-icon ${device.status}">
+                                    <i class="ri-printer-line"></i>
+                                </div>
+                                <span class="status-badge ${device.status}">${device.status}</span>
+                            </div>
+                            <h3>${device.device_name}</h3>
+                            <div class="device-info">
+                                <div><strong>Type:</strong> Label Printer (Sunmi)</div>
+                                <div><strong>Created:</strong> ${new Date(device.created_at).toLocaleDateString()}</div>
+                                ${device.activated_at ? `<div><strong>Activated:</strong> ${new Date(device.activated_at).toLocaleDateString()}</div>` : ''}
+                                ${device.branch_name ? `<div><strong>Branch:</strong> ${device.branch_name}</div>` : ''}
+                                ${device.status === 'revoked' && device.activation_code ? `
+                                    <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px solid #fbbf24; border-radius: 8px;">
+                                        <div style="font-weight: 600; margin-bottom: 0.5rem; color: #92400e;">🏷️ Activation Details</div>
+                                        <div style="font-size: 0.85rem; color: #92400e; margin-bottom: 0.5rem;"><strong>Foodics ID:</strong> ${foodicsId}</div>
+                                        <div style="font-size: 0.85rem; color: #92400e;"><strong>Activation Code:</strong></div>
+                                        <div style="font-family: monospace; font-size: 1.5rem; font-weight: bold; background: white; padding: 0.75rem; border-radius: 4px; margin-top: 0.25rem; text-align: center; color: #1f2937; letter-spacing: 0.2em;">${device.activation_code}</div>
+                                        <div style="font-size: 0.75rem; color: #92400e; margin-top: 0.5rem;">⚠️ Use this 6-digit code once to activate your printer in the Sunmi app</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="device-actions">
+                                <button class="btn btn-danger" onclick="deleteDevice('${device.device_id}', '${device.device_name}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Load devices error:', error);
+                showAlert('Failed to load printers');
+            }
+        }
+        
+        async function loadBranches() {
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/branches`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('deviceBranch');
+                    
+                    if (data.branches && data.branches.length > 0) {
+                        select.innerHTML = '<option value="">-- Select a branch --</option>' +
+                            data.branches.map(b => `<option value="${b.branch_id}">${b.branch_name}</option>`).join('');
+                    } else {
+                        select.innerHTML = '<option value="">No branches available</option>';
+                    }
+                }
+            } catch (error) {
+                console.error('Load branches error:', error);
+                document.getElementById('deviceBranch').innerHTML = '<option value="">Failed to load branches</option>';
+            }
+        }
+        
+        function showAddDeviceModal() {
+            document.getElementById('addDeviceModal').style.display = 'flex';
+        }
+        
+        function closeAddDeviceModal() {
+            document.getElementById('addDeviceModal').style.display = 'none';
+            document.getElementById('addDeviceForm').reset();
+        }
+        
+        document.getElementById('addDeviceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('deviceName').value.trim();
+            
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/labels`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ device_name: name })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    showAlert('Printer added successfully!', 'success');
+                    closeAddDeviceModal();
+                    loadDevices();
+                } else {
+                    showAlert(data.error || 'Failed to add printer');
+                }
+            } catch (error) {
+                showAlert('Network error');
+            }
+        });
+        
+        async function deleteDevice(deviceId, deviceName) {
+            if (!confirm(`Delete printer "${deviceName}"?`)) return;
+            
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/labels/${deviceId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    showAlert('Printer deleted', 'success');
+                    loadDevices();
+                } else {
+                    showAlert('Failed to delete printer');
+                }
+            } catch (error) {
+                showAlert('Network error');
+            }
+        }
+        
+        if (checkAuth()) {
+            loadDevices();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --omit=dev --no-audit --no-fund
+
+# Copy job script
+COPY jobs/foodics-sync-items-job.js ./
+
+# Make executable
+RUN chmod +x foodics-sync-items-job.js
+
+# Run the job
+CMD ["node", "foodics-sync-items-job.js"]

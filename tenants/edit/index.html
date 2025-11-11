@@ -31,7 +31,6 @@
             <button class="tab" data-tab="owner">Owner</button>
             <button class="tab" data-tab="integrations">Integrations</button>
             <button class="tab" data-tab="domains">Domains</button>
-            <button class="tab" data-tab="subscription">Subscription</button>
             <button class="tab" data-tab="danger">Danger</button>
           </div>
           
@@ -43,15 +42,10 @@
               <span id="basicsStatus" class="muted">—</span>
             </div>
           <div class="row cols-3">
-            <label class="grid">
+            <div class="grid">
               <span class="label" style="font-weight:800;">Company ID</span>
-              <small class="muted">Required — 6 digits</small>
-              <div class="flex" style="gap:8px; align-items:center;">
-                <input id="tCode" class="input" maxlength="6" inputmode="numeric" pattern="\d{6}" placeholder="123456" />
-                <button id="btnSuggestCode" class="btn sm" type="button">Suggest</button>
-                <small id="codeAvailability" class="muted">—</small>
-              </div>
-            </label>
+              <div id="tCodeDisplay" style="font-size:24px; font-weight:700; color:#1f2937; padding:8px 0;">—</div>
+            </div>
             <label class="grid"><span class="label">Name</span>
               <input id="tName" class="input" placeholder="Tenant name" />
             </label>
@@ -59,6 +53,32 @@
               <input id="tSlug" class="input" placeholder="tenant-slug" />
             </label>
           </div>
+          
+          <!-- Subscription Section -->
+          <div style="border-top:1px solid #e5e7eb; margin:24px 0; padding-top:24px;">
+            <div class="title" style="font-weight:700; margin-bottom:16px;">Subscription</div>
+            <div class="row cols-3">
+              <label class="grid"><span class="label">Subscription Type</span>
+                <select id="subTier" class="select">
+                  <option value="basic">Basic</option>
+                  <option value="pro">Pro</option>
+                  <option value="ai">AI</option>
+                </select>
+              </label>
+              <label class="grid"><span class="label">Expires At</span>
+                <small class="muted">Set expiration date</small>
+                <input id="expiresAt" class="input" type="date" />
+              </label>
+              <div class="grid">
+                <span class="label">Quick Extend (days)</span>
+                <div class="flex" style="gap:8px; align-items:center;">
+                  <input id="extendDays" class="input" type="number" min="1" placeholder="30" style="max-width:120px;" />
+                  <button id="applyExtend" class="btn">+Add Days</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
             <div class="row"><button id="saveBasics" class="btn primary">Save Basics</button></div>
           </div>
           
@@ -198,37 +218,6 @@
             <small id="domainsSingleWarning" class="muted" style="display:none;">Multiple domains configured — first row is primary.</small>
           </div>
           
-          <!-- Tab content: Subscription -->
-          <div id="tab-subscription" class="tab-content hidden">
-            <div class="toolbar">
-              <div class="title" style="font-weight:700;">Subscription</div>
-              <span class="spacer"></span>
-              <span id="subStatus" class="muted">—</span>
-            </div>
-          <div class="row cols-3">
-            <label class="grid"><span class="label">Tier</span>
-              <select id="subTier" class="select">
-                <option value="trial">Trial</option>
-                <option value="basic" selected>Basic</option>
-                <option value="professional">Professional</option>
-              </select>
-            </label>
-            <label class="grid"><span class="label">Trial ends at</span>
-              <input id="trialEndsAt" class="input" readonly />
-            </label>
-            <div class="grid">
-              <span class="label">Extend trial (days)</span>
-              <div class="flex" style="gap:8px; align-items:center;">
-                <input id="extendDays" class="input" type="number" min="1" placeholder="7" style="max-width:120px;" />
-                <button id="applyExtend" class="btn">Apply</button>
-              </div>
-            </div>
-          </div>
-            <div class="row" style="justify-content:flex-end;">
-              <button id="saveSub" class="btn primary">Save Subscription</button>
-            </div>
-          </div>
-          
           <!-- Tab content: Danger -->
           <div id="tab-danger" class="tab-content hidden">
             <div class="toolbar">
@@ -256,9 +245,9 @@
       </section>
     </main>
 
-    <script src="/js/admin-common.js?v=20250922-2"></script>
-    <script src="/js/admin-shell.js?v=20250922-2"></script>
-    <script src="/js/tenant-edit.js?v=20250922-2"></script>
+    <script src="/js/admin-common.js?v=20250211-7"></script>
+    <script src="/js/admin-shell.js?v=20250211-7"></script>
+    <script src="/js/tenant-edit.js?v=20250211-7"></script>
   </body>
 </html>
 

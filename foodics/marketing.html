@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Products Sales - Foodics</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #2d3748;
+    }
+    
+    .header {
+      background: white;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 1.5rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .header-content {
+      max-width: 1800px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header-title h1 {
+      font-size: 1.5rem;
+      color: #1a202c;
+      font-weight: 700;
+    }
+    
+    .date-selector {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .date-range-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: 2px solid #cbd5e0;
+      border-radius: 8px;
+      background: white;
+    }
+    
+    .date-range-box input {
+      border: none;
+      outline: none;
+      font-size: 0.9rem;
+      padding: 0.25rem;
+      width: 110px;
+    }
+    
+    .date-range-box span {
+      color: #718096;
+      font-weight: 600;
+    }
+    
+    .quick-filters {
+      position: relative;
+    }
+    
+    .btn-period {
+      padding: 0.5rem 1rem;
+      border: 2px solid #cbd5e0;
+      background: white;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #4a5568;
+      min-width: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .btn-period:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+    
+    .period-dropdown {
+      position: absolute;
+      top: 110%;
+      left: 0;
+      min-width: 150px;
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      padding: 0.5rem;
+      z-index: 1000;
+    }
+    
+    .period-dropdown.hidden {
+      display: none;
+    }
+    
+    .period-option {
+      padding: 0.6rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+    }
+    
+    .period-option:hover {
+      background: #f7fafc;
+      color: #667eea;
+    }
+    
+    .period-option.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .period-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 0.5rem 0;
+    }
+    
+    .btn {
+      padding: 0.6rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #4c51bf;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #434190;
+      transform: translateY(-1px);
+    }
+    
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .stats-bar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .stat-item {
+      text-align: center;
+    }
+    
+    .stat-label {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .product-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      transition: all 0.3s;
+      position: relative;
+    }
+    
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    }
+    
+    .rank-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      z-index: 10;
+    }
+    
+    .rank-badge.top3 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    
+    .cost-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.95);
+      color: #2d3748;
+      padding: 0.4rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      z-index: 10;
+      text-align: right;
+      line-height: 1.3;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .cost-badge-label {
+      font-size: 0.5rem;
+      text-transform: uppercase;
+      color: #718096;
+      font-weight: 500;
+      margin-bottom: 0.15rem;
+    }
+    
+    .cost-badge-value {
+      font-size: 0.75rem;
+      color: #2d3748;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+    
+    .cost-badge-profit {
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    
+    .cost-badge-profit.positive {
+      color: #48bb78;
+    }
+    
+    .cost-badge-profit.negative {
+      color: #f56565;
+    }
+    
+    .product-image {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    
+    .product-info {
+      padding: 0.625rem;
+    }
+    
+    .product-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 0.75rem;
+      min-height: 2.5rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .branch-breakdown {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0;
+      margin-bottom: 0.75rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    .branch-labels {
+      display: flex;
+      flex-direction: column;
+      background: #f7fafc;
+      border-right: 1px solid #e2e8f0;
+      padding: 0.2rem 0.2rem;
+      font-size: clamp(0.28rem, 0.7vw, 0.35rem);
+      font-weight: 600;
+      color: #4a5568;
+      justify-content: space-around;
+      text-align: left;
+      white-space: nowrap;
+    }
+    
+    .branch-label-row {
+      line-height: 1;
+      padding: 0.1rem 0;
+    }
+    
+    .branch-items {
+      display: flex;
+      gap: 0;
+    }
+    
+    .branch-qty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0.2rem 0.25rem;
+      flex: 1;
+      min-width: 0;
+      border-right: 1px solid rgba(255,255,255,0.3);
+      cursor: help;
+      transition: opacity 0.2s;
+    }
+    
+    .branch-qty:hover {
+      opacity: 0.85;
+    }
+    
+    .branch-qty:last-child {
+      border-right: none;
+    }
+    
+    .branch-qty-number {
+      font-size: clamp(0.5rem, 1.2vw, 0.65rem);
+      font-weight: 700;
+      color: white;
+      line-height: 1;
+      padding-bottom: 0.1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .branch-qty-prev {
+      font-size: clamp(0.35rem, 0.9vw, 0.5rem);
+      font-weight: 600;
+      color: rgba(255,255,255,0.75);
+      line-height: 1;
+      padding: 0.1rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .branch-qty-name {
+      font-size: clamp(0.3rem, 0.8vw, 0.4rem);
+      font-weight: 600;
+      color: rgba(255,255,255,0.95);
+      text-transform: uppercase;
+      letter-spacing: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+      padding-top: 0.1rem;
+    }
+    
+    .product-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 2px solid #e2e8f0;
+    }
+    
+    .metric {
+      text-align: center;
+    }
+    
+    .metric-label {
+      font-size: 0.7rem;
+      color: #718096;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    
+    .metric-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #4c51bf;
+    }
+    
+    .metric-value.revenue {
+      color: #48bb78;
+    }
+    
+    .metric-cost {
+      font-size: 0.7rem;
+      color: #718096;
+      margin-top: 0.25rem;
+      font-weight: 500;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 4rem;
+      color: #718096;
+    }
+    
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #4c51bf;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 2rem auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .error {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+      text-align: center;
+    }
+    
+    @media (min-width: 1601px) {
+      .products-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+    }
+    
+    @media (max-width: 1600px) {
+      .products-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+    }
+    
+    @media (max-width: 1200px) {
+      .products-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .products-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    /* Branch Filter Styles */
+    .branch-filter {
+      position: relative;
+      margin-left: 1rem;
+    }
+    
+    .btn-branch {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.2s ease, transform 0.2s ease;
+      white-space: nowrap;
+    }
+    
+    .btn-branch:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+    
+    .branch-dropdown {
+      position: absolute;
+      top: 110%;
+      right: 0;
+      min-width: 280px;
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      padding: 1rem;
+      z-index: 1000;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .branch-dropdown.hidden {
+      display: none;
+    }
+    
+    .branch-option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      margin-bottom: 0.5rem;
+    }
+    
+    .branch-option:hover {
+      background: #f7fafc;
+    }
+    
+    .branch-option.all {
+      font-weight: 700;
+      color: #667eea;
+      border-bottom: 2px solid #e2e8f0;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+    }
+    
+    .branch-option input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #667eea;
+    }
+    
+    .branch-option span {
+      flex: 1;
+      font-size: 0.95rem;
+      color: #2d3748;
+    }
+    
+    .branch-options.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <div class="header-title">
+        <h1>📊 Sales & Marketing</h1>
+      </div>
+      <div class="date-selector">
+        <div class="date-range-box">
+          <input type="date" id="dateFrom">
+          <span>-</span>
+          <input type="date" id="dateTo">
+        </div>
+        <div class="quick-filters">
+          <button class="btn-period" id="periodBtn">
+            <span id="periodLabel">This Month</span>
+            <span>▼</span>
+          </button>
+          <div class="period-dropdown hidden" id="periodDropdown">
+            <div class="period-option" onclick="setQuickFilter('today')">Today</div>
+            <div class="period-option" onclick="setQuickFilter('thisWeek')">This Week</div>
+            <div class="period-option active" onclick="setQuickFilter('thisMonth')">This Month</div>
+            <div class="period-option" onclick="setQuickFilter('thisYear')">This Year</div>
+            <div class="period-divider"></div>
+            <div class="period-option" onclick="setQuickFilter('yesterday')">Yesterday</div>
+            <div class="period-option" onclick="setQuickFilter('lastWeek')">Last Week</div>
+            <div class="period-option" onclick="setQuickFilter('lastMonth')">Last Month</div>
+            <div class="period-option" onclick="setQuickFilter('lastYear')">Last Year</div>
+          </div>
+        </div>
+        <div class="branch-filter">
+          <button class="btn btn-branch" id="branchFilterBtn">📍 All Branches</button>
+          <div class="branch-dropdown hidden" id="branchDropdown">
+            <label class="branch-option all">
+              <input type="checkbox" id="allBranches" checked />
+              <span>All Branches</span>
+            </label>
+            <div id="branchOptions" class="branch-options">
+              <!-- Branches will be populated dynamically -->
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="loadData()">Load Data</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="container">
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar" style="display: none;">
+      <div class="stat-item">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value" id="totalRevenue">0 KWD</div>
+        <div class="metric-cost" id="totalCost" style="color: rgba(255,255,255,0.8); font-size: 0.9rem; margin-top: 0.5rem;">Cost: 0 KWD</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Total Orders</div>
+        <div class="stat-value" id="totalOrders">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Products Sold</div>
+        <div class="stat-value" id="productsCount">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Avg Order Value</div>
+        <div class="stat-value" id="avgOrder">0 KWD</div>
+      </div>
+    </div>
+    
+    <!-- Products Grid -->
+    <div id="productsContainer">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 1rem; font-size: 1.1rem;">Loading products...</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const FOODICS_ID = localStorage.getItem('foodics_id') || '494675';
+    const API_BASE = window.location.origin;
+    
+    // Branch filter state
+    const BRANCH_STATE = {
+      all: true,
+      branches: [],
+      selected: new Set(),
+      branchColors: {
+        'Salmiya': '#667eea',
+        'Jahra': '#f093fb',
+        'Abu Halifa': '#48bb78',
+        'Coast Guard': '#ed8936',
+        'Ardiya': '#9f7aea',
+        'Kuwait University': '#38b2ac',
+        'City': '#f56565'
+      },
+      branchCodes: {
+        'Salmiya': 'SLB',
+        'Jahra': 'JRB',
+        'Abu Halifa': 'AHB',
+        'Coast Guard': 'CGB',
+        'Ardiya': 'ADB',
+        'Kuwait University': 'KUB',
+        'City': 'CTB'
+      },
+      currentPeriodLabel: 'Current',
+      previousPeriodLabel: 'Previous'
+    };
+    
+    // Quick date filter
+    function setQuickFilter(filter) {
+      const today = new Date();
+      let from, to, label;
+      
+      // Remove active class from all options
+      document.querySelectorAll('.period-option').forEach(opt => opt.classList.remove('active'));
+      
+      switch(filter) {
+        case 'today':
+          from = to = new Date();
+          label = 'Today';
+          BRANCH_STATE.currentPeriodLabel = 'Today';
+          BRANCH_STATE.previousPeriodLabel = 'Yesterday';
+          break;
+        case 'thisWeek':
+          // Monday to today
+          to = new Date();
+          from = new Date(today);
+          const day = from.getDay();
+          const diff = from.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+          from.setDate(diff);
+          label = 'This Week';
+          BRANCH_STATE.currentPeriodLabel = 'This Wk';
+          BRANCH_STATE.previousPeriodLabel = 'Last Wk';
+          break;
+        case 'thisMonth':
+          from = new Date(today.getFullYear(), today.getMonth(), 1);
+          to = new Date();
+          label = 'This Month';
+          BRANCH_STATE.currentPeriodLabel = 'This Mo';
+          BRANCH_STATE.previousPeriodLabel = 'Last Mo';
+          break;
+        case 'thisYear':
+          from = new Date(today.getFullYear(), 0, 1);
+          to = new Date();
+          label = 'This Year';
+          BRANCH_STATE.currentPeriodLabel = 'This Yr';
+          BRANCH_STATE.previousPeriodLabel = 'Last Yr';
+          break;
+        case 'yesterday':
+          from = to = new Date(today.setDate(today.getDate() - 1));
+          label = 'Yesterday';
+          BRANCH_STATE.currentPeriodLabel = 'Yesterday';
+          BRANCH_STATE.previousPeriodLabel = '2 Days Ago';
+          break;
+        case 'lastWeek':
+          // Previous Monday to Sunday
+          to = new Date(today);
+          const lastSunday = to.getDate() - to.getDay();
+          to.setDate(lastSunday);
+          from = new Date(to);
+          from.setDate(from.getDate() - 6);
+          label = 'Last Week';
+          BRANCH_STATE.currentPeriodLabel = 'Last Wk';
+          BRANCH_STATE.previousPeriodLabel = 'Prev Wk';
+          break;
+        case 'lastMonth':
+          from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          to = new Date(today.getFullYear(), today.getMonth(), 0);
+          label = 'Last Month';
+          BRANCH_STATE.currentPeriodLabel = 'Last Mo';
+          BRANCH_STATE.previousPeriodLabel = 'Prev Mo';
+          break;
+        case 'lastYear':
+          from = new Date(today.getFullYear() - 1, 0, 1);
+          to = new Date(today.getFullYear() - 1, 11, 31);
+          label = 'Last Year';
+          BRANCH_STATE.currentPeriodLabel = 'Last Yr';
+          BRANCH_STATE.previousPeriodLabel = 'Prev Yr';
+          break;
+      }
+      
+      // Update label and active state
+      document.getElementById('periodLabel').textContent = label;
+      event.target.classList.add('active');
+      
+      // Close dropdown
+      document.getElementById('periodDropdown').classList.add('hidden');
+      
+      document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
+      document.getElementById('dateTo').value = to.toISOString().split('T')[0];
+      loadData();
+    }
+    
+    // Initialize period dropdown
+    function initPeriodDropdown() {
+      const btn = document.getElementById('periodBtn');
+      const dropdown = document.getElementById('periodDropdown');
+      
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('hidden');
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+          dropdown.classList.add('hidden');
+        }
+      });
+    }
+    
+    // Initialize dates to this month
+    function initDates() {
+      const today = new Date();
+      
+      // This month: first day of current month to today
+      const firstDayThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      
+      document.getElementById('dateFrom').value = firstDayThisMonth.toISOString().split('T')[0];
+      document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+      
+      // Set the period labels
+      BRANCH_STATE.currentPeriodLabel = 'This Mo';
+      BRANCH_STATE.previousPeriodLabel = 'Last Mo';
+    }
+    
+    // Load data
+    async function loadData() {
+      const from = document.getElementById('dateFrom').value;
+      const to = document.getElementById('dateTo').value;
+      
+      if (!from || !to) {
+        alert('Please select date range');
+        return;
+      }
+      
+      document.getElementById('productsContainer').innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 1rem; font-size: 1.1rem;">Loading products...</p></div>';
+      document.getElementById('statsBar').style.display = 'none';
+      
+      try {
+        const params = new URLSearchParams({
+          foodics_id: FOODICS_ID,
+          from,
+          to
+          // No limit - show all products
+        });
+        
+        // Add branch filters if not "All"
+        if (!BRANCH_STATE.all && BRANCH_STATE.selected.size > 0) {
+          for (const branch of BRANCH_STATE.selected) {
+            params.append('branches', branch);
+          }
+        }
+        
+        const [summaryRes, productsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/foodics/analytics/sales-summary?${params.toString()}`),
+          fetch(`${API_BASE}/api/foodics/analytics/product-sales?${params.toString()}`)
+        ]);
+        
+        if (!summaryRes.ok || !productsRes.ok) {
+          throw new Error('Failed to load data');
+        }
+        
+        const summaryData = await summaryRes.json();
+        const productsData = await productsRes.json();
+        
+        // Format numbers with thousand separators and no decimals
+        const formatCurrency = (num) => {
+          return Math.round(num).toLocaleString('en-US');
+        };
+        
+        // Update stats
+        document.getElementById('totalRevenue').textContent = formatCurrency(summaryData.summary.total_revenue) + ' KWD';
+        document.getElementById('totalCost').textContent = 'Cost: ' + formatCurrency(productsData.total_cost || 0) + ' KWD';
+        document.getElementById('totalOrders').textContent = summaryData.summary.total_orders.toLocaleString('en-US');
+        document.getElementById('productsCount').textContent = productsData.products.length.toLocaleString('en-US');
+        document.getElementById('avgOrder').textContent = formatCurrency(summaryData.summary.avg_order_value) + ' KWD';
+        document.getElementById('statsBar').style.display = 'grid';
+        
+        // Render products
+        renderProducts(productsData.products);
+        
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('productsContainer').innerHTML = 
+          `<div class="error">Failed to load data: ${error.message}</div>`;
+      }
+    }
+    
+    // Render products grid
+    function renderProducts(products) {
+      const container = document.getElementById('productsContainer');
+      
+      if (products.length === 0) {
+        container.innerHTML = '<div class="loading"><p style="font-size: 1.2rem;">No products found in this period</p></div>';
+        return;
+      }
+      
+      const gridHtml = `
+        <div class="products-grid">
+          ${products.map((product, index) => {
+            const unitCost = product.quantity_sold > 0 ? product.total_cost / product.quantity_sold : 0;
+            const profit = product.total_revenue - product.total_cost;
+            const profitMargin = product.total_revenue > 0 ? (profit / product.total_revenue * 100) : 0;
+            return `
+            <div class="product-card">
+              <div class="rank-badge ${index < 3 ? 'top3' : ''}">#${index + 1}</div>
+              <div class="cost-badge">
+                <div class="cost-badge-label">Unit Cost</div>
+                <div class="cost-badge-value">${unitCost.toFixed(3)} KWD</div>
+                <div class="cost-badge-profit ${profitMargin >= 0 ? 'positive' : 'negative'}">${profitMargin.toFixed(0)}%</div>
+              </div>
+              <img 
+                src="${product.image || '/images/placeholder.png'}" 
+                alt="${product.name}"
+                class="product-image"
+                onerror="this.src='/images/placeholder.png'"
+              >
+              <div class="product-info">
+                <div class="product-name">${product.name}</div>
+                ${product.branch_breakdown ? renderBranchBreakdown(product.branch_breakdown, product.branch_breakdown_prev) : ''}
+                <div class="product-metrics">
+                  <div class="metric">
+                    <div class="metric-label">Revenue</div>
+                    <div class="metric-value revenue">${Math.round(product.total_revenue).toLocaleString('en-US')} KWD</div>
+                    <div class="metric-cost">Cost: ${Math.round(product.total_cost).toLocaleString('en-US')} KWD</div>
+                  </div>
+                  <div class="metric">
+                    <div class="metric-label">Qty Sold</div>
+                    <div class="metric-value">${product.quantity_sold.toLocaleString('en-US')}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          }).join('')}
+        </div>
+      `;
+      
+      container.innerHTML = gridHtml;
+    }
+    
+    // Render branch breakdown for a product
+    function renderBranchBreakdown(breakdown, breakdownPrev) {
+      if (!breakdown || Object.keys(breakdown).length === 0) return '';
+      
+      const branchesHtml = Object.entries(breakdown)
+        .filter(([branch, qty]) => qty > 0)
+        .map(([branch, qty]) => {
+          const color = BRANCH_STATE.branchColors[branch] || '#718096';
+          const code = BRANCH_STATE.branchCodes[branch] || branch.substring(0, 3).toUpperCase();
+          const prevQty = breakdownPrev && breakdownPrev[branch] ? breakdownPrev[branch] : 0;
+          return `
+            <div class="branch-qty" style="background: ${color};" title="${branch}: ${qty} units (prev: ${prevQty})">
+              <div class="branch-qty-number">${qty}</div>
+              <div class="branch-qty-prev">${prevQty}</div>
+              <div class="branch-qty-name">${code}</div>
+            </div>
+          `;
+        }).join('');
+      
+      return `
+        <div class="branch-breakdown">
+          <div class="branch-labels">
+            <div class="branch-label-row">${BRANCH_STATE.currentPeriodLabel}</div>
+            <div class="branch-label-row">${BRANCH_STATE.previousPeriodLabel}</div>
+            <div class="branch-label-row">Branch</div>
+          </div>
+          <div class="branch-items">${branchesHtml}</div>
+        </div>
+      `;
+    }
+    
+    // Initialize branch filter
+    async function initBranchFilter() {
+      // Load branches from API
+      try {
+        const res = await fetch(`${API_BASE}/api/foodics/analytics/branches?foodics_id=${FOODICS_ID}`);
+        const data = await res.json();
+        BRANCH_STATE.branches = data.branches || [];
+      } catch (error) {
+        console.error('Failed to load branches:', error);
+        // Fallback to hardcoded branches
+        BRANCH_STATE.branches = ['Abu Halifa', 'Ardiya', 'City', 'Coast Guard', 'Jahra', 'Kuwait University', 'Salmiya'];
+      }
+      
+      // Populate branch options
+      const optionsEl = document.getElementById('branchOptions');
+      optionsEl.innerHTML = '';
+      
+      BRANCH_STATE.branches.forEach(name => {
+        const id = 'branch_' + name.toLowerCase().replace(/\s+/g, '_');
+        const label = document.createElement('label');
+        label.className = 'branch-option';
+        label.innerHTML = `
+          <input type="checkbox" id="${id}" data-name="${name}" />
+          <span>${name}</span>
+        `;
+        optionsEl.appendChild(label);
+      });
+      
+      // Setup event listeners
+      const allEl = document.getElementById('allBranches');
+      const dropdown = document.getElementById('branchDropdown');
+      const btn = document.getElementById('branchFilterBtn');
+      
+      function updateBranchUI() {
+        const optionsClass = optionsEl.classList;
+        if (BRANCH_STATE.all) {
+          optionsClass.add('disabled');
+          BRANCH_STATE.selected.clear();
+          btn.textContent = '📍 All Branches';
+          allEl.checked = true;
+          optionsEl.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+            chk.checked = false;
+          });
+        } else {
+          optionsClass.remove('disabled');
+          const count = BRANCH_STATE.selected.size;
+          btn.textContent = count > 0 ? `📍 Branches (${count})` : '📍 Select Branches';
+          allEl.checked = false;
+        }
+      }
+      
+      // All branches checkbox
+      allEl.addEventListener('change', () => {
+        BRANCH_STATE.all = allEl.checked;
+        updateBranchUI();
+        loadData();
+      });
+      
+      // Individual branch checkboxes
+      optionsEl.addEventListener('change', (e) => {
+        const input = e.target.closest('input[type="checkbox"]');
+        if (!input) return;
+        
+        BRANCH_STATE.all = false;
+        const name = input.dataset.name;
+        if (input.checked) {
+          BRANCH_STATE.selected.add(name);
+        } else {
+          BRANCH_STATE.selected.delete(name);
+        }
+        updateBranchUI();
+        loadData();
+      });
+      
+      // Toggle dropdown
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('hidden');
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+          dropdown.classList.add('hidden');
+        }
+      });
+      
+      // Initialize UI
+      updateBranchUI();
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      initDates();
+      initPeriodDropdown();
+      await initBranchFilter();
+      loadData();
+    });
+  </script>
+</body>
+</html>

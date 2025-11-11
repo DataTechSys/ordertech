@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>OrderTech — Digital Signage</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #A3B1A4;
+        color: #2D2A26;
+        overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      :root {
+        --bg: #A3B1A4;
+        --surface: #ffffff;
+        --ink: #2D2A26;
+        --accent: #718472;
+        --line: #E5E7EB;
+        --radius: 14px;
+      }
+
+      .signage-container {
+        width: 100vw;
+        height: 100vh;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .products-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 20px;
+        width: 100%;
+        height: 100%;
+      }
+
+      .product-card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        padding: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .product-image-wrapper {
+        flex: 1;
+        position: relative;
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: #f5f5f5;
+        margin-bottom: 8px;
+        min-height: 0;
+      }
+
+      .product-image {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .product-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        text-align: center;
+        flex-shrink: 0;
+        padding: 4px 0;
+      }
+
+      .product-name-ar {
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.3;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .product-name-en {
+        font-size: 11px;
+        line-height: 1.3;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .product-price {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+
+      .loading-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .spinner {
+        width: 64px;
+        height: 64px;
+        border: 5px solid var(--line);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        font-size: 18px;
+        font-weight: 500;
+        color: var(--ink);
+      }
+
+      .progress-container {
+        width: 300px;
+        height: 8px;
+        background: var(--line);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 999px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      .progress-percent {
+        font-size: 14px;
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .update-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--accent);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      .update-indicator.show {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loadingContainer" class="loading-container">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading menu...</div>
+      <div class="progress-container">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <div id="progressPercent" class="progress-percent">0%</div>
+    </div>
+
+    <div id="signageContainer" class="signage-container" style="display: none;">
+      <div id="productsGrid" class="products-grid"></div>
+    </div>
+
+    <div id="updateIndicator" class="update-indicator">Checking for updates...</div>
+
+    <script>
+      const API_BASE = 'https://app.ordertech.me';
+      const CHECK_UPDATES_INTERVAL = 5 * 60 * 1000; // 5 minutes
+      const PAGE_ROTATION_INTERVAL = 15 * 1000; // 15 seconds
+      const PRODUCTS_PER_PAGE = 12;
+      const DEFAULT_TENANT_ID = 'f8578f9c-782b-4d31-b04f-3b2d890c5896';
+      const STORAGE_KEY = 'ordertech_ds_cache';
+
+      let allProducts = [];
+      let currentPage = 0;
+      let rotationTimer = null;
+      let updateCheckTimer = null;
+
+      function updateProgress(percent) {
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressPercent');
+        if (bar) bar.style.width = percent + '%';
+        if (text) text.textContent = Math.round(percent) + '%';
+      }
+
+      function showUpdateIndicator(message = 'Checking for updates...') {
+        const indicator = document.getElementById('updateIndicator');
+        indicator.textContent = message;
+        indicator.classList.add('show');
+        setTimeout(() => {
+          indicator.classList.remove('show');
+        }, 3000);
+      }
+
+      function getTenantId() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('tenant') || DEFAULT_TENANT_ID;
+      }
+
+      function getCachedData() {
+        try {
+          const cached = localStorage.getItem(STORAGE_KEY);
+          if (!cached) return null;
+          const data = JSON.parse(cached);
+          console.log('Cache found:', data.products?.length, 'products');
+          return data.products;
+        } catch {
+          return null;
+        }
+      }
+
+      function setCachedData(products) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            products: products
+          }));
+          console.log('Cached', products.length, 'products');
+        } catch {}
+      }
+
+      async function fetchProducts(silent = false) {
+        if (!silent) updateProgress(10);
+        const response = await fetch(`${API_BASE}/api/products`, {
+          headers: { 'X-Tenant-Id': getTenantId() }
+        });
+        if (!response.ok) throw new Error('Failed to fetch');
+        const data = await response.json();
+        if (!silent) updateProgress(30);
+        return Array.isArray(data) ? data : (data.items || []);
+      }
+
+      function createProductCard(product) {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        
+        const nameAr = typeof product.name_localized === 'string' ? product.name_localized : '';
+        const nameEn = product.name || '';
+        
+        let imageUrl = product.image_url || '/images/placeholder.png';
+        if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+          imageUrl = `${API_BASE}${imageUrl}`;
+        }
+
+        card.innerHTML = `
+          <div class="product-image-wrapper">
+            <img class="product-image" src="${imageUrl}" alt="${nameEn}" 
+                 onerror="this.src='${API_BASE}/images/placeholder.png'"/>
+          </div>
+          <div class="product-info">
+            <div class="product-name-ar">${nameAr}</div>
+            <div class="product-name-en">${nameEn}</div>
+            <div class="product-price">${(parseFloat(product.price) || 0).toFixed(3)} KWD</div>
+          </div>
+        `;
+        return card;
+      }
+
+      function shuffleArray(array) {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      }
+
+      function renderPage(pageIndex) {
+        const grid = document.getElementById('productsGrid');
+        grid.innerHTML = '';
+        const start = pageIndex * PRODUCTS_PER_PAGE;
+        const pageProducts = allProducts.slice(start, start + PRODUCTS_PER_PAGE);
+        while (pageProducts.length < PRODUCTS_PER_PAGE && allProducts.length > 0) {
+          pageProducts.push(allProducts[pageProducts.length % allProducts.length]);
+        }
+        pageProducts.forEach(product => grid.appendChild(createProductCard(product)));
+      }
+
+      async function preloadFirstPageImages(products, silent = false) {
+        const firstPage = products.slice(0, PRODUCTS_PER_PAGE);
+        const urls = firstPage.map(p => {
+          let url = p.image_url || '/images/placeholder.png';
+          if (url.startsWith('/') && !url.startsWith('//')) url = `${API_BASE}${url}`;
+          return url;
+        });
+
+        let loaded = 0;
+        const promises = urls.map(url => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              loaded++;
+              if (!silent) updateProgress(30 + (loaded / urls.length) * 60);
+              resolve();
+            };
+            img.onerror = () => {
+              loaded++;
+              if (!silent) updateProgress(30 + (loaded / urls.length) * 60);
+              resolve();
+            };
+            img.src = url;
+          });
+        });
+
+        await Promise.all(promises);
+        if (!silent) updateProgress(90);
+      }
+
+      function hasProductsChanged(oldProducts, newProducts) {
+        if (!oldProducts || !newProducts) return true;
+        if (oldProducts.length !== newProducts.length) return true;
+        
+        // Check if any product has different data
+        for (let i = 0; i < oldProducts.length; i++) {
+          const oldP = oldProducts[i];
+          const newP = newProducts.find(p => p.id === oldP.id);
+          if (!newP) return true; // Product removed
+          if (oldP.name !== newP.name) return true;
+          if (oldP.name_localized !== newP.name_localized) return true;
+          if (oldP.price !== newP.price) return true;
+          if (oldP.image_url !== newP.image_url) return true;
+        }
+        
+        return false;
+      }
+
+      async function checkForUpdates() {
+        try {
+          console.log('[Update Check] Checking for updates...');
+          showUpdateIndicator('Checking for updates...');
+          
+          const newProducts = await fetchProducts(true);
+          const validNew = newProducts.filter(p => p && p.name);
+          
+          if (hasProductsChanged(allProducts, validNew)) {
+            console.log('[Update Check] Changes detected, updating...');
+            showUpdateIndicator('Menu updated!');
+            
+            // Update cache
+            setCachedData(validNew);
+            
+            // Update display
+            const oldPage = currentPage;
+            allProducts = shuffleArray(validNew);
+            
+            // Preload new images silently
+            await preloadFirstPageImages(allProducts, true);
+            
+            // Re-render current page
+            renderPage(oldPage);
+            
+            console.log('[Update Check] Update complete');
+          } else {
+            console.log('[Update Check] No changes detected');
+            showUpdateIndicator('Menu is up to date');
+          }
+        } catch (error) {
+          console.error('[Update Check] Failed:', error);
+          showUpdateIndicator('Update check failed');
+        }
+      }
+
+      function startUpdateChecks() {
+        if (updateCheckTimer) {
+          clearInterval(updateCheckTimer);
+        }
+        
+        updateCheckTimer = setInterval(() => {
+          checkForUpdates();
+        }, CHECK_UPDATES_INTERVAL);
+        
+        console.log('[Update Check] Scheduled every', CHECK_UPDATES_INTERVAL / 60000, 'minutes');
+      }
+
+      async function init() {
+        try {
+          let products = getCachedData();
+          
+          if (!products) {
+            console.log('No cache, fetching fresh data...');
+            products = await fetchProducts();
+            setCachedData(products);
+          } else {
+            console.log('Using cached data');
+            updateProgress(30);
+          }
+          
+          products = products.filter(p => p && p.name);
+          allProducts = shuffleArray(products);
+          
+          updateProgress(50);
+          
+          await preloadFirstPageImages(allProducts);
+          
+          renderPage(0);
+          
+          updateProgress(100);
+          
+          setTimeout(() => {
+            document.getElementById('loadingContainer').style.display = 'none';
+            document.getElementById('signageContainer').style.display = 'block';
+          }, 300);
+          
+          // Start page rotation
+          rotationTimer = setInterval(() => {
+            currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
+            renderPage(currentPage);
+          }, PAGE_ROTATION_INTERVAL);
+          
+          // Start update checks
+          startUpdateChecks();
+          
+          // Fullscreen
+          const enterFS = () => {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) elem.requestFullscreen().catch(() => {});
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+          };
+          enterFS();
+          document.addEventListener('click', enterFS, { once: true });
+          
+          console.log('Digital Signage ready');
+        } catch (error) {
+          console.error('Init failed:', error);
+          // Try expired cache
+          try {
+            const cached = localStorage.getItem(STORAGE_KEY);
+            if (cached) {
+              const data = JSON.parse(cached);
+              allProducts = shuffleArray(data.products.filter(p => p && p.name));
+              await preloadFirstPageImages(allProducts);
+              renderPage(0);
+              document.getElementById('loadingContainer').style.display = 'none';
+              document.getElementById('signageContainer').style.display = 'block';
+              rotationTimer = setInterval(() => {
+                currentPage = (currentPage + 1) % Math.ceil(allProducts.length / PRODUCTS_PER_PAGE);
+                renderPage(currentPage);
+              }, PAGE_ROTATION_INTERVAL);
+              startUpdateChecks();
+            }
+          } catch {}
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+      window.addEventListener('beforeunload', () => {
+        if (rotationTimer) clearInterval(rotationTimer);
+        if (updateCheckTimer) clearInterval(updateCheckTimer);
+      });
+    </script>
+  </body>
+</html>

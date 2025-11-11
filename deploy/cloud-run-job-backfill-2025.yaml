@@ -1,0 +1,31 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: foodics-backfill-2025
+  namespace: '715493130630'
+  labels:
+    cloud.googleapis.com/location: me-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backfill
+            image: gcr.io/smart-order-469705/ordertech:latest
+            command: ["node"]
+            args: ["jobs/foodics-backfill-2025.js"]
+            env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:OL5eoBqUAF9xTgPm@10.87.32.3:5432/ordertech"
+            - name: NODE_ENV
+              value: "production"
+            resources:
+              limits:
+                cpu: "1000m"
+                memory: "512Mi"
+          timeoutSeconds: 3600  # 1 hour timeout
+          maxRetries: 0

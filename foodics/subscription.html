@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription | DataTech</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f3f4f6; color: #1f2937; }
+        .sidebar { position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1f2937; color: white; padding: 2rem 0; overflow-y: auto; }
+        .logo { padding: 0 1.5rem; font-size: 1.5rem; font-weight: bold; margin-bottom: 2rem; }
+        .menu { list-style: none; }
+        .menu a { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.5rem; color: #d1d5db; text-decoration: none; transition: all 0.3s; }
+        .menu a:hover, .menu a.active { background: #374151; color: white; }
+        .menu i { font-size: 1.2rem; }
+        .main-content { margin-left: 250px; padding: 2rem; max-width: 1000px; }
+        .header { background: white; padding: 1.5rem 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .btn { padding: 0.625rem 1.25rem; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.3s; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .card { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .card h2 { margin-bottom: 1rem; color: #1f2937; }
+        
+        .subscription-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .subscription-header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            background: rgba(255,255,255,0.2);
+            margin-top: 0.5rem;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .info-item {
+            background: rgba(255,255,255,0.1);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        
+        .info-item .label {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .plan-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .plan-card:hover {
+            border-color: #3b82f6;
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        }
+        
+        .plan-card.current {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+        
+        .plan-price {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3b82f6;
+            margin: 1rem 0;
+        }
+        
+        .plan-price span {
+            font-size: 1rem;
+            color: #6b7280;
+        }
+        
+        .plan-features {
+            list-style: none;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+        
+        .plan-features li {
+            padding: 0.5rem 0;
+            color: #4b5563;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .plan-features li i {
+            color: #10b981;
+        }
+        
+        .coming-soon {
+            color: #f59e0b;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><img src="/foodics/datatech-logo.png" alt="DataTech" style="height: 32px;"></div>
+        <ul class="menu">
+            <li><a href="/foodics/dashboard.html"><i class="ri-dashboard-line"></i> Dashboard</a></li>
+            <li><a href="/foodics/profile.html"><i class="ri-user-line"></i> Profile</a></li>
+            <li><a href="/foodics/devices.html"><i class="ri-computer-line"></i> Devices</a></li>
+            <li><a href="/foodics/subscription.html" class="active"><i class="ri-vip-crown-line"></i> Subscription</a></li>
+            <li><a href="/foodics/activity.html"><i class="ri-history-line"></i> Activity Log</a></li>
+            <li><a href="/foodics/settings.html"><i class="ri-settings-3-line"></i> Settings</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="header">
+            <h1>Subscription</h1>
+            <button class="btn btn-danger" onclick="logout()"><i class="ri-logout-box-line"></i> Logout</button>
+        </div>
+
+        <div class="subscription-header">
+            <h1>Your Subscription</h1>
+            <div class="status-badge" id="planStatus">TRIAL</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">Plan Type</div>
+                    <div class="value" id="planType">Trial</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Devices Allowed</div>
+                    <div class="value"><span id="devicesUsed">0</span> / <span id="devicesAllowed">0</span></div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Trial Ends</div>
+                    <div class="value" id="trialEnd" style="font-size: 1.1rem;">—</div>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="margin-bottom: 1.5rem;">Available Plans</h2>
+        <div class="plans-grid">
+            <div class="plan-card current">
+                <div class="plan-name">Basic</div>
+                <div class="plan-price">$49<span>/month/device</span></div>
+                <ul class="plan-features">
+                    <li><i class="ri-check-line"></i> DriveThru POS System</li>
+                    <li><i class="ri-check-line"></i> Order Management</li>
+                    <li><i class="ri-check-line"></i> Real-time Sync</li>
+                    <li><i class="ri-check-line"></i> Basic Analytics</li>
+                    <li><i class="ri-check-line"></i> Email Support</li>
+                </ul>
+                <button class="btn btn-primary" style="width: 100%;" disabled>Current Plan</button>
+            </div>
+
+            <div class="plan-card">
+                <div class="plan-name">Pro</div>
+                <div class="coming-soon">COMING SOON</div>
+                <ul class="plan-features" style="opacity: 0.6;">
+                    <li><i class="ri-check-line"></i> Everything in Basic</li>
+                    <li><i class="ri-check-line"></i> Accept Orders Remotely</li>
+                    <li><i class="ri-check-line"></i> Advanced Analytics</li>
+                    <li><i class="ri-check-line"></i> Priority Support</li>
+                    <li><i class="ri-check-line"></i> Custom Integrations</li>
+                </ul>
+            </div>
+
+            <div class="plan-card">
+                <div class="plan-name">AI</div>
+                <div class="coming-soon">COMING SOON</div>
+                <ul class="plan-features" style="opacity: 0.6;">
+                    <li><i class="ri-check-line"></i> Everything in Pro</li>
+                    <li><i class="ri-check-line"></i> AI-Powered Insights</li>
+                    <li><i class="ri-check-line"></i> Predictive Analytics</li>
+                    <li><i class="ri-check-line"></i> Smart Recommendations</li>
+                    <li><i class="ri-check-line"></i> Dedicated Support</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Need More Devices?</h2>
+            <p style="color: #6b7280; margin-bottom: 1rem;">Contact us to purchase additional device licenses for your subscription.</p>
+            <a href="mailto:support@datatech.systems" class="btn btn-primary">
+                <i class="ri-mail-line"></i> Contact Sales
+            </a>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        function checkAuth() {
+            const token = localStorage.getItem('foodics_token');
+            if (!token) {
+                window.location.href = '/foodics/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        function logout() {
+            localStorage.removeItem('foodics_token');
+            localStorage.removeItem('foodics_user');
+            window.location.href = '/foodics/login.html';
+        }
+
+        async function loadSubscription() {
+            try {
+                const token = localStorage.getItem('foodics_token');
+                const response = await fetch(`${API_BASE}/api/foodics/user/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const user = data.user;
+
+                    document.getElementById('planType').textContent = (user.plan_type || 'trial').toUpperCase();
+                    document.getElementById('planStatus').textContent = (user.plan_type || 'trial').toUpperCase();
+                    document.getElementById('devicesUsed').textContent = user.active_devices_count || 0;
+                    document.getElementById('devicesAllowed').textContent = user.devices_allowed || 0;
+
+                    if (user.trial_end_date) {
+                        const endDate = new Date(user.trial_end_date);
+                        const now = new Date();
+                        const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+                        document.getElementById('trialEnd').textContent = `${daysLeft} days left`;
+                    }
+                }
+            } catch (error) {
+                console.error('Load subscription error:', error);
+            }
+        }
+
+        if (checkAuth()) {
+            loadSubscription();
+        }
+    </script>
+</body>
+</html>

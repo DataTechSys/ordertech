@@ -1,0 +1,12 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+COPY jobs/sync-remote-db-job.js ./
+COPY jobs/sync-today-items.js ./
+RUN chmod +x sync-remote-db-job.js sync-today-items.js
+
+CMD ["node", "sync-remote-db-job.js"]

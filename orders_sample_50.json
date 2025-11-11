@@ -1,0 +1,3222 @@
+[
+  {
+    "id": "000007de-4f05-4508-a567-98de1b9d87fa",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 30,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-02-15",
+    "subtotal_price": 1.7,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.7,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "993e6163-3b73-401e-a5e7-2e0123f47bc3",
+        "auto_closed": false,
+        "printing_status": {
+          "model": "NT311",
+          "status": "receipt_printing_success"
+        },
+        "products_kitchen": [],
+        "business_date_in_utc": "2025-02-15"
+      }
+    },
+    "opened_at": "2025-02-15 07:28:47",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-02-15 07:29:39",
+    "created_at": "2025-02-15 07:29:43",
+    "updated_at": "2025-02-15 07:29:43",
+    "reference": 1540874,
+    "check_number": 110364
+  },
+  {
+    "id": "00000832-a48b-4550-836e-71a51ef815ab",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 152,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-01-09",
+    "subtotal_price": 3.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-01-09 18:59:45",
+        "device_id": "97bd983d-4ee2-46c0-b966-adcaa7ec7401",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "97bd986a-5c16-41c7-8d61-17af3f2c50e3",
+            "kitchen_done_at": "2024-01-09 18:59:45",
+            "kitchen_sent_at": "2024-01-09 18:58:51"
+          }
+        ],
+        "kitchen_done_at": "2024-01-09 18:59:45",
+        "products_kitchen": [
+          {
+            "uuid": "5e55be42-9098-44d1-b45b-ba334976d745",
+            "kitchen_times": [
+              {
+                "kds_id": "97bd986a-5c16-41c7-8d61-17af3f2c50e3",
+                "kitchen_done_at": "2024-01-09 18:59:45",
+                "kitchen_sent_at": "2024-01-09 18:58:51"
+              }
+            ],
+            "kitchen_done_at": "2024-01-09 18:59:45",
+            "kitchen_sent_at": "2024-01-09 18:58:51"
+          },
+          {
+            "uuid": "aeb9ac0d-7d02-4c8f-97bf-d3a3604fead0",
+            "kitchen_times": [
+              {
+                "kds_id": "97bd986a-5c16-41c7-8d61-17af3f2c50e3",
+                "kitchen_done_at": "2024-01-09 18:59:45",
+                "kitchen_sent_at": "2024-01-09 18:58:51"
+              }
+            ],
+            "kitchen_done_at": "2024-01-09 18:59:45",
+            "kitchen_sent_at": "2024-01-09 18:58:51"
+          }
+        ],
+        "kitchen_received_at": "2024-01-09 18:58:51"
+      }
+    },
+    "opened_at": "2024-01-09 18:58:31",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-01-09 18:58:51",
+    "created_at": "2024-01-09 18:59:47",
+    "updated_at": "2024-01-09 18:59:47",
+    "reference": 994673,
+    "check_number": 145004
+  },
+  {
+    "id": "000009dc-4683-4aa4-80bf-6005b14b9875",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 30,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2023-03-02",
+    "subtotal_price": 3.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9397d526-e7c7-4770-81f5-169d12e9a671",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2023-03-02 07:18:41",
+            "kitchen_sent_at": "2023-03-02 07:10:01"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2023-03-02 07:10:41",
+            "kitchen_sent_at": "2023-03-02 07:10:01"
+          }
+        ],
+        "kitchen_done_at": "2023-03-02 07:18:41",
+        "products_kitchen": [
+          {
+            "uuid": "7325333f-5dff-41bb-a26e-d28bcbaec27d",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2023-03-02 07:18:41",
+                "kitchen_sent_at": "2023-03-02 07:10:01"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2023-03-02 07:10:41",
+                "kitchen_sent_at": "2023-03-02 07:10:01"
+              }
+            ],
+            "kitchen_done_at": "2023-03-02 07:18:41",
+            "kitchen_sent_at": "2023-03-02 07:10:01"
+          },
+          {
+            "uuid": "d948581d-8f04-47a0-850b-fd8519b30a6a",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2023-03-02 07:18:41",
+                "kitchen_sent_at": "2023-03-02 07:10:01"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2023-03-02 07:10:41",
+                "kitchen_sent_at": "2023-03-02 07:10:01"
+              }
+            ],
+            "kitchen_done_at": "2023-03-02 07:18:41",
+            "kitchen_sent_at": "2023-03-02 07:10:01"
+          }
+        ],
+        "kitchen_received_at": "2023-03-02 07:10:01"
+      }
+    },
+    "opened_at": "2023-03-02 07:09:51",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2023-03-02 07:10:00",
+    "created_at": "2023-03-02 07:11:05",
+    "updated_at": "2023-03-02 07:19:44",
+    "reference": 668071,
+    "check_number": 180679
+  },
+  {
+    "id": "00000aa6-57f1-4afa-91b4-060e6e9f0d7a",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 42,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-03-10",
+    "subtotal_price": 3.15,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.15,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2025-03-13 12:57:48",
+        "device_id": "9397d526-e7c7-4770-81f5-169d12e9a671",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2025-03-13 01:39:09",
+            "kitchen_sent_at": "2025-03-10 17:53:06"
+          }
+        ],
+        "kitchen_done_at": "2025-03-13 01:39:09",
+        "products_kitchen": [
+          {
+            "uuid": "fa5a8358-8940-4e4b-a048-2a780750948a",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2025-03-13 01:39:09",
+                "kitchen_sent_at": "2025-03-10 17:53:06"
+              }
+            ],
+            "kitchen_done_at": "2025-03-13 01:39:09",
+            "kitchen_sent_at": "2025-03-10 17:53:06"
+          },
+          {
+            "uuid": "031a6734-d207-42be-829f-ebed55785e9b",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2025-03-13 01:39:09",
+                "kitchen_sent_at": "2025-03-10 17:53:06"
+              }
+            ],
+            "kitchen_done_at": "2025-03-13 01:39:09",
+            "kitchen_sent_at": "2025-03-10 17:53:06"
+          }
+        ],
+        "kitchen_received_at": "2025-03-10 17:53:06",
+        "business_date_in_utc": "2025-03-10"
+      }
+    },
+    "opened_at": "2025-03-10 17:52:44",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-03-10 17:53:05",
+    "created_at": "2025-03-10 17:53:02",
+    "updated_at": "2025-03-13 13:01:13",
+    "reference": 1568496,
+    "check_number": 280479
+  },
+  {
+    "id": "0000170e-84de-4e22-9af8-4a9cf79a4080",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 46,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-04-04",
+    "subtotal_price": 2.5,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2.5,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2024-04-03"
+      }
+    },
+    "opened_at": "2024-04-04 16:33:19",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-04-04 16:33:25",
+    "created_at": "2024-04-04 16:33:26",
+    "updated_at": "2024-04-04 16:33:26",
+    "reference": 1095015,
+    "check_number": 183139
+  },
+  {
+    "id": "00001b62-2f8a-442e-89cd-b543123b1d90",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 62,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-02-12",
+    "subtotal_price": 2.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2025-02-12 08:53:14",
+        "device_id": "97bd983d-4ee2-46c0-b966-adcaa7ec7401",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "97bd986a-5c16-41c7-8d61-17af3f2c50e3",
+            "kitchen_done_at": "2025-02-12 08:53:14",
+            "kitchen_sent_at": "2025-02-12 08:02:59"
+          }
+        ],
+        "kitchen_done_at": "2025-02-12 08:53:14",
+        "products_kitchen": [
+          {
+            "uuid": "3282dc40-c191-4aa7-9727-e153a691196c",
+            "kitchen_times": [
+              {
+                "kds_id": "97bd986a-5c16-41c7-8d61-17af3f2c50e3",
+                "kitchen_done_at": "2025-02-12 08:53:14",
+                "kitchen_sent_at": "2025-02-12 08:02:59"
+              }
+            ],
+            "kitchen_done_at": "2025-02-12 08:53:14",
+            "kitchen_sent_at": "2025-02-12 08:02:59"
+          },
+          {
+            "uuid": "97ac8cbf-6162-4bfa-824c-e92b2d77882c",
+            "kitchen_times": [
+              {
+                "kds_id": "97bd986a-5c16-41c7-8d61-17af3f2c50e3",
+                "kitchen_done_at": "2025-02-12 08:53:14",
+                "kitchen_sent_at": "2025-02-12 08:02:59"
+              }
+            ],
+            "kitchen_done_at": "2025-02-12 08:53:14",
+            "kitchen_sent_at": "2025-02-12 08:02:59"
+          }
+        ],
+        "kitchen_received_at": "2025-02-12 08:02:59",
+        "business_date_in_utc": "2025-02-12"
+      }
+    },
+    "opened_at": "2025-02-12 08:01:57",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-02-12 08:02:58",
+    "created_at": "2025-02-12 08:03:39",
+    "updated_at": "2025-02-12 08:53:50",
+    "reference": 1536643,
+    "check_number": 204730
+  },
+  {
+    "id": "000023fa-1a42-483f-a6bf-d64e341c457c",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 148,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-06-09",
+    "subtotal_price": 1.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-06-09 13:10:25",
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2024-06-09 13:10:25",
+            "kitchen_sent_at": "2024-06-09 13:08:36"
+          }
+        ],
+        "kitchen_done_at": "2024-06-09 13:10:25",
+        "products_kitchen": [
+          {
+            "uuid": "26783000-b678-4fcc-95dd-6e4a41416e4e",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2024-06-09 13:10:25",
+                "kitchen_sent_at": "2024-06-09 13:08:36"
+              }
+            ],
+            "kitchen_done_at": "2024-06-09 13:10:25",
+            "kitchen_sent_at": "2024-06-09 13:08:36"
+          }
+        ],
+        "kitchen_received_at": "2024-06-09 13:08:36",
+        "business_date_in_utc": "2024-06-08"
+      }
+    },
+    "opened_at": "2024-06-09 13:07:32",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-06-09 13:08:36",
+    "created_at": "2024-06-09 13:09:24",
+    "updated_at": "2024-06-09 13:11:31",
+    "reference": 1193593,
+    "check_number": 351163
+  },
+  {
+    "id": "00002ea1-7696-45e6-a97e-551d2379eefe",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 54,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-03-23",
+    "subtotal_price": 2.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-03-23 17:40:33",
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2024-03-23 18:40:18",
+            "kitchen_sent_at": "2024-03-23 17:34:09"
+          }
+        ],
+        "kitchen_done_at": "2024-03-23 18:40:18",
+        "products_kitchen": [
+          {
+            "uuid": "b3a607db-8c12-49a7-a22c-188a131e2879",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2024-03-23 18:40:18",
+                "kitchen_sent_at": "2024-03-23 17:34:09"
+              }
+            ],
+            "kitchen_done_at": "2024-03-23 18:40:18",
+            "kitchen_sent_at": "2024-03-23 17:34:09"
+          }
+        ],
+        "kitchen_received_at": "2024-03-23 17:34:09",
+        "business_date_in_utc": "2024-03-22"
+      }
+    },
+    "opened_at": "2024-03-23 17:33:32",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-03-23 17:34:08",
+    "created_at": "2024-03-23 17:34:13",
+    "updated_at": "2024-03-23 17:41:19",
+    "reference": 1084345,
+    "check_number": 392778
+  },
+  {
+    "id": "00003ea1-b39b-4534-b62e-a5aa7170b81f",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 59,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-01-02",
+    "subtotal_price": 3.85,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.85,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "auto_closed": false,
+        "products_kitchen": []
+      }
+    },
+    "opened_at": "2024-01-02 12:09:58",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-01-02 12:15:30",
+    "created_at": "2024-01-02 12:16:51",
+    "updated_at": "2024-01-02 12:16:51",
+    "reference": 983528,
+    "check_number": 173000
+  },
+  {
+    "id": "00004414-674e-4ffe-aa10-16e982744dae",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 82,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-02-15",
+    "subtotal_price": 3.5,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.5,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-02-15 07:57:08",
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2024-02-15 08:49:10",
+            "kitchen_sent_at": "2024-02-15 07:44:38"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2024-02-15 07:57:08",
+            "kitchen_sent_at": "2024-02-15 07:44:39"
+          }
+        ],
+        "kitchen_done_at": "2024-02-15 08:49:10",
+        "products_kitchen": [
+          {
+            "uuid": "cf782b95-9224-4096-8771-3b17e6fa124f",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2024-02-15 08:49:10",
+                "kitchen_sent_at": "2024-02-15 07:44:38"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2024-02-15 07:57:08",
+                "kitchen_sent_at": "2024-02-15 07:44:39"
+              }
+            ],
+            "kitchen_done_at": "2024-02-15 08:49:10",
+            "kitchen_sent_at": "2024-02-15 07:44:38"
+          },
+          {
+            "uuid": "89504652-5414-43f4-bd4b-fa9e05c597d2",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2024-02-15 08:49:10",
+                "kitchen_sent_at": "2024-02-15 07:44:38"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2024-02-15 07:57:08",
+                "kitchen_sent_at": "2024-02-15 07:44:39"
+              }
+            ],
+            "kitchen_done_at": "2024-02-15 08:49:10",
+            "kitchen_sent_at": "2024-02-15 07:44:38"
+          }
+        ],
+        "kitchen_received_at": "2024-02-15 07:44:38"
+      }
+    },
+    "opened_at": "2024-02-15 07:44:23",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-02-15 07:47:36",
+    "created_at": "2024-02-15 07:44:58",
+    "updated_at": "2024-02-15 07:57:39",
+    "reference": 1041278,
+    "check_number": 387166
+  },
+  {
+    "id": "0000515a-50d5-4c43-8fb3-f136beddfdeb",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 249,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2021-12-09",
+    "subtotal_price": 2.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2021-12-09 20:48:41",
+            "kitchen_sent_at": "2021-12-09 20:11:37"
+          }
+        ],
+        "kitchen_done_at": "2021-12-09 20:48:41",
+        "products_kitchen": [
+          {
+            "uuid": "8dee3a54-55d0-49ab-a4a4-aa67f93015f1",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2021-12-09 20:48:41",
+                "kitchen_sent_at": "2021-12-09 20:11:37"
+              }
+            ],
+            "kitchen_done_at": "2021-12-09 20:48:41",
+            "kitchen_sent_at": "2021-12-09 20:11:37"
+          }
+        ],
+        "kitchen_received_at": "2021-12-09 20:11:37"
+      }
+    },
+    "opened_at": "2021-12-09 20:11:34",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2021-12-09 20:11:37",
+    "created_at": "2021-12-09 20:12:34",
+    "updated_at": "2021-12-09 20:50:21",
+    "reference": 256205,
+    "check_number": 177499
+  },
+  {
+    "id": "0000641d-5726-4bbd-b4e2-acaf87dc1e00",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": 4,
+    "reference_x": null,
+    "number": 153,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-10-02",
+    "subtotal_price": 3.9,
+    "discount_amount": 3.9,
+    "rounding_amount": 0,
+    "total_price": 0,
+    "tax_exclusive_discount_amount": 3.9,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "loyalty": {
+          "app_id": "9f71365e-b93a-45cd-a8f8-4ac6e7bc1c8d",
+          "reward_code": "341289"
+        },
+        "ready_at": "2025-10-02 15:06:15",
+        "device_id": "955a81e4-6679-4c4c-9a31-5ec8140017ca",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_sent_at": "2025-10-02 15:05:16"
+          }
+        ],
+        "kitchen_done_at": "2025-10-02 15:06:15",
+        "products_kitchen": [
+          {
+            "uuid": "39735413-883c-483d-a692-ae8bea715148",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_sent_at": "2025-10-02 15:05:16"
+              }
+            ],
+            "kitchen_sent_at": "2025-10-02 15:05:16"
+          }
+        ],
+        "kitchen_received_at": "2025-10-02 15:05:16",
+        "business_date_in_utc": "2025-10-02"
+      }
+    },
+    "opened_at": "2025-10-02 15:05:11",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-10-02 15:06:01",
+    "created_at": "2025-10-02 15:05:51",
+    "updated_at": "2025-10-02 15:06:16",
+    "reference": 1822666,
+    "check_number": 318017
+  },
+  {
+    "id": "0000676d-ebf5-417e-8463-22d098bf1acd",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 59,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-09-09",
+    "subtotal_price": 4,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 4,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2022-09-09 11:58:08",
+            "kitchen_sent_at": "2022-09-09 11:57:01"
+          }
+        ],
+        "kitchen_done_at": "2022-09-09 11:58:08",
+        "products_kitchen": [
+          {
+            "uuid": "03c9904e-ff41-4ddb-b172-8f86cdd2ba93",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2022-09-09 11:58:08",
+                "kitchen_sent_at": "2022-09-09 11:57:01"
+              }
+            ],
+            "kitchen_done_at": "2022-09-09 11:58:08",
+            "kitchen_sent_at": "2022-09-09 11:57:01"
+          }
+        ],
+        "kitchen_received_at": "2022-09-09 11:57:01"
+      }
+    },
+    "opened_at": "2022-09-09 11:56:54",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-09-09 11:57:00",
+    "created_at": "2022-09-09 11:57:51",
+    "updated_at": "2022-09-09 11:58:52",
+    "reference": 509271,
+    "check_number": 124264
+  },
+  {
+    "id": "00007074-3dcc-4b54-81dc-d56ac85328ed",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 10,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-07-07",
+    "subtotal_price": 5.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 5.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2024-07-06"
+      }
+    },
+    "opened_at": "2024-07-07 00:41:10",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-07-07 00:41:42",
+    "created_at": "2024-07-07 00:41:33",
+    "updated_at": "2024-07-07 00:42:03",
+    "reference": 1231823,
+    "check_number": 200239
+  },
+  {
+    "id": "00007083-1637-4d17-af27-cb93433342fc",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 236,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2021-05-26",
+    "subtotal_price": 1.5,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.5,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-6069-482e-ad32-9639e200d83a",
+            "kitchen_done_at": "2021-05-26 10:28:26",
+            "kitchen_sent_at": "2021-05-26 10:26:18"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2021-05-26 10:28:16",
+            "kitchen_sent_at": "2021-05-26 10:26:19"
+          }
+        ],
+        "kitchen_done_at": "2021-05-26 10:28:26",
+        "products_kitchen": [
+          {
+            "uuid": "9338dd92-1b9c-4565-9392-57dc98b415cf",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-6069-482e-ad32-9639e200d83a",
+                "kitchen_done_at": "2021-05-26 10:28:26",
+                "kitchen_sent_at": "2021-05-26 10:26:18"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2021-05-26 10:28:16",
+                "kitchen_sent_at": "2021-05-26 10:26:19"
+              }
+            ],
+            "kitchen_done_at": "2021-05-26 10:28:26",
+            "kitchen_sent_at": "2021-05-26 10:26:18"
+          }
+        ],
+        "kitchen_received_at": "2021-05-26 10:26:19"
+      }
+    },
+    "opened_at": "2021-05-26 10:26:06",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2021-05-26 10:28:33",
+    "created_at": "2021-05-26 10:26:37",
+    "updated_at": "2021-05-26 10:28:42",
+    "reference": 66109,
+    "check_number": 130214
+  },
+  {
+    "id": "000085dd-9053-4004-ad8c-f0e87fbc7439",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 211,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-05-11",
+    "subtotal_price": 6.245,
+    "discount_amount": 0,
+    "rounding_amount": 0.005,
+    "total_price": 6.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9d5a68d4-47a4-475a-ace2-916922b0f3a0",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2025-05-11"
+      }
+    },
+    "opened_at": "2025-05-11 14:02:00",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-05-11 14:03:06",
+    "created_at": "2025-05-11 14:03:09",
+    "updated_at": "2025-05-11 14:03:09",
+    "reference": 1646165,
+    "check_number": 122849
+  },
+  {
+    "id": "00008905-67da-45a2-acbf-48987690c5cb",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 145,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-10-10",
+    "subtotal_price": 3.85,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.85,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-10-10 19:57:57",
+        "device_id": "92aca873-591f-4ee9-8bcc-6607a72a28c3",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9ab48f2a-7ba0-4e40-ba8c-af36d243d024",
+            "kitchen_done_at": "2024-10-10 20:57:52",
+            "kitchen_sent_at": "2024-10-10 18:47:06"
+          }
+        ],
+        "kitchen_done_at": "2024-10-10 20:57:52",
+        "products_kitchen": [
+          {
+            "uuid": "1b738b49-ff70-481c-aded-84d49b9bff72",
+            "kitchen_times": [
+              {
+                "kds_id": "9ab48f2a-7ba0-4e40-ba8c-af36d243d024",
+                "kitchen_done_at": "2024-10-10 20:57:52",
+                "kitchen_sent_at": "2024-10-10 18:47:06"
+              }
+            ],
+            "kitchen_done_at": "2024-10-10 20:57:52",
+            "kitchen_sent_at": "2024-10-10 18:47:06"
+          },
+          {
+            "uuid": "2cba5018-33f2-41c6-b249-d1a0e2a8e845",
+            "kitchen_times": [
+              {
+                "kds_id": "9ab48f2a-7ba0-4e40-ba8c-af36d243d024",
+                "kitchen_done_at": "2024-10-10 20:57:52",
+                "kitchen_sent_at": "2024-10-10 18:47:06"
+              }
+            ],
+            "kitchen_done_at": "2024-10-10 20:57:52",
+            "kitchen_sent_at": "2024-10-10 18:47:06"
+          }
+        ],
+        "kitchen_received_at": "2024-10-10 18:47:06",
+        "business_date_in_utc": "2024-10-10"
+      }
+    },
+    "opened_at": "2024-10-10 18:46:10",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-10-10 18:47:05",
+    "created_at": "2024-10-10 18:47:48",
+    "updated_at": "2024-10-10 19:59:08",
+    "reference": 1360026,
+    "check_number": 220285
+  },
+  {
+    "id": "0000960b-8b80-4426-960d-1bc51d0b3360",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 130,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-04-06",
+    "subtotal_price": 3.3,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.3,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9d3e3722-aafb-4da8-918b-de7f195f1de3",
+        "auto_closed": false,
+        "printing_status": {
+          "model": "TM-m30II",
+          "status": "receipt_printing_failed",
+          "error_message": "CallbackErrorCoverOpen"
+        },
+        "products_kitchen": [],
+        "business_date_in_utc": "2025-04-06"
+      }
+    },
+    "opened_at": "2025-04-06 11:45:45",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-04-06 11:45:58",
+    "created_at": "2025-04-06 11:46:37",
+    "updated_at": "2025-04-06 11:46:37",
+    "reference": 1596150,
+    "check_number": 141553
+  },
+  {
+    "id": "00009bdd-27a1-40ed-9df8-fc8fe8345a2f",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": 4,
+    "reference_x": null,
+    "number": 1,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-05-12",
+    "subtotal_price": 4.5,
+    "discount_amount": 3.45,
+    "rounding_amount": 0,
+    "total_price": 1.05,
+    "tax_exclusive_discount_amount": 3.45,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "loyalty": {
+          "app_id": "92ba8bd1-d5c2-49b9-ba7f-782921116d32",
+          "reward_code": "p3450"
+        },
+        "device_id": "97bd983d-4ee2-46c0-b966-adcaa7ec7401",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2024-05-12"
+      }
+    },
+    "opened_at": "2024-05-12 03:35:16",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-05-12 03:36:29",
+    "created_at": "2024-05-12 03:35:55",
+    "updated_at": "2024-05-12 03:37:17",
+    "reference": 1147343,
+    "check_number": 163234
+  },
+  {
+    "id": "00009d89-62ff-4bf1-8fb2-530f0bfc6f7c",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 48,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-05-28",
+    "subtotal_price": 2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2022-05-28 00:31:12",
+            "kitchen_sent_at": "2022-05-28 00:07:46"
+          }
+        ],
+        "kitchen_done_at": "2022-05-28 00:31:12",
+        "products_kitchen": [
+          {
+            "uuid": "22e08058-1de5-4168-b044-d16b62cdf41c",
+            "kitchen_times": [
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-05-28 00:31:12",
+                "kitchen_sent_at": "2022-05-28 00:07:46"
+              }
+            ],
+            "kitchen_done_at": "2022-05-28 00:31:12",
+            "kitchen_sent_at": "2022-05-28 00:07:46"
+          }
+        ],
+        "kitchen_received_at": "2022-05-28 00:07:46"
+      }
+    },
+    "opened_at": "2022-05-28 00:07:40",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-05-28 00:07:45",
+    "created_at": "2022-05-28 00:08:46",
+    "updated_at": "2022-05-28 00:33:42",
+    "reference": 404324,
+    "check_number": 263412
+  },
+  {
+    "id": "0000a5fe-083c-4316-9996-7ce2eb762bb4",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 8,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-07-30",
+    "subtotal_price": 4,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 4,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-07-30 00:56:31",
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9ca3415b-6d38-4ef1-80d0-55f023afd555",
+            "kitchen_done_at": "2024-07-29 21:47:52",
+            "kitchen_sent_at": "2024-07-29 21:30:58"
+          },
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2024-07-30 00:56:31",
+            "kitchen_sent_at": "2024-07-29 21:30:58"
+          }
+        ],
+        "kitchen_done_at": "2024-07-30 00:56:31",
+        "products_kitchen": [
+          {
+            "uuid": "da78f63e-c1b6-4950-89bc-07c3e17f6ac0",
+            "kitchen_times": [
+              {
+                "kds_id": "9ca3415b-6d38-4ef1-80d0-55f023afd555",
+                "kitchen_done_at": "2024-07-29 21:47:52",
+                "kitchen_sent_at": "2024-07-29 21:30:58"
+              },
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2024-07-30 00:56:31",
+                "kitchen_sent_at": "2024-07-29 21:30:58"
+              }
+            ],
+            "kitchen_done_at": "2024-07-30 00:56:31",
+            "kitchen_sent_at": "2024-07-29 21:30:58"
+          }
+        ],
+        "kitchen_received_at": "2024-07-29 21:30:58",
+        "business_date_in_utc": "2024-07-29"
+      }
+    },
+    "opened_at": "2024-07-29 21:29:48",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-07-29 21:30:58",
+    "created_at": "2024-07-29 21:31:00",
+    "updated_at": "2024-07-30 00:57:16",
+    "reference": 1262608,
+    "check_number": 365306
+  },
+  {
+    "id": "0000b0bd-7aed-492f-a09f-62dbc1cd5b5b",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 1,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2021-09-14",
+    "subtotal_price": 1.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2021-09-13 21:11:19",
+            "kitchen_sent_at": "2021-09-13 21:09:23"
+          }
+        ],
+        "kitchen_done_at": "2021-09-13 21:11:19",
+        "products_kitchen": [
+          {
+            "uuid": "8a236ee4-0e51-4848-bf0b-2b7b23b94d62",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2021-09-13 21:11:19",
+                "kitchen_sent_at": "2021-09-13 21:09:23"
+              }
+            ],
+            "kitchen_done_at": "2021-09-13 21:11:19",
+            "kitchen_sent_at": "2021-09-13 21:09:23"
+          }
+        ],
+        "kitchen_received_at": "2021-09-13 21:09:23"
+      }
+    },
+    "opened_at": "2021-09-13 21:08:31",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2021-09-13 21:09:22",
+    "created_at": "2021-09-13 21:09:50",
+    "updated_at": "2021-09-13 21:11:51",
+    "reference": 180603,
+    "check_number": 155550
+  },
+  {
+    "id": "0000bf93-123b-4d11-ac66-b7ca4f294d63",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 22,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-08-19",
+    "subtotal_price": 1.2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9d5a68d4-47a4-475a-ace2-916922b0f3a0",
+        "auto_closed": false,
+        "printing_status": {
+          "model": "TM-m30II",
+          "status": "receipt_printing_failed",
+          "error_message": "ConnectErrorOffline"
+        },
+        "products_kitchen": [],
+        "business_date_in_utc": "2025-08-19"
+      }
+    },
+    "opened_at": "2025-08-19 04:55:52",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-08-19 04:56:25",
+    "created_at": "2025-08-19 04:56:49",
+    "updated_at": "2025-08-19 04:56:49",
+    "reference": 1773494,
+    "check_number": 135753
+  },
+  {
+    "id": "0000c345-65c6-452e-bd72-677d7f3496f8",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 59,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-02-02",
+    "subtotal_price": 1,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2022-02-02 10:39:44",
+            "kitchen_sent_at": "2022-02-02 10:19:09"
+          }
+        ],
+        "kitchen_done_at": "2022-02-02 10:39:44",
+        "products_kitchen": [
+          {
+            "uuid": "0ebb0811-de7f-4bf7-b620-e1b8baf429f4",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2022-02-02 10:39:44",
+                "kitchen_sent_at": "2022-02-02 10:19:09"
+              }
+            ],
+            "kitchen_done_at": "2022-02-02 10:39:44",
+            "kitchen_sent_at": "2022-02-02 10:19:09"
+          },
+          {
+            "uuid": "37f61e6f-f943-47b4-81c5-bb2e11d5592e",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2022-02-02 10:39:44",
+                "kitchen_sent_at": "2022-02-02 10:19:09"
+              }
+            ],
+            "kitchen_done_at": "2022-02-02 10:39:44",
+            "kitchen_sent_at": "2022-02-02 10:19:09"
+          }
+        ],
+        "kitchen_received_at": "2022-02-02 10:19:09"
+      }
+    },
+    "opened_at": "2022-02-02 10:18:55",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-02-02 10:19:09",
+    "created_at": "2022-02-02 10:19:10",
+    "updated_at": "2022-02-02 10:40:12",
+    "reference": 300083,
+    "check_number": 190979
+  },
+  {
+    "id": "0000d05d-b6db-4103-ab61-5cf8d7c96156",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 106,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-08-06",
+    "subtotal_price": 2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9397d526-e7c7-4770-81f5-169d12e9a671",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2024-08-06"
+      }
+    },
+    "opened_at": "2024-08-06 19:14:46",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-08-06 19:14:59",
+    "created_at": "2024-08-06 19:14:56",
+    "updated_at": "2024-08-06 19:15:54",
+    "reference": 1273217,
+    "check_number": 255264
+  },
+  {
+    "id": "0000d10f-fc27-4c1f-9f5e-c55dca4d487a",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 99,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-01-16",
+    "subtotal_price": 3.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9397d526-e7c7-4770-81f5-169d12e9a671",
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2022-01-16 19:46:17",
+            "kitchen_sent_at": "2022-01-16 19:46:03"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2022-01-16 19:47:36",
+            "kitchen_sent_at": "2022-01-16 19:46:03"
+          }
+        ],
+        "kitchen_done_at": "2022-01-16 19:47:36",
+        "products_kitchen": [
+          {
+            "uuid": "179e432a-17de-48d2-8ab4-f309de82aa9a",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2022-01-16 19:46:17",
+                "kitchen_sent_at": "2022-01-16 19:46:03"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-01-16 19:47:36",
+                "kitchen_sent_at": "2022-01-16 19:46:03"
+              }
+            ],
+            "kitchen_done_at": "2022-01-16 19:47:36",
+            "kitchen_sent_at": "2022-01-16 19:46:03"
+          },
+          {
+            "uuid": "a4999a0a-d3d9-4b01-88ea-33964cad16fb",
+            "kitchen_times": [
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-01-16 19:47:36",
+                "kitchen_sent_at": "2022-01-16 19:46:03"
+              }
+            ],
+            "kitchen_done_at": "2022-01-16 19:47:36",
+            "kitchen_sent_at": "2022-01-16 19:46:03"
+          }
+        ],
+        "kitchen_received_at": "2022-01-16 19:46:03"
+      }
+    },
+    "opened_at": "2022-01-16 19:45:53",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-01-16 19:46:02",
+    "created_at": "2022-01-16 19:46:58",
+    "updated_at": "2022-01-16 19:48:06",
+    "reference": 284495,
+    "check_number": 138597
+  },
+  {
+    "id": "0000d5ea-6a17-49d0-ae42-b21bcb29c752",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 91,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-12-30",
+    "subtotal_price": 10.35,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 10.35,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "97bd983d-4ee2-46c0-b966-adcaa7ec7401",
+        "auto_closed": false,
+        "products_kitchen": []
+      }
+    },
+    "opened_at": "2022-12-30 20:57:33",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-12-30 20:58:18",
+    "created_at": "2022-12-30 20:58:31",
+    "updated_at": "2022-12-30 20:58:31",
+    "reference": 610180,
+    "check_number": 103927
+  },
+  {
+    "id": "0000df78-94f9-4ab5-9a6c-03e8294b5d7d",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 278,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2021-06-14",
+    "subtotal_price": 1.5,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.5,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2021-06-14 15:13:43",
+            "kitchen_sent_at": "2021-06-14 15:13:39"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2021-06-14 15:14:57",
+            "kitchen_sent_at": "2021-06-14 15:13:39"
+          }
+        ],
+        "kitchen_done_at": "2021-06-14 15:14:57",
+        "products_kitchen": [
+          {
+            "uuid": "87bed6a4-d3de-4541-adc4-44719703af09",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2021-06-14 15:13:43",
+                "kitchen_sent_at": "2021-06-14 15:13:39"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2021-06-14 15:14:57",
+                "kitchen_sent_at": "2021-06-14 15:13:39"
+              }
+            ],
+            "kitchen_done_at": "2021-06-14 15:14:57",
+            "kitchen_sent_at": "2021-06-14 15:13:39"
+          }
+        ],
+        "kitchen_received_at": "2021-06-14 15:13:39"
+      }
+    },
+    "opened_at": "2021-06-14 15:13:37",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2021-06-14 15:15:10",
+    "created_at": "2021-06-14 15:13:51",
+    "updated_at": "2021-06-14 15:15:58",
+    "reference": 86575,
+    "check_number": 141605
+  },
+  {
+    "id": "0000e3b6-0953-43e2-89ba-fa8691e3c81d",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 215,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-05-15",
+    "subtotal_price": 4,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 4,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-05-16 02:14:16",
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2024-05-15 22:39:34",
+            "kitchen_sent_at": "2024-05-15 20:37:09"
+          },
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2024-05-16 03:14:14",
+            "kitchen_sent_at": "2024-05-15 20:37:09"
+          }
+        ],
+        "kitchen_done_at": "2024-05-16 03:14:14",
+        "products_kitchen": [
+          {
+            "uuid": "9a0ba909-8897-4361-8a29-9b393882c305",
+            "kitchen_times": [
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2024-05-15 22:39:34",
+                "kitchen_sent_at": "2024-05-15 20:37:09"
+              },
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2024-05-16 03:14:14",
+                "kitchen_sent_at": "2024-05-15 20:37:09"
+              }
+            ],
+            "kitchen_done_at": "2024-05-16 03:14:14",
+            "kitchen_sent_at": "2024-05-15 20:37:09"
+          },
+          {
+            "uuid": "be2b5629-9c17-40dc-9dff-24608a733dc5",
+            "kitchen_times": [
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2024-05-15 22:39:34",
+                "kitchen_sent_at": "2024-05-15 20:37:09"
+              },
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2024-05-16 03:14:14",
+                "kitchen_sent_at": "2024-05-15 20:37:09"
+              }
+            ],
+            "kitchen_done_at": "2024-05-16 03:14:14",
+            "kitchen_sent_at": "2024-05-15 20:37:09"
+          }
+        ],
+        "kitchen_received_at": "2024-05-15 20:37:09",
+        "business_date_in_utc": "2024-05-14"
+      }
+    },
+    "opened_at": "2024-05-15 20:36:50",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-05-15 20:37:09",
+    "created_at": "2024-05-15 20:37:46",
+    "updated_at": "2024-05-16 02:14:55",
+    "reference": 1153794,
+    "check_number": 401827
+  },
+  {
+    "id": "0000e789-c342-4d1b-a79b-02dee96191c4",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 75,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2021-03-08",
+    "subtotal_price": 3,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-6069-482e-ad32-9639e200d83a",
+            "kitchen_done_at": "2021-03-08 08:09:11",
+            "kitchen_sent_at": "2021-03-08 08:07:14"
+          }
+        ],
+        "kitchen_done_at": "2021-03-08 08:09:11",
+        "products_kitchen": [
+          {
+            "uuid": "fa5fd360-bf95-4687-a1fd-f0453f3b75fe",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-6069-482e-ad32-9639e200d83a",
+                "kitchen_done_at": "2021-03-08 08:09:11",
+                "kitchen_sent_at": "2021-03-08 08:07:14"
+              }
+            ],
+            "kitchen_done_at": "2021-03-08 08:09:11",
+            "kitchen_sent_at": "2021-03-08 08:07:14"
+          },
+          {
+            "uuid": "cbd86f16-0d18-4100-afc1-1061c840a994",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-6069-482e-ad32-9639e200d83a",
+                "kitchen_done_at": "2021-03-08 08:08:14",
+                "kitchen_sent_at": "2021-03-08 08:07:41"
+              }
+            ],
+            "kitchen_done_at": "2021-03-08 08:08:14",
+            "kitchen_sent_at": "2021-03-08 08:07:41"
+          },
+          {
+            "uuid": "587d5861-9619-4570-a030-a1a9da3dac57",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-6069-482e-ad32-9639e200d83a",
+                "kitchen_done_at": "2021-03-08 08:08:14",
+                "kitchen_sent_at": "2021-03-08 08:07:41"
+              }
+            ],
+            "kitchen_done_at": "2021-03-08 08:08:14",
+            "kitchen_sent_at": "2021-03-08 08:07:41"
+          }
+        ],
+        "kitchen_received_at": "2021-03-08 08:07:14"
+      }
+    },
+    "opened_at": "2021-03-08 08:07:13",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2021-03-08 08:08:28",
+    "created_at": "2021-03-08 08:09:24",
+    "updated_at": "2021-03-08 08:09:24",
+    "reference": 22844,
+    "check_number": 105193
+  },
+  {
+    "id": "0000eb72-419d-4d49-b329-f51b26197a0a",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 93,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-08-14",
+    "subtotal_price": 1.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9397d526-e7c7-4770-81f5-169d12e9a671",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2024-08-14"
+      }
+    },
+    "opened_at": "2024-08-14 17:39:46",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-08-14 17:40:00",
+    "created_at": "2024-08-14 17:39:58",
+    "updated_at": "2024-08-14 17:40:21",
+    "reference": 1283582,
+    "check_number": 256250
+  },
+  {
+    "id": "0000f096-78a2-4c9c-8249-5fe214621f31",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 56,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2021-07-02",
+    "subtotal_price": 2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2021-07-02 09:08:44",
+            "kitchen_sent_at": "2021-07-02 09:07:58"
+          },
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2021-07-02 09:08:29",
+            "kitchen_sent_at": "2021-07-02 09:07:58"
+          }
+        ],
+        "kitchen_done_at": "2021-07-02 09:08:44",
+        "products_kitchen": [
+          {
+            "uuid": "e2317bc3-3f59-401e-890e-40c123624860",
+            "kitchen_times": [
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2021-07-02 09:08:44",
+                "kitchen_sent_at": "2021-07-02 09:07:58"
+              },
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2021-07-02 09:08:29",
+                "kitchen_sent_at": "2021-07-02 09:07:58"
+              }
+            ],
+            "kitchen_done_at": "2021-07-02 09:08:44",
+            "kitchen_sent_at": "2021-07-02 09:07:58"
+          }
+        ],
+        "kitchen_received_at": "2021-07-02 09:07:58"
+      }
+    },
+    "opened_at": "2021-07-02 09:07:56",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2021-07-02 09:09:32",
+    "created_at": "2021-07-02 09:08:30",
+    "updated_at": "2021-07-02 09:10:33",
+    "reference": 105570,
+    "check_number": 150755
+  },
+  {
+    "id": "0000f53e-ac44-44b7-8a5d-ecf1ec05eeb3",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 4,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-12-05",
+    "subtotal_price": 3.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "auto_closed": false,
+        "products_kitchen": [],
+        "business_date_in_utc": "2024-12-05"
+      }
+    },
+    "opened_at": "2024-12-04 23:34:26",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-12-04 23:34:46",
+    "created_at": "2024-12-04 23:34:44",
+    "updated_at": "2024-12-04 23:35:35",
+    "reference": 1440605,
+    "check_number": 219941
+  },
+  {
+    "id": "0000fa9a-ba22-40f6-b6cd-3890bf347009",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 116,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-09-09",
+    "subtotal_price": 2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-09-09 17:52:37",
+        "device_id": "97a8059e-1417-4618-9b27-e9b297a3081e",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2024-09-09 17:52:37",
+            "kitchen_sent_at": "2024-09-09 17:20:57"
+          }
+        ],
+        "kitchen_done_at": "2024-09-09 17:52:37",
+        "printing_status": {
+          "model": "TM-m30II",
+          "status": "receipt_printing_success"
+        },
+        "products_kitchen": [
+          {
+            "uuid": "d6eb4f75-d35f-4069-bd94-88a790561241",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2024-09-09 17:52:37",
+                "kitchen_sent_at": "2024-09-09 17:20:57"
+              }
+            ],
+            "kitchen_done_at": "2024-09-09 17:52:37",
+            "kitchen_sent_at": "2024-09-09 17:20:57"
+          }
+        ],
+        "kitchen_received_at": "2024-09-09 17:20:57",
+        "business_date_in_utc": "2024-09-08"
+      }
+    },
+    "opened_at": "2024-09-09 17:20:00",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-09-09 17:20:53",
+    "created_at": "2024-09-09 17:21:02",
+    "updated_at": "2024-09-09 17:53:16",
+    "reference": 1317362,
+    "check_number": 166622
+  },
+  {
+    "id": "00010ed0-ef3b-4419-a9ae-7147388a31be",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 138,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-04-30",
+    "subtotal_price": 6.5,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 6.5,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2025-04-30 12:50:22",
+        "device_id": "955a81e4-6679-4c4c-9a31-5ec8140017ca",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2025-04-30 12:50:22",
+            "kitchen_sent_at": "2025-04-30 12:41:17"
+          }
+        ],
+        "kitchen_done_at": "2025-04-30 12:50:22",
+        "products_kitchen": [
+          {
+            "uuid": "7e3463f9-3155-4f40-b3cb-2fd7c543e331",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2025-04-30 12:50:22",
+                "kitchen_sent_at": "2025-04-30 12:41:17"
+              }
+            ],
+            "kitchen_done_at": "2025-04-30 12:50:22",
+            "kitchen_sent_at": "2025-04-30 12:41:17"
+          },
+          {
+            "uuid": "d9b72f64-33b2-4123-98b8-df1522a2f49c",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2025-04-30 12:50:22",
+                "kitchen_sent_at": "2025-04-30 12:41:17"
+              }
+            ],
+            "kitchen_done_at": "2025-04-30 12:50:22",
+            "kitchen_sent_at": "2025-04-30 12:41:17"
+          },
+          {
+            "uuid": "64304259-04ec-45f3-aa28-d65055670070",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2025-04-30 12:50:22",
+                "kitchen_sent_at": "2025-04-30 12:41:17"
+              }
+            ],
+            "kitchen_done_at": "2025-04-30 12:50:22",
+            "kitchen_sent_at": "2025-04-30 12:41:17"
+          }
+        ],
+        "kitchen_received_at": "2025-04-30 12:41:17",
+        "business_date_in_utc": "2025-04-30"
+      }
+    },
+    "opened_at": "2025-04-30 12:37:09",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-04-30 12:41:16",
+    "created_at": "2025-04-30 12:38:27",
+    "updated_at": "2025-04-30 12:51:02",
+    "reference": 1630570,
+    "check_number": 290346
+  },
+  {
+    "id": "000119c7-e508-440e-82dd-a0c52e506a32",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 83,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-02-09",
+    "subtotal_price": 1.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2022-02-09 07:34:01",
+            "kitchen_sent_at": "2022-02-09 07:32:18"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2022-02-09 07:34:15",
+            "kitchen_sent_at": "2022-02-09 07:32:19"
+          }
+        ],
+        "kitchen_done_at": "2022-02-09 07:34:15",
+        "products_kitchen": [
+          {
+            "uuid": "c0be6306-b75e-403b-b700-6f94e48de90d",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2022-02-09 07:34:01",
+                "kitchen_sent_at": "2022-02-09 07:32:18"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-02-09 07:34:15",
+                "kitchen_sent_at": "2022-02-09 07:32:19"
+              }
+            ],
+            "kitchen_done_at": "2022-02-09 07:34:15",
+            "kitchen_sent_at": "2022-02-09 07:32:18"
+          },
+          {
+            "uuid": "368058de-9bf4-47ae-97b3-a726b67ecbff",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2022-02-09 07:34:01",
+                "kitchen_sent_at": "2022-02-09 07:32:18"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-02-09 07:34:15",
+                "kitchen_sent_at": "2022-02-09 07:32:19"
+              }
+            ],
+            "kitchen_done_at": "2022-02-09 07:34:15",
+            "kitchen_sent_at": "2022-02-09 07:32:18"
+          }
+        ],
+        "kitchen_received_at": "2022-02-09 07:32:18"
+      }
+    },
+    "opened_at": "2022-02-09 07:32:13",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-02-09 07:34:07",
+    "created_at": "2022-02-09 07:34:18",
+    "updated_at": "2022-02-09 07:34:18",
+    "reference": 306336,
+    "check_number": 234250
+  },
+  {
+    "id": "00011f1f-6877-4dfd-9e17-e6e0868902d9",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 95,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-05-30",
+    "subtotal_price": 0,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 0,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2022-05-30 02:19:56",
+            "kitchen_sent_at": "2022-05-30 02:18:20"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2022-05-30 02:30:37",
+            "kitchen_sent_at": "2022-05-30 02:18:20"
+          }
+        ],
+        "kitchen_done_at": "2022-05-30 02:30:37",
+        "products_kitchen": [
+          {
+            "uuid": "855cfb0b-12a2-4005-8313-c97992b12425",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2022-05-30 02:19:56",
+                "kitchen_sent_at": "2022-05-30 02:18:20"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-05-30 02:30:37",
+                "kitchen_sent_at": "2022-05-30 02:18:20"
+              }
+            ],
+            "kitchen_done_at": "2022-05-30 02:30:37",
+            "kitchen_sent_at": "2022-05-30 02:18:20"
+          }
+        ],
+        "kitchen_received_at": "2022-05-30 02:18:20"
+      }
+    },
+    "opened_at": "2022-05-30 02:18:06",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-05-30 02:18:28",
+    "created_at": "2022-05-30 02:18:54",
+    "updated_at": "2022-05-30 02:31:11",
+    "reference": 406725,
+    "check_number": 264134
+  },
+  {
+    "id": "00012932-3db1-40f9-86a1-58bd02116605",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 17,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-09-10",
+    "subtotal_price": 2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2022-09-10 00:36:12",
+            "kitchen_sent_at": "2022-09-10 00:13:53"
+          }
+        ],
+        "kitchen_done_at": "2022-09-10 00:36:12",
+        "products_kitchen": [
+          {
+            "uuid": "c1a2c486-5e4b-48bd-9ea8-f853b477b016",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2022-09-10 00:36:12",
+                "kitchen_sent_at": "2022-09-10 00:13:53"
+              }
+            ],
+            "kitchen_done_at": "2022-09-10 00:36:12",
+            "kitchen_sent_at": "2022-09-10 00:13:53"
+          }
+        ],
+        "kitchen_received_at": "2022-09-10 00:13:53"
+      }
+    },
+    "opened_at": "2022-09-10 00:13:44",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-09-10 00:13:52",
+    "created_at": "2022-09-10 00:14:42",
+    "updated_at": "2022-09-10 00:56:30",
+    "reference": 509961,
+    "check_number": 124343
+  },
+  {
+    "id": "000133b1-3403-4a65-9b27-a4919cd71071",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 70,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-05-13",
+    "subtotal_price": 1.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2025-05-13 10:34:39",
+        "device_id": "955a81e4-6679-4c4c-9a31-5ec8140017ca",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2025-05-13 08:37:57",
+            "kitchen_sent_at": "2025-05-13 07:43:46"
+          }
+        ],
+        "kitchen_done_at": "2025-05-13 08:37:57",
+        "products_kitchen": [
+          {
+            "uuid": "f1c49c0f-162c-4fe6-8301-0adeacd87fc8",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2025-05-13 08:37:57",
+                "kitchen_sent_at": "2025-05-13 07:43:46"
+              }
+            ],
+            "kitchen_done_at": "2025-05-13 08:37:57",
+            "kitchen_sent_at": "2025-05-13 07:43:47"
+          }
+        ],
+        "kitchen_received_at": "2025-05-13 07:43:47",
+        "business_date_in_utc": "2025-05-13"
+      }
+    },
+    "opened_at": "2025-05-13 07:43:07",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-05-13 07:43:46",
+    "created_at": "2025-05-13 07:44:02",
+    "updated_at": "2025-05-13 10:45:18",
+    "reference": 1648600,
+    "check_number": 292933
+  },
+  {
+    "id": "00016740-6dcd-4faf-8691-dc18a9ff4f84",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 90,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2025-05-22",
+    "subtotal_price": 1.4,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.4,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9d5a68d4-47a4-475a-ace2-916922b0f3a0",
+        "auto_closed": false,
+        "printing_status": {
+          "model": "TM-m30II",
+          "status": "receipt_printing_failed",
+          "error_message": "ConnectErrorOffline"
+        },
+        "products_kitchen": [],
+        "business_date_in_utc": "2025-05-22"
+      }
+    },
+    "opened_at": "2025-05-22 08:15:48",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2025-05-22 08:16:38",
+    "created_at": "2025-05-22 08:17:34",
+    "updated_at": "2025-05-22 08:17:34",
+    "reference": 1660787,
+    "check_number": 124483
+  },
+  {
+    "id": "00016951-4b62-4c76-8390-b5464141b115",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 129,
+    "type": 1,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2023-01-05",
+    "subtotal_price": 1.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2023-01-05 21:53:02",
+            "kitchen_sent_at": "2023-01-05 15:42:31"
+          }
+        ],
+        "kitchen_done_at": "2023-01-05 21:53:02",
+        "products_kitchen": [
+          {
+            "uuid": "1ffa436c-8c74-4d8e-b02b-64afae18a819",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2023-01-05 21:53:02",
+                "kitchen_sent_at": "2023-01-05 15:42:31"
+              }
+            ],
+            "kitchen_done_at": "2023-01-05 21:53:02",
+            "kitchen_sent_at": "2023-01-05 15:42:31"
+          }
+        ],
+        "kitchen_received_at": "2023-01-05 15:42:31"
+      }
+    },
+    "opened_at": "2023-01-05 15:42:17",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2023-01-05 15:42:30",
+    "created_at": "2023-01-05 15:43:14",
+    "updated_at": "2023-01-06 06:10:10",
+    "reference": 615792,
+    "check_number": 252480
+  },
+  {
+    "id": "000169d7-3f09-4213-90f3-35f2ae865000",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 152,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-03-09",
+    "subtotal_price": 1,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2022-03-09 16:38:26",
+            "kitchen_sent_at": "2022-03-09 16:37:26"
+          }
+        ],
+        "kitchen_done_at": "2022-03-09 16:38:26",
+        "products_kitchen": [
+          {
+            "uuid": "e10ad9e0-362d-4e8c-a343-a6ad0dbf6e99",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2022-03-09 16:38:26",
+                "kitchen_sent_at": "2022-03-09 16:37:26"
+              }
+            ],
+            "kitchen_done_at": "2022-03-09 16:38:26",
+            "kitchen_sent_at": "2022-03-09 16:37:26"
+          }
+        ],
+        "kitchen_received_at": "2022-03-09 16:37:26"
+      }
+    },
+    "opened_at": "2022-03-09 16:37:10",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-03-09 16:37:26",
+    "created_at": "2022-03-09 16:37:45",
+    "updated_at": "2022-03-09 16:38:52",
+    "reference": 332759,
+    "check_number": 198595
+  },
+  {
+    "id": "000170fe-2503-41df-afe4-83626e9f4bff",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 47,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2023-05-05",
+    "subtotal_price": 3.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2023-05-05 14:20:44",
+            "kitchen_sent_at": "2023-05-05 14:19:34"
+          }
+        ],
+        "kitchen_done_at": "2023-05-05 14:20:44",
+        "products_kitchen": [
+          {
+            "uuid": "30378d3e-5e39-4eda-89f4-76f0e3cf7b23",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2023-05-05 14:20:44",
+                "kitchen_sent_at": "2023-05-05 14:19:34"
+              }
+            ],
+            "kitchen_done_at": "2023-05-05 14:20:44",
+            "kitchen_sent_at": "2023-05-05 14:19:34"
+          },
+          {
+            "uuid": "52e05e6f-7247-47c7-a610-1a7c83800f6f",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2023-05-05 14:20:44",
+                "kitchen_sent_at": "2023-05-05 14:19:34"
+              }
+            ],
+            "kitchen_done_at": "2023-05-05 14:20:44",
+            "kitchen_sent_at": "2023-05-05 14:19:34"
+          }
+        ],
+        "kitchen_received_at": "2023-05-05 14:19:34"
+      }
+    },
+    "opened_at": "2023-05-05 14:18:59",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2023-05-05 14:19:33",
+    "created_at": "2023-05-05 14:20:37",
+    "updated_at": "2023-05-05 14:21:49",
+    "reference": 720814,
+    "check_number": 147752
+  },
+  {
+    "id": "00017fbe-e419-4460-aa3a-7632d3707ed7",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": 4,
+    "reference_x": null,
+    "number": 15,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2023-01-31",
+    "subtotal_price": 1.5,
+    "discount_amount": 1.5,
+    "rounding_amount": 0,
+    "total_price": 0,
+    "tax_exclusive_discount_amount": 1.5,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "loyalty": {
+          "app_id": "92ba8bd1-d5c2-49b9-ba7f-782921116d32",
+          "reward_code": "p1500"
+        },
+        "device_id": "955a8135-ec70-4c7a-9485-35f14a75beb9",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2023-01-31 06:27:55",
+            "kitchen_sent_at": "2023-01-31 03:55:05"
+          }
+        ],
+        "kitchen_done_at": "2023-01-31 06:27:55",
+        "products_kitchen": [
+          {
+            "uuid": "3a19dad2-6ee3-4a3a-84b6-d6ad80dbeb28",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2023-01-31 06:27:55",
+                "kitchen_sent_at": "2023-01-31 03:55:05"
+              }
+            ],
+            "kitchen_done_at": "2023-01-31 06:27:55",
+            "kitchen_sent_at": "2023-01-31 03:55:05"
+          }
+        ],
+        "kitchen_received_at": "2023-01-31 03:55:05"
+      }
+    },
+    "opened_at": "2023-01-31 03:54:35",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2023-01-31 03:55:04",
+    "created_at": "2023-01-31 03:55:02",
+    "updated_at": "2023-01-31 10:46:33",
+    "reference": 639950,
+    "check_number": 139339
+  },
+  {
+    "id": "0001876c-4dfc-46ed-85e9-156f3cdd10f6",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 23,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 1,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2022-09-23",
+    "subtotal_price": 1.75,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.75,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5ddc-491e-88d5-185529155720",
+        "kitchen_times": [
+          {
+            "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+            "kitchen_done_at": "2022-09-23 02:52:30",
+            "kitchen_sent_at": "2022-09-23 00:37:16"
+          },
+          {
+            "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+            "kitchen_done_at": "2022-09-23 00:52:13",
+            "kitchen_sent_at": "2022-09-23 00:37:17"
+          }
+        ],
+        "kitchen_done_at": "2022-09-23 02:52:30",
+        "products_kitchen": [
+          {
+            "uuid": "c0f3fe91-b370-4af8-887a-dd9a4359e2f7",
+            "kitchen_times": [
+              {
+                "kds_id": "9397da46-06c9-4f7e-8347-09a3f0b257fb",
+                "kitchen_done_at": "2022-09-23 02:52:30",
+                "kitchen_sent_at": "2022-09-23 00:37:16"
+              },
+              {
+                "kds_id": "92eed3e9-625d-4f97-b94f-89ea8bc63ece",
+                "kitchen_done_at": "2022-09-23 00:52:13",
+                "kitchen_sent_at": "2022-09-23 00:37:17"
+              }
+            ],
+            "kitchen_done_at": "2022-09-23 02:52:30",
+            "kitchen_sent_at": "2022-09-23 00:37:16"
+          }
+        ],
+        "kitchen_received_at": "2022-09-23 00:37:16"
+      }
+    },
+    "opened_at": "2022-09-23 00:34:34",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2022-09-23 00:37:16",
+    "created_at": "2022-09-23 00:37:37",
+    "updated_at": "2022-09-23 03:03:58",
+    "reference": 521881,
+    "check_number": 295958
+  },
+  {
+    "id": "00018d89-0615-4328-b8c1-6db944affc9c",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 165,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": null,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2023-12-25",
+    "subtotal_price": 1.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "auto_closed": false,
+        "products_kitchen": []
+      }
+    },
+    "opened_at": "2023-12-25 15:49:35",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2023-12-25 15:50:37",
+    "created_at": "2023-12-25 15:50:48",
+    "updated_at": "2023-12-25 15:50:48",
+    "reference": 970958,
+    "check_number": 308961
+  },
+  {
+    "id": "00019661-f6a9-499e-8680-4f6afb8c7f42",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 12,
+    "type": 3,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-02-27",
+    "subtotal_price": 2,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 2,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-02-27 06:08:36",
+        "device_id": "92aca873-591f-4ee9-8bcc-6607a72a28c3",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9ab48f2a-7ba0-4e40-ba8c-af36d243d024",
+            "kitchen_done_at": "2024-02-27 07:08:28",
+            "kitchen_sent_at": "2024-02-27 04:57:12"
+          }
+        ],
+        "kitchen_done_at": "2024-02-27 07:08:28",
+        "products_kitchen": [
+          {
+            "uuid": "4dea5648-24ea-4a66-99f6-a34e0bff173c",
+            "kitchen_times": [
+              {
+                "kds_id": "9ab48f2a-7ba0-4e40-ba8c-af36d243d024",
+                "kitchen_done_at": "2024-02-27 07:08:28",
+                "kitchen_sent_at": "2024-02-27 04:57:12"
+              }
+            ],
+            "kitchen_done_at": "2024-02-27 07:08:28",
+            "kitchen_sent_at": "2024-02-27 04:57:12"
+          }
+        ],
+        "kitchen_received_at": "2024-02-27 04:57:12"
+      }
+    },
+    "opened_at": "2024-02-27 04:56:13",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-02-27 04:57:11",
+    "created_at": "2024-02-27 04:57:12",
+    "updated_at": "2024-02-27 06:09:38",
+    "reference": 1056589,
+    "check_number": 195404
+  },
+  {
+    "id": "00019762-32ad-45d5-889c-2fd6baebc945",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 88,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2023-12-29",
+    "subtotal_price": 3.95,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 3.95,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2023-12-29 16:53:44",
+        "device_id": "97e63101-3159-4048-a126-9be87cdc560c",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9a7006bc-a16e-4722-852b-40dbf866455f",
+            "kitchen_done_at": "2023-12-29 17:53:05",
+            "kitchen_sent_at": "2023-12-29 16:38:37"
+          }
+        ],
+        "kitchen_done_at": "2023-12-29 17:53:05",
+        "products_kitchen": [
+          {
+            "uuid": "0f212386-c370-4dfc-8c6c-cad6e290fb53",
+            "kitchen_times": [
+              {
+                "kds_id": "9a7006bc-a16e-4722-852b-40dbf866455f",
+                "kitchen_done_at": "2023-12-29 17:53:05",
+                "kitchen_sent_at": "2023-12-29 16:38:37"
+              }
+            ],
+            "kitchen_done_at": "2023-12-29 17:53:05",
+            "kitchen_sent_at": "2023-12-29 16:38:37"
+          },
+          {
+            "uuid": "059ac291-198d-43e0-bf73-bafca4d45dc5",
+            "kitchen_times": [
+              {
+                "kds_id": "9a7006bc-a16e-4722-852b-40dbf866455f",
+                "kitchen_done_at": "2023-12-29 17:53:05",
+                "kitchen_sent_at": "2023-12-29 16:38:37"
+              }
+            ],
+            "kitchen_done_at": "2023-12-29 17:53:05",
+            "kitchen_sent_at": "2023-12-29 16:38:37"
+          }
+        ],
+        "kitchen_received_at": "2023-12-29 16:38:37"
+      }
+    },
+    "opened_at": "2023-12-29 16:37:15",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2023-12-29 16:38:47",
+    "created_at": "2023-12-29 16:38:17",
+    "updated_at": "2023-12-29 16:54:38",
+    "reference": 978068,
+    "check_number": 110475
+  },
+  {
+    "id": "0001a3a3-6427-4414-8b6c-e224910a4d87",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 217,
+    "type": 2,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-01-13",
+    "subtotal_price": 1.5,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.5,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-01-13 17:38:53",
+        "device_id": "9283f4da-5872-4fa9-bc52-232415a767bd",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+            "kitchen_done_at": "2024-01-13 17:38:53",
+            "kitchen_sent_at": "2024-01-13 17:09:51"
+          }
+        ],
+        "kitchen_done_at": "2024-01-13 17:38:53",
+        "products_kitchen": [
+          {
+            "uuid": "8e591821-c4fb-4607-9a10-c2818317a97c",
+            "kitchen_times": [
+              {
+                "kds_id": "9283f4da-64a9-4172-9996-11b0717b1941",
+                "kitchen_done_at": "2024-01-13 17:38:53",
+                "kitchen_sent_at": "2024-01-13 17:09:51"
+              }
+            ],
+            "kitchen_done_at": "2024-01-13 17:38:53",
+            "kitchen_sent_at": "2024-01-13 17:09:51"
+          }
+        ],
+        "kitchen_received_at": "2024-01-13 17:09:51"
+      }
+    },
+    "opened_at": "2024-01-13 17:09:44",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-01-13 17:10:10",
+    "created_at": "2024-01-13 17:10:29",
+    "updated_at": "2024-01-13 17:39:51",
+    "reference": 1000234,
+    "check_number": 313949
+  },
+  {
+    "id": "0001a3cb-54a2-4ae0-ab27-b9e520cf857c",
+    "app_id": "8f7884c0-9e14-4833-ba96-3221471e8709",
+    "promotion_id": null,
+    "discount_type": null,
+    "reference_x": null,
+    "number": 69,
+    "type": 4,
+    "source": 1,
+    "status": 4,
+    "delivery_status": 2,
+    "guests": 1,
+    "kitchen_notes": null,
+    "customer_notes": null,
+    "business_date": "2024-02-11",
+    "subtotal_price": 1.25,
+    "discount_amount": 0,
+    "rounding_amount": 0,
+    "total_price": 1.25,
+    "tax_exclusive_discount_amount": 0,
+    "delay_in_seconds": null,
+    "meta": {
+      "foodics": {
+        "ready_at": "2024-02-11 08:01:07",
+        "device_id": "955a81e4-6679-4c4c-9a31-5ec8140017ca",
+        "auto_closed": false,
+        "kitchen_times": [
+          {
+            "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+            "kitchen_done_at": "2024-02-11 08:01:07",
+            "kitchen_sent_at": "2024-02-11 07:46:23"
+          }
+        ],
+        "kitchen_done_at": "2024-02-11 08:01:07",
+        "products_kitchen": [
+          {
+            "uuid": "0da35bd9-ae2a-4c07-b7b2-6b22c2659a5d",
+            "kitchen_times": [
+              {
+                "kds_id": "955a829b-8ed4-4606-9a74-a5a4dde42f81",
+                "kitchen_done_at": "2024-02-11 08:01:07",
+                "kitchen_sent_at": "2024-02-11 07:46:23"
+              }
+            ],
+            "kitchen_done_at": "2024-02-11 08:01:07",
+            "kitchen_sent_at": "2024-02-11 07:46:23"
+          }
+        ],
+        "kitchen_received_at": "2024-02-11 07:46:23"
+      }
+    },
+    "opened_at": "2024-02-11 07:45:38",
+    "accepted_at": null,
+    "due_at": null,
+    "driver_assigned_at": null,
+    "dispatched_at": null,
+    "driver_collected_at": null,
+    "delivered_at": null,
+    "closed_at": "2024-02-11 07:46:22",
+    "created_at": "2024-02-11 07:46:41",
+    "updated_at": "2024-02-11 08:01:49",
+    "reference": 1035826,
+    "check_number": 213986
+  }
+]

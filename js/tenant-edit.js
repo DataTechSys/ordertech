@@ -18,32 +18,68 @@
     if (!TID) return;
     try {
       const t = await api(`/admin/tenants/${encodeURIComponent(TID)}`, { tenantId: null });
+      console.log('[loadBasics] Tenant data:', t);
       $('#tName').value = t.name || '';
       $('#tSlug').value = t.slug || '';
-      const codeEl = $('#tCode');
-      if (codeEl) {
-        codeEl.value = t.code || '';
+      
+      // Display Company ID as text only
+      const codeDisplay = document.getElementById('tCodeDisplay');
+      console.log('[loadBasics] codeDisplay element:', codeDisplay);
+      console.log('[loadBasics] t.code value:', t.code);
+      if (codeDisplay) {
+        codeDisplay.textContent = t.code || '—';
+        console.log('[loadBasics] Set codeDisplay.textContent to:', codeDisplay.textContent);
         ORIG_CODE = t.code || '';
-        codeEl.readOnly = false; codeEl.disabled = false; codeEl.title = 'Company ID must be exactly 6 digits';
+      } else {
+        console.error('[loadBasics] tCodeDisplay element not found!');
       }
       $('#tBranchLimit').value = t.branch_limit != null ? String(t.branch_limit) : '';
       $('#tLicLimit').value = t.license_limit != null ? String(t.license_limit) : '';
+      
+      // Load subscription data
+      const tierEl = document.getElementById('subTier');
+      const expiresEl = document.getElementById('expiresAt');
+      if (t.subscription_type) {
+        tierEl.value = String(t.subscription_type).toLowerCase();
+      } else {
+        tierEl.value = 'basic';
+      }
+      if (t.subscription_expires_at) {
+        const d = new Date(t.subscription_expires_at);
+        expiresEl.value = d.toISOString().split('T')[0];
+      } else {
+        // Default to 14 days from now
+        const defaultExpires = new Date();
+        defaultExpires.setDate(defaultExpires.getDate() + 14);
+        expiresEl.value = defaultExpires.toISOString().split('T')[0];
+      }
     } catch {}
   }
 
   async function saveBasics(){
     const name = ($('#tName').value||'').trim();
     const slug = ($('#tSlug').value||'').trim();
-    const code = normalizeCode($('#tCode')?.value||'');
     if (!name) { toast('Name required'); return; }
-    if (!/^\d{6}$/.test(code)) { toast('Company ID must be exactly 6 digits'); return; }
     try {
-      await api(`/admin/tenants/${encodeURIComponent(TID)}`, { method:'PUT', body: { name, code }, tenantId: null });
-      // slug goes via settings
-      await api(`/admin/tenants/${encodeURIComponent(TID)}/settings`, { method:'PUT', body: { settings: { slug } }, tenantId: TID });
+      // Prepare subscription data
+      const subscription_type = (document.getElementById('subTier')?.value || 'basic').toLowerCase();
+      let subscription_expires_at = (document.getElementById('expiresAt')?.value || '').trim();
+      if (subscription_expires_at) {
+        try {
+          // Convert YYYY-MM-DD to ISO timestamp at end of day
+          const d = new Date(subscription_expires_at + 'T23:59:59Z');
+          subscription_expires_at = d.toISOString();
+        } catch {}
+      }
+      
+      // Save tenant basics + subscription in one call (no code - it's readonly)
+      await api(`/admin/tenants/${encodeURIComponent(TID)}`, { 
+        method:'PUT', 
+        body: { name, slug, subscription_type, subscription_expires_at }, 
+        tenantId: null 
+      });
+      
       $('#basicsStatus').textContent = 'Saved'; toast('Saved');
-      ORIG_CODE = code;
-      try { await checkCodeAvailability(); } catch {}
     } catch (e) {
       const err = (e && e.data && (e.data.message||e.data.error)) || '';
       if (String(err).includes('company_id') || String(e?.data?.error||'') === 'company_id_in_use') {
@@ -477,8 +513,6 @@
     $('#btnExportAndDelete')?.addEventListener('click', exportAndDelete);
     $('#btnDeleteTenant')?.addEventListener('click', deleteTenantCompletely);
     document.getElementById('btnSaveSubdomain')?.addEventListener('click', saveSubdomain);
-    document.getElementById('tCode')?.addEventListener('input', ()=>{ checkCodeAvailability().catch(()=>{}); });
-    document.getElementById('btnSuggestCode')?.addEventListener('click', ()=>{ suggestCode().catch(()=>{}); });
 
     // Old Integrations handlers removed - now using modal UI
   }
@@ -493,21 +527,41 @@
       const r = await api(`/admin/tenants/${encodeURIComponent(TID)}/settings`, { tenantId: null });
       const sub = (r && r.settings && r.settings.features && r.settings.features.subscription) || null;
       const tierEl = document.getElementById('subTier');
-      const endEl = document.getElementById('trialEndsAt');
-      if (sub && sub.tier) tierEl.value = String(sub.tier).toLowerCase(); else tierEl.value = 'basic';
-      if (sub && sub.tier === 'trial' && sub.trial_ends_at) endEl.value = new Date(sub.trial_ends_at).toISOString(); else endEl.value = '';
+      const endEl = document.getElementById('expiresAt');
+      
+      // Set tier with default to 'trial'
+      if (sub && sub.tier) {
+        tierEl.value = String(sub.tier).toLowerCase();
+      } else {
+        tierEl.value = 'trial';
+      }
+      
+      // Set expiration date
+      if (sub && sub.trial_ends_at) {
+        // Convert ISO datetime to date string (YYYY-MM-DD) for date input
+        const d = new Date(sub.trial_ends_at);
+        endEl.value = d.toISOString().split('T')[0];
+      } else {
+        // Default to 14 days from now for new subscriptions
+        const defaultExpires = new Date();
+        defaultExpires.setDate(defaultExpires.getDate() + 14);
+        endEl.value = defaultExpires.toISOString().split('T')[0];
+      }
+      
       updateTrialUi();
     } catch {}
   }
 
   function updateTrialUi(){
-    const tier = (document.getElementById('subTier')?.value || 'basic').toLowerCase();
-    const trialRow = document.getElementById('trialEndsAt');
+    const tier = (document.getElementById('subTier')?.value || 'trial').toLowerCase();
+    const expiresField = document.getElementById('expiresAt');
     const extInput = document.getElementById('extendDays');
     const extBtn = document.getElementById('applyExtend');
-    const disabled = tier !== 'trial';
-    trialRow.disabled = true; // read-only always
-    extInput.disabled = disabled; extBtn.disabled = disabled;
+    // Expiration date is editable for all subscription types
+    // Quick extend is always available
+    expiresField.disabled = false;
+    extInput.disabled = false;
+    extBtn.disabled = false;
   }
 
   function addDaysToIso(iso, days){
@@ -515,31 +569,71 @@
   }
 
   async function saveSubscription(){
-    const tier = (document.getElementById('subTier')?.value || 'basic').toLowerCase();
-    let trial_ends_at = (document.getElementById('trialEndsAt')?.value || '').trim();
-    if (tier === 'trial' && !trial_ends_at) { trial_ends_at = addDaysToIso('', 14); }
+    const tier = (document.getElementById('subTier')?.value || 'trial').toLowerCase();
+    let expiresAt = (document.getElementById('expiresAt')?.value || '').trim();
+    
+    // Convert date input (YYYY-MM-DD) to ISO datetime
+    let trial_ends_at = '';
+    if (expiresAt) {
+      try {
+        const d = new Date(expiresAt + 'T23:59:59Z');
+        trial_ends_at = d.toISOString();
+      } catch {
+        toast('Invalid date format');
+        return;
+      }
+    } else if (tier === 'trial') {
+      // Default to 14 days if trial and no date set
+      trial_ends_at = addDaysToIso('', 14);
+    }
+    
     try {
       const current = await api(`/admin/tenants/${encodeURIComponent(TID)}/settings`, { tenantId: null });
       const curFeatures = (current && current.settings && current.settings.features) || {};
-      const features = { ...curFeatures, subscription: { tier, ...(tier==='trial'?{ trial_ends_at }: {}) } };
+      const features = { ...curFeatures, subscription: { tier, trial_ends_at } };
       await api(`/admin/tenants/${encodeURIComponent(TID)}/settings`, { method:'PUT', body:{ settings:{ features } }, tenantId: null });
-      document.getElementById('subStatus').textContent = 'Saved'; toast('Saved');
+      document.getElementById('subStatus').textContent = 'Saved ✓'; toast('Subscription saved');
       try { window.__refreshSubscriptionChip && window.__refreshSubscriptionChip(); } catch {}
-    } catch { document.getElementById('subStatus').textContent = 'Failed'; toast('Save failed'); }
+    } catch { document.getElementById('subStatus').textContent = 'Failed ✗'; toast('Save failed'); }
   }
 
   function wireSubscription(){
     const tierEl = document.getElementById('subTier');
     const extBtn = document.getElementById('applyExtend');
     const saveBtn = document.getElementById('saveSub');
-    tierEl?.addEventListener('change', ()=>{ updateTrialUi(); if (tierEl.value==='trial' && !document.getElementById('trialEndsAt').value) { document.getElementById('trialEndsAt').value = addDaysToIso('', 14); } });
+    tierEl?.addEventListener('change', ()=>{ 
+      updateTrialUi(); 
+      if (tierEl.value==='trial' && !document.getElementById('expiresAt').value) { 
+        const defaultExpires = new Date();
+        defaultExpires.setDate(defaultExpires.getDate() + 14);
+        document.getElementById('expiresAt').value = defaultExpires.toISOString().split('T')[0];
+      } 
+    });
     extBtn?.addEventListener('click', ()=>{
       try {
         const n = parseInt((document.getElementById('extendDays')?.value||'0'), 10);
         if (!Number.isFinite(n) || n <= 0) { toast('Enter days > 0'); return; }
-        const cur = document.getElementById('trialEndsAt').value || new Date().toISOString();
-        document.getElementById('trialEndsAt').value = addDaysToIso(cur, n);
-      } catch {}
+        const curVal = document.getElementById('expiresAt').value;
+        let baseDate;
+        if (curVal) {
+          // Parse as YYYY-MM-DD in local time, not UTC
+          const parts = curVal.split('-');
+          baseDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          baseDate = new Date();
+        }
+        // Add days
+        baseDate.setDate(baseDate.getDate() + n);
+        // Format back to YYYY-MM-DD
+        const year = baseDate.getFullYear();
+        const month = String(baseDate.getMonth() + 1).padStart(2, '0');
+        const day = String(baseDate.getDate()).padStart(2, '0');
+        document.getElementById('expiresAt').value = `${year}-${month}-${day}`;
+        document.getElementById('extendDays').value = ''; // Clear input after extending
+      } catch (e) { 
+        console.error('Failed to extend date:', e);
+        toast('Failed to extend date'); 
+      }
     });
     saveBtn?.addEventListener('click', saveSubscription);
   }
@@ -553,7 +647,6 @@
       showEditor();
       await loadBasics();
       await loadOwner();
-      await loadSubscription();
       // Integrations UI
       try { await loadIntegrations(); } catch {}
       // Subdomain UI (now in tabs)

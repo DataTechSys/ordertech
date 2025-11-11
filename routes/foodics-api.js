@@ -468,21 +468,63 @@ function initFoodicsRoutes(db) {
   // Get current user profile
   router.get('/user/profile', authenticateFoodicsToken, async (req, res) => {
     try {
+      // Get user info
       const userResult = await db(
-        `SELECT u.*, s.plan_type, s.status as subscription_status, s.trial_end_date, s.devices_allowed,
-                (SELECT COUNT(*) FROM foodics_devices WHERE user_id = u.user_id) as devices_count,
-                (SELECT COUNT(*) FROM foodics_devices WHERE user_id = u.user_id AND status = 'active') as active_devices_count
+        `SELECT u.user_id, u.foodics_id, u.email, u.company_name, u.phone, u.status, u.created_at
          FROM foodics_users u
-         LEFT JOIN foodics_subscriptions s ON u.user_id = s.user_id
          WHERE u.user_id = $1`,
         [req.foodicsUser.user_id]
       );
       
-      if (!userResult.rows || userResult.rows.length === 0) {
+      const userRows = getRows(userResult);
+      if (userRows.length === 0) {
         return res.status(404).json({ error: 'User not found' });
       }
       
-      const user = userResult.rows[0];
+      const user = userRows[0];
+      
+      // Get tenant_id, license, and subscription from saas.tenants
+      const tenantResult = await db(
+        `SELECT tenant_id, license_limit, subscription_type, subscription_expires_at FROM saas.tenants WHERE foodics_id = $1`,
+        [user.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      let devices_count = 0;
+      let active_devices_count = 0;
+      let devices_allowed = 1;
+      let plan_type = 'basic';
+      let trial_end_date = null;
+      
+      if (tenantRows.length > 0) {
+        const tenant_id = tenantRows[0].tenant_id;
+        devices_allowed = tenantRows[0].license_limit || 1;
+        plan_type = tenantRows[0].subscription_type || 'basic';
+        trial_end_date = tenantRows[0].subscription_expires_at;
+        
+        // Count devices from saas.devices
+        const devicesCountResult = await db(
+          `SELECT COUNT(*) as count FROM saas.devices WHERE tenant_id = $1 AND deleted_at IS NULL`,
+          [tenant_id]
+        );
+        const activeDevicesCountResult = await db(
+          `SELECT COUNT(*) as count FROM saas.devices WHERE tenant_id = $1 AND status = 'active' AND deleted_at IS NULL`,
+          [tenant_id]
+        );
+        
+        const countRows = getRows(devicesCountResult);
+        const activeCountRows = getRows(activeDevicesCountResult);
+        
+        devices_count = parseInt(countRows[0]?.count || 0);
+        active_devices_count = parseInt(activeCountRows[0]?.count || 0);
+      }
+      
+      user.devices_count = devices_count;
+      user.active_devices_count = active_devices_count;
+      user.devices_allowed = devices_allowed;
+      user.plan_type = plan_type;
+      user.subscription_status = 'active';
+      user.trial_end_date = trial_end_date;
       delete user.password_hash;
       
       res.json({ success: true, user });
@@ -603,34 +645,56 @@ function initFoodicsRoutes(db) {
   
   // ================ BRANCHES MANAGEMENT ================
   
-  // Get branches for current tenant
+  // Get branches for current tenant (from Foodics API)
   router.get('/branches', authenticateFoodicsToken, async (req, res) => {
     try {
-      // Get tenant_id
-      const tenantResult = await db(
-        `SELECT tenant_id FROM saas.tenants WHERE foodics_id = $1`,
+      // Get API token from foodics_users
+      const userResult = await db(
+        `SELECT foodics_api_token as api_token
+         FROM foodics_users
+         WHERE foodics_id = $1`,
         [req.foodicsUser.foodics_id]
       );
       
-      const tenantRows = getRows(tenantResult);
-      if (tenantRows.length === 0) {
-        return res.status(404).json({ error: 'Tenant not found' });
+      const userRows = getRows(userResult);
+      if (userRows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
       }
       
-      const tenant_id = tenantRows[0].tenant_id;
+      const api_token = userRows[0].api_token;
       
-      // Get branches
-      const branchesResult = await db(
-        `SELECT branch_id, branch_name FROM saas.branches WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY branch_name`,
-        [tenant_id]
-      );
+      if (!api_token) {
+        return res.status(400).json({ 
+          error: 'Foodics API token not configured', 
+          message: 'Please configure your Foodics API token in Settings' 
+        });
+      }
       
-      const branchesRows = getRows(branchesResult);
-      res.json({ success: true, branches: branchesRows });
+      // Fetch branches directly from Foodics API
+      const { makeClient } = require('../server/integrations/foodics');
+      const foodicsClient = makeClient(api_token);
+      
+      const result = await foodicsClient.listBranches();
+      
+      // Transform to expected format with Foodics IDs
+      const branches = (result.items || []).map(b => ({
+        branch_id: b.id,  // Use Foodics ID directly
+        branch_name: b.name,
+        reference: b.reference || null,
+        meta: {
+          foodics_branch_id: b.id,
+          foodics_data: b
+        }
+      }));
+      
+      res.json({ success: true, branches });
       
     } catch (error) {
       console.error('Get branches error:', error);
-      res.status(500).json({ error: 'Failed to fetch branches' });
+      res.status(500).json({ 
+        error: 'Failed to fetch branches from Foodics', 
+        details: error.message 
+      });
     }
   });
   
@@ -655,26 +719,33 @@ function initFoodicsRoutes(db) {
       const tenant_id = tenantRows[0].tenant_id;
       const devices_allowed = tenantRows[0].devices_allowed || 1;
       
-      // Get devices for this tenant
+      // Get devices for this tenant (exclude label printers as they're fetched separately)
       const devicesResult = await db(
         `SELECT d.device_id, d.device_name, d.device_type, d.uuid as device_uuid, 
-                d.status, d.activated_at, d.last_seen, d.created_at, 
+                d.status, d.activated_at, d.last_seen, d.created_at, d.meta,
                 d.branch_id, b.branch_name,
                 ac.code as activation_code
          FROM saas.devices d
          LEFT JOIN saas.branches b ON d.branch_id = b.branch_id
          LEFT JOIN saas.device_activation_codes ac ON d.device_id = ac.device_id AND ac.status = 'pending'
-         WHERE d.tenant_id = $1 AND d.deleted_at IS NULL
+         WHERE d.tenant_id = $1 AND d.deleted_at IS NULL AND d.device_type != 'label_printer'
          ORDER BY d.created_at ASC`,
         [tenant_id]
       );
       
       const devicesRows = getRows(devicesResult);
-      const devices_used = devicesRows.length;
+      
+      // Add branch_name from meta if not in join (for Foodics-only devices)
+      const devicesWithBranch = devicesRows.map(d => ({
+        ...d,
+        branch_name: d.branch_name || (d.meta?.foodics_branch_name) || 'N/A'
+      }));
+      
+      const devices_used = devicesWithBranch.length;
       
       res.json({
         success: true,
-        devices: devicesRows,
+        devices: devicesWithBranch,
         devices_used,
         devices_allowed
       });
@@ -688,7 +759,7 @@ function initFoodicsRoutes(db) {
   // Add new device (requires available license)
   router.post('/devices', authenticateFoodicsToken, async (req, res) => {
     try {
-      const { device_name, branch_id } = req.body;
+      const { device_name, branch_id, terminal_id, branch_name } = req.body;
       
       if (!device_name) {
         return res.status(400).json({ error: 'Device name required' });
@@ -730,12 +801,22 @@ function initFoodicsRoutes(db) {
         });
       }
       
-      // Create device without activation token
+      // Prepare device meta with Foodics IDs
+      const deviceMeta = {
+        foodics_branch_id: branch_id,  // Store Foodics branch ID
+        foodics_branch_name: branch_name || 'Unknown Branch'
+      };
+      
+      if (terminal_id) {
+        deviceMeta.foodics_terminal_id = terminal_id;
+      }
+      
+      // Create device without branch_id FK (set to NULL since we're using Foodics ID in meta)
       const deviceResult = await db(
-        `INSERT INTO saas.devices (tenant_id, branch_id, device_name, device_type, status, role)
-         VALUES ($1, $2, $3, 'drivethru', 'revoked', 'cashier')
+        `INSERT INTO saas.devices (tenant_id, branch_id, device_name, device_type, status, role, meta)
+         VALUES ($1, NULL, $2, 'drivethru', 'revoked', 'cashier', $3)
          RETURNING device_id, device_name, device_type, status, created_at`,
-        [tenant_id, branch_id, device_name]
+        [tenant_id, device_name, JSON.stringify(deviceMeta)]
       );
       
       const deviceRows = getRows(deviceResult);
@@ -773,7 +854,9 @@ function initFoodicsRoutes(db) {
       
     } catch (error) {
       console.error('Add device error:', error);
-      res.status(500).json({ error: 'Failed to add device' });
+      console.error('Error stack:', error.stack);
+      console.error('Error details:', { message: error.message, code: error.code, detail: error.detail });
+      res.status(500).json({ error: 'Failed to add device', details: error.message });
     }
   });
   
@@ -802,14 +885,19 @@ function initFoodicsRoutes(db) {
   
   // Activate device with Company ID + Activation Code (for iOS app)
   router.post('/devices/activate', async (req, res) => {
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`[${requestId}] POST /devices/activate - Request body:`, req.body);
+    
     try {
       const { company_id, activation_code } = req.body;
       
       if (!company_id || !/^\d{6}$/.test(company_id)) {
+        console.log(`[${requestId}] Invalid company_id:`, company_id);
         return res.status(400).json({ error: 'Valid 6-digit Company ID required' });
       }
       
       if (!activation_code || !/^\d{6}$/.test(activation_code)) {
+        console.log(`[${requestId}] Invalid activation_code:`, activation_code);
         return res.status(400).json({ error: 'Valid 6-digit Activation Code required' });
       }
       
@@ -823,12 +911,15 @@ function initFoodicsRoutes(db) {
       );
       
       const tenantRows = getRows(tenantResult);
+      console.log(`[${requestId}] Tenant lookup result:`, tenantRows);
       if (tenantRows.length === 0) {
-        return res.status(404).json({ error: 'Company ID not found' });
+        console.log(`[${requestId}] Company ID not found: ${company_id}`);
+        return res.status(404).json({ error: 'Activation code not found or Foodics ID not registered' });
       }
       
       const tenant_id = tenantRows[0].tenant_id;
       const foodics_token = tenantRows[0].foodics_api_token || null;
+      console.log(`[${requestId}] Found tenant: ${tenant_id}`);
       
       // Find activation code
       const codeResult = await db(
@@ -841,8 +932,10 @@ function initFoodicsRoutes(db) {
       );
       
       const codeRows = getRows(codeResult);
+      console.log(`[${requestId}] Activation code lookup result:`, codeRows);
       if (codeRows.length === 0) {
-        return res.status(404).json({ error: 'Invalid or already used activation code' });
+        console.log(`[${requestId}] Activation code not found or already used: ${activation_code}`);
+        return res.status(404).json({ error: 'Activation code not found or Foodics ID not registered' });
       }
       
       const codeData = codeRows[0];
@@ -872,7 +965,7 @@ function initFoodicsRoutes(db) {
         [activation_code]
       );
       
-      console.log(`[Foodics] Device activated: ${device_id} for tenant ${tenant_id}`);
+      console.log(`[${requestId}] Device activated successfully: ${device_id} for tenant ${tenant_id}`);
       
       res.json({
         status: 'claimed',
@@ -886,7 +979,7 @@ function initFoodicsRoutes(db) {
       });
       
     } catch (error) {
-      console.error('Device activation error:', error);
+      console.error(`[${requestId}] Device activation error:`, error);
       res.status(500).json({ error: 'Activation failed', detail: error.message });
     }
   });
@@ -918,6 +1011,167 @@ function initFoodicsRoutes(db) {
     } catch (error) {
       console.error('Delete device error:', error);
       res.status(500).json({ error: 'Failed to remove device' });
+    }
+  });
+  
+  // ================ LABELS MANAGEMENT ================
+  
+  // Get all label printers for current user
+  router.get('/labels', authenticateFoodicsToken, async (req, res) => {
+    try {
+      // Get tenant_id from foodics_id
+      const tenantResult = await db(
+        `SELECT t.tenant_id, t.license_limit as devices_allowed
+         FROM saas.tenants t
+         WHERE t.foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant_id = tenantRows[0].tenant_id;
+      const devices_allowed = tenantRows[0].devices_allowed || 1;
+      
+      // Get label printers for this tenant
+      const devicesResult = await db(
+        `SELECT d.device_id, d.device_name, d.device_type, d.uuid as device_uuid, 
+                d.status, d.activated_at, d.last_seen, d.created_at, 
+                d.branch_id, b.branch_name,
+                ac.code as activation_code
+         FROM saas.devices d
+         LEFT JOIN saas.branches b ON d.branch_id = b.branch_id
+         LEFT JOIN saas.device_activation_codes ac ON d.device_id = ac.device_id AND ac.status = 'pending'
+         WHERE d.tenant_id = $1 AND d.device_type = 'label_printer' AND d.deleted_at IS NULL
+         ORDER BY d.created_at ASC`,
+        [tenant_id]
+      );
+      
+      const devicesRows = getRows(devicesResult);
+      const devices_used = devicesRows.length;
+      
+      res.json({
+        success: true,
+        devices: devicesRows,
+        devices_used,
+        devices_allowed
+      });
+      
+    } catch (error) {
+      console.error('Get label printers error:', error);
+      res.status(500).json({ error: 'Failed to fetch label printers' });
+    }
+  });
+  
+  // Add new label printer
+  router.post('/labels', authenticateFoodicsToken, async (req, res) => {
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`[${requestId}] POST /labels - Start - User: ${req.foodicsUser.foodics_id}, Body:`, req.body);
+    
+    try {
+      const { device_name, branch_id } = req.body;
+      
+      if (!device_name) {
+        console.log(`[${requestId}] POST /labels - Error: No device name`);
+        return res.status(400).json({ error: 'Printer name required' });
+      }
+      
+      // Get tenant_id from foodics_id
+      const tenantResult = await db(
+        `SELECT t.tenant_id, t.license_limit as devices_allowed
+         FROM saas.tenants t
+         WHERE t.foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      console.log(`[${requestId}] POST /labels - Tenant lookup result:`, tenantResult.rows || tenantResult);
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant_id = tenantRows[0].tenant_id;
+      console.log(`[${requestId}] POST /labels - Creating device for tenant: ${tenant_id}, name: ${device_name}`);
+      
+      // Create label printer device (branch_id is optional for label printers)
+      const deviceResult = await db(
+        `INSERT INTO saas.devices (tenant_id, branch_id, device_name, device_type, status, role)
+         VALUES ($1, $2, $3, 'label_printer', 'revoked', 'display')
+         RETURNING device_id, device_name, device_type, status, created_at`,
+        [tenant_id, branch_id || null, device_name]
+      );
+      
+      const deviceRows = getRows(deviceResult);
+      const device_id = deviceRows[0].device_id;
+      console.log(`[${requestId}] POST /labels - Device created with ID: ${device_id}`);
+      
+      // Generate 6-digit activation code
+      let activation_code;
+      let attempts = 0;
+      while (attempts < 10) {
+        activation_code = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Check if code already exists
+        const existingCode = await db(
+          `SELECT code FROM saas.device_activation_codes WHERE code = $1`,
+          [activation_code]
+        );
+        const existingRows = getRows(existingCode);
+        
+        if (existingRows.length === 0) break;
+        attempts++;
+      }
+      
+      // Create activation code (expires in 90 days)
+      const expires_at = new Date(Date.now() + 90 * 24 * 3600000);
+      await db(
+        `INSERT INTO saas.device_activation_codes (code, tenant_id, device_id, expires_at, role, status)
+         VALUES ($1, $2, $3, $4, 'display', 'pending')`,
+        [activation_code, tenant_id, device_id, expires_at]
+      );
+      console.log(`[${requestId}] POST /labels - Activation code created: ${activation_code}`);
+      
+      console.log(`[${requestId}] POST /labels - Success - Sending response`);
+      res.status(201).json({ 
+        success: true, 
+        device: { ...deviceRows[0], activation_code }
+      });
+      
+    } catch (error) {
+      console.error(`[${requestId}] POST /labels - Error:`, error);
+      res.status(500).json({ error: 'Failed to add label printer' });
+    }
+  });
+  
+  // Delete label printer
+  router.delete('/labels/:device_id', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { device_id } = req.params;
+      
+      // Get tenant_id
+      const tenantResult = await db(
+        `SELECT tenant_id FROM saas.tenants WHERE foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      // Soft delete device
+      await db(
+        `UPDATE saas.devices SET deleted_at = NOW() WHERE device_id = $1 AND tenant_id = $2`,
+        [device_id, tenantRows[0].tenant_id]
+      );
+      
+      res.json({ success: true, message: 'Printer removed' });
+      
+    } catch (error) {
+      console.error('Delete label printer error:', error);
+      res.status(500).json({ error: 'Failed to remove printer' });
     }
   });
   
@@ -989,6 +1243,98 @@ function initFoodicsRoutes(db) {
     }
   });
   
+  // Get tenant subscription status (saas schema)
+  router.get('/tenant/subscription', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const tenantResult = await db(
+        `SELECT t.tenant_id, t.foodics_id, t.company_name, t.subscription_expires_at, 
+                t.subscription_status, t.license_limit
+         FROM saas.tenants t
+         WHERE t.foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant = tenantRows[0];
+      let days_remaining = null;
+      let is_expired = false;
+      
+      if (tenant.subscription_expires_at) {
+        const now = new Date();
+        const expires = new Date(tenant.subscription_expires_at);
+        days_remaining = Math.ceil((expires - now) / (1000 * 60 * 60 * 24));
+        is_expired = days_remaining <= 0;
+      }
+      
+      res.json({
+        success: true,
+        subscription: {
+          tenant_id: tenant.tenant_id,
+          company_name: tenant.company_name,
+          foodics_id: tenant.foodics_id,
+          status: tenant.subscription_status || 'active',
+          expires_at: tenant.subscription_expires_at,
+          days_remaining: days_remaining,
+          is_expired: is_expired,
+          devices_allowed: tenant.license_limit || 1
+        }
+      });
+      
+    } catch (error) {
+      console.error('Get tenant subscription error:', error);
+      res.status(500).json({ error: 'Failed to fetch subscription' });
+    }
+  });
+  
+  // Update tenant subscription expiry (admin function)
+  router.post('/tenant/subscription/update', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { expires_at, devices_allowed } = req.body;
+      
+      if (!expires_at) {
+        return res.status(400).json({ error: 'Expiry date required' });
+      }
+      
+      // Validate date
+      const expiryDate = new Date(expires_at);
+      if (isNaN(expiryDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid date format' });
+      }
+      
+      const updates = [];
+      const params = [req.foodicsUser.foodics_id];
+      let paramCount = 2;
+      
+      updates.push(`subscription_expires_at = $${paramCount}`);
+      params.push(expiryDate);
+      paramCount++;
+      
+      if (devices_allowed !== undefined) {
+        updates.push(`license_limit = $${paramCount}`);
+        params.push(parseInt(devices_allowed));
+        paramCount++;
+      }
+      
+      await db(
+        `UPDATE saas.tenants SET ${updates.join(', ')} WHERE foodics_id = $1`,
+        params
+      );
+      
+      res.json({
+        success: true,
+        message: 'Subscription updated successfully'
+      });
+      
+    } catch (error) {
+      console.error('Update subscription error:', error);
+      res.status(500).json({ error: 'Failed to update subscription' });
+    }
+  });
+  
   // ================ ACTIVITY LOGS ================
   
   router.get('/activity', authenticateFoodicsToken, async (req, res) => {
@@ -1009,6 +1355,347 @@ function initFoodicsRoutes(db) {
     } catch (error) {
       console.error('Get activity error:', error);
       res.status(500).json({ error: 'Failed to fetch activity logs' });
+    }
+  });
+  
+  // ================ ORDER PUSH CONFIGURATION ================
+  
+  // Get list of terminals (POS devices) for a Foodics branch
+  router.get('/terminals', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { branch_id } = req.query;
+      
+      if (!branch_id) {
+        return res.status(400).json({ error: 'branch_id parameter required' });
+      }
+      
+      // Get tenant and API token
+      const tenantResult = await db(
+        `SELECT t.tenant_id, t.meta->>'foodics_api_token' as api_token
+         FROM saas.tenants t
+         WHERE t.foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0 || !tenantRows[0].api_token) {
+        return res.status(404).json({ error: 'Foodics API token not configured' });
+      }
+      
+      const api_token = tenantRows[0].api_token;
+      
+      // Call Foodics API
+      const { makeClient } = require('../server/integrations/foodics');
+      const foodicsClient = makeClient(api_token);
+      
+      const result = await foodicsClient.listTerminals(branch_id);
+      
+      // Return simplified list
+      const terminals = (result.items || []).map(t => ({
+        id: t.id,
+        name: t.name || t.device_name || 'Unnamed Device',
+        code: t.code || t.serial_number,
+        type: t.type || 'terminal'
+      }));
+      
+      res.json({ success: true, terminals });
+      
+    } catch (error) {
+      console.error('Get terminals error:', error);
+      res.status(500).json({ error: 'Failed to fetch terminals', details: error.message });
+    }
+  });
+  
+  // Get list of cashiers (users) for a Foodics branch
+  router.get('/cashiers', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { branch_id } = req.query;
+      
+      if (!branch_id) {
+        return res.status(400).json({ error: 'branch_id parameter required' });
+      }
+      
+      // Get tenant and API token
+      const tenantResult = await db(
+        `SELECT t.tenant_id, t.meta->>'foodics_api_token' as api_token
+         FROM saas.tenants t
+         WHERE t.foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0 || !tenantRows[0].api_token) {
+        return res.status(404).json({ error: 'Foodics API token not configured' });
+      }
+      
+      const api_token = tenantRows[0].api_token;
+      
+      // Call Foodics API
+      const { makeClient } = require('../server/integrations/foodics');
+      const foodicsClient = makeClient(api_token);
+      
+      const result = await foodicsClient.listCashiers(branch_id);
+      
+      // Return simplified list
+      const cashiers = (result.items || []).map(u => ({
+        id: u.id,
+        name: u.name || u.username || 'Unnamed User',
+        username: u.username,
+        email: u.email
+      }));
+      
+      res.json({ success: true, cashiers });
+      
+    } catch (error) {
+      console.error('Get cashiers error:', error);
+      res.status(500).json({ error: 'Failed to fetch cashiers', details: error.message });
+    }
+  });
+  
+  // Get order push configuration for a branch
+  router.get('/branches/:branch_id/order-push-config', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { branch_id } = req.params;
+      
+      // Get tenant_id
+      const tenantResult = await db(
+        `SELECT tenant_id FROM saas.tenants WHERE foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant_id = tenantRows[0].tenant_id;
+      
+      // Get branch config
+      const branchResult = await db(
+        `SELECT branch_id, branch_name, meta
+         FROM saas.branches
+         WHERE branch_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+        [branch_id, tenant_id]
+      );
+      
+      const branchRows = getRows(branchResult);
+      if (branchRows.length === 0) {
+        return res.status(404).json({ error: 'Branch not found' });
+      }
+      
+      const branch = branchRows[0];
+      const meta = branch.meta || {};
+      
+      res.json({
+        success: true,
+        config: {
+          branch_id: branch.branch_id,
+          branch_name: branch.branch_name,
+          foodics_branch_id: meta.foodics_branch_id || null,
+          foodics_terminal_id: meta.foodics_terminal_id || null,
+          foodics_cashier_id: meta.foodics_cashier_id || null,
+          configured: !!(meta.foodics_branch_id && meta.foodics_terminal_id && meta.foodics_cashier_id)
+        }
+      });
+      
+    } catch (error) {
+      console.error('Get branch order push config error:', error);
+      res.status(500).json({ error: 'Failed to fetch configuration' });
+    }
+  });
+  
+  // Save order push configuration for a branch
+  router.post('/branches/:branch_id/order-push-config', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { branch_id } = req.params;
+      const { terminal_id, cashier_id } = req.body;
+      
+      if (!terminal_id || !cashier_id) {
+        return res.status(400).json({ error: 'terminal_id and cashier_id are required' });
+      }
+      
+      // Get tenant_id
+      const tenantResult = await db(
+        `SELECT tenant_id FROM saas.tenants WHERE foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant_id = tenantRows[0].tenant_id;
+      
+      // Verify branch belongs to tenant
+      const branchResult = await db(
+        `SELECT branch_id, meta
+         FROM saas.branches
+         WHERE branch_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+        [branch_id, tenant_id]
+      );
+      
+      const branchRows = getRows(branchResult);
+      if (branchRows.length === 0) {
+        return res.status(404).json({ error: 'Branch not found' });
+      }
+      
+      const currentMeta = branchRows[0].meta || {};
+      
+      // Update branch meta with order push config
+      const updatedMeta = {
+        ...currentMeta,
+        foodics_terminal_id: terminal_id,
+        foodics_cashier_id: cashier_id,
+        order_push_configured_at: new Date().toISOString(),
+        order_push_configured_by: req.foodicsUser.user_id
+      };
+      
+      await db(
+        `UPDATE saas.branches
+         SET meta = $1, updated_at = NOW()
+         WHERE branch_id = $2`,
+        [JSON.stringify(updatedMeta), branch_id]
+      );
+      
+      console.log(`[Foodics] Order push config saved for branch ${branch_id}: terminal=${terminal_id}, cashier=${cashier_id}`);
+      
+      res.json({
+        success: true,
+        message: 'Order push configuration saved successfully'
+      });
+      
+    } catch (error) {
+      console.error('Save branch order push config error:', error);
+      res.status(500).json({ error: 'Failed to save configuration' });
+    }
+  });
+  
+  // Get device-level order push overrides
+  router.get('/devices/:device_id/order-push-config', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { device_id } = req.params;
+      
+      // Get tenant_id
+      const tenantResult = await db(
+        `SELECT tenant_id FROM saas.tenants WHERE foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant_id = tenantRows[0].tenant_id;
+      
+      // Get device config
+      const deviceResult = await db(
+        `SELECT d.device_id, d.device_name, d.meta, b.meta as branch_meta
+         FROM saas.devices d
+         LEFT JOIN saas.branches b ON d.branch_id = b.branch_id
+         WHERE d.device_id = $1 AND d.tenant_id = $2 AND d.deleted_at IS NULL`,
+        [device_id, tenant_id]
+      );
+      
+      const deviceRows = getRows(deviceResult);
+      if (deviceRows.length === 0) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+      
+      const device = deviceRows[0];
+      const deviceMeta = device.meta || {};
+      const branchMeta = device.branch_meta || {};
+      
+      res.json({
+        success: true,
+        config: {
+          device_id: device.device_id,
+          device_name: device.device_name,
+          terminal_id_override: deviceMeta.foodics_terminal_id_override || null,
+          cashier_id_override: deviceMeta.foodics_cashier_id_override || null,
+          // Show effective config (override or branch default)
+          effective_terminal_id: deviceMeta.foodics_terminal_id_override || branchMeta.foodics_terminal_id || null,
+          effective_cashier_id: deviceMeta.foodics_cashier_id_override || branchMeta.foodics_cashier_id || null
+        }
+      });
+      
+    } catch (error) {
+      console.error('Get device order push config error:', error);
+      res.status(500).json({ error: 'Failed to fetch configuration' });
+    }
+  });
+  
+  // Save device-level order push overrides
+  router.post('/devices/:device_id/order-push-config', authenticateFoodicsToken, async (req, res) => {
+    try {
+      const { device_id } = req.params;
+      const { terminal_id, cashier_id } = req.body;
+      
+      // Get tenant_id
+      const tenantResult = await db(
+        `SELECT tenant_id FROM saas.tenants WHERE foodics_id = $1`,
+        [req.foodicsUser.foodics_id]
+      );
+      
+      const tenantRows = getRows(tenantResult);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      
+      const tenant_id = tenantRows[0].tenant_id;
+      
+      // Verify device belongs to tenant
+      const deviceResult = await db(
+        `SELECT device_id, meta
+         FROM saas.devices
+         WHERE device_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
+        [device_id, tenant_id]
+      );
+      
+      const deviceRows = getRows(deviceResult);
+      if (deviceRows.length === 0) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+      
+      const currentMeta = deviceRows[0].meta || {};
+      
+      // Update device meta with overrides (null values remove override)
+      const updatedMeta = { ...currentMeta };
+      
+      if (terminal_id !== undefined) {
+        if (terminal_id === null) {
+          delete updatedMeta.foodics_terminal_id_override;
+        } else {
+          updatedMeta.foodics_terminal_id_override = terminal_id;
+        }
+      }
+      
+      if (cashier_id !== undefined) {
+        if (cashier_id === null) {
+          delete updatedMeta.foodics_cashier_id_override;
+        } else {
+          updatedMeta.foodics_cashier_id_override = cashier_id;
+        }
+      }
+      
+      await db(
+        `UPDATE saas.devices
+         SET meta = $1, updated_at = NOW()
+         WHERE device_id = $2`,
+        [JSON.stringify(updatedMeta), device_id]
+      );
+      
+      console.log(`[Foodics] Device order push overrides saved for device ${device_id}`);
+      
+      res.json({
+        success: true,
+        message: 'Device order push configuration saved successfully'
+      });
+      
+    } catch (error) {
+      console.error('Save device order push config error:', error);
+      res.status(500).json({ error: 'Failed to save configuration' });
     }
   });
   

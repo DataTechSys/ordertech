@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install --omit=dev --no-audit --no-fund
+
+# Copy job script
+COPY jobs/backfill-today-branches.js ./
+
+# Make executable
+RUN chmod +x backfill-today-branches.js
+
+# Run the job
+CMD ["node", "backfill-today-branches.js"]

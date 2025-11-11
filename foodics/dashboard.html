@@ -217,6 +217,11 @@
             color: #ef4444;
         }
         
+        .device-icon.revoked {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+        
         .status-badge {
             padding: 0.25rem 0.75rem;
             border-radius: 12px;
@@ -231,6 +236,11 @@
         }
         
         .status-badge.inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .status-badge.revoked {
             background: #fee2e2;
             color: #991b1b;
         }
@@ -432,18 +442,22 @@
         async function loadDevices() {
             try {
                 const token = localStorage.getItem('foodics_token');
-                const response = await fetch(`${API_BASE}/api/foodics/devices`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+                const [devicesResponse, labelsResponse] = await Promise.all([
+                    fetch(`${API_BASE}/api/foodics/devices`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_BASE}/api/foodics/labels`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    const devices = data.devices || [];
+                if (devicesResponse.ok && labelsResponse.ok) {
+                    const devicesData = await devicesResponse.json();
+                    const labelsData = await labelsResponse.json();
+                    const allDevices = [...devicesData.devices, ...labelsData.devices];
                     const devicesList = document.getElementById('devicesList');
                     
-                    if (devices.length === 0) {
+                    if (allDevices.length === 0) {
                         devicesList.innerHTML = `
                             <div class="empty-state">
                                 <i class="ri-computer-line"></i>
@@ -454,20 +468,27 @@
                         return;
                     }
                     
-                    devicesList.innerHTML = devices.map(device => `
+                    devicesList.innerHTML = allDevices.map(device => {
+                        const isLabelPrinter = device.device_type === 'label_printer';
+                        const icon = isLabelPrinter ? 'ri-printer-line' : 'ri-computer-line';
+                        const typeDisplay = isLabelPrinter ? 'Label Printer' : 'DriveThru';
+                        const statusDisplay = device.status === 'active' ? 'Used' : 'Not Used';
+                        
+                        return `
                         <div class="device-item">
                             <div class="device-info">
                                 <div class="device-icon ${device.status}">
-                                    <i class="ri-computer-line"></i>
+                                    <i class="${icon}"></i>
                                 </div>
                                 <div>
                                     <strong>${device.device_name}</strong>
-                                    <div style="font-size: 0.85rem; color: #6b7280;">${device.device_type}</div>
+                                    <div style="font-size: 0.85rem; color: #6b7280;">${typeDisplay}</div>
                                 </div>
                             </div>
-                            <span class="status-badge ${device.status}">${device.status}</span>
+                            <span class="status-badge ${device.status}">${statusDisplay}</span>
                         </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
             } catch (error) {
                 console.error('Load devices error:', error);

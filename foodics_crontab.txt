@@ -1,0 +1,2 @@
+# Foodics order sync - runs every 5 minutes
+*/5 * * * * /Users/mosawi/DATATECH/OrderTech/sync_foodics.sh

@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+COPY check-remote-items.js ./
+RUN chmod +x check-remote-items.js
+
+CMD ["node", "check-remote-items.js"]

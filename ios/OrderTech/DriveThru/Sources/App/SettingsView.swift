@@ -18,6 +18,10 @@ struct SettingsView: View {
     @State private var isActivating: Bool = false
     @State private var activationError: String? = nil
     
+    // Deactivation confirmation
+    @State private var showDeactivateConfirm = false
+    @State private var deactivateConfirmText = ""
+    
     // Idle Poster settings
     @AppStorage("OT.display.idlePosterEnabled") private var idlePosterEnabled: Bool = false
     @AppStorage("OT.display.idleTimeout") private var idleTimeout: Double = 15.0
@@ -80,169 +84,183 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section("Device") {
-                    HStack { Text("Device ID"); Spacer(); Text(app.deviceId).font(.footnote).foregroundColor(.secondary) }
-                    HStack { Text("Branch"); Spacer(); Text(app.branchName).font(.footnote).foregroundColor(.secondary) }
+                Section("DEVICE") {
+                    LabeledContent("Device ID", value: app.deviceId)
+                    LabeledContent("Foodics ID", value: companyIdDisplay)
+                    LabeledContent("Branch", value: app.branchName)
+                    LabeledContent("Device Name", value: activation.info?.displayName ?? app.friendlyName)
+                    
+                    // Subscription row
                     HStack {
-                        Text("Company ID"); Spacer()
-                        Text(companyIdDisplay).font(.footnote).foregroundColor(.secondary).monospacedDigit()
-                    }
-                    HStack {
-                        Text("Friendly Name"); Spacer()
-                        Text(activation.info?.displayName ?? app.friendlyName)
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                        Text("Subscription")
+                        Spacer()
+                        if let subscription = activation.info?.subscription {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text(formatSubscriptionType(subscription.type))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("/")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text(subscription.isExpired ? "Expired" : "Active")
+                                        .font(.footnote)
+                                        .foregroundColor(subscription.isExpired ? .red : .green)
+                                        .fontWeight(.semibold)
+                                }
+                                if let expiryDate = subscription.expiresAt {
+                                    Text(formatDate(expiryDate))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("No expiry")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } else {
+                            Text("Not set")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     
-                    // Subscription status
-                    if let subscription = activation.info?.subscription {
-                        HStack {
-                            Text("Subscription")
-                            Spacer()
-                            if subscription.isExpired {
-                                Text("Expired")
-                                    .font(.footnote)
-                                    .foregroundColor(.red)
-                                    .fontWeight(.semibold)
-                            } else if subscription.daysRemaining <= 30 {
-                                Text("\(subscription.daysRemaining) days left")
-                                    .font(.footnote)
-                                    .foregroundColor(subscription.daysRemaining <= 7 ? .orange : .secondary)
-                                    .fontWeight(subscription.daysRemaining <= 7 ? .semibold : .regular)
-                            } else {
-                                Text("Active (\(subscription.daysRemaining) days)")
+                    Button(action: { Task { await refreshAdmin() } }) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                }
+                
+                Section("CATALOG") {
+                    HStack {
+                        Text("Foodics Link")
+                        Spacer()
+                        if let token = env.foodicsToken, !token.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("Active")
                                     .font(.footnote)
                                     .foregroundColor(.green)
                             }
-                        }
-                    }
-                    
-                    Toggle("Share location", isOn: $shareLocation)
-                    Button("Refresh from Admin") { Task { await refreshAdmin() } }
-                }
-                
-                Section {
-                    // Foodics token status (read-only)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Foodics API Token")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Spacer()
-                            if let token = env.foodicsToken, !token.isEmpty {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                    Text("Active")
-                                        .font(.caption)
-                                        .foregroundColor(.green)
-                                }
-                            } else {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "exclamationmark.circle.fill")
-                                        .foregroundColor(.orange)
-                                    Text("Not Available")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                }
-                            }
-                        }
-                        
-                        if let token = env.foodicsToken, !token.isEmpty {
-                            // Show token preview (first 20 chars)
-                            HStack {
-                                Text("\(token.prefix(20))...")
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                Spacer()
-                            }
-                            .padding(8)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(6)
                         } else {
-                            Text("Token will be automatically synced from server during device activation")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(8)
-                                .background(Color.blue.opacity(0.05))
-                                .cornerRadius(6)
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.red)
+                                Text("Not Active")
+                                    .font(.footnote)
+                                    .foregroundColor(.red)
+                            }
                         }
                     }
-                    .padding(.vertical, 4)
                     
-                    Button("Sync catalog & prefetch images") { Task { await syncData() } }
-                        .disabled(env.foodicsToken == nil || env.foodicsToken?.isEmpty == true)
-                    
-                    Button("Clear Cache & Force Sync", role: .destructive) {
-                        Task {
-                            await clearCache()
-                            await syncData()
-                        }
+                    Button(action: { Task { await syncData() } }) {
+                        Label("Sync", systemImage: "arrow.triangle.2.circlepath")
                     }
-                } header: {
-                    Text("Catalog")
-                } footer: {
-                    Text("Import menu data from Foodics. Use 'Clear Cache' to force refresh Arabic category names.")
+                    .disabled(env.foodicsToken == nil || env.foodicsToken?.isEmpty == true || (activation.info?.subscription?.isExpired ?? false))
                 }
                 
-                Section("External Display") {
+                Section("EXTERNAL DISPLAY") {
                     Picker("Rotation", selection: $externalRotationRaw) {
                         ForEach(ExternalRotationMode.allCases) { mode in
                             Text(mode.title).tag(mode.rawValue)
                         }
                     }
-                }
-                
-                Section {
-                    Toggle("Enable Idle Poster", isOn: $idlePosterEnabled)
                     
-                    if idlePosterEnabled {
-                        Picker("Display Mode", selection: $posterModeRaw) {
-                            Text("Full-Screen Products").tag("fullscreen")
-                            Text("Category Menu Flip").tag("categories")
-                        }
-                        .pickerStyle(.segmented)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Idle timeout")
-                                Spacer()
-                                Text("\(Int(idleTimeout))s")
-                                    .foregroundColor(.secondary)
-                                    .monospacedDigit()
-                            }
-                            Slider(value: $idleTimeout, in: 5...60, step: 5)
-                                .tint(.accentColor)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(posterModeRaw == "fullscreen" ? "Page transition" : "Category transition")
-                                Spacer()
-                                Text("\(Int(posterFlipInterval))s")
-                                    .foregroundColor(.secondary)
-                                    .monospacedDigit()
-                            }
-                            Slider(value: $posterFlipInterval, in: 5...30, step: 5)
-                                .tint(.accentColor)
-                        }
-                    }
-                } header: {
-                    Text("Idle Poster")
-                } footer: {
-                    if idlePosterEnabled {
-                        if posterModeRaw == "fullscreen" {
-                            Text("Full-Screen: Shows a shuffled grid of all products, flipping pages at the set interval.")
-                        } else {
-                            Text("Category Menu: Shows the menu for each category, flipping through categories at the set interval.")
-                        }
-                    } else {
-                        Text("Show rotating product poster when idle. Configure timeout and page transition timing.")
-                    }
+                    Toggle("Poster", isOn: $idlePosterEnabled)
+                    
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showDeactivateConfirm = true
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        // Close settings (dismiss)
+                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let rootVC = windowScene.windows.first?.rootViewController {
+                            rootVC.dismiss(animated: true)
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showDeactivateConfirm) {
+                NavigationStack {
+                    VStack(spacing: 20) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.orange)
+                            .padding(.top, 40)
+                        
+                        Text("Deactivate Device")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("This will remove the device token and clear all activation data.")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Type 'delete' to confirm")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            TextField("", text: $deactivateConfirmText)
+                                .textFieldStyle(.roundedBorder)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        }
+                        .padding(.horizontal, 40)
+                        .padding(.top, 20)
+                        
+                        Spacer()
+                        
+                        VStack(spacing: 12) {
+                            Button(action: {
+                                deactivateDevice()
+                                deactivateConfirmText = ""
+                                showDeactivateConfirm = false
+                            }) {
+                                Text("Deactivate")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(deactivateConfirmText.lowercased() == "delete" ? Color.red : Color.gray)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                            .disabled(deactivateConfirmText.lowercased() != "delete")
+                            
+                            Button(action: {
+                                deactivateConfirmText = ""
+                                showDeactivateConfirm = false
+                            }) {
+                                Text("Cancel")
+                                    .fontWeight(.medium)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.gray.opacity(0.2))
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(10)
+                            }
+                        }
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 40)
+                    }
+                    .navigationBarTitleDisplayMode(.inline)
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
 
@@ -256,6 +274,12 @@ struct SettingsView: View {
     }
     
     private func syncData() async {
+        // Check if subscription is expired
+        if let subscription = activation.info?.subscription, subscription.isExpired {
+            print("[Settings] Sync blocked - subscription expired")
+            return
+        }
+        
         let client = CatalogStore()
         await client.syncAll(env: env)
         // Notify active catalog views to reload
@@ -269,6 +293,56 @@ struct SettingsView: View {
 
     private func refreshAdmin() async {
         await activation.updateFromManifest(env: env, app: app)
+    }
+    
+    private func deactivateDevice() {
+        // Clear all environment tokens and IDs
+        env.deviceToken = nil
+        env.foodicsToken = nil
+        env.tenantId = nil
+        env.tenantHostOverride = nil
+        
+        // Clear all cached data
+        try? LocalCache.delete("activation.json")
+        try? LocalCache.delete("tenant.json")
+        try? LocalCache.delete("categories.json")
+        try? LocalCache.delete("products.json")
+        try? LocalCache.delete("modifier_reference_table.json")
+        LocalCache.lastSyncDate = nil
+        
+        // Clear AppModel state
+        app.friendlyName = "OrderTech Device"
+        app.branchName = "No Branch"
+        UserDefaults.standard.removeObject(forKey: "OT.display.friendlyName")
+        UserDefaults.standard.removeObject(forKey: "OT.display.branchName")
+        
+        // Notify activation manager to clear its state
+        activation.tokenChanged(env: env, app: app)
+        
+        print("[Settings] Device deactivated - all data cleared")
+    }
+    
+    private func formatSubscriptionType(_ type: String) -> String {
+        let lowercased = type.lowercased()
+        switch lowercased {
+        case "ai":
+            return "AI"
+        case "basic":
+            return "Basic"
+        case "pro":
+            return "Pro"
+        case "trial":
+            return "Trial"
+        default:
+            return type.capitalized
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
     
     private func activateDevice() async {

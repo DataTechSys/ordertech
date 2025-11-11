@@ -784,6 +784,7 @@ private struct BillItemAppearance {
 private struct BillBoxView: View {
     @EnvironmentObject var env: EnvironmentStore
     @EnvironmentObject var catalog: CatalogStore
+    @EnvironmentObject var activation: ActivationManager
     @EnvironmentObject var orientation: OrientationModel
     @Environment(\.isExternalContext) private var isExternalContext
     let lines: [BasketLineUI]
@@ -796,6 +797,29 @@ private struct BillBoxView: View {
     var appearance: BillItemAppearance = BillItemAppearance()
     var body: some View {
         VStack(spacing: 0) {
+            // Subscription expiry warning at top right
+            if let subscription = activation.info?.subscription,
+               !subscription.isExpired,
+               subscription.daysRemaining <= 30 {
+                HStack {
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                        Text("\(subscription.daysRemaining) days left")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(subscription.daysRemaining <= 7 ? .red : .orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background((subscription.daysRemaining <= 7 ? Color.red : Color.orange).opacity(0.15))
+                    .cornerRadius(8)
+                }
+                .padding(.top, 6)
+                .padding(.trailing, 8)
+                .transition(.opacity)
+            }
+            
             // Syncing indicator at top right
             if catalog.isLoading {
                 HStack {
@@ -2512,32 +2536,33 @@ private struct ProductTile: View {
                 .fill(DT.surface)
                 .overlay(RoundedRectangle(cornerRadius: corner).stroke(DT.line, lineWidth: 1))
             
-            // Same vertical layout for both local and external displays
+            // English on top (bold), Arabic below (normal)
             VStack(spacing: 4) {
                 SquareAsyncImage(url: absoluteURL(product.image_url), cornerRadius: corner)
                     .frame(width: imageSide, height: imageSide)
                 VStack(spacing: 1) {
-                    if ar.isEmpty {
-                        Text(en)
-                            .font(.system(size: 14, weight: .semibold))
-                            .lineLimit(1)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.clear)
-                            .frame(width: imageSide)
-                    } else {
-                        Text(ar)
-                            .font(.system(size: 14, weight: .black))
-                            .lineLimit(1)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(DT.ink)
-                            .frame(width: imageSide)
-                    }
+                    // English name - bold and larger
                     Text(en)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 15, weight: .bold))
                         .lineLimit(1)
                         .multilineTextAlignment(.center)
                         .foregroundColor(DT.ink)
                         .frame(width: imageSide)
+                    
+                    // Arabic name - normal weight
+                    if !ar.isEmpty {
+                        Text(ar)
+                            .font(.system(size: 12, weight: .regular))
+                            .lineLimit(1)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(DT.ink.opacity(0.8))
+                            .frame(width: imageSide)
+                    } else {
+                        // Reserve space for consistent card height
+                        Text(" ")
+                            .font(.system(size: 12, weight: .regular))
+                            .frame(width: imageSide)
+                    }
                     HStack(spacing: 2) {
                         Text(String(format: "%.3f", product.price))
                             .font(.system(size: 13, weight: .semibold))

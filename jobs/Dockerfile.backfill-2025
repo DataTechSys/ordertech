@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install --omit=dev --no-audit --no-fund
+
+# Copy job script
+COPY jobs/foodics-backfill-2025.js ./
+
+# Make executable
+RUN chmod +x foodics-backfill-2025.js
+
+# Run the job
+CMD ["node", "foodics-backfill-2025.js"]

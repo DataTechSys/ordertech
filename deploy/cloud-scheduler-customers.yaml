@@ -1,0 +1,79 @@
+# Cloud Scheduler configuration for Customer Analytics sync
+# Syncs customer data 4 times daily (00:00, 06:00, 12:00, 18:00 AST)
+
+# To deploy:
+# gcloud scheduler jobs create http customer-analytics-sync \
+#   --location=me-central1 \
+#   --schedule="0 0,6,12,18 * * *" \
+#   --time-zone="Asia/Riyadh" \
+#   --uri="https://ordertech-715493130630.me-central1.run.app/api/customers/analytics/sync?mode=incremental" \
+#   --http-method=POST \
+#   --headers="X-Sync-Token=YOUR_SYNC_INTERNAL_TOKEN" \
+#   --attempt-deadline=600s \
+#   --max-retry-attempts=3 \
+#   --min-backoff=10s \
+#   --max-backoff=300s \
+#   --description="Customer analytics sync - runs 4x daily"
+
+# Full sync (manual trigger for initial backfill):
+# gcloud scheduler jobs create http customer-analytics-full-sync \
+#   --location=me-central1 \
+#   --schedule="0 2 * * 0" \
+#   --time-zone="Asia/Riyadh" \
+#   --uri="https://ordertech-715493130630.me-central1.run.app/api/customers/analytics/sync?mode=full" \
+#   --http-method=POST \
+#   --headers="X-Sync-Token=YOUR_SYNC_INTERNAL_TOKEN" \
+#   --attempt-deadline=1800s \
+#   --max-retry-attempts=2 \
+#   --min-backoff=60s \
+#   --max-backoff=600s \
+#   --description="Customer analytics full sync - runs weekly on Sunday 2AM"
+
+# Schedule breakdown:
+# - 00:00 AST (9:00 PM UTC previous day) - Post-midnight sync
+# - 06:00 AST (3:00 AM UTC) - Morning pre-opening sync
+# - 12:00 AST (9:00 AM UTC) - Midday sync
+# - 18:00 AST (3:00 PM UTC) - Evening sync
+
+# Environment variables required on Cloud Run service:
+# - SYNC_INTERNAL_TOKEN: Secret token for authenticating sync requests
+# - DATABASE_URL: PostgreSQL connection string
+# - FOODICS_API_BASE: https://api.foodics.com/v5
+# - FOODICS_API_TOKEN: Foodics API token
+# - DATATECH_DB_HOST: 34.72.158.144
+# - DATATECH_DB_PORT: 5432
+# - DATATECH_DB_NAME: postgres
+# - DATATECH_DB_USER: ordertech
+# - DATATECH_DB_PASS: Ordertech.2020
+# - TZ: Asia/Riyadh
+
+# Manual trigger (for testing):
+# curl -X POST \
+#   -H "X-Sync-Token: YOUR_SYNC_INTERNAL_TOKEN" \
+#   "https://ordertech-715493130630.me-central1.run.app/api/customers/analytics/sync?mode=incremental"
+
+# Check sync health:
+# curl "https://ordertech-715493130630.me-central1.run.app/api/customers/analytics/health"
+
+# Monitoring:
+# - Check Cloud Logging for sync job logs: [Customer Analytics]
+# - Monitor sync completion times (should be < 60 seconds for incremental)
+# - Alert if sync fails 3+ times consecutively
+# - Alert if last_sync_time > 8 hours old
+
+# Performance expectations:
+# - Incremental sync (3-day window): 10-30 seconds
+# - Full sync (2-year backfill): 5-15 minutes
+# - Database impact: minimal (uses batch upserts with indexes)
+# - API calls: ~50-200 per incremental sync (Foodics + DataTech)
+
+# Deployment steps:
+# 1. Set SYNC_INTERNAL_TOKEN in Cloud Run environment (use Secret Manager)
+# 2. Deploy the scheduler jobs using the gcloud commands above
+# 3. Verify first run: gcloud scheduler jobs run customer-analytics-sync --location=me-central1
+# 4. Check logs: gcloud logging read "resource.type=cloud_run_revision AND textPayload:\"Customer Analytics\"" --limit=50
+# 5. Verify dashboard at: https://foodics.ordertech.me/customers
+
+# Cleanup (if needed):
+# gcloud scheduler jobs delete customer-analytics-sync --location=me-central1
+# gcloud scheduler jobs delete customer-analytics-full-sync --location=me-central1

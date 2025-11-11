@@ -143,134 +143,77 @@ struct InlineActivationPageView: View {
         defer { isSubmitting = false }
         let company = companyId.filter { $0.isNumber }
         let code = activationCode.filter { $0.isNumber }
+        
         do {
-            // Step 1: Try to register/claim via current base (env.baseURL) — supports local core-api token issuance
-            do {
-                var regComps = URLComponents(url: env.baseURL, resolvingAgainstBaseURL: false) ?? URLComponents()
-                regComps.path = "/device/pair/register"
-                if let regURL = regComps.url {
-                    var reg = URLRequest(url: regURL)
-                    reg.httpMethod = "POST"
-                    reg.setValue("application/json", forHTTPHeaderField: "accept")
-                    reg.setValue("application/json", forHTTPHeaderField: "content-type")
-                    if !company.isEmpty { reg.setValue(company, forHTTPHeaderField: "x-tenant-id") }
-                    let payload: [String: Any] = [
-                        "code": code,
-                        "role": "display",
-                        "tenant_id": company
-                    ]
-                    reg.httpBody = try JSONSerialization.data(withJSONObject: payload)
-                    let (data, resp) = try await URLSession.shared.data(for: reg)
-                    if let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            let status = (obj["status"] as? String ?? "").lowercased()
-                            if status == "claimed", let token = obj["device_token"] as? String, !token.isEmpty {
-                                let tidObj = (obj["tenant_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                let tid = (tidObj?.isEmpty == false) ? tidObj! : company
-                                await MainActor.run { env.tenantId = tid; env.deviceToken = token; success = true }
-                                await activation.updateAfterActivation(env: env, app: app)
-                                return
-                            }
-                        }
-                    }
-                }
-            } catch {
-                // ignore; will try app host below
+            // Use Foodics activation endpoint
+            guard let url = URL(string: "https://app.ordertech.me/api/foodics/devices/activate") else {
+                errorMsg = "Invalid URL"
+                return
             }
-            // Step 1b: Try Admin app host as fallback
-            do {
-                if let regURL = URL(string: "https://app.ordertech.me/device/pair/register") {
-                    var reg = URLRequest(url: regURL)
-                    reg.httpMethod = "POST"
-                    reg.setValue("application/json", forHTTPHeaderField: "accept")
-                    reg.setValue("application/json", forHTTPHeaderField: "content-type")
-                    if !company.isEmpty { reg.setValue(company, forHTTPHeaderField: "x-tenant-id") }
-                    let payload: [String: Any] = [
-                        "code": code,
-                        "role": "display",
-                        "tenant_id": company
-                    ]
-                    reg.httpBody = try JSONSerialization.data(withJSONObject: payload)
-                    let (data, resp) = try await URLSession.shared.data(for: reg)
-                    if let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            let status = (obj["status"] as? String ?? "").lowercased()
-                            if status == "claimed", let token = obj["device_token"] as? String, !token.isEmpty {
-                                let tidObj = (obj["tenant_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                let tid = (tidObj?.isEmpty == false) ? tidObj! : company
-                                await MainActor.run { env.tenantId = tid; env.deviceToken = token; success = true }
-                                await activation.updateAfterActivation(env: env, app: app)
-                                return
-                            }
-                        }
-                    }
-                }
-            } catch {
-                // ignore; will poll status
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "content-type")
+            request.setValue("application/json", forHTTPHeaderField: "accept")
+            
+            let payload: [String: Any] = [
+                "company_id": company,
+                "activation_code": code
+            ]
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                errorMsg = "Invalid response"
+                return
             }
-
-            // Step 2: Poll status on env.baseURL, then fallback to Admin host
-            var attempts = 0
-            while attempts < 40 {
-                attempts += 1
-                // Try base first
-                do {
-                    var comps = URLComponents(url: env.baseURL, resolvingAgainstBaseURL: false) ?? URLComponents()
-                    comps.path = "/device/pair/\(code)/status"
-                    if let url = comps.url {
-                        var req = URLRequest(url: url)
-                        req.httpMethod = "GET"
-                        if !company.isEmpty { req.setValue(company, forHTTPHeaderField: "x-tenant-id") }
-                        req.setValue("application/json", forHTTPHeaderField: "accept")
-                        let (data, resp) = try await URLSession.shared.data(for: req)
-                        if let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                            let status = (obj?["status"] as? String ?? "").lowercased()
-                            let role = (obj?["role"] as? String ?? "").lowercased()
-                            if !role.isEmpty && role != "display" { errorMsg = "This code is for a different device role (\(role.uppercased()))."; break }
-                            if status == "claimed", let token = obj?["device_token"] as? String, !token.isEmpty {
-                                let tidObj = (obj?["tenant_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                let tid = (tidObj?.isEmpty == false) ? tidObj! : company
-                                await MainActor.run { env.tenantId = tid; env.deviceToken = token; success = true }
-                                await activation.updateAfterActivation(env: env, app: app)
-                                return
-                            }
-                            if status == "expired" { errorMsg = "Code expired — generate a new code in Admin and try again."; break }
-                        }
-                    }
-                } catch {
-                    // ignore; try admin host
-                }
-                // Fallback: Admin host
-                do {
-                    var comps = URLComponents(string: "https://app.ordertech.me/device/pair/\(code)/status")!
-                    var req = URLRequest(url: comps.url!)
-                    req.httpMethod = "GET"
-                    if !company.isEmpty { req.setValue(company, forHTTPHeaderField: "x-tenant-id") }
-                    req.setValue("application/json", forHTTPHeaderField: "accept")
-                    let (data, resp) = try await URLSession.shared.data(for: req)
-                    if let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                        let status = (obj?["status"] as? String ?? "").lowercased()
-                        let role = (obj?["role"] as? String ?? "").lowercased()
-                        if !role.isEmpty && role != "display" { errorMsg = "This code is for a different device role (\(role.uppercased()))."; break }
-                        if status == "claimed", let token = obj?["device_token"] as? String, !token.isEmpty {
-                            let tidObj = (obj?["tenant_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let tid = (tidObj?.isEmpty == false) ? tidObj! : company
-                            await MainActor.run { env.tenantId = tid; env.deviceToken = token; success = true }
-                            await activation.updateAfterActivation(env: env, app: app)
-                            return
-                        }
-                        if status == "expired" { errorMsg = "Code expired — generate a new code in Admin and try again."; break }
-                    }
-                } catch {
-                    // ignore
-                }
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            
+            print("[InlineActivation] Response status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("[InlineActivation] Response body: \(responseString)")
             }
-            if success == false { errorMsg = "Still pending. Ask Admin to link this code to this device." }
+            
+            if httpResponse.statusCode == 200 {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let status = json["status"] as? String,
+                   status.lowercased() == "claimed",
+                   let token = json["device_token"] as? String {
+                    print("[InlineActivation] Activation successful")
+                    
+                    // Extract Foodics token if available
+                    let foodicsToken = json["foodics_token"] as? String
+                    
+                    await MainActor.run {
+                        env.tenantId = company
+                        env.deviceToken = token
+                        if let foodicsToken = foodicsToken, !foodicsToken.isEmpty {
+                            env.foodicsToken = foodicsToken
+                            print("[InlineActivation] Foodics token saved: \(foodicsToken.prefix(20))...")
+                        }
+                        success = true
+                    }
+                    await activation.updateAfterActivation(env: env, app: app)
+                    return
+                } else {
+                    print("[InlineActivation] JSON parsing failed or status != claimed")
+                }
+            } else if httpResponse.statusCode == 404 {
+                errorMsg = "Invalid Company ID or Activation Code"
+                return
+            } else if httpResponse.statusCode == 400 {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = json["error"] as? String {
+                    errorMsg = error
+                } else {
+                    errorMsg = "Invalid codes"
+                }
+                return
+            }
+            
+            errorMsg = "Activation failed. Please check your codes and try again."
         } catch {
-            errorMsg = "Activation failed: \(error.localizedDescription)"
+            errorMsg = "Error: \(error.localizedDescription)"
         }
     }
 }
