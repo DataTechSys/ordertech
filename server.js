@@ -2027,6 +2027,7 @@ if (REQUIRE_DB_EFFECTIVE && !HAS_DB) return res.status(503).json({ error: 'db_re
       and coalesce(p.active, true)
       and coalesce(c.active, true)
       and coalesce(c.deleted, false) = false
+      and p.type IN ('standard', 'combo')
       ${category_name ? 'and c.name=$2' : ''}
       order by c.name, p.name
     `;
