@@ -9,11 +9,11 @@
   },
   
   "database": {
-    "type": "postgresql",
+    "type": "mysql",
     "connection_method": "cloud_sql_proxy",
     "proxy": {
       "host": "127.0.0.1",
-      "port": 6555,
+      "port": 6556,
       "description": "Cloud SQL Auth Proxy - ONLY database connection method"
     },
     "cloud_instance": {
@@ -104,7 +104,7 @@
         "service": "ordertech"
       },
       "cloud_sql": {
-        "name": "Cloud SQL PostgreSQL Database",
+        "name": "Cloud SQL MySQL Database",
         "connection_name": "smart-order-469705:me-central1:ordertech-db",
         "type": "cloud-sql",
         "region": "me-central1",

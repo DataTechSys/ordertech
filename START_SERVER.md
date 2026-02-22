@@ -72,8 +72,8 @@ If you see 401 errors in the admin panel:
 ### Common Issues
 
 - **Server not loading .env.local**: Always use `-r dotenv/config` flag
-- **Port conflicts**: Check if port 3000 is already in use
-- **Database errors**: Check PostgreSQL connection if database features are needed
+- **Port conflicts**: Check if port 8080 is already in use
+- **Database errors**: Check MySQL connection via Cloud SQL Proxy on port 6556
 
 ## 📝 Development Notes
 

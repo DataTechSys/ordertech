@@ -36,15 +36,16 @@ node start.js --validate
 
 ### Database Strategy
 - **Method**: Cloud SQL Proxy ONLY
-- **Local Connection**: `127.0.0.1:6555`
+- **Database Engine**: MySQL 8.0
+- **Local Connection**: `127.0.0.1:6556`
 - **Cloud Instance**: `smart-order-469705:me-central1:ordertech-db`
-- **Local PostgreSQL**: 🗑️ **COMPLETELY REMOVED** (freed ~140MB disk space)
-- **Port 5432**: ❌ **FORBIDDEN** (reserved but unused)
+- **Local PostgreSQL**: 🗑️ **NOT USED** (project uses MySQL)
+- **Port 5432**: ❌ **FORBIDDEN** (PostgreSQL port - not used)
 
 ### Service Ports (Standardized)
 ```
 🖥️  8080  →  OrderTech API Server
-💾 6555  →  Cloud SQL Proxy  
+💾 6556  →  Cloud SQL Proxy (MySQL)
 📦 6379  →  Redis
 🗄️  9000  →  MinIO API
 🖥️  9001  →  MinIO Console
@@ -52,7 +53,8 @@ node start.js --validate
 ❌ FORBIDDEN PORTS:
    3000  →  Old default port
    3001  →  Old dashboard server  
-   5432  →  Local PostgreSQL
+   5432  →  PostgreSQL (NOT USED - project uses MySQL)
+   6555  →  Wrong proxy port (use 6556)
 ```
 
 ### Monitored Services (Auto-configured)
@@ -82,7 +84,7 @@ Required in `.env.local`:
 ```bash
 PORT=8080                 # Server port (enforced)
 DB_HOST=127.0.0.1        # Proxy host
-DB_PORT=6555             # Proxy port  
+DB_PORT=6556             # Proxy port (MySQL)
 DB_USER=ordertech        # Database user
 DB_PASSWORD=Ordertech.2020   # Database password
 DB_NAME=ordertech        # Database name
@@ -113,10 +115,10 @@ pkill -f "node server.js"
 ### Database Issues  
 ```bash
 # Verify Cloud SQL Proxy
-lsof -i :6555
+lsof -i :6556
 
 # Start if needed
-cloud-sql-proxy smart-order-469705:me-central1:ordertech-db --port=6555
+cloud-sql-proxy smart-order-469705:me-central1:ordertech-db --port=6556
 ```
 
 ### Configuration Problems

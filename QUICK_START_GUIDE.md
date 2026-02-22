@@ -48,7 +48,8 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 ### **Database Connection Test**
 ```bash
-psql "postgresql://ordertech:Ordertech.2020@localhost:6555/ordertech" -c "SELECT current_database();"
+mysql -h 127.0.0.1 -P 6556 -u ordertech -p ordertech
+# Password: Ordertech.2020
 ```
 
 ### **API Response Test**  
@@ -98,7 +99,7 @@ docker compose restart
 ### **Database Connection Issues**
 ```bash
 # Check Cloud SQL Proxy
-lsof -i :6555
+lsof -i :6556
 
 # Verify database credentials
 gcloud secrets versions access latest --secret=DATABASE_URL --project=smart-order-469705
@@ -160,8 +161,8 @@ curl -s "https://ordertech-64v5pfkeba-ww.a.run.app/webrtc/config" | jq '.sfu.ena
 ## 🔑 Key Credentials
 
 ### **Local Development**
-- **Database**: `ordertech:Ordertech.2020@localhost:6555`
-- **pgAdmin**: `admin@ordertech.com:devpassword`
+- **Database**: `ordertech:Ordertech.2020@127.0.0.1:6556` (MySQL)
+- **pgAdmin**: `admin@ordertech.com:devpassword` (for reference only)
 - **MinIO**: `ordertech-dev:ordertech-dev-secret`
 
 ### **Production Secrets** (Google Secret Manager)
