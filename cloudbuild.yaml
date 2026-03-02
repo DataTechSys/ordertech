@@ -105,7 +105,7 @@ steps:
         '--platform','managed',
         '--port','3000',
         '--timeout','3600',
-        '--set-secrets','DATABASE_URL=${_DB_SECRET}:latest,LIVEKIT_API_KEY=${_LK_KEY_SECRET}:latest,LIVEKIT_API_SECRET=${_LK_SEC_SECRET}:latest,OPENAI_API_KEY=${_OPENAI_API_SECRET}:latest,OPENAI_ASSISTANT_ID=${_OPENAI_ASSISTANT_SECRET}:latest',
+        '--set-secrets','DATABASE_URL=${_DB_SECRET}:latest,LIVEKIT_API_KEY=${_LK_KEY_SECRET}:latest,LIVEKIT_API_SECRET=${_LK_SEC_SECRET}:latest,OPENAI_API_KEY=${_OPENAI_API_SECRET}:latest,OPENAI_ASSISTANT_ID=${_OPENAI_ASSISTANT_SECRET}:latest,FOODICS_API_TOKEN=${_FOODICS_TOKEN_SECRET}:latest',
         '--add-cloudsql-instances','${_DB_INSTANCE}',
         '--update-env-vars','ASSETS_BUCKET=${_ASSETS_BUCKET}',
         '--update-env-vars','TENANTS_UI_BASE=https://storage.googleapis.com/${_ASSETS_BUCKET}/tenants/',
@@ -120,7 +120,7 @@ images:
 substitutions:
   _REGION: me-central1
   _AR_LOCATION: me-central1
-  _SERVICE: ordertech
+  _SERVICE: api-ordertech-me
   _MIGRATION_JOB: migrate-ordertech
   _DB_SECRET: DATABASE_URL
   _DB_INSTANCE: smart-order-469705:me-central1:ordertech-db
@@ -129,3 +129,4 @@ substitutions:
   _LK_SEC_SECRET: livekit-api-secret
   _OPENAI_API_SECRET: openai-api-key
   _OPENAI_ASSISTANT_SECRET: openai-assistant-id
+  _FOODICS_TOKEN_SECRET: FOODICS_TOKEN
