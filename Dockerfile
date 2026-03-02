@@ -31,5 +31,6 @@ USER nodejs
 
 # EXPOSE directive is informational only; Cloud Run uses PORT env var
 
-# Use npm start for flexibility (can be overridden if needed)
-CMD ["npm", "start"]
+# Run node directly to avoid npm overhead and see clearer errors
+# Echo statement will confirm container is starting
+CMD ["sh", "-c", "echo '>>> Container starting, PORT='$PORT && node server.js"]
