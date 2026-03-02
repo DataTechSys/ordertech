@@ -12,10 +12,15 @@ try {
 
 // Startup diagnostics
 try {
+  console.log('='.repeat(60));
   console.log('[boot] Starting OrderTech server... PORT env=', process.env.PORT);
   console.log('[boot] NODE_ENV=', process.env.NODE_ENV);
   console.log('[boot] JOB_COMMAND=', process.env.JOB_COMMAND);
   console.log('[boot] REQUIRE_DB=', process.env.REQUIRE_DB);
+  console.log('[boot] DATABASE_URL=', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+  console.log('[boot] DB_HOST=', process.env.DB_HOST);
+  console.log('[boot] DB_NAME=', process.env.DB_NAME);
+  console.log('='.repeat(60));
   process.on('exit', (code) => { try { console.log('[boot] Process exit', code); } catch {} });
   process.on('uncaughtException', (err) => { try { console.error('[boot] Uncaught exception', err); } catch {} });
   process.on('unhandledRejection', (reason) => { try { console.error('[boot] Unhandled rejection', reason); } catch {} });
@@ -13249,12 +13254,21 @@ if (HAS_DB) {
     try { await ensureFoodicsSchema(); } catch (e) { console.error('ensureFoodicsSchema failed', e); }
     // Fail fast if DB is required but unreachable
     try { if (REQUIRE_DB_EFFECTIVE) { await db('select 1'); } } catch (e) {
-      try { console.error('DB connectivity check failed at startup; exiting'); } catch {}
-      try { process.exit(1); } catch {}
+      console.error('[FATAL] DB connectivity check failed at startup');
+      console.error('[FATAL] Error:', e.message);
+      console.error('[FATAL] HAS_DB:', HAS_DB);
+      console.error('[FATAL] REQUIRE_DB:', REQUIRE_DB);
+      console.error('[FATAL] REQUIRE_DB_EFFECTIVE:', REQUIRE_DB_EFFECTIVE);
+      console.error('[FATAL] Exiting process');
+      process.exit(1);
     }
   } else if (REQUIRE_DB_EFFECTIVE) {
-    try { console.error('DB required but configuration missing; exiting'); } catch {}
-    try { process.exit(1); } catch {}
+    console.error('[FATAL] DB required but configuration missing');
+    console.error('[FATAL] HAS_DB:', HAS_DB);
+    console.error('[FATAL] REQUIRE_DB:', REQUIRE_DB);
+    console.error('[FATAL] DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+    console.error('[FATAL] Exiting process');
+    process.exit(1);
   }
   try {
     if (HAS_DB) {
