@@ -116,7 +116,9 @@ app.use(express.urlencoded({ extended: true }));
 // admin.ordertech.me serves admin-dashboard.html at root
 // MUST BE BEFORE OTHER ROUTES
 app.use((req, res, next) => {
-  const host = (req.get('host') || '').toLowerCase();
+  // Check X-Forwarded-Host (Load Balancer) first, then fall back to Host header
+  const forwardedHost = (req.get('x-forwarded-host') || '').toLowerCase();
+  const host = (forwardedHost || req.get('host') || '').toLowerCase();
   
   // Admin subdomain: serve admin dashboard
   if (host.startsWith('admin.ordertech.me') || host === 'admin.ordertech.me:8080') {
