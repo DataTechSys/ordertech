@@ -481,7 +481,14 @@ addRoute('get', '/display/status', async (req, res) => {
 });
 
 // Import and initialize enhanced device status management
-const DeviceStatusManager = require('./server-device-status');
+// Temporarily disabled due to PostgreSQL dependency
+let DeviceStatusManager = null;
+try {
+  DeviceStatusManager = require('./server-device-status');
+  console.log('[Server] DeviceStatusManager loaded');
+} catch (e) {
+  console.warn('[Server] DeviceStatusManager not available (requires PostgreSQL LISTEN/NOTIFY):', e.message);
+}
 let deviceStatusManager = null; // Will be initialized after WebSocket server setup
 
 // Ensure enhanced device status schema exists (idempotent)
