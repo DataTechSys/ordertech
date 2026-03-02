@@ -120,6 +120,11 @@ app.use((req, res, next) => {
   const forwardedHost = (req.get('x-forwarded-host') || '').toLowerCase();
   const host = (forwardedHost || req.get('host') || '').toLowerCase();
   
+  // Debug logging for admin requests
+  if (req.path === '/' && (host.includes('admin') || forwardedHost.includes('admin'))) {
+    console.log('[Admin Debug] Host:', req.get('host'), 'X-Forwarded-Host:', req.get('x-forwarded-host'), 'Path:', req.path, 'Resolved host:', host);
+  }
+  
   // Admin subdomain: serve admin dashboard
   if (host.startsWith('admin.ordertech.me') || host === 'admin.ordertech.me:8080') {
     const originalPath = req.path;
