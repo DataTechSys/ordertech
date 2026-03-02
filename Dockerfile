@@ -2,7 +2,6 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=8080
 
 # Stage 1: Install dependencies
 FROM base AS deps
@@ -18,7 +17,6 @@ COPY . .
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=8080
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
@@ -31,7 +29,7 @@ COPY --from=app --chown=nodejs:nodejs /app ./
 # Switch to non-root user
 USER nodejs
 
-EXPOSE 8080
+# EXPOSE directive is informational only; Cloud Run uses PORT env var
 
 # Use npm start for flexibility (can be overridden if needed)
 CMD ["npm", "start"]
