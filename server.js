@@ -108,9 +108,23 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Subdomain routing: foodics.ordertech.me serves /foodics content at root
+// admin.ordertech.me serves admin-dashboard.html at root
 // MUST BE BEFORE OTHER ROUTES
 app.use((req, res, next) => {
   const host = (req.get('host') || '').toLowerCase();
+  
+  // Admin subdomain: serve admin dashboard
+  if (host.startsWith('admin.ordertech.me') || host === 'admin.ordertech.me:8080') {
+    const originalPath = req.path;
+    // Root path serves admin dashboard
+    if (originalPath === '/') {
+      // Will be handled by route below that serves admin-dashboard.html
+      req._isAdminSubdomain = true;
+    }
+    // Admin subdirectory paths are already correct (/admin/*)
+  }
+  
+  // Foodics subdomain: rewrite paths to /foodics prefix
   if (host.startsWith('foodics.ordertech.me') || host === 'foodics.ordertech.me:8080') {
     const originalPath = req.path;
     // Skip rewriting for API routes, static assets, and already-prefixed paths
@@ -11310,6 +11324,8 @@ app.use('/fonts', express.static(path.join(__dirname, 'fonts')));
 app.use('/sidebar', express.static(path.join(__dirname, 'sidebar')));
 // Expose CSV data (e.g., top_sellers.csv) for frontend consumption
 app.use('/data', express.static(path.join(__dirname, 'data')));
+// Serve admin dashboard static assets (marketing subdirectories, etc.)
+app.use('/admin', express.static(path.join(__dirname, 'admin')));
 // Kiosk auto-update feed (Electron generic provider) — currently served from local folder (requires redeploy per release)
 try { fs.mkdirSync(path.join(__dirname, 'kiosk', 'win'), { recursive: true }); } catch {}
 app.use('/kiosk/win', express.static(path.join(__dirname, 'kiosk', 'win')));
@@ -11380,7 +11396,19 @@ addRoute('get', '/platform/admins/', (_req, res) => res.sendFile(path.join(__dir
 // Friendly aliases for cashier/display
 addRoute('get', /^\/drive\/?$/,  (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
 addRoute('get', '/drive/', (_req, res) => res.sendFile(path.join(__dirname, 'drive', 'index.html')));
-addRoute('get', '/', (_req, res) => res.sendFile(path.join(__dirname, 'admin-dashboard.html')));
+addRoute('get', '/', (req, res) => {
+  // Serve admin dashboard for admin.ordertech.me subdomain or default
+  if (req._isAdminSubdomain) {
+    try {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      res.set('Last-Modified', new Date().toUTCString());
+      res.set('ETag', `"${Date.now()}"`);
+    } catch {}
+  }
+  return res.sendFile(path.join(__dirname, 'admin-dashboard.html'));
+});
 // Direct access to admin HTML files
 addRoute('get', '/admin-dashboard.html', (_req, res) => {
   try {
