@@ -125,15 +125,14 @@ app.use((req, res, next) => {
     console.log('[Admin Debug] Host:', req.get('host'), 'X-Forwarded-Host:', req.get('x-forwarded-host'), 'Path:', req.path, 'Resolved host:', host);
   }
   
-  // Admin subdomain: serve admin dashboard
+  // Admin subdomain: all paths work as-is (routes like /login, /admin/*, etc. are already defined)
   if (host.startsWith('admin.ordertech.me') || host === 'admin.ordertech.me:8080') {
     const originalPath = req.path;
     // Root path serves admin dashboard
     if (originalPath === '/') {
-      // Will be handled by route below that serves admin-dashboard.html
       req._isAdminSubdomain = true;
     }
-    // Admin subdirectory paths are already correct (/admin/*)
+    // All other paths like /login, /admin/*, etc. work as-is without rewriting
   }
   
   // Foodics subdomain: rewrite paths to /foodics prefix

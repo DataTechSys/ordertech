@@ -1,6 +1,9 @@
 # Keep Docker build context minimal and fast for OrderTech Cloud Run deployment
+# Optimized to reduce deployment time by excluding unnecessary files
 
-# VCS / Editor
+# ============================================================================
+# VCS / Editor / OS
+# ============================================================================
 .dockerignore
 .gcloudignore
 .git
@@ -11,12 +14,14 @@
 .warp
 *.swp
 *.swo
+.DS_Store
 
+# ============================================================================
 # Dependencies and caches (will be installed fresh in container)
+# ============================================================================
 node_modules
 **/node_modules
 **/.cache
-**/.DS_Store
 npm-debug.log*
 yarn-error.log*
 .pnpm-store
@@ -25,13 +30,25 @@ yarn-error.log*
 **/.vite
 **/.next/cache
 
-# Documentation and ops inventories
-docs
-inventory
+# ============================================================================
+# Large projects and assets (NOT needed for Cloud Run)
+# ============================================================================
+# AI Assistant project (4.5GB) - separate application
+koobs-ai-assistant
+# C++ Whisper library (219MB) - not needed for web service
+whisper.cpp
+# Static media assets - should be served from Google Cloud Storage
+images
+photos
+data
+public/images
 
+# ============================================================================
 # Build outputs (will be rebuilt in container)
+# ============================================================================
 build
 dist
+out
 .out
 .next
 coverage
@@ -39,13 +56,16 @@ coverage
 **/dist
 **/coverage
 
-# Non-service apps and native projects (not needed for web service)
+# ============================================================================
+# Native projects and apps (not needed for web service)
+# ============================================================================
 CashierApp
 DisplayApp
 ios-cashier
 ios
 Archive
 OrderTechCore
+Sources
 *.xcodeproj
 *.xcworkspace
 *.xcuserdatad
@@ -62,73 +82,300 @@ DerivedData
 *.dSYM
 macos
 
-# Kiosk artifacts (not needed for web service)
+# Kiosk artifacts
 kiosk
 kiosk-shell
 
-# LARGE EXCLUSIONS: Heavy projects and assets
-# AI Assistant project (4.5GB) - separate application
-koobs-ai-assistant
-# C++ Whisper library (219MB) - not needed for web service
-whisper.cpp
-# Static media assets (111MB total) - should be served from Google Cloud Storage
-images
-photos
-data
-# Keep only essential public assets that can't be moved to GCS yet
-# public/images - commented out for now, review if these are essential
-
-# Logs, temp, and dev files
+# ============================================================================
+# Backups, logs, temp files (1GB+ of unnecessary data)
+# ============================================================================
+.backups
+backup
+server.js.backup
 logs
+.logs
 *.log
 tmp
+temp_audio
 nohup.out
-.logs
 .pid
+*.pid
 server_data
+_pginfo
 
-# Local development and environment files
-docker-compose.yml
+# ============================================================================
+# Development and unused directories
+# ============================================================================
+dev
+docs
+inventory
+__OLD__
+DriveWeb
+sidebar
+posters
+profile
+signup
+start-trial
+verify-email
+web
+monitoring
+reports
+
+# ============================================================================
+# Static HTML UI directories (using iOS apps instead)
+# Exclude until needed - can re-enable specific ones later
+# Note: admin directory is now included for consolidated admin dashboard
+# ============================================================================
+drive
+products
+tenants
+categories
+modifiers
+orders
+company
+users
+roles
+branches
+devices
+billing
+poster
+messages
+platform
+# login - INCLUDED: login page needed for admin access
+cashier
+
+# ============================================================================
+# Environment and secrets
+# ============================================================================
 .env*
 .envrc
 *.local
 cloud-sql-proxy
+cloud-sql-proxy*
+cloud_sql_proxy*
 
+# ============================================================================
 # Test files
+# ============================================================================
 test
 **/*.test.js
 **/*.spec.js
 
-# --------------------------------------------------------------------
-# Deployment optimization (Cloud Run): Exclude large/static artifacts
-# These are either hosted on GCS bucket "ordertech.me" or not needed
-# at runtime. Reduces Docker build context and speeds up deployments.
-# Added: ~60MB reduction (public/images 25MB, cloud-sql-proxy 31MB, fonts 1.2MB, etc.)
-# --------------------------------------------------------------------
-
-# 1) Static images served from GCS bucket
-public/images
-
-# 2) Local dev database proxy tool (not needed in Cloud Run)
-# Cloud Run uses connectors/managed auth for Cloud SQL connection
-cloud-sql-proxy*
-cloud_sql_proxy*
-
-# 3) Fonts (can be served via CDN/GCS in future)
+# ============================================================================
+# Fonts (can be served via CDN/GCS in future)
+# ============================================================================
 fonts
 public/fonts
 
-# 4) Backups and temp files (not needed in production container)
-backup
-.backups
-*.backup
-server.js.backup
+# ============================================================================
+# Local development files
+# ============================================================================
+docker-compose.yml
 
-# 5) Root-level sample/test image files (dev/test only)
-# These are not needed in production containers
+# ============================================================================
+# Root-level docs and data files (exclude all, keep only essential configs)
+# ============================================================================
+/*.md
+/*.sql
+/*.csv
+
+# Root-level media files (exclude test/sample files)
 /poster-defualt.png
 /ordertech.png
-/iced-americano.jpg
-/Black-Spanish.jpg
-/placeholder.jpg
 /test-image.png
+/placeholder.jpg
+/Black-Spanish.jpg
+/iced-americano.jpg
+/*.mp3
+/*.wav
+/*.ogg
+
+# ============================================================================
+# Explicit root-level JS file exclusions (keep only 6 runtime files)
+# Excluding 146+ test/dev/import scripts
+# ============================================================================
+/ai-endpoints.js
+/backfill_branch_data.js
+/bulk_import_customers.js
+/bulk_import_orders.js
+/check-product-match.js
+/check-real-products-today.js
+/check-remote-items.js
+/check-server-config.js
+/check-tenants-and-create-device.js
+/check_devices_in_db.js
+/check_foodics_api_fields.js
+/check_foodics_order_structure.js
+/check_foodics_skus.js
+/check_foodics_statuses.js
+/check_livekit_rooms.js
+/check_local_routes.js
+/check_modifier_links.js
+/check_order_types.js
+/check_orders_data.js
+/check_product_schema.js
+/check_rooms.js
+/check_routes.js
+/check_rtc_rooms.js
+/check_today_orders.js
+/cleanup_branches.js
+/cleanup_devices.js
+/convert_fouzi_skus_sequential.js
+/convert_mysql_to_postgres.js
+/create-production-display.js
+/create_activation_codes.js
+/create_d2d_devices.js
+/create_test_relationships.js
+/debug-displays.js
+/debug-foodics-import.js
+/debug_koobs_options_issue.js
+/debug_modifier_relationships.js
+/debug_modifiers.js
+/debug_product_lookup.js
+/debug_sync_issue.js
+/debug_user_access.js
+/diagnose_fouzi_images_api.js
+/diagnose_koobs_sync_deep.js
+/direct_csv_import.js
+/explore-foodics-api.js
+/final_modifier_sync.js
+/fix_fouzi_images.js
+/fix_koobs_links.js
+/fix_koobs_options_direct.js
+/fix_product_schema.js
+/fix_uploaded_images.js
+/get_50_customers.js
+/get_50_orders.js
+/get_firebase_token.js
+/grant_koobs_admin.js
+/import_50_customers.js
+/import_50_orders.js
+/import_all_foodics_products.js
+/import_all_orders.js
+/import_all_orders_with_items.js
+/import_foodics_products.js
+/import_foodics_sales_console.js
+/import_from_csv.js
+/import_koobs_sales.js
+/import_month_csv.js
+/import_months.js
+/import_order_items.js
+/import_order_items_overnight.js
+/import_product_modifiers_auth.js
+/import_product_modifiers_db.js
+/import_real_foodics_sales.js
+/insert_sample_orders.js
+/inspect_foodics_structure.js
+/keep-displays-online.js
+/local-order-handler.js
+/manual_grant_owner.js
+/migrate_fouzi_images.js
+/mock-api.js
+/mock_server.js
+/quick_fix.js
+/quick_sample.js
+/recreate_foodics_relationships.js
+/recreate_foodics_relationships_fixed.js
+/redirect-patch.js
+/register_devices.js
+/reset_branch_rooms.js
+/resync_today_orders.js
+/run_foodics_sync.js
+/run_foodics_sync_fixed.js
+/sample_data_endpoint.js
+/server-display-status-endpoint.js
+/server-integration-patch.js
+/setup_foodics_cloud.js
+/setup_foodics_token.js
+/simple-presence-test.js
+/simple_modifier_sync.js
+/smart_foodics_import.js
+/sw.js
+/sync-devices-to-local.js
+/sync-products-from-api.js
+/sync_foodics_orders.js
+/sync_from_remote_db.js
+/sync_koobs_options.js
+/test-ai-endpoints.js
+/test-cashier-token.js
+/test-checkout-overlay.js
+/test-create-devices.js
+/test-device-presence.js
+/test-foodics-import.js
+/test-foodics-items.js
+/test-koobs-foodics.js
+/test-live-devices.js
+/test-presence-displays.js
+/test-presence.js
+/test-products-include.js
+/test-real-ai.js
+/test-smtp.js
+/test-startup.js
+/test_admin_api_arabic.js
+/test_admin_auth.js
+/test_admin_products.js
+/test_api_access.js
+/test_cashier_connection.js
+/test_cloud_menu_cache.js
+/test_db_arabic_names.js
+/test_displays_all.js
+/test_displays_local.js
+/test_enhanced_options_sync.js
+/test_foodics_modifiers.js
+/test_foodics_orders.js
+/test_include.js
+/test_koobs_displays.js
+/test_koobs_local.js
+/test_menu_cache.js
+/test_modifier_fixes.js
+/test_modifiers_complete.js
+/test_product_localization.js
+/test_production_494675.js
+/test_sku_complete.js
+/test_sku_direct.js
+/test_sku_fix_simple.js
+/test_sku_update_fix.js
+/test_sync_localization.js
+/test_tenant_fix.js
+/test_upload_flow.js
+/update_products_arabic_sku.js
+/verify_branch_fix.js
+/verify_sku_fix.js
+/wake-production-displays.js
+
+# ============================================================================
+# Explicit root-level HTML file exclusions (keep only 2 admin files)
+# Excluding 76+ test/dev HTML pages
+# ============================================================================
+/Ai-Chat.html
+/ai-continuous-test.html
+/ai-full-conversation.html
+/ai-integration-test.html
+/ai-push-to-talk.html
+/ai-simple-continuous.html
+/ai-test-direct.html
+/ai-test-simple.html
+/ai-test.html
+/analytics.html
+/audio-diagnostic.html
+/audio-test-direct.html
+/debug-products.html
+/debug_tenant_dropdown.html
+/debug_tenant_issue.html
+/index-ai-backup.html
+/index-redirect.html
+/index.html
+/login.html
+/orders.html
+/products.html
+/redirect-to-admin.html
+/test-ai-components.html
+/test-ai-integrated.html
+/test-audio.html
+/test-whisper-direct.html
+/test-whisper-simple.html
+/test-whisper.html
+/test_koobs_ai.html
+/test_stream_abort_fix.html
+/unified-orders.html
+/url-redirect.html
