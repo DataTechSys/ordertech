@@ -11451,6 +11451,7 @@ addRoute('get', '/modifiers/', (_req, res) => res.sendFile(path.join(__dirname, 
 addRoute('get', '/orders/',   (_req, res) => res.sendFile(path.join(__dirname, 'orders',   'index.html')));
 // Organization pages
 addRoute('get', '/company/',  (_req, res) => res.sendFile(path.join(__dirname, 'company',  'index.html')));
+addRoute('get', '/users',    (_req, res) => res.redirect(301, '/users/'));
 addRoute('get', '/users/',    (_req, res) => res.sendFile(path.join(__dirname, 'users',    'index.html')));
 addRoute('get', '/roles/',    (_req, res) => res.sendFile(path.join(__dirname, 'roles',    'index.html')));
 addRoute('get', '/branches/', (_req, res) => res.sendFile(path.join(__dirname, 'branches', 'index.html')));
