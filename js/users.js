@@ -41,19 +41,51 @@
       const emailTd=document.createElement('td'); emailTd.textContent = u.email||'—';
       const roleTd=document.createElement('td');
       const sel=document.createElement('select'); sel.className='select';
-      for (const r of roles){ const opt=document.createElement('option'); opt.value=r; opt.textContent=r; if ((u.role||'').toLowerCase()===r) opt.selected=true; sel.appendChild(opt);} 
+      for (const r of roles){ const opt=document.createElement('option'); opt.value=r; opt.textContent=r; if ((u.role||'').toLowerCase()===r) opt.selected=true; sel.appendChild(opt);}
       sel.addEventListener('change', async ()=>{
         const tid=STATE.selectedTenantId; if(!tid) return;
         try { await api(`/admin/tenants/${encodeURIComponent(tid)}/users/${encodeURIComponent(u.id)}`, { method:'PUT', body:{ role: sel.value }, tenantId: tid }); toast('Role updated'); } catch { toast('Update failed'); sel.value = u.role; }
       });
       roleTd.appendChild(sel);
-      const actTd=document.createElement('td');
+      const actTd=document.createElement('td'); actTd.style='display:flex;gap:6px;align-items:center;';
+      // Edit button — toggles inline password form
+      const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
+      edit.addEventListener('click', ()=>{
+        // Remove existing edit row if open
+        const existing = tr.nextElementSibling;
+        if (existing && existing._editRow) { existing.remove(); return; }
+        const editTr=document.createElement('tr'); editTr._editRow=true;
+        const editTd=document.createElement('td'); editTd.colSpan=3;
+        editTd.style='padding:8px 12px; background:var(--surface2,#f5f7fa);';
+        const pwInput=document.createElement('input'); pwInput.type='password'; pwInput.className='input';
+        pwInput.placeholder='New password (min 6 chars)'; pwInput.style='margin-right:8px; min-width:220px;';
+        const saveBtn=document.createElement('button'); saveBtn.className='btn primary'; saveBtn.textContent='Update Password';
+        saveBtn.addEventListener('click', async ()=>{
+          const pw=pwInput.value.trim();
+          if (!pw || pw.length<6){ toast('Password must be at least 6 characters'); return; }
+          const tid=STATE.selectedTenantId; if(!tid) return;
+          try {
+            await api(`/admin/tenants/${encodeURIComponent(tid)}/users/${encodeURIComponent(u.id)}`, { method:'PUT', body:{ password: pw }, tenantId: tid });
+            toast('Password updated'); editTr.remove();
+          } catch(e){
+            if (e?.data?.error==='password_too_short') toast('Password must be at least 6 characters');
+            else toast('Password update failed');
+          }
+        });
+        const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel';
+        cancelBtn.style='margin-left:6px;';
+        cancelBtn.addEventListener('click', ()=>editTr.remove());
+        editTd.appendChild(pwInput); editTd.appendChild(saveBtn); editTd.appendChild(cancelBtn);
+        editTr.appendChild(editTd);
+        tr.insertAdjacentElement('afterend', editTr);
+        pwInput.focus();
+      });
       const del=document.createElement('button'); del.className='btn danger'; del.textContent='Remove'; del.addEventListener('click', async ()=>{
         if (!confirm('Remove user from tenant?')) return;
         const tid=STATE.selectedTenantId; if(!tid) return;
         try { await api(`/admin/tenants/${encodeURIComponent(tid)}/users/${encodeURIComponent(u.id)}`, { method:'DELETE', tenantId: tid }); loadUsers(); } catch { toast('Remove failed'); }
       });
-      actTd.appendChild(del);
+      actTd.appendChild(edit); actTd.appendChild(del);
       tr.appendChild(emailTd); tr.appendChild(roleTd); tr.appendChild(actTd);
       tbody.appendChild(tr);
     }
@@ -70,7 +102,13 @@
       const emailTd=document.createElement('td'); emailTd.textContent = u.email||'—';
       const roleTd=document.createElement('td'); roleTd.textContent = (u.role||'').toLowerCase() || '—';
       const whenTd=document.createElement('td'); whenTd.textContent = u.deleted_at ? new Date(u.deleted_at).toLocaleString() : '—';
-      const actTd=document.createElement('td');
+      const actTd=document.createElement('td'); actTd.style='display:flex;gap:6px;align-items:center;';
+      const restore=document.createElement('button'); restore.className='btn primary'; restore.textContent='Restore'; restore.addEventListener('click', async ()=>{
+        if (!confirm(`Restore ${u.email||'this user'} back to the tenant?`)) return;
+        const tid=STATE.selectedTenantId; if(!tid) return;
+        try { await api(`/admin/tenants/${encodeURIComponent(tid)}/users/${encodeURIComponent(u.id)}/restore`, { method:'POST', tenantId: tid }); toast('User restored'); loadUsers(); }
+        catch (e) { toast('Restore failed'); }
+      });
       const purge=document.createElement('button'); purge.className='btn danger'; purge.textContent='Purge'; purge.addEventListener('click', async ()=>{
         if (!confirm('Permanently delete this user? This cannot be undone.')) return;
         const tid=STATE.selectedTenantId; if(!tid) return;
@@ -79,7 +117,7 @@
           if (e?.data?.error === 'still_member') toast('Cannot purge: user still belongs to a tenant'); else toast('Purge failed');
         }
       });
-      actTd.appendChild(purge);
+      actTd.appendChild(restore); actTd.appendChild(purge);
       tr.appendChild(emailTd); tr.appendChild(roleTd); tr.appendChild(whenTd); tr.appendChild(actTd);
       tbody.appendChild(tr);
     }

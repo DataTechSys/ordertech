@@ -10215,30 +10215,54 @@ addRoute('post', '/admin/tenants/:id/users', verifyAuthOpen, requireTenantPermPa
   }
 });
 
-// Update user role in tenant
+// Update user role and/or password in tenant
 addRoute('put', '/admin/tenants/:id/users/:userId', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
   const tenantId = req.params.id; const userId = req.params.userId;
-  const role  = String(req.body?.role||'').toLowerCase();
-  if (!BUILTIN_TENANT_ROLES.includes(role)) return res.status(400).json({ error: 'invalid_role' });
+  const role     = req.body?.role     ? String(req.body.role).toLowerCase()  : null;
+  const password = req.body?.password ? String(req.body.password)             : null;
+  if (role && !BUILTIN_TENANT_ROLES.includes(role)) return res.status(400).json({ error: 'invalid_role' });
+  if (password && password.length < 6) return res.status(400).json({ error: 'password_too_short' });
+  if (!role && !password) return res.status(400).json({ error: 'nothing_to_update' });
   if (!HAS_DB && DEV_OPEN_ADMIN) {
     const arr = memTenantUsersByTenant.get(tenantId) || [];
     const u = arr.find(x => x.id === userId);
     if (!u) return res.status(404).json({ error: 'not_found' });
-    u.role = role;
+    if (role) u.role = role;
     return res.json({ ok:true });
   }
   if (!HAS_DB) return res.status(503).json({ error: 'DB not configured' });
   try {
-    await db(`update tenant_users set role=? where tenant_id=? and user_id=?`, [role, tenantId, userId]);
-  } catch (_e1) {
-    try {
-      await db(`update tenant_users set role=? where tenant_id=? and user_id=?`, [role, tenantId, userId]);
-    } catch (_e2) {
-      await db(`update tenant_users set role=? where tenant_id=? and user_id=?`, [role, tenantId, userId]);
+    if (role) {
+      try {
+        await db(`update tenant_users set role=? where tenant_id=? and user_id=?`, [role, tenantId, userId]);
+      } catch (_e1) {
+        await db(`update tenant_users set role=? where tenant_id=? and user_id=?`, [role, tenantId, userId]);
+      }
+      cacheDelByPrefix(`adm:users:${tenantId}`);
     }
+    if (password && admin) {
+      let email = null;
+      try {
+        const r = await db('select lower(email) as email from users where id=? limit 1', [userId]);
+        if (r && r[0]) email = r[0].email;
+      } catch {
+        try {
+          const r = await db('select lower(email) as email from users where user_id=? limit 1', [userId]);
+          if (r && r[0]) email = r[0].email;
+        } catch {}
+      }
+      if (!email) return res.status(404).json({ error: 'user_not_found' });
+      try {
+        const fbUser = await admin.auth().getUserByEmail(email);
+        await admin.auth().updateUser(fbUser.uid, { password });
+      } catch (_e) {
+        return res.status(500).json({ error: 'password_update_failed' });
+      }
+    }
+    res.json({ ok:true });
+  } catch (_e) {
+    res.status(500).json({ error: 'update_failed' });
   }
-  cacheDelByPrefix(`adm:users:${tenantId}`);
-  res.json({ ok:true });
 });
 
 // Remove user from tenant (soft-delete semantics: record tombstone; mark user deleted when no memberships remain)
@@ -10373,6 +10397,53 @@ addRoute('delete', '/admin/tenants/:id/users/:userId/purge', verifyAuthOpen, req
     res.json({ ok:true });
   } catch (_e) {
     res.status(500).json({ error: 'purge_failed' });
+  }
+});
+
+// Restore a deleted user back to a tenant
+addRoute('post', '/admin/tenants/:id/users/:userId/restore', verifyAuthOpen, requireTenantPermParamOpenFactory('manage_users'), async (req, res) => {
+  const tenantId = String(req.params.id||'').trim();
+  const userId   = String(req.params.userId||'').trim();
+  if (!HAS_DB) {
+    if (DEV_OPEN_ADMIN) {
+      const delArr = memTenantUsersDeletedByTenant.get(tenantId) || [];
+      const idx = delArr.findIndex(x => x.id === userId);
+      if (idx < 0) return res.status(404).json({ error: 'not_found' });
+      const u = delArr.splice(idx, 1)[0];
+      memTenantUsersDeletedByTenant.set(tenantId, delArr);
+      const arr = memTenantUsersByTenant.get(tenantId) || [];
+      if (!arr.find(x => x.id === userId)) {
+        arr.push({ id: u.id, email: u.email, role: u.role||'viewer', created_at: new Date().toISOString() });
+        memTenantUsersByTenant.set(tenantId, arr);
+      }
+      return res.json({ ok:true });
+    }
+    return res.status(503).json({ error: 'DB not configured' });
+  }
+  try {
+    await ensureUsersDeletionSchema();
+    // Get last known role from tombstone
+    const rows = await db(
+      `select role from tenant_users_deleted where tenant_id=? and user_id=? order by deleted_at desc limit 1`,
+      [tenantId, userId]
+    ).catch(() => []);
+    const role = (rows && rows[0] && rows[0].role) || 'viewer';
+    // Re-add to tenant_users
+    try {
+      await db(`insert into tenant_users (tenant_id, user_id, role) values (?,?,?) on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, userId, role]);
+    } catch {
+      await db(`insert into tenant_users (tenant_id, user_id, role) values (?,?,?) on conflict (tenant_id, user_id) do update set role=excluded.role`, [tenantId, userId, role]);
+    }
+    // Remove tombstones
+    try { await db('delete from tenant_users_deleted where tenant_id=? and user_id=?', [tenantId, userId]); } catch {}
+    // Clear soft-delete marker on user
+    try { await db('update users set deleted_at=null where id=?', [userId]); }
+    catch { try { await db('update users set deleted_at=null where user_id=?', [userId]); } catch {} }
+    cacheDelByPrefix(`adm:users:${tenantId}`);
+    cacheDelByPrefix(`adm:users-deleted:${tenantId}`);
+    res.json({ ok:true });
+  } catch (_e) {
+    res.status(500).json({ error: 'restore_failed' });
   }
 });
 
