@@ -13,17 +13,17 @@ public class OrderService : IOrderService
         _orderRepository = orderRepository;
     }
 
-    public async Task<IEnumerable<Order>> GetOrdersByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0)
+    public async Task<IEnumerable<Order>> GetOrdersByTenantIdAsync(string tenantId, int limit = 100, int offset = 0)
     {
         return await _orderRepository.GetByTenantIdAsync(tenantId, limit, offset);
     }
 
-    public async Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0)
+    public async Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(string tenantId, int limit = 100, int offset = 0)
     {
         return await _orderRepository.GetSalesOrdersByTenantIdAsync(tenantId, limit, offset);
     }
 
-    public async Task<(IEnumerable<Order> cashierOrders, IEnumerable<SalesOrder> salesOrders)> GetAllOrdersByTenantIdAsync(Guid tenantId, int limit = 1000)
+    public async Task<(IEnumerable<Order> cashierOrders, IEnumerable<SalesOrder> salesOrders)> GetAllOrdersByTenantIdAsync(string tenantId, int limit = 1000)
     {
         var cashierOrdersTask = _orderRepository.GetByTenantIdAsync(tenantId, limit, 0);
         var salesOrdersTask = _orderRepository.GetSalesOrdersByTenantIdAsync(tenantId, limit, 0);

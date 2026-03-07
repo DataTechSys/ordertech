@@ -3,7 +3,7 @@ namespace OrderTech.SuperAdmin.Domain.Entities;
 public class Branch
 {
     public Guid Id { get; set; }
-    public Guid TenantId { get; set; }
+    public string TenantId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? NameAr { get; set; }
     public string? Location { get; set; }

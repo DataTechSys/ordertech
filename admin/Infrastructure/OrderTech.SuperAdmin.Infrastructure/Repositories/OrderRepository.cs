@@ -14,7 +14,7 @@ public class OrderRepository : IOrderRepository
         _context = context;
     }
 
-    public async Task<IEnumerable<Order>> GetByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0)
+    public async Task<IEnumerable<Order>> GetByTenantIdAsync(string tenantId, int limit = 100, int offset = 0)
     {
         return await _context.Orders
             .Where(o => o.TenantId == tenantId)
@@ -25,7 +25,7 @@ public class OrderRepository : IOrderRepository
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0)
+    public async Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(string tenantId, int limit = 100, int offset = 0)
     {
         return await _context.SalesOrders
             .Where(o => o.TenantId == tenantId)
@@ -43,7 +43,7 @@ public class OrderRepository : IOrderRepository
             .FirstOrDefaultAsync(o => o.Id == id);
     }
 
-    public async Task<int> GetCountByTenantIdAsync(Guid tenantId)
+    public async Task<int> GetCountByTenantIdAsync(string tenantId)
     {
         return await _context.Orders
             .Where(o => o.TenantId == tenantId)

@@ -4,8 +4,8 @@ namespace OrderTech.SuperAdmin.Domain.Interfaces;
 
 public interface IOrderRepository
 {
-    Task<IEnumerable<Order>> GetByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0);
-    Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0);
+    Task<IEnumerable<Order>> GetByTenantIdAsync(string tenantId, int limit = 100, int offset = 0);
+    Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(string tenantId, int limit = 100, int offset = 0);
     Task<Order?> GetByIdAsync(Guid id);
-    Task<int> GetCountByTenantIdAsync(Guid tenantId);
+    Task<int> GetCountByTenantIdAsync(string tenantId);
 }

@@ -21,7 +21,7 @@ public class OrdersController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetOrders(Guid tenantId, int limit = 1000)
+    public async Task<IActionResult> GetOrders(string tenantId, int limit = 1000)
     {
         try
         {
