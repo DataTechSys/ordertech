@@ -44,7 +44,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Disable HTTPS redirection in Cloud Run (TLS handled by load balancer)
+// app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 

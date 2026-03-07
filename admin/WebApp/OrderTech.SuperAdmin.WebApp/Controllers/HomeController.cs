@@ -25,13 +25,23 @@ public class HomeController : Controller
             return RedirectToAction("Login", "Auth");
         }
 
-        // Get dashboard stats
-        var tenants = await _tenantService.GetAllTenantsAsync();
-        var users = await _userService.GetAllUsersAsync();
+        try
+        {
+            // Get dashboard stats
+            var tenants = await _tenantService.GetAllTenantsAsync();
+            var users = await _userService.GetAllUsersAsync();
 
-        ViewBag.TenantCount = tenants.Count();
-        ViewBag.UserCount = users.Count();
-        ViewBag.UserName = HttpContext.Session.GetString("UserName");
+            ViewBag.TenantCount = tenants.Count();
+            ViewBag.UserCount = users.Count();
+            ViewBag.UserName = HttpContext.Session.GetString("UserName");
+        }
+        catch (Exception ex)
+        {
+            // Log error but still render view
+            ViewBag.TenantCount = 0;
+            ViewBag.UserCount = 0;
+            ViewBag.Error = "Database connection error: " + ex.Message;
+        }
 
         return View();
     }
