@@ -36,8 +36,9 @@ public class UsersController : Controller
                     role = u.Role,
                     tenantName = u.Tenant?.Name,
                     isActive = u.IsActive,
+                    status = u.Status,
                     createdAt = u.CreatedAt,
-                    lastLoginAt = u.LastLoginAt
+                    modifiedAt = u.ModifiedAt
                 })
             });
         }
@@ -56,9 +57,10 @@ public class UsersController : Controller
             {
                 Email = request.Email,
                 Name = request.Name,
-                Role = request.Role,
-                TenantId = request.TenantId,
-                IsActive = true
+                TenantId = request.TenantId ?? Guid.Empty,
+                Status = "active",
+                RoleId = Guid.Empty, // TODO: Look up role ID from role name
+                CreatedAt = DateTime.UtcNow
             };
 
             await _userService.CreateUserAsync(user, request.Password);
@@ -83,8 +85,9 @@ public class UsersController : Controller
 
             user.Email = request.Email;
             user.Name = request.Name;
-            user.Role = request.Role;
-            user.IsActive = request.IsActive;
+            user.Status = request.IsActive ? "active" : "inactive";
+            user.ModifiedAt = DateTime.UtcNow;
+            // TODO: Update role_id from request.Role
 
             await _userService.UpdateUserAsync(user);
             return Json(new { success = true });

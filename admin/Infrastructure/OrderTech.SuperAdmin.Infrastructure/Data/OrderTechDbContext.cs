@@ -44,14 +44,22 @@ public class OrderTechDbContext : DbContext
             entity.ToTable("users");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Email).HasColumnName("email").IsRequired();
-            entity.Property(e => e.Name).HasColumnName("name");
-            entity.Property(e => e.PasswordHash).HasColumnName("password_hash");
-            entity.Property(e => e.Role).HasColumnName("role");
             entity.Property(e => e.TenantId).HasColumnName("tenant_id");
-            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
+            entity.Property(e => e.PasswordHash).HasColumnName("password_hash").IsRequired();
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
-            entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at");
+            entity.Property(e => e.ModifiedAt).HasColumnName("modified_at");
+            entity.Property(e => e.RoleId).HasColumnName("role_id");
+            entity.Property(e => e.Email).HasColumnName("email").IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").IsRequired();
+            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
+            entity.Property(e => e.InviteExpire).HasColumnName("invite_expire");
+            entity.Property(e => e.InviteUsed).HasColumnName("invite_used");
+            entity.Property(e => e.ImageUrl).HasColumnName("image_url");
+            
+            // Ignore computed properties
+            entity.Ignore(e => e.IsActive);
+            entity.Ignore(e => e.Role);
             
             entity.HasOne(e => e.Tenant)
                 .WithMany()
