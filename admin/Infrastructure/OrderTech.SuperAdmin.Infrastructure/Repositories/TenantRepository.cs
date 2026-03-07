@@ -17,7 +17,7 @@ public class TenantRepository : ITenantRepository
     public async Task<IEnumerable<Tenant>> GetAllAsync()
     {
         return await _context.Tenants
-            .OrderBy(t => t.Name)
+            .OrderBy(t => t.CompanyName)
             .ToListAsync();
     }
 
