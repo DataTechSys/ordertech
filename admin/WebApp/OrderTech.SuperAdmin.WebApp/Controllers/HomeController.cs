@@ -18,12 +18,13 @@ public class HomeController : Controller
 
     public async Task<IActionResult> Index()
     {
+        // TEMP: Authentication disabled for development
         // Check if logged in
-        var userEmail = HttpContext.Session.GetString("UserEmail");
-        if (string.IsNullOrEmpty(userEmail))
-        {
-            return RedirectToAction("Login", "Auth");
-        }
+        // var userEmail = HttpContext.Session.GetString("UserEmail");
+        // if (string.IsNullOrEmpty(userEmail))
+        // {
+        //     return RedirectToAction("Login", "Auth");
+        // }
 
         try
         {
