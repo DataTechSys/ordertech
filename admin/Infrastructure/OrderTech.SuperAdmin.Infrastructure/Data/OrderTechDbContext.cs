@@ -25,17 +25,26 @@ public class OrderTechDbContext : DbContext
         {
             entity.ToTable("tenants");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Name).HasColumnName("name").IsRequired();
-            entity.Property(e => e.BusinessName).HasColumnName("business_name");
-            entity.Property(e => e.ContactEmail).HasColumnName("contact_email");
-            entity.Property(e => e.ContactPhone).HasColumnName("contact_phone");
-            entity.Property(e => e.Address).HasColumnName("address");
+            entity.Property(e => e.Id).HasColumnName("tenant_id");
+            entity.Property(e => e.FoodicsBusinessId).HasColumnName("foodics_business_id").IsRequired();
+            entity.Property(e => e.FoodicsApiToken).HasColumnName("foodics_api_token").IsRequired();
+            entity.Property(e => e.CompanyName).HasColumnName("company_name");
+            entity.Property(e => e.IsDemo).HasColumnName("is_demo");
             entity.Property(e => e.LogoUrl).HasColumnName("logo_url");
-            entity.Property(e => e.FoodicsAccountId).HasColumnName("foodics_account_id");
-            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
+            entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
+            entity.Property(e => e.SubscriptionStatus).HasColumnName("subscription_status");
+            entity.Property(e => e.SubscriptionPlan).HasColumnName("subscription_plan");
+            entity.Property(e => e.TrialEndsAt).HasColumnName("trial_ends_at");
+            entity.Property(e => e.Settings).HasColumnName("settings");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.DeviceLimit).HasColumnName("device_limit");
+            
+            // Ignore computed properties
+            entity.Ignore(e => e.Name);
+            entity.Ignore(e => e.FoodicsAccountId);
+            entity.Ignore(e => e.IsActive);
         });
 
         // User configuration
