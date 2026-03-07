@@ -18,7 +18,7 @@ public class TenantService : ITenantService
         return await _tenantRepository.GetAllAsync();
     }
 
-    public async Task<Tenant?> GetTenantByIdAsync(Guid id)
+    public async Task<Tenant?> GetTenantByIdAsync(string id)
     {
         return await _tenantRepository.GetByIdAsync(id);
     }
@@ -33,7 +33,7 @@ public class TenantService : ITenantService
         await _tenantRepository.UpdateAsync(tenant);
     }
 
-    public async Task DeleteTenantAsync(Guid id)
+    public async Task DeleteTenantAsync(string id)
     {
         await _tenantRepository.DeleteAsync(id);
     }

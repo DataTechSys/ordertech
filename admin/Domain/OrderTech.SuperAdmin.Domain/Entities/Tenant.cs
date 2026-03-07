@@ -7,7 +7,7 @@ public class Tenant
 {
     [Key]
     [Column("tenant_id")]
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     
     [Column("foodics_business_id")]
     public string FoodicsBusinessId { get; set; } = string.Empty;

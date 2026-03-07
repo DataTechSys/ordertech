@@ -18,7 +18,7 @@ public class TenantsController : Controller
         return View(tenants);
     }
 
-    public async Task<IActionResult> Details(Guid id)
+    public async Task<IActionResult> Details(string id)
     {
         var tenant = await _tenantService.GetTenantByIdAsync(id);
         if (tenant == null)

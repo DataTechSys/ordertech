@@ -57,7 +57,7 @@ public class UsersController : Controller
             {
                 Email = request.Email,
                 Name = request.Name,
-                TenantId = request.TenantId ?? Guid.Empty,
+                TenantId = request.TenantId ?? string.Empty,
                 Status = "active",
                 RoleId = Guid.Empty, // TODO: Look up role ID from role name
                 CreatedAt = DateTime.UtcNow
@@ -118,7 +118,7 @@ public class UsersController : Controller
         public string Name { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string Role { get; set; } = "User";
-        public Guid? TenantId { get; set; }
+        public string? TenantId { get; set; }
     }
 
     public class UpdateUserRequest

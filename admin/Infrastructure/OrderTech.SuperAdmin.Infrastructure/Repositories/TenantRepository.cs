@@ -21,7 +21,7 @@ public class TenantRepository : ITenantRepository
             .ToListAsync();
     }
 
-    public async Task<Tenant?> GetByIdAsync(Guid id)
+    public async Task<Tenant?> GetByIdAsync(string id)
     {
         return await _context.Tenants
             .Include(t => t.Branches)
@@ -30,7 +30,10 @@ public class TenantRepository : ITenantRepository
 
     public async Task<Tenant> CreateAsync(Tenant tenant)
     {
-        tenant.Id = Guid.NewGuid();
+        if (string.IsNullOrEmpty(tenant.Id))
+        {
+            tenant.Id = Guid.NewGuid().ToString();
+        }
         tenant.CreatedAt = DateTime.UtcNow;
         _context.Tenants.Add(tenant);
         await _context.SaveChangesAsync();
@@ -44,7 +47,7 @@ public class TenantRepository : ITenantRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(string id)
     {
         var tenant = await _context.Tenants.FindAsync(id);
         if (tenant != null)
