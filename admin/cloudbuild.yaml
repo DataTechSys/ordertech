@@ -6,7 +6,6 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
-      - '--no-cache'
       - '-t'
       - 'gcr.io/$PROJECT_ID/admin-ordertech-me:${_IMAGE_TAG}'
       - '-t'

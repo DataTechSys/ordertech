@@ -1,0 +1,10 @@
+name: admin-ordertech-me-deploy
+description: Deploy admin-ordertech-me when admin/ changes
+github:
+  owner: DataTechSys
+  name: ordertech
+  push:
+    branch: ^main$
+includedFiles:
+  - admin/**
+filename: admin/cloudbuild.yaml
