@@ -1,0 +1,16 @@
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/bin/Debug/net8.0/OrderTech.SuperAdmin.Application.deps.json
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/bin/Debug/net8.0/OrderTech.SuperAdmin.Application.dll
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/bin/Debug/net8.0/OrderTech.SuperAdmin.Application.pdb
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/bin/Debug/net8.0/OrderTech.SuperAdmin.Domain.dll
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/bin/Debug/net8.0/OrderTech.SuperAdmin.Domain.pdb
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.csproj.AssemblyReference.cache
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.GeneratedMSBuildEditorConfig.editorconfig
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.AssemblyInfoInputs.cache
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.AssemblyInfo.cs
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.csproj.CoreCompileInputs.cache
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.sourcelink.json
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTec.BCDB7E57.Up2Date
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.dll
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/refint/OrderTech.SuperAdmin.Application.dll
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/OrderTech.SuperAdmin.Application.pdb
+/Volumes/MOSAWI-T9/DATATECH/OrderTech/admin/Application/OrderTech.SuperAdmin.Application/obj/Debug/net8.0/ref/OrderTech.SuperAdmin.Application.dll

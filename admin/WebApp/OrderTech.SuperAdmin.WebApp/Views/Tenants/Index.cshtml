@@ -1,0 +1,47 @@
+@@model IEnumerable<OrderTech.SuperAdmin.Domain.Entities.Tenant>
+
+@@{
+    ViewData["Title"] = "Tenants";
+}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">Tenants</h1>
+    </div>
+    
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Business Name</th>
+                    <th>Contact Email</th>
+                    <th>Foodics Account</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @@foreach (var tenant in Model)
+                {
+                    <tr>
+                        <td>@@tenant.Name</td>
+                        <td>@@tenant.BusinessName</td>
+                        <td>@@tenant.ContactEmail</td>
+                        <td>@@tenant.FoodicsAccountId</td>
+                        <td>
+                            <span class="badge @@(tenant.IsActive ? "active" : "inactive")">
+                                @@(tenant.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>@@tenant.CreatedAt.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <a href="@@Url.Action("Details", new { id = tenant.Id })" class="btn btn-sm">View</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

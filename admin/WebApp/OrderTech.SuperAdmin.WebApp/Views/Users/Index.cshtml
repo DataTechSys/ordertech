@@ -1,0 +1,55 @@
+@@model IEnumerable<OrderTech.SuperAdmin.Domain.Entities.User>
+
+@@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">Users</h1>
+        <button id="addUserBtn" class="btn primary">Add User</button>
+    </div>
+    
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Tenant</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @@foreach (var user in Model)
+                {
+                    <tr>
+                        <td>@@user.Email</td>
+                        <td>@@user.Name</td>
+                        <td>@@user.Role</td>
+                        <td>@@user.Tenant?.Name</td>
+                        <td>
+                            <span class="badge @@(user.IsActive ? "active" : "inactive")">
+                                @@(user.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>@@user.CreatedAt.ToString("yyyy-MM-dd")</td>
+                        <td>@@user.LastLoginAt?.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            <button class="btn btn-sm edit-user" data-id="@@user.Id">Edit</button>
+                            <button class="btn btn-sm delete-user" data-id="@@user.Id">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@@section Scripts {
+    <script src="~/js/users.js"></script>
+}

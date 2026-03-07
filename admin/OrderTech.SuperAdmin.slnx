@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Application/">
+    <Project Path="Application/OrderTech.SuperAdmin.Application/OrderTech.SuperAdmin.Application.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="Domain/OrderTech.SuperAdmin.Domain/OrderTech.SuperAdmin.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="Infrastructure/OrderTech.SuperAdmin.Infrastructure/OrderTech.SuperAdmin.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/WebApp/">
+    <Project Path="WebApp/OrderTech.SuperAdmin.WebApp/OrderTech.SuperAdmin.WebApp.csproj" />
+  </Folder>
+</Solution>

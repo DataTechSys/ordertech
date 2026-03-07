@@ -1,0 +1,86 @@
+@{
+    ViewData["Title"] = "Unified Orders - All Sources";
+}
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-title">Orders - All Sources</h1>
+    </div>
+    
+    <div class="filters-card">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label>Tenant ID:</label>
+                <input id="tenantId" type="text" class="input tenant-input" placeholder="Enter tenant UUID" />
+            </div>
+            <button id="loadBtn" class="btn primary">Load Orders</button>
+        </div>
+        <div class="filter-row">
+            <div class="filter-group">
+                <label>Source:</label>
+                <select id="sourceFilter" class="select">
+                    <option value="">All Sources</option>
+                    <option value="cashier">Cashier Orders</option>
+                    <option value="foodics">Foodics Orders</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>Status:</label>
+                <select id="statusFilter" class="select">
+                    <option value="">All Statuses</option>
+                    <option value="paid">Paid</option>
+                    <option value="closed">Closed</option>
+                    <option value="completed">Completed</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>Period:</label>
+                <select id="daysFilter" class="select">
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="">All time</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value" id="cashierCount">0</div>
+            <div class="stat-label">Cashier Orders</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="foodicsCount">0</div>
+            <div class="stat-label">Foodics Orders</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="totalAmount">0.000 KWD</div>
+            <div class="stat-label">Total Amount</div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="table" id="ordersTable">
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Order ID</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Branch</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Items</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+@@section Scripts {
+    <script src="~/js/orders.js"></script>
+}

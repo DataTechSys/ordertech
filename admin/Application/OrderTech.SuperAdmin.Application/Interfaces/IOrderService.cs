@@ -1,0 +1,10 @@
+using OrderTech.SuperAdmin.Domain.Entities;
+
+namespace OrderTech.SuperAdmin.Application.Interfaces;
+
+public interface IOrderService
+{
+    Task<IEnumerable<Order>> GetOrdersByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0);
+    Task<IEnumerable<SalesOrder>> GetSalesOrdersByTenantIdAsync(Guid tenantId, int limit = 100, int offset = 0);
+    Task<(IEnumerable<Order> cashierOrders, IEnumerable<SalesOrder> salesOrders)> GetAllOrdersByTenantIdAsync(Guid tenantId, int limit = 1000);
+}
